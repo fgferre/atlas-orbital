@@ -1,7 +1,7 @@
 import { useRef, useMemo, Suspense } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { Html, useTexture } from "@react-three/drei";
+import { useTexture } from "@react-three/drei";
 import {
   type CelestialBody,
   AstroPhysics,
@@ -23,7 +23,7 @@ const PlanetVisual = ({
   isSelected: boolean;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const { selectId, showLabels, scaleMode } = useStore();
+  const { selectId, scaleMode } = useStore();
 
   // Handle texture loading
   let textureMap: THREE.Texture | undefined;
@@ -74,14 +74,6 @@ const PlanetVisual = ({
             opacity={0.3}
           />
         </mesh>
-      )}
-
-      {showLabels && (
-        <Html distanceFactor={100} className="pointer-events-none">
-          <div className="text-gray-300 text-xs font-mono whitespace-nowrap transform translate-x-4 -translate-y-1/2 drop-shadow-md">
-            {body.name.en}
-          </div>
-        </Html>
       )}
     </mesh>
   );
