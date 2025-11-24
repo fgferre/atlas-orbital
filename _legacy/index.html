@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas Orbital - NASA Style v12 High Fidelity</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'nasa-black': '#000000',
+                        'nasa-panel': 'rgba(20, 20, 20, 0.9)',
+                        'nasa-accent': '#ff9d00',
+                        'nasa-blue': '#4facfe',
+                        'nasa-text': '#eeeeee',
+                        'nasa-dim': '#888888'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Segoe UI', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Fonte Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <script type="importmap">
+        {
+            "imports": {
+                "react": "https://esm.sh/react@18.2.0",
+                "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/examples/jsm/controls/OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background-color: #000; height: 100%; color: #eee; font-family: 'Inter', sans-serif; }
+        
+        .planet-label {
+            position: absolute;
+            color: #ccc;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transform: translate(12px, -50%);
+            text-shadow: 0 1px 4px rgba(0,0,0,1);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color 0.2s;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .planet-label:hover { color: #ff9d00; }
+
+        .planet-icon {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.2s;
+            z-index: 5;
+        }
+        .planet-icon:hover {
+            border-color: #ff9d00;
+            transform: translate(-50%, -50%) scale(1.2);
+            background: rgba(255, 157, 0, 0.1);
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+        
+        .glass-panel {
+            background: rgba(15, 15, 15, 0.90);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo, useContext, createContext } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+
+        const AU_IN_KM = 149597870.7; 
+        const AU_TO_3D_UNITS = 1000; 
+        const KM_TO_3D_UNITS = AU_TO_3D_UNITS / AU_IN_KM;
+
+        const SOLAR_SYSTEM_BODIES = [
+            { id: 'sun', type: 'star', name: {en:'SUN', pt:'SOL'}, radiusKm: 696340, color: '#FFFFAA', orbit: { a:0,e:0,i:0,O:0,w:0,M0:0,n:0 }, info: 'The heart of our solar system.' },
+            { id: 'mercury', group:'inner', type: 'planet', name: {en:'MERCURY', pt:'MERCÚRIO'}, radiusKm: 2439, color: '#A5A5A5', orbit: { a:0.387, e:0.205, i:7.00, O:48.3, w:29.1, M0:174.7, n:4.092 }, info: 'Smallest planet.' },
+            { id: 'venus', group:'inner', type: 'planet', name: {en:'VENUS', pt:'VÊNUS'}, radiusKm: 6051, color: '#E3BB76', orbit: { a:0.723, e:0.006, i:3.39, O:76.6, w:54.8, M0:50.1, n:1.602 }, info: 'Thick atmosphere.' },
+            { id: 'earth', group:'inner', type: 'planet', name: {en:'EARTH', pt:'TERRA'}, radiusKm: 6371, color: '#4facfe', orbit: { a:1.000, e:0.016, i:0.00, O:0.0, w:102.9, M0:357.5, n:0.985 }, info: 'Our home.' },
+            { id: 'mars', group:'inner', type: 'planet', name: {en:'MARS', pt:'MARTE'}, radiusKm: 3389, color: '#DD4422', orbit: { a:1.523, e:0.093, i:1.85, O:49.5, w:286.5, M0:19.4, n:0.524 }, info: 'Red planet.' },
+            { id: 'jupiter', group:'outer', type: 'planet', name: {en:'JUPITER', pt:'JÚPITER'}, radiusKm: 69911, color: '#D9A066', orbit: { a:5.204, e:0.048, i:1.30, O:100.5, w:273.8, M0:20.0, n:0.083 }, info: 'Gas giant.' },
+            { id: 'saturn', group:'outer', type: 'planet', name: {en:'SATURN', pt:'SATURNO'}, radiusKm: 58232, color: '#EBD795', orbit: { a:9.582, e:0.056, i:2.48, O:113.7, w:339.3, M0:317.0, n:0.033 }, info: 'Ring system.' },
+            { id: 'uranus', group:'outer', type: 'planet', name: {en:'URANUS', pt:'URANO'}, radiusKm: 25362, color: '#99FFFF', orbit: { a:19.21, e:0.046, i:0.77, O:74.0, w:96.9, M0:142.2, n:0.011 }, info: 'Ice giant.' },
+            { id: 'neptune', group:'outer', type: 'planet', name: {en:'NEPTUNE', pt:'NETUNO'}, radiusKm: 24622, color: '#3333FF', orbit: { a:30.11, e:0.009, i:1.76, O:131.7, w:276.3, M0:256.2, n:0.005 }, info: 'Winds.' },
+            { id: 'moon', parentId: 'earth', type: 'moon', name: {en:'MOON', pt:'LUA'}, radiusKm: 1737, color: '#CCCCCC', orbit: { a:0.00257, e:0.055, i:5.14, O:0, w:0, M0:0, n:13.176 }, info: 'Earth satellite.' },
+            { id: 'pluto', group:'other', type: 'dwarf', name: {en:'PLUTO', pt:'PLUTÃO'}, radiusKm: 1188, color: '#CCC', orbit: { a:39.48, e:0.248, i:17.16, O:110.3, w:113.7, M0:14.8, n:0.003 }, info: 'Dwarf planet.' },
+            { id: 'ceres', group:'inner', type: 'dwarf', name: {en:'CERES', pt:'CERES'}, radiusKm: 473, color: '#AAA', orbit: { a:2.768, e:0.076, i:10.59, O:80.3, w:73.0, M0:153.9, n:0.214 }, info: 'Asteroid belt.' }
+        ];
+
+        const TimeCtx = createContext({});
+        const SelCtx = createContext({});
+        const SetCtx = createContext({});
+
+        class AstroPhysics {
+            static calculateLocalPosition(orbitParams, date) {
+                const J2000 = new Date('2000-01-01T12:00:00Z').getTime();
+                const d = (date.getTime() - J2000) / 86400000;
+                const { a, e, i, O, w, M0, n } = orbitParams;
+                let M = (M0 + n * d) % 360;
+                const rad = Math.PI/180;
+                let E = M * rad;
+                for(let k=0; k<5; k++) E = E - (E - e*Math.sin(E) - M*rad)/(1 - e*Math.cos(E));
+                const P = a*(Math.cos(E)-e);
+                const Q = a*Math.sqrt(1-e*e)*Math.sin(E);
+                const cosO=Math.cos(O*rad), sinO=Math.sin(O*rad);
+                const cosw=Math.cos(w*rad), sinw=Math.sin(w*rad);
+                const cosi=Math.cos(i*rad), sini=Math.sin(i*rad);
+                const x = P*(cosw*cosO - sinw*sinO*cosi) - Q*(sinw*cosO + cosw*sinO*cosi);
+                const y = P*(cosw*sinO + sinw*cosO*cosi) + Q*(cosw*cosO*cosi - sinw*sinO);
+                const z = P*(sinw*sini) + Q*(cosw*sini);
+                return new THREE.Vector3(x * AU_TO_3D_UNITS, z * AU_TO_3D_UNITS, -y * AU_TO_3D_UNITS);
+            }
+            
+            // CORREÇÃO: Aumentado de 180 para 4096 segmentos para suavidade total
+            static getRelativeOrbitPoints(orbitParams, segments=4096) {
+                const pts = [];
+                const dummy = new Date('2000-01-01');
+                const period = 360 / (orbitParams.n || 0.001);
+                for(let j=0; j<=segments; j++) {
+                    const t = new Date(dummy.getTime() + (j/segments)*period*86400000);
+                    pts.push(this.calculateLocalPosition(orbitParams, t));
+                }
+                return pts;
+            }
+        }
+
+        const Canvas3D = () => {
+            const containerRef = useRef(null);
+            const { datetime, isPlaying, speed, setDatetime } = useContext(TimeCtx);
+            const { selectedId, selectId, focusId } = useContext(SelCtx);
+            const { showLabels, showOrbits, scaleMode } = useContext(SetCtx);
+            const [overlayItems, setOverlayItems] = useState([]);
+            
+            const r = useRef({ 
+                scene:null, camera:null, renderer:null, controls:null, bodies:new Map(), lastTime: Date.now(),
+                isFlying: false, cameraTargetPos: null, flyOffset: null
+            });
+
+            const getTargetScale = (body, mode) => {
+                if (mode === 'didactic') {
+                    if(body.type === 'star') return 60; 
+                    if(body.radiusKm > 50000) return 40; 
+                    if(body.type === 'moon') return 10; 
+                    return 20; 
+                } else {
+                    return body.radiusKm * KM_TO_3D_UNITS; 
+                }
+            };
+
+            useEffect(() => {
+                if (focusId && r.current.bodies.has(focusId) && r.current.camera && r.current.controls) {
+                    const mesh = r.current.bodies.get(focusId);
+                    const bodyData = SOLAR_SYSTEM_BODIES.find(b => b.id === focusId);
+                    
+                    const targetRadius = getTargetScale(bodyData, scaleMode);
+                    const isSaturn = focusId === 'saturn';
+                    const multiplier = scaleMode === 'realistic' ? 3.0 : (isSaturn ? 5.0 : 3.5);
+                    const idealDist = targetRadius * multiplier;
+
+                    const direction = new THREE.Vector3().subVectors(r.current.camera.position, r.current.controls.target).normalize();
+                    if (direction.lengthSq() < 0.1) direction.set(0,0,1);
+                    
+                    const newCamPos = new THREE.Vector3().copy(mesh.position).add(direction.multiplyScalar(idealDist));
+
+                    r.current.flyOffset = direction.clone().multiplyScalar(idealDist);
+                    r.current.cameraTargetPos = newCamPos;
+                    r.current.isFlying = true;
+                }
+            }, [focusId, scaleMode]); 
+
+            useEffect(() => {
+                if(!containerRef.current) return;
+                const scene = new THREE.Scene();
+                const starsGeo = new THREE.BufferGeometry();
+                const pos = [];
+                for(let i=0; i<6000; i++) pos.push((Math.random()-0.5)*200000, (Math.random()-0.5)*200000, (Math.random()-0.5)*200000);
+                starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                scene.add(new THREE.Points(starsGeo, new THREE.PointsMaterial({color:0x888888, size:60, sizeAttenuation:true, transparent:true, opacity:0.6})));
+                r.current.scene = scene;
+
+                const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 0.001, 500000);
+                camera.position.set(0, 3000, 4000);
+                r.current.camera = camera;
+
+                const renderer = new THREE.WebGLRenderer({antialias:true, logarithmicDepthBuffer:true});
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                containerRef.current.appendChild(renderer.domElement);
+                r.current.renderer = renderer;
+
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.maxDistance = 300000;
+                controls.minDistance = 0.00001; 
+                r.current.controls = controls;
+
+                const stopFlying = () => { r.current.isFlying = false; };
+                controls.addEventListener('start', stopFlying);
+
+                scene.add(new THREE.PointLight(0xffffff, 1.5, 0));
+                scene.add(new THREE.AmbientLight(0x222222));
+
+                SOLAR_SYSTEM_BODIES.forEach(b => {
+                    const geo = new THREE.SphereGeometry(1, 64, 64); 
+                    const mat = b.type === 'star' ? new THREE.MeshBasicMaterial({color: 0xFFDD88}) : new THREE.MeshStandardMaterial({color: b.color});
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.userData = { id: b.id, radiusKm: b.radiusKm };
+                    scene.add(mesh);
+                    r.current.bodies.set(b.id, mesh);
+                    if(b.type === 'star') mesh.add(new THREE.Mesh(new THREE.SphereGeometry(1.5,32,32), new THREE.MeshBasicMaterial({color:0xffaa00, transparent:true, opacity:0.2, side:THREE.BackSide})));
+                });
+
+                SOLAR_SYSTEM_BODIES.forEach(b => {
+                    if(b.type !== 'star') {
+                        const pts = AstroPhysics.getRelativeOrbitPoints(b.orbit);
+                        const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: b.color, transparent: true, opacity: 0.3 }));
+                        line.userData = { type: 'orbit' };
+                        if (b.parentId && r.current.bodies.get(b.parentId)) r.current.bodies.get(b.parentId).add(line);
+                        else scene.add(line);
+                    }
+                });
+
+                const raycaster = new THREE.Raycaster();
+                raycaster.params.Line.threshold = 5; 
+                
+                let startX = 0, startY = 0;
+                const onMouseDown = (e) => {
+                    startX = e.clientX;
+                    startY = e.clientY;
+                };
+
+                const onClick = (e) => {
+                    if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) return;
+
+                    const m = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+                    raycaster.setFromCamera(m, camera);
+                    const hit = raycaster.intersectObjects(scene.children, true).find(i => i.object.userData.id);
+                    selectId(hit ? hit.object.userData.id : null);
+                };
+                
+                window.addEventListener('mousedown', onMouseDown);
+                window.addEventListener('click', onClick);
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth/window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                return () => { 
+                    if(containerRef.current) containerRef.current.innerHTML=''; 
+                    window.removeEventListener('mousedown', onMouseDown);
+                    window.removeEventListener('click', onClick); 
+                    controls.removeEventListener('start', stopFlying);
+                }
+            }, []);
+
+            useEffect(() => {
+                let fid;
+                const loop = () => {
+                    const now = Date.now();
+                    const dt = now - r.current.lastTime;
+                    r.current.lastTime = now;
+                    if(isPlaying) setDatetime(prev => new Date(prev.getTime() + (speed * dt/1000)*86400000));
+
+                    const currentOverlays = [];
+                    r.current.scene.traverse(o => { if(o.userData.type === 'orbit') o.visible = showOrbits; });
+
+                    SOLAR_SYSTEM_BODIES.forEach(b => {
+                        const mesh = r.current.bodies.get(b.id);
+                        if(!mesh) return;
+
+                        let s = 1;
+                        if(scaleMode === 'didactic') {
+                            if(b.type === 'star') s = 60; 
+                            else s = b.radiusKm > 50000 ? 40 : 20; 
+                        } else {
+                            s = b.radiusKm * KM_TO_3D_UNITS; 
+                        }
+                        mesh.scale.set(s,s,s);
+
+                        if (b.parentId) {
+                            const localPos = AstroPhysics.calculateLocalPosition(b.orbit, datetime);
+                            if(scaleMode === 'didactic') localPos.multiplyScalar(50); 
+                            const parentMesh = r.current.bodies.get(b.parentId);
+                            if(parentMesh) mesh.position.copy(parentMesh.position).add(localPos);
+                        } else {
+                            mesh.position.copy(AstroPhysics.calculateLocalPosition(b.orbit, datetime));
+                        }
+
+                        if(b.type !== 'star') {
+                            const v = mesh.position.clone();
+                            v.project(r.current.camera);
+                            if(v.z < 1) {
+                                const x = (v.x * .5 + .5) * window.innerWidth;
+                                const y = (-(v.y * .5) + .5) * window.innerHeight;
+                                const dist = r.current.camera.position.distanceTo(mesh.position);
+                                const threshold = scaleMode === 'realistic' ? 50 : 5000; 
+                                currentOverlays.push({ id: b.id, name: b.name.en, x, y, isSmall: dist > threshold });
+                            }
+                        }
+                    });
+                    setOverlayItems(currentOverlays);
+
+                    if (focusId && r.current.bodies.has(focusId)) {
+                        const targetMesh = r.current.bodies.get(focusId);
+                        const targetPos = targetMesh.position;
+                        const controls = r.current.controls;
+                        const camera = r.current.camera;
+
+                        const prevTarget = controls.target.clone();
+                        controls.target.copy(targetPos); 
+                        
+                        if (r.current.isFlying && r.current.cameraTargetPos && r.current.flyOffset) {
+                            r.current.camera.position.lerp(r.current.cameraTargetPos, 0.05);
+                            
+                            if (r.current.camera.position.distanceTo(r.current.cameraTargetPos) < (r.current.flyOffset.length() * 0.05)) {
+                                r.current.isFlying = false;
+                            }
+                        } else {
+                            const deltaMove = new THREE.Vector3().subVectors(targetPos, prevTarget);
+                            camera.position.add(deltaMove);
+                        }
+                    }
+
+                    r.current.controls.update();
+                    r.current.renderer.render(r.current.scene, r.current.camera);
+                    fid = requestAnimationFrame(loop);
+                };
+                loop();
+                return () => cancelAnimationFrame(fid);
+            }, [datetime, isPlaying, speed, focusId, showLabels, showOrbits, scaleMode]);
+
+            return (
+                <div className="relative w-full h-full">
+                    <div ref={containerRef} className="w-full h-full" />
+                    {overlayItems.map(item => (
+                        <React.Fragment key={item.id}>
+                            {item.isSmall && <div className="planet-icon" style={{ left: item.x, top: item.y }} onClick={(e) => { e.stopPropagation(); selectId(item.id); }} />}
+                            {showLabels && <div className="planet-label" style={{ left: item.x, top: item.y }} onClick={(e) => { e.stopPropagation(); selectId(item.id); }}>{item.name}</div>}
+                        </React.Fragment>
+                    ))}
+                </div>
+            );
+        };
+
+        const Sidebar = () => {
+            const { selectedId } = useContext(SelCtx);
+            const b = SOLAR_SYSTEM_BODIES.find(x => x.id === selectedId) || SOLAR_SYSTEM_BODIES[0];
+            return (
+                <div className="absolute top-0 left-0 h-full w-80 glass-panel p-6 flex flex-col z-10 border-r border-white/10">
+                    <div className="text-xs text-nasa-dim uppercase tracking-widest mb-1">Eyes on the Solar System</div>
+                    <h1 className="text-4xl font-light text-white mb-1 tracking-tight">{b.name.en}</h1>
+                    <div className="flex items-center gap-2 mb-6">
+                         <span className={`w-2 h-2 rounded-full`} style={{background: b.color}}></span>
+                         <span className="text-nasa-accent text-sm font-bold uppercase">{b.type}</span>
+                    </div>
+                    <div className="text-sm text-gray-300 leading-relaxed font-light">
+                        <p className="mb-4">{b.info}</p>
+                        <div className="grid grid-cols-2 gap-4 mt-6">
+                            <div><div className="text-xs text-nasa-dim uppercase">Radius</div><div className="text-white font-mono">{b.radiusKm.toLocaleString()} km</div></div>
+                            <div><div className="text-xs text-nasa-dim uppercase">Dist. from Sun</div><div className="text-white font-mono">{b.orbit.a} AU</div></div>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        const LayersPanel = () => {
+            const { showLabels, toggleLabels, showOrbits, toggleOrbits, scaleMode, toggleScaleMode } = useContext(SetCtx);
+            return (
+                <div className="absolute bottom-24 right-4 w-48 glass-panel rounded-lg p-4 z-10">
+                    <div className="flex items-center justify-between mb-3 cursor-pointer text-sm text-gray-300 font-semibold"><span>View Options ></span></div>
+                    <div className="mb-4">
+                        <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2">Scale Mode</div>
+                        <button onClick={toggleScaleMode} className={`w-full py-1.5 px-3 text-xs font-bold rounded border transition-all ${scaleMode === 'didactic' ? 'bg-nasa-accent text-black border-nasa-accent' : 'bg-transparent text-white border-gray-600 hover:border-white'}`}>
+                            {scaleMode === 'didactic' ? 'DIDACTIC' : 'REAL 1:1'}
+                        </button>
+                    </div>
+                    <div className="space-y-2 border-t border-white/10 pt-3">
+                        <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs"><input type="checkbox" checked={showLabels} onChange={toggleLabels} className="accent-nasa-accent"/> Labels</label>
+                        <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs"><input type="checkbox" checked={showOrbits} onChange={toggleOrbits} className="accent-nasa-accent"/> Orbits</label>
+                    </div>
+                </div>
+            )
+        }
+
+        const Timeline = () => {
+            const { datetime, isPlaying, setIsPlaying } = useContext(TimeCtx);
+            return (
+                <div className="absolute bottom-0 left-80 right-0 h-20 glass-panel border-t border-white/10 flex flex-col justify-center items-center px-10 z-10">
+                    <div className="flex items-center gap-4 w-full max-w-2xl mb-2">
+                        <span className="text-nasa-dim text-xs font-mono">NOV. 24, 2025</span>
+                        <div className="flex-1 h-[1px] bg-gray-700 relative"><div className="absolute left-1/2 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-nasa-accent rounded-full shadow-[0_0_10px_#ff9d00]"></div></div>
+                        <span className="text-nasa-dim text-xs font-mono">10:06:00 AM</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                         <button onClick={() => setIsPlaying(!isPlaying)} className="text-nasa-accent font-bold text-xs uppercase tracking-widest hover:text-white transition-colors">{isPlaying ? 'PAUSE' : 'LIVE'}</button>
+                         <div className="text-white font-light text-sm font-mono tracking-widest">{datetime.toDateString().toUpperCase()}</div>
+                    </div>
+                </div>
+            )
+        }
+
+        const App = () => {
+            const [datetime, setDatetime] = useState(new Date());
+            const [speed, setSpeed] = useState(0.5);
+            const [isPlaying, setIsPlaying] = useState(true);
+            const [selectedId, selectId] = useState('sun');
+            const [focusId, setFocusId] = useState(null);
+            const [showLabels, setShowLabels] = useState(true);
+            const [showOrbits, setShowOrbits] = useState(true);
+            const [scaleMode, setScaleMode] = useState('didactic'); 
+
+            // CORREÇÃO 2: Se clicar no vazio ou pedir para selecionar null, 
+            // o sistema agora foca no Sol (target lock) em vez de ficar sem foco.
+            const handleSelect = (id) => { 
+                const targetId = id || 'sun';
+                selectId(targetId); 
+                setFocusId(targetId); 
+            };
+
+            return (
+                <TimeCtx.Provider value={{datetime, speed, isPlaying, setDatetime, setSpeed, setIsPlaying}}>
+                    <SelCtx.Provider value={{selectedId, selectId: handleSelect, focusId, setFocusId}}>
+                        <SetCtx.Provider value={{
+                            showLabels, toggleLabels: () => setShowLabels(s=>!s), 
+                            showOrbits, toggleOrbits: () => setShowOrbits(s=>!s),
+                            scaleMode, toggleScaleMode: () => setScaleMode(s => s === 'didactic' ? 'realistic' : 'didactic')
+                        }}>
+                            <Canvas3D />
+                            <Sidebar />
+                            <LayersPanel />
+                            <Timeline />
+                        </SetCtx.Provider>
+                    </SelCtx.Provider>
+                </TimeCtx.Provider>
+            );
+        };
+        createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

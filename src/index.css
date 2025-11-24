@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+@theme {
+  --color-nasa-black: #000000;
+  --color-nasa-panel: rgba(20, 20, 20, 0.9);
+  --color-nasa-accent: #ff9d00;
+  --color-nasa-blue: #4facfe;
+  --color-nasa-text: #eeeeee;
+  --color-nasa-dim: #888888;
+  
+  --font-sans: 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000;
+  color: #eee;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
