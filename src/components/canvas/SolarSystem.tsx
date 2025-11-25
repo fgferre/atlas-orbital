@@ -1,17 +1,23 @@
-import { SOLAR_SYSTEM_BODIES } from "../../lib/astrophysics";
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { useMemo } from "react";
 import { Planet } from "./Planet";
 import { useStore } from "../../store";
 
 export const SolarSystem = () => {
-  const { visibility } = useStore();
+  const visibility = useStore((state) => state.visibility);
 
   // Group bodies by parentId
-  const bodiesByParent = SOLAR_SYSTEM_BODIES.reduce((acc, body) => {
-    const pid = body.parentId || "root";
-    if (!acc[pid]) acc[pid] = [];
-    acc[pid].push(body);
-    return acc;
-  }, {} as Record<string, typeof SOLAR_SYSTEM_BODIES>);
+  const bodiesByParent = useMemo(() => {
+    return SOLAR_SYSTEM_BODIES.reduce(
+      (acc, body) => {
+        const pid = body.parentId || "root";
+        if (!acc[pid]) acc[pid] = [];
+        acc[pid].push(body);
+        return acc;
+      },
+      {} as Record<string, typeof SOLAR_SYSTEM_BODIES>
+    );
+  }, []);
 
   const renderBody = (id: string) => {
     const bodies = bodiesByParent[id];

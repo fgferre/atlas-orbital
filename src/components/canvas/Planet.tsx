@@ -19,7 +19,8 @@ interface PlanetProps {
 const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
-  const { selectId, scaleMode } = useStore();
+  const selectId = useStore((state) => state.selectId);
+  const scaleMode = useStore((state) => state.scaleMode);
 
   // Handle ring texture
   let textureRing: THREE.Texture | undefined;
@@ -265,7 +266,8 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
 // Wrapper to handle Suspense for textures
 const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const { scaleMode, selectId } = useStore();
+  const scaleMode = useStore((state) => state.scaleMode);
+  const selectId = useStore((state) => state.selectId);
 
   useFrame(() => {
     if (!meshRef.current) return;
@@ -318,7 +320,9 @@ const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
 export const Planet = ({ body, children }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<THREE.LineLoop>(null);
-  const { scaleMode, showOrbits, focusId } = useStore();
+  const scaleMode = useStore((state) => state.scaleMode);
+  const showOrbits = useStore((state) => state.showOrbits);
+  const focusId = useStore((state) => state.focusId);
 
   // Orbit geometry with adaptive resolution
   const orbitGeometry = useMemo(() => {

@@ -1,8 +1,8 @@
 import { useStore } from "../../store";
-import { SOLAR_SYSTEM_BODIES } from "../../lib/astrophysics";
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 
 export const Sidebar = () => {
-  const { selectedId } = useStore();
+  const selectedId = useStore((state) => state.selectedId);
   const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
 
   if (!b) return null;

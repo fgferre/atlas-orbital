@@ -3,14 +3,16 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useStore } from "../../store";
-import { SOLAR_SYSTEM_BODIES, KM_TO_3D_UNITS } from "../../lib/astrophysics";
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { KM_TO_3D_UNITS } from "../../lib/astrophysics";
 
 export const CameraController = () => {
   const { camera, scene } = useThree();
   const controls = useThree(
     (state) => state.controls
   ) as OrbitControlsImpl | null;
-  const { focusId, scaleMode } = useStore();
+  const focusId = useStore((state) => state.focusId);
+  const scaleMode = useStore((state) => state.scaleMode);
 
   const flyingRef = useRef({
     isFlying: false,
