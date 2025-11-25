@@ -123,20 +123,3 @@ export function colorIndexToRGB(bv: number): RGBColor {
 
   return { r, g, b };
 }
-
-/**
- * Helper to determine if a star should be visible based on LOD.
- */
-export function isStarVisible(
-  starDist: number,
-  starMag: number,
-  cameraDist: number,
-  fov: number
-): boolean {
-  // Simple heuristic:
-  // If we are zoomed out (cameraDist large), we only see bright stars.
-  // If we are zoomed in, we see dimmer stars.
-
-  // This is a placeholder for the actual LOD logic which might happen in the shader or loop.
-  return true;
-}
