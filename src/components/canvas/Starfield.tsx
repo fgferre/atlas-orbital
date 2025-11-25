@@ -200,7 +200,11 @@ export const Starfield = () => {
   // Astronomy Y -> Three -Z (Right Hand Rule)
 
   return (
-    <points geometry={geometry} rotation={[(23.4 * Math.PI) / 180, 0, 0]}>
+    <points
+      geometry={geometry}
+      rotation={[(23.4 * Math.PI) / 180, 0, 0]}
+      raycast={null}
+    >
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}

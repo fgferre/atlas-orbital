@@ -30,6 +30,7 @@ interface AppState {
   setDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
   setIsPlaying: (isPlaying: boolean) => void;
+  setSelectedId: (id: string | null) => void;
   selectId: (id: string | null) => void;
   setFocusId: (id: string | null) => void;
   setOverlayItems: (
@@ -76,6 +77,7 @@ export const useStore = create<AppState>((set) => ({
     })),
   setSpeed: (speed) => set({ speed }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
+  setSelectedId: (selectedId: string | null) => set({ selectedId }),
   selectId: (selectedId) => set({ selectedId, focusId: selectedId }),
   setFocusId: (focusId) => set({ focusId }),
   setOverlayItems: (overlayItems) => set({ overlayItems }),

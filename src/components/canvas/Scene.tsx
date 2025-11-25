@@ -11,10 +11,15 @@ import { CameraController } from "./CameraController";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 
+import { useStore } from "../../store";
+
 export const Scene = () => {
+  const setSelectedId = useStore((state) => state.setSelectedId);
+
   return (
     <>
       <Canvas
+        onPointerMissed={() => setSelectedId(null)}
         camera={{
           position: [0, 3000, 4000],
           fov: 40,
