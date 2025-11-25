@@ -1,5 +1,6 @@
 import { Canvas } from "@react-three/fiber";
-import { Stars, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
+import { Starfield } from "./Starfield";
 import {
   EffectComposer,
   Bloom,
@@ -17,21 +18,13 @@ export const Scene = () => {
         camera={{
           position: [0, 3000, 4000],
           fov: 40,
-          near: 0.001,
-          far: 500000,
+          near: 0.01,
+          far: 1e12,
         }}
         gl={{ antialias: true, logarithmicDepthBuffer: true }}
       >
         <color attach="background" args={["#000000"]} />
-        <Stars
-          radius={300}
-          depth={50}
-          count={5000}
-          factor={4}
-          saturation={0}
-          fade
-          speed={1}
-        />
+        <Starfield />
 
         <ambientLight intensity={0.1} />
         <pointLight position={[0, 0, 0]} intensity={2} decay={0} />
@@ -41,7 +34,7 @@ export const Scene = () => {
         <CameraController />
         <OrbitControls
           enablePan={true}
-          maxDistance={300000}
+          maxDistance={1e9}
           minDistance={0.00001}
           makeDefault
         />

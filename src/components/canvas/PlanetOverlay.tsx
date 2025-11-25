@@ -2,20 +2,21 @@ import { useStore } from "../../store";
 
 // This component renders OUTSIDE the Canvas and displays HTML overlays
 export const PlanetOverlay = () => {
-  const { overlayItems, showLabels, selectId } = useStore();
+  const { overlayItems, showLabels, showIcons, selectId } = useStore();
 
   return (
     <div className="absolute inset-0 pointer-events-none">
       {overlayItems.map((item) => (
         <div key={item.id}>
           {/* Planet Icon (small circle for distant planets) */}
-          {item.isSmall && (
+          {showIcons && item.isSmall && (
             <div
-              className="absolute w-3 h-3 border border-white/40 rounded-full pointer-events-auto cursor-pointer transition-all hover:border-nasa-accent hover:scale-110 hover:bg-nasa-accent/10"
+              className="absolute w-3 h-3 border border-white/40 rounded-full pointer-events-auto cursor-pointer hover:border-nasa-accent hover:scale-110 hover:bg-nasa-accent/10"
               style={{
                 left: `${item.x}px`,
                 top: `${item.y}px`,
                 transform: "translate(-50%, -50%)",
+                transition: "border-color 0.2s, scale 0.2s", // Only transition hover effects, NOT transform position
               }}
               onClick={(e) => {
                 e.stopPropagation();

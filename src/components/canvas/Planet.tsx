@@ -15,13 +15,7 @@ interface PlanetProps {
   children?: React.ReactNode;
 }
 
-const PlanetVisual = ({
-  body,
-  isSelected,
-}: {
-  body: CelestialBody;
-  isSelected: boolean;
-}) => {
+const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const { selectId, scaleMode } = useStore();
 
@@ -36,8 +30,9 @@ const PlanetVisual = ({
     let s = 1;
     if (scaleMode === "didactic") {
       if (body.type === "star") s = 60;
-      else if (body.type === "moon") s = 10;
-      else s = body.radiusKm > 50000 ? 40 : 20;
+      else if (body.type === "moon")
+        s = 5; // Moon is ~1/4 of Earth size (1737km vs 6371km)
+      else s = body.radiusKm > 50000 ? 40 : 20; // Large planets = 40, Small planets = 20
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
@@ -63,27 +58,12 @@ const PlanetVisual = ({
         roughness={0.8}
         metalness={0.1}
       />
-
-      {isSelected && (
-        <mesh scale={[1.2, 1.2, 1.2]}>
-          <sphereGeometry args={[1, 32, 32]} />
-          <meshBasicMaterial
-            color="#ffffff"
-            wireframe
-            transparent
-            opacity={0.3}
-          />
-        </mesh>
-      )}
     </mesh>
   );
 };
 
 // Wrapper to handle Suspense for textures
-const PlanetVisualWrapper = (props: {
-  body: CelestialBody;
-  isSelected: boolean;
-}) => {
+const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
   const fallback = (
     <mesh
       onClick={(e) => {
@@ -110,14 +90,20 @@ const PlanetVisualWrapper = (props: {
 
 export const Planet = ({ body, children }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
-  const { scaleMode, showOrbits, selectedId } = useStore();
+  const { scaleMode, showOrbits } = useStore();
 
   // Orbit geometry
   const orbitGeometry = useMemo(() => {
     if (body.type === "star") return null;
     const pts = AstroPhysics.getRelativeOrbitPoints(body.orbit);
+
+    // In didactic mode, exaggerate moon orbit distance to match position
+    if (body.parentId && scaleMode === "didactic") {
+      pts.forEach((p) => p.multiplyScalar(50));
+    }
+
     return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [body]);
+  }, [body, scaleMode]);
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -140,7 +126,7 @@ export const Planet = ({ body, children }: PlanetProps) => {
       )}
 
       <group ref={groupRef} name={body.id}>
-        <PlanetVisualWrapper body={body} isSelected={selectedId === body.id} />
+        <PlanetVisualWrapper body={body} />
         {children}
       </group>
     </>

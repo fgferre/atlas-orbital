@@ -7,6 +7,8 @@ interface AppState {
   selectedId: string | null;
   focusId: string | null;
   showLabels: boolean;
+  showIcons: boolean;
+  showStarfield: boolean;
   showOrbits: boolean;
   scaleMode: "didactic" | "realistic";
   overlayItems: Array<{
@@ -32,8 +34,10 @@ interface AppState {
     }>
   ) => void;
   toggleLabels: () => void;
+  toggleIcons: () => void;
   toggleOrbits: () => void;
   toggleScaleMode: () => void;
+  toggleShowStarfield: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -43,9 +47,11 @@ export const useStore = create<AppState>((set) => ({
   selectedId: "sun",
   focusId: "sun",
   showLabels: true,
+  showIcons: true,
   showOrbits: true,
   scaleMode: "didactic",
   overlayItems: [],
+  showStarfield: true,
 
   setDatetime: (value) =>
     set((state) => ({
@@ -57,7 +63,10 @@ export const useStore = create<AppState>((set) => ({
   setFocusId: (focusId) => set({ focusId }),
   setOverlayItems: (overlayItems) => set({ overlayItems }),
   toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
+  toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
   toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
+  toggleShowStarfield: () =>
+    set((state) => ({ showStarfield: !state.showStarfield })),
   toggleScaleMode: () =>
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",

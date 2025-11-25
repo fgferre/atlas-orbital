@@ -33,8 +33,7 @@ export interface CelestialBody {
   };
 }
 
-const TEXTURE_PATH =
-  "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/";
+const TEXTURE_PATH = "/textures/";
 
 export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
   {
@@ -46,7 +45,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
     info: "The heart of our solar system.",
     textures: {
-      map: "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/sprites/snowflake1.png",
+      map: TEXTURE_PATH + "snowflake1.png",
     },
   },
   {
@@ -66,6 +65,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 4.092,
     },
     info: "Smallest planet.",
+    textures: { map: TEXTURE_PATH + "mercury.jpg" },
   },
   {
     id: "venus",
@@ -84,6 +84,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 1.602,
     },
     info: "Thick atmosphere.",
+    textures: { map: TEXTURE_PATH + "venus.jpg" },
   },
   {
     id: "earth",
@@ -95,8 +96,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 1.0, e: 0.016, i: 0.0, O: 0.0, w: 102.9, M0: 357.5, n: 0.985 },
     info: "Our home.",
     textures: {
-      map: TEXTURE_PATH + "earth_atmos_2048.jpg",
-      bump: TEXTURE_PATH + "earth_normal_2048.jpg",
+      map: TEXTURE_PATH + "earth.jpg",
     },
   },
   {
@@ -116,7 +116,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.524,
     },
     info: "Red planet.",
-    textures: { map: TEXTURE_PATH + "mars_1k.jpg" },
+    textures: { map: TEXTURE_PATH + "mars.jpg" },
   },
   {
     id: "jupiter",
@@ -135,6 +135,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.083,
     },
     info: "Gas giant.",
+    textures: { map: TEXTURE_PATH + "jupiter.jpg" },
   },
   {
     id: "saturn",
@@ -153,6 +154,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.033,
     },
     info: "Ring system.",
+    textures: { map: TEXTURE_PATH + "saturn.jpg" },
   },
   {
     id: "uranus",
@@ -171,6 +173,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.011,
     },
     info: "Ice giant.",
+    textures: { map: TEXTURE_PATH + "uranus.jpg" },
   },
   {
     id: "neptune",
@@ -189,6 +192,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.005,
     },
     info: "Winds.",
+    textures: { map: TEXTURE_PATH + "neptune.jpg" },
   },
   {
     id: "moon",
@@ -199,7 +203,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#CCCCCC",
     orbit: { a: 0.00257, e: 0.055, i: 5.14, O: 0, w: 0, M0: 0, n: 13.176 },
     info: "Earth satellite.",
-    textures: { map: TEXTURE_PATH + "moon_1024.jpg" },
+    textures: { map: TEXTURE_PATH + "moon.jpg" },
   },
   {
     id: "pluto",
