@@ -1,5 +1,5 @@
-import { Scene } from './components/canvas/Scene';
-import { Overlay } from './components/ui/Overlay';
+import { Scene } from "./components/canvas/Scene";
+import { Overlay } from "./components/ui/Overlay";
 
 function App() {
   return (
@@ -7,7 +7,7 @@ function App() {
       <Scene />
       <Overlay />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

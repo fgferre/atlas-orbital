@@ -18,6 +18,14 @@ interface AppState {
     y: number;
     isSmall: boolean;
   }>;
+  visibility: {
+    planets: boolean;
+    dwarfs: boolean;
+    moons: boolean;
+    asteroids: boolean;
+    comets: boolean;
+    tnos: boolean;
+  };
 
   setDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
@@ -38,6 +46,7 @@ interface AppState {
   toggleOrbits: () => void;
   toggleScaleMode: () => void;
   toggleShowStarfield: () => void;
+  toggleVisibility: (category: keyof AppState["visibility"]) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -52,6 +61,14 @@ export const useStore = create<AppState>((set) => ({
   scaleMode: "didactic",
   overlayItems: [],
   showStarfield: true,
+  visibility: {
+    planets: true,
+    dwarfs: true,
+    moons: true,
+    asteroids: true,
+    comets: true,
+    tnos: true,
+  },
 
   setDatetime: (value) =>
     set((state) => ({
@@ -70,5 +87,12 @@ export const useStore = create<AppState>((set) => ({
   toggleScaleMode: () =>
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
+    })),
+  toggleVisibility: (category) =>
+    set((state) => ({
+      visibility: {
+        ...state.visibility,
+        [category]: !state.visibility[category],
+      },
     })),
 }));

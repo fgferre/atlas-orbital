@@ -12,6 +12,8 @@ export const LayersPanel = () => {
     toggleScaleMode,
     showStarfield,
     toggleShowStarfield,
+    visibility,
+    toggleVisibility,
   } = useStore();
   return (
     <div className="absolute bottom-24 right-4 w-48 bg-nasa-panel backdrop-blur-md rounded-lg p-4 z-10 pointer-events-auto border border-white/10">
@@ -70,6 +72,59 @@ export const LayersPanel = () => {
           />{" "}
           Starfield
         </label>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-white/10">
+        <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2">
+          Categories
+        </div>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs">
+            <input
+              type="checkbox"
+              checked={visibility.planets}
+              onChange={() => toggleVisibility("planets")}
+              className="accent-nasa-accent"
+            />{" "}
+            Planets
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs">
+            <input
+              type="checkbox"
+              checked={visibility.moons}
+              onChange={() => toggleVisibility("moons")}
+              className="accent-nasa-accent"
+            />{" "}
+            Moons
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs">
+            <input
+              type="checkbox"
+              checked={visibility.dwarfs}
+              onChange={() => toggleVisibility("dwarfs")}
+              className="accent-nasa-accent"
+            />{" "}
+            Dwarfs
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs">
+            <input
+              type="checkbox"
+              checked={visibility.asteroids}
+              onChange={() => toggleVisibility("asteroids")}
+              className="accent-nasa-accent"
+            />{" "}
+            Asteroids
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer hover:text-white text-gray-400 text-xs">
+            <input
+              type="checkbox"
+              checked={visibility.tnos}
+              onChange={() => toggleVisibility("tnos")}
+              className="accent-nasa-accent"
+            />{" "}
+            TNOs
+          </label>
+        </div>
       </div>
     </div>
   );

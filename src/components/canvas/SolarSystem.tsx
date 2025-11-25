@@ -1,10 +1,13 @@
-import { SOLAR_SYSTEM_BODIES } from '../../lib/astrophysics';
-import { Planet } from './Planet';
+import { SOLAR_SYSTEM_BODIES } from "../../lib/astrophysics";
+import { Planet } from "./Planet";
+import { useStore } from "../../store";
 
 export const SolarSystem = () => {
+  const { visibility } = useStore();
+
   // Group bodies by parentId
   const bodiesByParent = SOLAR_SYSTEM_BODIES.reduce((acc, body) => {
-    const pid = body.parentId || 'root';
+    const pid = body.parentId || "root";
     if (!acc[pid]) acc[pid] = [];
     acc[pid].push(body);
     return acc;
@@ -13,17 +16,29 @@ export const SolarSystem = () => {
   const renderBody = (id: string) => {
     const bodies = bodiesByParent[id];
     if (!bodies) return null;
-    
-    return bodies.map(body => (
-      <Planet key={body.id} body={body}>
-        {renderBody(body.id)}
-      </Planet>
-    ));
+
+    return bodies.map((body) => {
+      // Check visibility based on body type
+      let isVisible = true;
+      if (body.type === "planet") isVisible = visibility.planets;
+      else if (body.type === "dwarf") isVisible = visibility.dwarfs;
+      else if (body.type === "moon") isVisible = visibility.moons;
+      else if (body.type === "asteroid") isVisible = visibility.asteroids;
+      else if (body.type === "comet") isVisible = visibility.comets;
+      else if (body.type === "tno") isVisible = visibility.tnos;
+
+      // Always show the Sun (star)
+      if (body.type === "star") isVisible = true;
+
+      if (!isVisible) return null;
+
+      return (
+        <Planet key={body.id} body={body}>
+          {renderBody(body.id)}
+        </Planet>
+      );
+    });
   };
 
-  return (
-    <group>
-      {renderBody('root')}
-    </group>
-  );
+  return <group>{renderBody("root")}</group>;
 };

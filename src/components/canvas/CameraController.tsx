@@ -42,7 +42,8 @@ export const CameraController = () => {
 
     const targetRadius = getTargetScale(bodyData);
     const isSaturn = focusId === "saturn";
-    const multiplier = scaleMode === "realistic" ? 3.0 : isSaturn ? 5.0 : 3.5;
+    // Increased multipliers to ensure objects don't fill the entire screen (approx 50-60% coverage)
+    const multiplier = scaleMode === "realistic" ? 5.0 : isSaturn ? 6.0 : 4.5;
     const idealDist = targetRadius * multiplier;
 
     // CRITICAL FIX: Use getWorldPosition for moons
@@ -80,6 +81,25 @@ export const CameraController = () => {
       controls.removeEventListener("start", stopFlying);
     };
   }, [controls]);
+
+  // Update camera settings based on target size
+  useEffect(() => {
+    if (!focusId || !controls || !camera) return;
+
+    const bodyData = SOLAR_SYSTEM_BODIES.find((b) => b.id === focusId);
+    if (!bodyData) return;
+
+    const targetRadius = getTargetScale(bodyData);
+
+    // Dynamic minDistance: allow getting closer to smaller objects
+    // For small objects (radius < 1 unit), allow getting very close
+    controls.minDistance = targetRadius * 1.2;
+
+    // Dynamic near plane: prevent clipping when close
+    // Set near plane to 1/10th of the minDistance
+    camera.near = Math.min(1, controls.minDistance * 0.1);
+    camera.updateProjectionMatrix();
+  }, [focusId, scaleMode, controls, camera]);
 
   // Update camera position every frame
   useFrame(() => {

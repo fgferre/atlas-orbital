@@ -17,7 +17,8 @@ interface PlanetProps {
 }
 
 const PlanetVisual = ({ body }: { body: CelestialBody }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const rotationRef = useRef<THREE.Group>(null);
   const { selectId, scaleMode } = useStore();
 
   // Handle ring texture
@@ -91,9 +92,6 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
           float mixFactor = smoothstep(-0.1, 0.1, intensity);
 
           // Mix night lights (when dark) with day map (when lit)
-          // When intensity is 0 (Night), we want nightColor
-          // When intensity is 1 (Day), we want dayColor
-          
           vec3 finalColor = mix(nightColor, dayColor * intensity, mixFactor);
           
           gl_FragColor = vec4(finalColor, 1.0);
@@ -171,7 +169,9 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   }, []);
 
   useFrame(() => {
-    if (!meshRef.current) return;
+    if (!groupRef.current) return;
+
+    // Scaling
     let s = 1;
     if (scaleMode === "didactic") {
       if (body.type === "star") s = 60;
@@ -180,12 +180,25 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
-    meshRef.current.scale.setScalar(s);
+    groupRef.current.scale.setScalar(s);
+
+    // Rotation
+    if (rotationRef.current && body.rotationPeriodHours) {
+      const { datetime } = useStore.getState();
+      // Calculate rotation angle: (time / period) * 2PI
+      // Period is in hours, time is in ms.
+      // 1 hour = 3600000 ms
+      const currentRotation =
+        (datetime.getTime() / (body.rotationPeriodHours * 3600000)) *
+        Math.PI *
+        2;
+      rotationRef.current.rotation.y = currentRotation;
+    }
   });
 
   return (
-    <mesh
-      ref={meshRef}
+    <group
+      ref={groupRef}
       onClick={(e) => {
         e.stopPropagation();
         selectId(body.id);
@@ -193,51 +206,59 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
       onPointerOver={() => (document.body.style.cursor = "pointer")}
       onPointerOut={() => (document.body.style.cursor = "auto")}
     >
-      {/* 1. Base Planet Sphere */}
-      <sphereGeometry args={[1, 64, 64]} />
-      {earthMaterial ? (
-        <primitive object={earthMaterial} attach="material" />
-      ) : (
-        <meshStandardMaterial
-          map={textureMap}
-          color={textureMap ? "#ffffff" : body.color}
-          emissive={body.type === "star" ? body.color : "#000"}
-          emissiveMap={body.type === "star" ? textureMap : undefined}
-          emissiveIntensity={body.type === "star" ? 2 : 0}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      )}
+      {/* Axial Tilt Group */}
+      <group rotation={[0, 0, (body.axialTilt || 0) * (Math.PI / 180)]}>
+        {/* Rotation Group */}
+        <group ref={rotationRef}>
+          {/* 1. Base Planet Sphere */}
+          <mesh>
+            <sphereGeometry args={[1, 64, 64]} />
+            {earthMaterial ? (
+              <primitive object={earthMaterial} attach="material" />
+            ) : (
+              <meshStandardMaterial
+                map={textureMap}
+                color={textureMap ? "#ffffff" : body.color}
+                emissive={body.type === "star" ? body.color : "#000"}
+                emissiveMap={body.type === "star" ? textureMap : undefined}
+                emissiveIntensity={body.type === "star" ? 2 : 0}
+                roughness={0.8}
+                metalness={0.1}
+              />
+            )}
+          </mesh>
 
-      {/* 2. Cloud Layer (Slightly larger) */}
-      {cloudMaterial && (
-        <mesh scale={[1.01, 1.01, 1.01]}>
-          <sphereGeometry args={[1, 64, 64]} />
-          <primitive object={cloudMaterial} attach="material" />
-        </mesh>
-      )}
+          {/* 2. Cloud Layer (Slightly larger) */}
+          {cloudMaterial && (
+            <mesh scale={[1.01, 1.01, 1.01]}>
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive object={cloudMaterial} attach="material" />
+            </mesh>
+          )}
 
-      {/* 3. Atmosphere Layer (Larger still) */}
-      {body.id === "earth" && (
-        <mesh scale={[1.15, 1.15, 1.15]}>
-          <sphereGeometry args={[1, 64, 64]} />
-          <primitive object={atmosphereMaterial} attach="material" />
-        </mesh>
-      )}
+          {/* 3. Atmosphere Layer (Larger still) */}
+          {body.id === "earth" && (
+            <mesh scale={[1.15, 1.15, 1.15]}>
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive object={atmosphereMaterial} attach="material" />
+            </mesh>
+          )}
 
-      {/* 4. Ring System */}
-      {textureRing && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[1.4, 2.4, 64]} />
-          <meshStandardMaterial
-            map={textureRing}
-            transparent
-            side={THREE.DoubleSide}
-            opacity={0.8}
-          />
-        </mesh>
-      )}
-    </mesh>
+          {/* 4. Ring System */}
+          {textureRing && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[1.4, 2.4, 64]} />
+              <meshStandardMaterial
+                map={textureRing}
+                transparent
+                side={THREE.DoubleSide}
+                opacity={0.8}
+              />
+            </mesh>
+          )}
+        </group>
+      </group>
+    </group>
   );
 };
 
@@ -392,7 +413,21 @@ export const Planet = ({ body, children }: PlanetProps) => {
 
       <group ref={groupRef} name={body.id}>
         <PlanetVisualWrapper body={body} />
-        {children}
+
+        {/* 
+          Moons usually orbit the planet's equatorial plane (which is tilted).
+          We apply the planet's axial tilt to the children container so the moons orbit the equator.
+          EXCEPTION: Earth's Moon orbits the ecliptic (mostly), not Earth's equator.
+        */}
+        <group
+          rotation={
+            body.id !== "earth"
+              ? [0, 0, (body.axialTilt || 0) * (Math.PI / 180)]
+              : [0, 0, 0]
+          }
+        >
+          {children}
+        </group>
       </group>
     </>
   );
