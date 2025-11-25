@@ -19,7 +19,7 @@ export const Scene = () => {
           position: [0, 3000, 4000],
           fov: 40,
           near: 0.01,
-          far: 1e12,
+          far: 1e14, // Increased to ensure visibility of distant stars
         }}
         gl={{ antialias: true, logarithmicDepthBuffer: true }}
       >
@@ -34,8 +34,9 @@ export const Scene = () => {
         <CameraController />
         <OrbitControls
           enablePan={true}
-          maxDistance={1e9}
+          maxDistance={1e13} // Increased to allow zooming out to see the whole starfield
           minDistance={0.00001}
+          zoomSpeed={3.0} // Faster zoom for better navigation at large scales
           makeDefault
         />
 

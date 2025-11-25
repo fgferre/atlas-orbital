@@ -1,0 +1,15 @@
+Fetching 35000 stars from VizieR...
+URL: https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=I/239/hip_main&-c=00%2000%2000&-c.rs=180&-out.max=35000&-out=RAdeg,DEdeg,Plx,Vmag,B-V&-sort=Vmag
+Download complete. Parsing...
+First 500 chars: #
+#   VizieR Astronomical Server vizier.cds.unistra.fr
+#    Date: 2025-11-25T03:30:15 [V7.5.3]
+#   In case of problem, please report to:	cds-question@unistra.fr
+#
+#
+#Coosys	J2000:	eq_FK5 J2000
+#INFO	service_protocol=ASU	  IVOID of the protocol through which the data was retrieved
+#INFO	request_date=2025-11-25T03:30:15	  Query execution date
+#INFO	request=https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=I/239/hip_main&-c=00%2000%2000&-c.rs=180&-out.max=35000&-out=RAdeg,DEdeg,Plx,Vmag,B-V&-so
+Parsed 0 stars.
+Saved to C:\Users\fgfer\OneDrive\Documents\GitHub\atlas-orbital\src\data\tycho2-processed.json
