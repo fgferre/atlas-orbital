@@ -30,6 +30,9 @@ export interface CelestialBody {
     map?: string;
     bump?: string;
     atmosphere?: string;
+    ring?: string;
+    clouds?: string;
+    night?: string;
   };
 }
 
@@ -45,7 +48,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
     info: "The heart of our solar system.",
     textures: {
-      map: TEXTURE_PATH + "snowflake1.png",
+      map: TEXTURE_PATH + "8k_sun.jpg",
     },
   },
   {
@@ -65,7 +68,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 4.092,
     },
     info: "Smallest planet.",
-    textures: { map: TEXTURE_PATH + "mercury.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_mercury.jpg" },
   },
   {
     id: "venus",
@@ -84,7 +87,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 1.602,
     },
     info: "Thick atmosphere.",
-    textures: { map: TEXTURE_PATH + "venus.jpg" },
+    textures: {
+      map: TEXTURE_PATH + "8k_venus_surface.jpg",
+      atmosphere: TEXTURE_PATH + "4k_venus_atmosphere.jpg",
+    },
   },
   {
     id: "earth",
@@ -96,7 +102,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 1.0, e: 0.016, i: 0.0, O: 0.0, w: 102.9, M0: 357.5, n: 0.985 },
     info: "Our home.",
     textures: {
-      map: TEXTURE_PATH + "earth.jpg",
+      map: TEXTURE_PATH + "8k_earth_daymap.jpg",
+      night: TEXTURE_PATH + "8k_earth_nightmap.jpg",
+      clouds: TEXTURE_PATH + "8k_earth_clouds.jpg",
     },
   },
   {
@@ -116,7 +124,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.524,
     },
     info: "Red planet.",
-    textures: { map: TEXTURE_PATH + "mars.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_mars.jpg" },
   },
   {
     id: "jupiter",
@@ -135,7 +143,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.083,
     },
     info: "Gas giant.",
-    textures: { map: TEXTURE_PATH + "jupiter.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_jupiter.jpg" },
   },
   {
     id: "saturn",
@@ -154,7 +162,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.033,
     },
     info: "Ring system.",
-    textures: { map: TEXTURE_PATH + "saturn.jpg" },
+    textures: {
+      map: TEXTURE_PATH + "8k_saturn.jpg",
+      ring: TEXTURE_PATH + "8k_saturn_ring_alpha.png",
+    },
   },
   {
     id: "uranus",
@@ -173,7 +184,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.011,
     },
     info: "Ice giant.",
-    textures: { map: TEXTURE_PATH + "uranus.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_uranus.jpg" },
   },
   {
     id: "neptune",
@@ -192,7 +203,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.005,
     },
     info: "Winds.",
-    textures: { map: TEXTURE_PATH + "neptune.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_neptune.jpg" },
   },
   {
     id: "moon",
@@ -203,7 +214,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#CCCCCC",
     orbit: { a: 0.00257, e: 0.055, i: 5.14, O: 0, w: 0, M0: 0, n: 13.176 },
     info: "Earth satellite.",
-    textures: { map: TEXTURE_PATH + "moon.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_moon.jpg" },
   },
   {
     id: "pluto",
@@ -222,6 +233,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.003,
     },
     info: "Dwarf planet.",
+    textures: { map: TEXTURE_PATH + "2k_pluto.jpg" },
   },
   {
     id: "ceres",
@@ -229,7 +241,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "dwarf",
     name: { en: "CERES", pt: "CERES" },
     radiusKm: 473,
-    color: "#AAA",
+    color: "#B8A998",
     orbit: {
       a: 2.768,
       e: 0.076,
@@ -240,6 +252,64 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.214,
     },
     info: "Asteroid belt.",
+    textures: { map: TEXTURE_PATH + "4k_ceres_fictional.jpg" },
+  },
+  {
+    id: "haumea",
+    group: "other",
+    type: "dwarf",
+    name: { en: "HAUMEA", pt: "HAUMEA" },
+    radiusKm: 816,
+    color: "#E8D5C4",
+    orbit: {
+      a: 43.218,
+      e: 0.188,
+      i: 28.19,
+      O: 121.9,
+      w: 240.2,
+      M0: 217.7,
+      n: 0.003,
+    },
+    info: "Fast spinner.",
+    textures: { map: TEXTURE_PATH + "4k_haumea_fictional.jpg" },
+  },
+  {
+    id: "makemake",
+    group: "other",
+    type: "dwarf",
+    name: { en: "MAKEMAKE", pt: "MAKEMAKE" },
+    radiusKm: 715,
+    color: "#D4A574",
+    orbit: {
+      a: 45.715,
+      e: 0.159,
+      i: 29.0,
+      O: 79.4,
+      w: 298.4,
+      M0: 165.5,
+      n: 0.003,
+    },
+    info: "Dwarf planet.",
+    textures: { map: TEXTURE_PATH + "4k_makemake_fictional.jpg" },
+  },
+  {
+    id: "eris",
+    group: "other",
+    type: "dwarf",
+    name: { en: "ERIS", pt: "ÉRIS" },
+    radiusKm: 1163,
+    color: "#F0E6D2",
+    orbit: {
+      a: 67.781,
+      e: 0.44,
+      i: 44.04,
+      O: 35.8,
+      w: 151.4,
+      M0: 205.9,
+      n: 0.001,
+    },
+    info: "Massive dwarf.",
+    textures: { map: TEXTURE_PATH + "4k_eris_fictional.jpg" },
   },
 ];
 
