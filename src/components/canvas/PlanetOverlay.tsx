@@ -8,15 +8,15 @@ export const PlanetOverlay = () => {
     <div className="absolute inset-0 pointer-events-none">
       {overlayItems.map((item) => (
         <div key={item.id}>
-          {/* Planet Icon (small circle for distant planets) */}
-          {showIcons && item.isSmall && (
+          {/* Planet Icon */}
+          {showIcons && item.showIcon && (
             <div
               className="absolute w-3 h-3 border border-white/40 rounded-full pointer-events-auto cursor-pointer hover:border-nasa-accent hover:scale-110 hover:bg-nasa-accent/10"
               style={{
                 left: `${item.x}px`,
                 top: `${item.y}px`,
                 transform: "translate(-50%, -50%)",
-                transition: "border-color 0.2s, scale 0.2s", // Only transition hover effects, NOT transform position
+                transition: "border-color 0.2s, scale 0.2s",
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -26,7 +26,7 @@ export const PlanetOverlay = () => {
           )}
 
           {/* Planet Label */}
-          {showLabels && (
+          {showLabels && item.showLabel && (
             <div
               className="absolute text-gray-300 text-xs font-semibold uppercase tracking-wide pointer-events-auto cursor-pointer transition-colors hover:text-nasa-accent drop-shadow-md whitespace-nowrap"
               style={{

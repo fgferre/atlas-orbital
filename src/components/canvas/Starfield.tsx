@@ -203,7 +203,7 @@ export const Starfield = () => {
     <points
       geometry={geometry}
       rotation={[(23.4 * Math.PI) / 180, 0, 0]}
-      raycast={null}
+      raycast={() => null}
     >
       <shaderMaterial
         ref={materialRef}

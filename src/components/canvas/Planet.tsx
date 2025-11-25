@@ -1,7 +1,7 @@
 import { useRef, useMemo, Suspense } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { useTexture } from "@react-three/drei";
+import { useTexture, Line } from "@react-three/drei";
 import {
   type CelestialBody,
   AstroPhysics,
@@ -319,13 +319,13 @@ const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
 
 export const Planet = ({ body, children }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
-  const orbitLineRef = useRef<THREE.LineLoop>(null);
+  const orbitLineRef = useRef<any>(null);
   const scaleMode = useStore((state) => state.scaleMode);
   const showOrbits = useStore((state) => state.showOrbits);
   const focusId = useStore((state) => state.focusId);
 
-  // Orbit geometry with adaptive resolution
-  const orbitGeometry = useMemo(() => {
+  // Orbit points with adaptive resolution
+  const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
 
     // Use 4x higher resolution for focused bodies
@@ -337,7 +337,7 @@ export const Planet = ({ body, children }: PlanetProps) => {
       pts.forEach((p) => p.multiplyScalar(50));
     }
 
-    return new THREE.BufferGeometry().setFromPoints(pts);
+    return pts;
   }, [body, scaleMode, focusId]);
 
   useFrame(({ camera }) => {
@@ -396,23 +396,28 @@ export const Planet = ({ body, children }: PlanetProps) => {
         );
       }
 
-      const material = orbitLineRef.current.material as THREE.LineBasicMaterial;
-      material.opacity = opacity;
+      const material = orbitLineRef.current.material as THREE.ShaderMaterial;
+      if (material.uniforms?.opacity) {
+        material.uniforms.opacity.value = opacity;
+      } else {
+        material.opacity = opacity;
+      }
     }
   });
 
   return (
     <>
-      {showOrbits && orbitGeometry && (
-        <lineLoop ref={orbitLineRef} geometry={orbitGeometry} renderOrder={-1}>
-          <lineBasicMaterial
-            color={body.color}
-            transparent
-            opacity={0.3}
-            depthTest={true}
-            depthWrite={false}
-          />
-        </lineLoop>
+      {showOrbits && orbitPoints && (
+        <Line
+          ref={orbitLineRef}
+          points={orbitPoints}
+          color={body.color}
+          lineWidth={1.5} // Thicker, volumetric look
+          transparent
+          opacity={0.3}
+          depthTest={true}
+          depthWrite={false}
+        />
       )}
 
       <group ref={groupRef} name={body.id}>

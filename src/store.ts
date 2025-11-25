@@ -17,6 +17,8 @@ interface AppState {
     x: number;
     y: number;
     isSmall: boolean;
+    showLabel: boolean;
+    showIcon: boolean;
   }>;
   visibility: {
     planets: boolean;
@@ -40,6 +42,8 @@ interface AppState {
       x: number;
       y: number;
       isSmall: boolean;
+      showLabel: boolean;
+      showIcon: boolean;
     }>
   ) => void;
   toggleLabels: () => void;
