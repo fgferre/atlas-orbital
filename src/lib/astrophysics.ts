@@ -34,7 +34,24 @@ export interface CelestialBody {
   orbit: OrbitParams;
   rotationPeriodHours: number; // Sidereal rotation period in hours (negative for retrograde)
   axialTilt: number; // Axial tilt in degrees
+
+  // Enhanced Data Fields
+  classification?: string; // e.g. "Terrestrial Planet", "Gas Giant"
+  mass?: string;
+  gravity?: string;
+  composition?: string;
+  atmosphere?: string;
+  dayLength?: string;
+  yearLength?: string;
+  curiosity?: string;
+  facts?: string[]; // Changed from single fact to array
+  spectralClass?: string; // For stars
+  description?: string;
+  distanceFromParent?: string; // String from catalog (e.g. "57,910,000 km")
+
+  // Legacy info field (keep for now or deprecate)
   info: string;
+
   textures?: {
     map?: string;
     bump?: string;

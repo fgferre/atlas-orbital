@@ -63,6 +63,24 @@ body {
   border-right: 2px solid var(--color-nasa-accent);
 }
 
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-nasa-dim);
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-nasa-accent);
+}
+
 /* Animations */
 @keyframes slideInLeft {
   from {
