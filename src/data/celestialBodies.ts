@@ -179,6 +179,55 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     textures: { map: TEXTURE_PATH + "8k_mars.jpg" },
   },
   {
+    id: "phobos",
+    parentId: "mars",
+    type: "moon",
+    name: { en: "PHOBOS", pt: "FOBOS" },
+    radiusKm: 11,
+    color: "#B0A090",
+    orbit: { a: 0.0000627, e: 0.0151, i: 1.093, O: 0, w: 0, M0: 0, n: 1128.8 },
+    rotationPeriodHours: 7.65,
+    axialTilt: 0,
+    classification: "Natural Satellite",
+    mass: "1.06 × 10¹⁶ kg",
+    gravity: "0.0057 m/s²",
+    composition: "Rock, dust",
+    atmosphere: "None",
+    dayLength: "7.65 hours",
+    yearLength: "0.32 days",
+    curiosity:
+      "It orbits closer to its planet than any other moon in the solar system.",
+    facts: ["It is doomed to crash into Mars in ~50 million years."],
+    description: "Small, irregular, and heavily cratered.",
+    distanceFromParent: "9,376 km",
+    info: "Mars moon.",
+    textures: { map: TEXTURE_PATH + "2k_phobos.jpg" },
+  },
+  {
+    id: "deimos",
+    parentId: "mars",
+    type: "moon",
+    name: { en: "DEIMOS", pt: "DEIMOS" },
+    radiusKm: 6,
+    color: "#C0B0A0",
+    orbit: { a: 0.000156, e: 0.0002, i: 0.93, O: 0, w: 0, M0: 0, n: 285.1 },
+    rotationPeriodHours: 30.3,
+    axialTilt: 0,
+    classification: "Natural Satellite",
+    mass: "1.48 × 10¹⁵ kg",
+    gravity: "0.003 m/s²",
+    composition: "Rock, dust",
+    atmosphere: "None",
+    dayLength: "30.3 hours",
+    yearLength: "1.26 days",
+    curiosity: "It is smaller and smoother than Phobos.",
+    facts: ["It escapes Mars' gravity very slowly."],
+    description: "Small and lumpy, like an asteroid.",
+    distanceFromParent: "23,463 km",
+    info: "Mars moon.",
+    textures: { map: TEXTURE_PATH + "2k_deimos.jpg" },
+  },
+  {
     id: "jupiter",
     group: "outer",
     type: "planet",
@@ -251,6 +300,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     textures: {
       map: TEXTURE_PATH + "8k_saturn.jpg",
       ring: TEXTURE_PATH + "8k_saturn_ring_alpha.png",
+    },
+    ringSystem: {
+      innerRadius: 1.28,
+      outerRadius: 2.35,
     },
   },
   {
@@ -419,7 +472,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Dynamic surface, marked by lava flows.",
     distanceFromParent: "421,800 km",
     info: "Volcanic world.",
-    textures: { map: TEXTURE_PATH + "4k_io.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_io.jpg" },
   },
   {
     id: "europa",
@@ -443,7 +496,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Icy surface with few craters.",
     distanceFromParent: "670,900 km",
     info: "Subsurface ocean.",
-    textures: { map: TEXTURE_PATH + "4k_europa.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_europa.jpg" },
   },
   // Saturn's Major Moons
   {
@@ -468,7 +521,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Dynamic climate, lakes and rivers of liquid hydrocarbons.",
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
-    textures: { map: TEXTURE_PATH + "4k_titan.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_titan.jpg" },
   },
   {
     id: "rhea",
@@ -493,7 +546,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Rhea is marked by craters and possible hints of past activity.",
     distanceFromParent: "527,000 km",
     info: "Icy body.",
-    textures: { map: TEXTURE_PATH + "4k_rhea.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_rhea.jpg" },
   },
   {
     id: "iapetus",
@@ -542,7 +595,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "It displays geological contrasts and tectonic activity.",
     distanceFromParent: "377,400 km",
     info: "Cratered ice.",
-    textures: { map: TEXTURE_PATH + "4k_dione.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_dione.jpg" },
   },
   {
     id: "tethys",
@@ -567,7 +620,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Abundant ice and landscape marked by large geological features.",
     distanceFromParent: "294,670 km",
     info: "Huge canyon.",
-    textures: { map: TEXTURE_PATH + "4k_tethys.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_tethys.jpg" },
   },
   {
     id: "enceladus",
@@ -643,7 +696,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Triton is the only large moon in retrograde orbit, with icy surfaces and active geysers.",
     distanceFromParent: "354,800 km",
     info: "Retrograde orbit.",
-    textures: { map: TEXTURE_PATH + "4k_triton.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_triton.png" },
   },
   {
     id: "titania",
@@ -667,7 +720,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Titania has deep fissures and abundant ice.",
     distanceFromParent: "436,300 km",
     info: "Largest Uranus moon.",
-    textures: { map: TEXTURE_PATH + "4k_titania.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_titania.png" },
   },
   {
     id: "oberon",
@@ -691,7 +744,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Impact regions and rugged terrains predominate.",
     distanceFromParent: "583,500 km",
     info: "Outermost major moon.",
-    textures: { map: TEXTURE_PATH + "4k_oberon.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_oberon.png" },
   },
   {
     id: "umbriel",
@@ -715,7 +768,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Umbriel is the least reflective among Uranus’s moons.",
     distanceFromParent: "266,000 km",
     info: "Darkest moon.",
-    textures: { map: TEXTURE_PATH + "4k_umbriel.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_umbriel.png" },
   },
   {
     id: "ariel",
@@ -739,7 +792,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Ariel shows valleys, bright sections, and steep slopes.",
     distanceFromParent: "191,000 km",
     info: "Brightest moon.",
-    textures: { map: TEXTURE_PATH + "4k_ariel.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_ariel.png" },
   },
   {
     id: "miranda",
@@ -764,7 +817,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Miranda has mixed terrains, mountains, and faults.",
     distanceFromParent: "129,900 km",
     info: "Jumbled terrain.",
-    textures: { map: TEXTURE_PATH + "4k_miranda.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_miranda.png" },
   },
   {
     id: "pluto",
@@ -836,7 +889,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Ceres has bright craters and signs of cryovolcanism, suggesting active processes beneath its frozen surface.",
     distanceFromParent: "413,700,000 km",
     info: "Asteroid belt.",
-    textures: { map: TEXTURE_PATH + "4k_ceres_fictional.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_ceres.jpg" },
   },
   {
     id: "haumea",
@@ -938,7 +991,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Orbiting in the outskirts of the solar system, Eris has a highly inclined and eccentric orbit and is the most distant known dwarf planet from the Sun.",
     distanceFromParent: "10,120,000,000 km",
     info: "Massive dwarf.",
-    textures: { map: TEXTURE_PATH + "4k_eris_fictional.jpg" },
+    textures: { map: TEXTURE_PATH + "2k_eris.jpg" },
   },
   // Dwarf Planets & TNOs
   {
@@ -1093,7 +1146,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     description: "Charon may also have subsurface oceans.",
     distanceFromParent: "19,570 km",
     info: "Binary partner.",
-    textures: { map: TEXTURE_PATH + "4k_charon.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_charon.png" },
   },
   {
     id: "vanth",
@@ -1170,6 +1223,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "353,400,000 km",
     info: "Brightest asteroid.",
     textures: { map: TEXTURE_PATH + "4k_vesta.jpg" },
+    model: {
+      path: "/models/Vesta_1_100.glb",
+      scale: 1, // Will be adjusted in component
+    },
   },
   {
     id: "pallas",

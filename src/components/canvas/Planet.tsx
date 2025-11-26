@@ -26,7 +26,7 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   let textureRing: THREE.Texture | undefined;
   if (body.textures?.ring) {
     textureRing = useTexture(body.textures.ring);
-    textureRing.rotation = -Math.PI / 2; // Rotate texture to align with geometry
+    // Don't rotate - let's see if that was causing issues
   }
 
   // Handle cloud texture
@@ -175,9 +175,12 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
     // Scaling
     let s = 1;
     if (scaleMode === "didactic") {
-      if (body.type === "star") s = 60;
-      else if (body.type === "moon") s = 5;
-      else s = body.radiusKm > 50000 ? 40 : 20;
+      if (body.type === "star")
+        s = 50; // Reduced from 60
+      else if (body.type === "moon")
+        s = 3; // Reduced from 5
+      // Reduced planet scale to prevent overlap with moons in the new compressed scale
+      else s = body.radiusKm > 50000 ? 25 : 10; // Reduced from 40/20 to 25/10
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
@@ -247,13 +250,52 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
 
           {/* 4. Ring System */}
           {textureRing && (
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[1.4, 2.4, 64]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={1000}>
+              {/* Custom geometry with radial UVs for horizontal strip texture */}
+              <primitive
+                object={useMemo(() => {
+                  // Use defined ring system or fallback to Saturn defaults
+                  const innerRadius = body.ringSystem?.innerRadius || 1.28;
+                  const outerRadius = body.ringSystem?.outerRadius || 2.35;
+                  const segments = 128;
+
+                  const geometry = new THREE.RingGeometry(
+                    innerRadius,
+                    outerRadius,
+                    segments
+                  );
+                  const positions = geometry.attributes.position;
+                  const uvs = geometry.attributes.uv;
+
+                  // Remap UVs for radial strip texture
+                  const v3 = new THREE.Vector3();
+                  for (let i = 0; i < positions.count; i++) {
+                    v3.fromBufferAttribute(positions, i);
+                    const radius = Math.sqrt(v3.x * v3.x + v3.y * v3.y);
+
+                    // Map U from 0 (inner) to 1 (outer) based on radius
+                    const u =
+                      (radius - innerRadius) / (outerRadius - innerRadius);
+
+                    // V stays at 0.5 for horizontal strip
+                    uvs.setXY(i, u, 0.5);
+                  }
+
+                  return geometry;
+                }, [body.ringSystem])}
+              />
               <meshStandardMaterial
                 map={textureRing}
-                transparent
+                alphaMap={textureRing}
+                transparent={true}
                 side={THREE.DoubleSide}
-                opacity={0.8}
+                depthWrite={false}
+                // Much brighter emissive to match reference images
+                emissive={0xffffff}
+                emissiveMap={textureRing}
+                emissiveIntensity={1.5} // Increased from 0.4 to 1.5 for visibility
+                roughness={0.8}
+                metalness={0.0}
               />
             </mesh>
           )}
@@ -263,7 +305,12 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   );
 };
 
-// Wrapper to handle Suspense for textures
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { PlanetModel } from "./PlanetModel";
+
+// ... (existing imports)
+
+// Wrapper to handle Suspense for textures/models
 const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -273,9 +320,7 @@ const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
     if (!meshRef.current) return;
     let s = 1;
     if (scaleMode === "didactic") {
-      if (props.body.type === "star") s = 60;
-      else if (props.body.type === "moon") s = 5;
-      else s = props.body.radiusKm > 50000 ? 40 : 20;
+      s = AstroPhysics.calculateDidacticRadius(props.body.radiusKm);
     } else {
       s = props.body.radiusKm * KM_TO_3D_UNITS;
     }
@@ -305,6 +350,17 @@ const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
     );
   }
 
+  // Check for 3D Model first
+  if (props.body.model) {
+    return (
+      <ErrorBoundary fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <PlanetModel body={props.body} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   if (props.body.textures?.map) {
     return (
       <ErrorBoundary fallback={fallback}>
@@ -324,31 +380,48 @@ export const Planet = ({ body, children }: PlanetProps) => {
   const showOrbits = useStore((state) => state.showOrbits);
   const focusId = useStore((state) => state.focusId);
 
+  // Calculate system multipliers once
+  const systemMultipliers = useMemo(() => {
+    return AstroPhysics.calculateSystemMultipliers(SOLAR_SYSTEM_BODIES);
+  }, []);
+
   // Orbit points with adaptive resolution
   const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
 
     // Use 4x higher resolution for focused bodies
     const segments = focusId === body.id ? 16384 : 4096;
-    const pts = AstroPhysics.getRelativeOrbitPoints(body.orbit, segments);
 
-    // In didactic mode, exaggerate moon orbit distance to match position
-    if (body.parentId && scaleMode === "didactic") {
-      pts.forEach((p) => p.multiplyScalar(50));
-    }
+    // Get system multiplier for this body (default to 1)
+    const multiplier = body.parentId
+      ? systemMultipliers[body.parentId] || 1
+      : 1;
+
+    const pts = AstroPhysics.getRelativeOrbitPoints(
+      body.orbit,
+      segments,
+      scaleMode,
+      multiplier
+    );
 
     return pts;
-  }, [body, scaleMode, focusId]);
+  }, [body, scaleMode, focusId, systemMultipliers]);
 
   useFrame(({ camera }) => {
     if (!groupRef.current) return;
     const { datetime } = useStore.getState();
 
     // 1. Update Group Position (Orbital motion)
-    const pos = AstroPhysics.calculateLocalPosition(body.orbit, datetime);
-    if (body.parentId && scaleMode === "didactic") {
-      pos.multiplyScalar(50); // Exaggerate moon distance
-    }
+    const multiplier = body.parentId
+      ? systemMultipliers[body.parentId] || 1
+      : 1;
+
+    const pos = AstroPhysics.calculateLocalPosition(
+      body.orbit,
+      datetime,
+      scaleMode,
+      multiplier
+    );
     groupRef.current.position.copy(pos);
 
     // 2. Adaptive fade for ALL bodies based on camera distance (both modes)
@@ -362,17 +435,15 @@ export const Planet = ({ body, children }: PlanetProps) => {
       let sizeMultiplier: number;
 
       if (scaleMode === "didactic") {
-        // In didactic mode, use fixed sizes
+        // In didactic mode, use algorithmic sizes
+        planetSize = AstroPhysics.calculateDidacticRadius(body.radiusKm);
+
         if (body.type === "star") {
-          planetSize = 60;
-          sizeMultiplier = 15; // Stars: fade earlier (was 8)
+          sizeMultiplier = 15;
         } else if (body.type === "moon") {
-          // Moon orbits are exaggerated by 50x, so we need to account for this
-          planetSize = 5 * 50; // Moon orbit is 50x farther in didactic
-          sizeMultiplier = 3; // Closer multiplier since orbit is already 50x away
+          sizeMultiplier = 10;
         } else {
-          planetSize = body.radiusKm > 50000 ? 40 : 20;
-          sizeMultiplier = body.radiusKm > 50000 ? 20 : 40; // Planets: earlier fade (was 10/20)
+          sizeMultiplier = 20;
         }
       } else {
         // In realistic mode, use actual scale with logarithmic multipliers

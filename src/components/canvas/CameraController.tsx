@@ -4,7 +4,7 @@ import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
-import { KM_TO_3D_UNITS } from "../../lib/astrophysics";
+import { KM_TO_3D_UNITS, AstroPhysics } from "../../lib/astrophysics";
 
 export const CameraController = () => {
   const { camera, scene } = useThree();
@@ -23,10 +23,7 @@ export const CameraController = () => {
   // Calculate ideal camera distance based on body size
   const getTargetScale = (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
     if (scaleMode === "didactic") {
-      if (body.type === "star") return 60;
-      if (body.radiusKm > 50000) return 40;
-      if (body.type === "moon") return 10;
-      return 20;
+      return AstroPhysics.calculateDidacticRadius(body.radiusKm);
     } else {
       return body.radiusKm * KM_TO_3D_UNITS;
     }

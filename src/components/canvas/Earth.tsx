@@ -2,7 +2,11 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useTexture } from "@react-three/drei";
-import { type CelestialBody, KM_TO_3D_UNITS } from "../../lib/astrophysics";
+import {
+  type CelestialBody,
+  KM_TO_3D_UNITS,
+  AstroPhysics,
+} from "../../lib/astrophysics";
 import { useStore } from "../../store";
 
 interface EarthProps {
@@ -50,7 +54,7 @@ export const Earth = ({ body }: EarthProps) => {
     if (!groupRef.current) return;
     let s = 1;
     if (scaleMode === "didactic") {
-      s = 20;
+      s = AstroPhysics.calculateDidacticRadius(body.radiusKm);
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
