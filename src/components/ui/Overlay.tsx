@@ -6,7 +6,9 @@ import { TopBar } from "./TopBar";
 export const Overlay = () => {
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      <TopBar />
+      <div className="pointer-events-auto">
+        <TopBar />
+      </div>
       <Sidebar />
       <LayersPanel />
       <Timeline />

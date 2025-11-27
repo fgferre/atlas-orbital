@@ -10,11 +10,8 @@ export const OverlayPositionTracker = () => {
   const setOverlayItems = useStore((state) => state.setOverlayItems);
 
   // Priority: 10 means this runs AFTER normal updates
-  useFrame(() => {
-    const { width, height } = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
+  useFrame((state) => {
+    const { width, height } = state.size;
     const focusId = useStore.getState().focusId;
 
     // 1. Calculate Screen Positions for ALL bodies

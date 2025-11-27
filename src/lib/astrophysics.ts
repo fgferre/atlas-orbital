@@ -218,10 +218,10 @@ export class AstroPhysics {
     return multipliers;
   }
 
-  // Increased from 180 to 4096 segments for ultra-smooth orbits
+  // Default segments set to 1024 for sufficiently smooth orbits at typical zoom levels. Individual bodies may override this in Planet.tsx.
   static getRelativeOrbitPoints(
     orbitParams: OrbitParams,
-    segments = 4096,
+    segments = 1024,
     scaleMode: "didactic" | "realistic" = "realistic",
     systemMultiplier: number = 1
   ): THREE.Vector3[] {

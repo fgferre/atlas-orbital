@@ -3,20 +3,18 @@ import { useStore } from "../../store";
 
 export const LayersPanel = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const {
-    showLabels,
-    toggleLabels,
-    showIcons,
-    toggleIcons,
-    showOrbits,
-    toggleOrbits,
-    scaleMode,
-    toggleScaleMode,
-    showStarfield,
-    toggleShowStarfield,
-    visibility,
-    toggleVisibility,
-  } = useStore();
+  const showLabels = useStore((state) => state.showLabels);
+  const toggleLabels = useStore((state) => state.toggleLabels);
+  const showIcons = useStore((state) => state.showIcons);
+  const toggleIcons = useStore((state) => state.toggleIcons);
+  const showOrbits = useStore((state) => state.showOrbits);
+  const toggleOrbits = useStore((state) => state.toggleOrbits);
+  const scaleMode = useStore((state) => state.scaleMode);
+  const toggleScaleMode = useStore((state) => state.toggleScaleMode);
+  const showStarfield = useStore((state) => state.showStarfield);
+  const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
+  const visibility = useStore((state) => state.visibility);
+  const toggleVisibility = useStore((state) => state.toggleVisibility);
 
   return (
     <div

@@ -6,7 +6,7 @@ const SEC_PER_DAY = 86400;
 
 // Helper to create step object
 const createStep = (valueInSeconds: number, label: string) => ({
-  value: valueInSeconds / SEC_PER_DAY,
+  value: valueInSeconds,
   label,
 });
 
@@ -59,10 +59,14 @@ const TIME_STEPS = [
   createStep(3 * 365 * SEC_PER_DAY, "3 years/second"),
 ];
 
-const NORMAL_SPEED = 1 / SEC_PER_DAY; // 1 second per second
+const NORMAL_SPEED = 1; // 1 second per second
 
 export const Timeline = () => {
-  const { datetime, isPlaying, setIsPlaying, speed, setSpeed } = useStore();
+  const datetime = useStore((state) => state.datetime);
+  const isPlaying = useStore((state) => state.isPlaying);
+  const setIsPlaying = useStore((state) => state.setIsPlaying);
+  const speed = useStore((state) => state.speed);
+  const setSpeed = useStore((state) => state.setSpeed);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const requestRef = useRef<number | undefined>(undefined);
   const previousTimeRef = useRef<number | undefined>(undefined);
@@ -173,10 +177,7 @@ export const Timeline = () => {
           .getState()
           .setDatetime(
             (prev) =>
-              new Date(
-                prev.getTime() +
-                  ((useStore.getState().speed * deltaTime) / 1000) * 86400000
-              )
+              new Date(prev.getTime() + useStore.getState().speed * deltaTime)
           );
       }
     }
@@ -186,7 +187,11 @@ export const Timeline = () => {
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current!);
+    return () => {
+      if (requestRef.current !== undefined) {
+        cancelAnimationFrame(requestRef.current);
+      }
+    };
   }, []);
 
   const currentLabel = useMemo(() => {

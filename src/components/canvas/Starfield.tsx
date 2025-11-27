@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import starDataRaw from "../../data/tycho2-processed.json";
 import {
@@ -102,6 +103,7 @@ const fragmentShader = `
 
 export const Starfield = () => {
   const { scaleMode, showStarfield } = useStore();
+  const { gl } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   // Process data once
@@ -211,7 +213,7 @@ export const Starfield = () => {
         fragmentShader={fragmentShader}
         uniforms={{
           time: { value: 0 },
-          pixelRatio: { value: window.devicePixelRatio },
+          pixelRatio: { value: gl.getPixelRatio() },
           zoom: { value: 1.0 },
         }}
         transparent={true}

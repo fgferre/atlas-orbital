@@ -94,9 +94,11 @@ export const CameraController = () => {
     // For small objects (radius < 1 unit), allow getting very close
     controls.minDistance = targetRadius * 1.2;
 
-    // Dynamic near plane: prevent clipping when close
-    // Set near plane to 1/10th of the minDistance
-    camera.near = Math.min(1, controls.minDistance * 0.1);
+    // Dynamic near plane: prevent clipping when close, but keep it safe
+    // We clamp between 0.1 and 2 to avoid Z-fighting or clipping on large scales
+    // This interacts with logarithmicDepthBuffer in Scene.tsx
+    const newNear = Math.min(2, Math.max(0.1, controls.minDistance * 0.1));
+    camera.near = newNear;
     camera.updateProjectionMatrix();
   }, [focusId, scaleMode, controls, camera]);
 

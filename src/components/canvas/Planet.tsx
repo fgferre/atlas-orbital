@@ -1,4 +1,4 @@
-import { useRef, useMemo, Suspense } from "react";
+import { useRef, useMemo, Suspense, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useTexture, Line } from "@react-three/drei";
@@ -103,6 +103,12 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
     });
   }, [textureMap, textureNight]);
 
+  useEffect(() => {
+    return () => {
+      earthMaterial?.dispose();
+    };
+  }, [earthMaterial]);
+
   // Custom Shader for Clouds (treating black as transparent)
   const cloudMaterial = useMemo(() => {
     if (!textureClouds) return null;
@@ -133,6 +139,12 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
       depthWrite: false, // Don't write to depth buffer to avoid occlusion issues
     });
   }, [textureClouds]);
+
+  useEffect(() => {
+    return () => {
+      cloudMaterial?.dispose();
+    };
+  }, [cloudMaterial]);
 
   // Atmosphere Shader (Fresnel Glow)
   const atmosphereMaterial = useMemo(() => {
@@ -168,6 +180,12 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
       depthWrite: false,
     });
   }, []);
+
+  useEffect(() => {
+    return () => {
+      atmosphereMaterial?.dispose();
+    };
+  }, [atmosphereMaterial]);
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -390,7 +408,7 @@ export const Planet = ({ body, children }: PlanetProps) => {
     if (body.type === "star") return null;
 
     // Use 4x higher resolution for focused bodies
-    const segments = focusId === body.id ? 16384 : 4096;
+    const segments = focusId === body.id ? 2048 : 512;
 
     // Get system multiplier for this body (default to 1)
     const multiplier = body.parentId

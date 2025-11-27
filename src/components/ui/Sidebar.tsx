@@ -20,8 +20,6 @@ export const Sidebar = () => {
           "polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)",
       }}
       onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onWheel={(e) => e.stopPropagation()}
     >
       {/* Tech Border Decoration */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-nasa-accent to-transparent opacity-50"></div>

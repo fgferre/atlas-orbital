@@ -16,7 +16,8 @@ interface EarthProps {
 export const Earth = ({ body }: EarthProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
-  const { selectId, scaleMode } = useStore();
+  const selectId = useStore((state) => state.selectId);
+  const scaleMode = useStore((state) => state.scaleMode);
 
   // Load textures once
   const dayTexture = useTexture(body.textures?.map || "");
