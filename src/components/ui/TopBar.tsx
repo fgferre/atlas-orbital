@@ -1,4 +1,4 @@
-// import { useStore } from "../../store"; // Unused
+// import { SearchBar } from "./SearchBar"; // Moved to Overlay
 
 export const TopBar = () => {
   return (
@@ -18,9 +18,14 @@ export const TopBar = () => {
         </div>
       </div>
 
+      {/* Center Search - REMOVED */}
+      {/* <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
+        <SearchBar />
+      </div> */}
+
       {/* Right Controls */}
       <div className="flex items-center gap-6 pointer-events-auto">
-        {/* Placeholder for future controls */}
+        {/* Future controls */}
       </div>
 
       {/* Decorative Line */}

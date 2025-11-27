@@ -28,6 +28,9 @@ interface AppState {
     comets: boolean;
     tnos: boolean;
   };
+  showTutorial: boolean;
+  tutorialStep: number;
+  isSceneReady: boolean;
 
   setDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
@@ -52,6 +55,9 @@ interface AppState {
   toggleScaleMode: () => void;
   toggleShowStarfield: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
+  closeTutorial: () => void;
+  setTutorialStep: (step: number) => void;
+  setSceneReady: (ready: boolean) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -74,6 +80,9 @@ export const useStore = create<AppState>((set) => ({
     comets: true,
     tnos: true,
   },
+  showTutorial: !localStorage.getItem("hasSeenTutorial"),
+  tutorialStep: 0,
+  isSceneReady: false,
 
   setDatetime: (value) =>
     set((state) => ({
@@ -101,4 +110,10 @@ export const useStore = create<AppState>((set) => ({
         [category]: !state.visibility[category],
       },
     })),
+  closeTutorial: () => {
+    localStorage.setItem("hasSeenTutorial", "true");
+    set({ showTutorial: false });
+  },
+  setTutorialStep: (step) => set({ tutorialStep: step }),
+  setSceneReady: (ready) => set({ isSceneReady: ready }),
 }));

@@ -1,4 +1,5 @@
 import { Canvas } from "@react-three/fiber";
+import { Suspense } from "react";
 import { OrbitControls } from "@react-three/drei";
 import { Starfield } from "./Starfield";
 import {
@@ -10,6 +11,7 @@ import { SolarSystem } from "./SolarSystem";
 import { CameraController } from "./CameraController";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
+import { SceneReadyChecker } from "./SceneReadyChecker";
 
 import { useStore } from "../../store";
 
@@ -29,12 +31,16 @@ export const Scene = () => {
         gl={{ antialias: true, logarithmicDepthBuffer: true }}
       >
         <color attach="background" args={["#000000"]} />
-        <Starfield />
+        <Suspense fallback={null}>
+          <Starfield />
+        </Suspense>
 
         <ambientLight intensity={0.1} />
         <pointLight position={[0, 0, 0]} intensity={2} decay={0} />
 
-        <SolarSystem />
+        <Suspense fallback={null}>
+          <SolarSystem />
+        </Suspense>
         <OverlayPositionTracker />
         <CameraController />
         <OrbitControls
@@ -54,6 +60,7 @@ export const Scene = () => {
           />
           <ToneMapping />
         </EffectComposer>
+        <SceneReadyChecker />
       </Canvas>
       <PlanetOverlay />
     </>

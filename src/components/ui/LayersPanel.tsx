@@ -18,7 +18,7 @@ export const LayersPanel = () => {
 
   return (
     <div
-      className={`absolute top-20 right-4 glass-panel transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) z-40 flex flex-col pointer-events-auto ${
+      className={`relative transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) z-40 flex flex-col pointer-events-auto glass-panel ${
         isCollapsed ? "w-12 h-12 rounded-lg" : "w-64 p-4 rounded-lg"
       }`}
       style={{ overflow: isCollapsed ? "hidden" : "visible" }}
