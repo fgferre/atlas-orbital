@@ -61,6 +61,13 @@ export interface CelestialBody {
     night?: string;
   };
 
+  // New Fields for Enhanced UI
+  records?: string[]; // Superlatives/Records
+  explorationMilestone?: {
+    year: number;
+    description: string;
+  };
+
   ringSystem?: {
     innerRadius: number; // In planetary radii
     outerRadius: number; // In planetary radii
@@ -235,5 +242,40 @@ export class AstroPhysics {
       );
     }
     return pts;
+  }
+
+  // Physics Helpers
+  static calculateOrbitalVelocity(
+    orbitParams: OrbitParams,
+    currentDistanceAU: number,
+    parentMassKg: number
+  ): number {
+    // Vis-viva equation: v = sqrt(GM * (2/r - 1/a))
+    // G = 6.67430e-11 m^3 kg^-1 s^-2
+    // But we can simplify for solar system relative to Earth/Sun if needed,
+    // or use standard units. Let's use standard SI units.
+
+    if (currentDistanceAU <= 0) return 0;
+
+    const G = 6.6743e-11;
+    const r = currentDistanceAU * AU_IN_KM * 1000; // meters
+    const a = orbitParams.a * AU_IN_KM * 1000; // meters (semi-major axis)
+
+    // If a is 0 (Sun), velocity is 0 (relative to itself)
+    if (a === 0) return 0;
+
+    // For circular approximation if e is small, v = sqrt(GM/r)
+    // For elliptical: v = sqrt(GM * (2/r - 1/a))
+
+    const v = Math.sqrt(G * parentMassKg * (2 / r - 1 / a));
+    return v / 1000; // km/s
+  }
+
+  static calculateEscapeVelocity(massKg: number, radiusKm: number): number {
+    // v_e = sqrt(2GM/r)
+    const G = 6.6743e-11;
+    const r = radiusKm * 1000; // meters
+    const v = Math.sqrt((2 * G * massKg) / r);
+    return v / 1000; // km/s
   }
 }

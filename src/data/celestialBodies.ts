@@ -20,15 +20,24 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "~24.47 days (equator), ~34 days (poles)",
     yearLength: "Not applicable (central point of the system)",
     curiosity:
-      "It accounts for approximately 99.86% of the total mass of the solar system.",
+      "The Sun accounts for 99.86% of the total mass of the entire Solar System. It consumes about 600 million tons of hydrogen every second.",
     facts: [
-      "Its light takes about 8 minutes and 20 seconds to reach Earth.",
-      "Solar cycle of 11 years, alternating between maxima and minima of activity.",
-      "Generates energy through nuclear fusion, converting hydrogen into helium.",
+      "Light from the Sun takes 8 minutes and 20 seconds to reach Earth.",
+      "The Sun's core temperature is about 15 million degrees Celsius.",
+      "It rotates faster at its equator than at its poles (differential rotation).",
+      "Solar flares can disrupt communications and power grids on Earth.",
     ],
+    records: [
+      "Most massive object in the system",
+      "Hottest surface in the system",
+    ],
+    explorationMilestone: {
+      year: 2018,
+      description: "Parker Solar Probe launched to touch the Sun",
+    },
     spectralClass: "G2V",
     description:
-      "The Sun is a middle-aged star, the primary source of energy and heat for the entire solar system. Its enormous gravitational influence keeps planets, asteroids, comets, and TNOs in orbit. Its atmospheric layers and phenomena such as solar flares affect space weather and influence technological systems on Earth.",
+      "The Sun is the star at the center of our Solar System. It is a nearly perfect sphere of hot plasma, heated to incandescence by nuclear fusion reactions in its core. Radiating the energy mainly as visible light and infrared radiation, it is by far the most important source of energy for life on Earth. Its diameter is about 1.39 million kilometers, or 109 times that of Earth.",
     distanceFromParent: "149,600,000 km (1 AU)",
     info: "The heart of our solar system.",
     textures: {
@@ -61,12 +70,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Very tenuous, composed of traces of sodium, potassium, oxygen, helium",
     dayLength: "58.6 Earth days",
     yearLength: "87.97 Earth days",
-    curiosity: "It is the closest planet to the Sun and has no moons.",
+    curiosity:
+      "Despite being closest to the Sun, Mercury is not the hottest planet—Venus is. Mercury has no atmosphere to trap heat, leading to extreme temperature swings.",
     facts: [
-      "Its surface has extreme temperature variations, from -173°C to 427°C.",
+      "Mercury has a huge metallic core, comprising about 85% of its radius.",
+      "A day on Mercury (sunrise to sunrise) lasts 176 Earth days.",
+      "It has the most eccentric orbit of all the planets.",
+      "Temperatures range from -173°C at night to 427°C during the day.",
     ],
+    records: ["Smallest planet", "Most cratered planet"],
+    explorationMilestone: {
+      year: 2011,
+      description: "MESSENGER became the first spacecraft to orbit Mercury",
+    },
     description:
-      "Mercury is small, dense, and has craters similar to those of the Moon, as well as a proportionally large metallic core.",
+      "Mercury is the smallest planet in the Solar System and the closest to the Sun. Its orbit around the Sun takes 87.97 Earth days, the shortest of all the Sun's planets. It is named after the Roman deity Mercury, the messenger of the gods. Like Venus, Mercury orbits the Sun within Earth's orbit as an inferior planet, and its apparent distance from the Sun as viewed from Earth never exceeds 28°.",
     distanceFromParent: "57,910,000 km",
     info: "Smallest planet.",
     textures: { map: TEXTURE_PATH + "8k_mercury.jpg" },
@@ -97,12 +115,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "243 Earth days (retrograde rotation)",
     yearLength: "224.7 Earth days",
     curiosity:
-      "Its atmosphere generates the strongest greenhouse effect in the solar system.",
+      "Venus spins in the opposite direction to most other planets (retrograde rotation). This means the Sun rises in the west and sets in the east.",
     facts: [
-      "Venus is the hottest planet, with surface temperatures above 460°C.",
+      "Its thick atmosphere traps heat, making it the hottest planet (462°C).",
+      "Atmospheric pressure is 92 times greater than Earth's.",
+      "A day on Venus is longer than a year on Venus.",
+      "It is the brightest natural object in Earth's night sky after the Moon.",
     ],
+    records: ["Hottest planet", "Slowest rotation"],
+    explorationMilestone: {
+      year: 1970,
+      description:
+        "Venera 7 became the first spacecraft to land on another planet",
+    },
     description:
-      "Similar in size to Earth, Venus shines intensely in the sky, but its environment is extremely inhospitable.",
+      "Venus is the second planet from the Sun. It is named after the Roman goddess of love and beauty. As the brightest natural object in Earth's night sky after the Moon, Venus can cast shadows and can be visible to the naked eye in broad daylight. Venus is a terrestrial planet and is sometimes called Earth's 'sister planet' because of their similar size, mass, proximity to the Sun, and bulk composition.",
     distanceFromParent: "108,200,000 km",
     info: "Thick atmosphere.",
     textures: {
@@ -128,12 +155,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "24 hours",
     yearLength: "365.25 days",
     curiosity:
-      "It is the only planet with abundant liquid water and the only one known to harbor life.",
+      "Earth is the only planet not named after a Greek or Roman god. The name comes from Old English and Germanic words meaning 'ground'.",
     facts: [
-      "Its magnetic field protects the surface from intense solar radiation.",
+      "Earth's atmosphere is 78% nitrogen and 21% oxygen.",
+      "It has a powerful magnetic field that protects us from solar wind.",
+      "The planet is actually an oblate spheroid, bulging at the equator.",
+      "71% of the surface is covered by water.",
     ],
+    records: ["Densest planet", "Only known life"],
+    explorationMilestone: {
+      year: 1961,
+      description: "Yuri Gagarin became the first human in space",
+    },
     description:
-      "Earth is a dynamic planet, with climate, oceans, and tectonic plates, suitable for life.",
+      "Earth is the third planet from the Sun and the only astronomical object known to harbor life. About 29% of Earth's surface is land consisting of continents and islands. The remaining 71% is covered with water, mostly by oceans, seas, gulfs, and other salt-water bodies, but also by lakes, rivers, and other freshwater, which together constitute the hydrosphere.",
     distanceFromParent: "149,600,000 km",
     info: "Our home.",
     textures: {
@@ -168,12 +203,24 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "24h 37min",
     yearLength: "687 Earth days",
     curiosity:
-      "It has the largest mountain (Olympus Mons) and the largest canyon (Valles Marineris) in the solar system.",
+      "Mars is home to Olympus Mons, the largest volcano in the solar system, and Valles Marineris, one of the largest canyons.",
     facts: [
-      "Recent probes have detected water in solid state beneath the surface.",
+      "Mars has two small moons, Phobos and Deimos.",
+      "There is strong evidence that Mars once had liquid water on its surface.",
+      "Dust storms can cover the entire planet and last for months.",
+      "A year on Mars is 687 Earth days - nearly twice as long.",
     ],
+    records: [
+      "Tallest mountain (Olympus Mons)",
+      "Largest canyon (Valles Marineris)",
+    ],
+    explorationMilestone: {
+      year: 2021,
+      description:
+        "Perseverance rover landed and deployed the Ingenuity helicopter",
+    },
     description:
-      "Mars is known for its reddish appearance; the planet has been the constant target of missions seeking evidence of past life.",
+      "Mars is the fourth planet from the Sun and the second-smallest planet in the Solar System, being larger than only Mercury. In English, Mars carries the name of the Roman god of war and is often referred to as the 'Red Planet'. The latter refers to the effect of the iron oxide prevalent on Mars's surface, which gives it a reddish appearance distinctive among the astronomical bodies visible to the naked eye.",
     distanceFromParent: "227,940,000 km",
     info: "Red planet.",
     textures: { map: TEXTURE_PATH + "8k_mars.jpg" },
@@ -196,9 +243,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "7.65 hours",
     yearLength: "0.32 days",
     curiosity:
-      "It orbits closer to its planet than any other moon in the solar system.",
-    facts: ["It is doomed to crash into Mars in ~50 million years."],
-    description: "Small, irregular, and heavily cratered.",
+      "Phobos is spiraling inward at a rate of 2 meters every century. In about 50 million years, it will either crash into Mars or break up into a ring.",
+    facts: [
+      "It is named after the Greek god Phobos, a son of Ares (Mars) and Aphrodite (Venus).",
+      "Its surface is covered in regolith and has a large impact crater named Stickney.",
+      "Phobos is likely a captured asteroid.",
+    ],
+    records: ["Closest orbiting moon", "Shortest orbital period for a moon"],
+    explorationMilestone: {
+      year: 1971,
+      description: "Mariner 9 provided the first close-up images",
+    },
+    description:
+      "Phobos is the larger and closer of the two natural satellites of Mars. It is a small, irregularly shaped object with a mean radius of 11 km. Phobos orbits Mars much closer than any other major moon orbits its planet, completing an orbit in just 7 hours and 39 minutes. As a result, it rises in the west, moves across the sky in 4 hours and 15 minutes, and sets in the east, twice each Martian day.",
     distanceFromParent: "9,376 km",
     info: "Mars moon.",
     textures: { map: TEXTURE_PATH + "2k_phobos.jpg" },
@@ -220,9 +277,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "None",
     dayLength: "30.3 hours",
     yearLength: "1.26 days",
-    curiosity: "It is smaller and smoother than Phobos.",
-    facts: ["It escapes Mars' gravity very slowly."],
-    description: "Small and lumpy, like an asteroid.",
+    curiosity:
+      "From Mars, Deimos would appear as a bright star-like object, slightly larger than Venus appears from Earth. It would not be large enough to cause a total solar eclipse.",
+    facts: [
+      "Deimos is gradually moving away from Mars.",
+      "It is named after Deimos, the Greek god of dread and terror.",
+      "Its escape velocity is only 5.6 m/s - you could jump off it with a bike.",
+    ],
+    records: ["Smallest major moon", "Smoothest surface among small moons"],
+    explorationMilestone: {
+      year: 1977,
+      description: "Viking orbiters provided detailed imagery",
+    },
+    description:
+      "Deimos is the smaller and outer of the two natural satellites of Mars. It has a mean radius of 6.2 km and takes 30.3 hours to orbit Mars. Like Phobos, Deimos has a lumpy, non-spherical shape and is heavily cratered, though its craters are generally smaller and filled with regolith, giving it a smoother appearance.",
     distanceFromParent: "23,463 km",
     info: "Mars moon.",
     textures: { map: TEXTURE_PATH + "2k_deimos.jpg" },
@@ -254,12 +322,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "9h 56min",
     yearLength: "11.86 Earth years",
     curiosity:
-      "It has more than 90 moons, and the largest of them, Ganymede, is larger than Mercury.",
+      "Jupiter has the shortest day of all the planets, rotating once every 9 hours and 55 minutes. This rapid rotation creates its strong magnetic field.",
     facts: [
-      "The Great Red Spot is a storm that has been active for centuries.",
+      "The Great Red Spot is a storm larger than Earth that has raged for centuries.",
+      "Jupiter has a faint ring system, discovered by Voyager 1 in 1979.",
+      "Its magnetic field is 20,000 times stronger than Earth's.",
+      "It acts as a 'vacuum cleaner', protecting inner planets from comets.",
     ],
+    records: ["Largest planet", "Shortest day", "Strongest magnetic field"],
+    explorationMilestone: {
+      year: 1973,
+      description: "Pioneer 10 became the first spacecraft to visit Jupiter",
+    },
     description:
-      "Jupiter is the gas giant of the solar system, with an intense magnetic field and an extensive system of faint rings.",
+      "Jupiter is the largest planet in the Solar System, with a mass more than two and a half times that of all the other planets combined. It is a gas giant with a mass one-thousandth that of the Sun. Jupiter is primarily composed of hydrogen with a quarter of its mass being helium. It lacks a well-defined solid surface. Because of its rapid rotation, the planet's shape is that of an oblate spheroid.",
     distanceFromParent: "778,330,000 km",
     info: "Gas giant.",
     textures: { map: TEXTURE_PATH + "8k_jupiter.jpg" },
@@ -289,12 +365,22 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Hydrogen and helium; traces of methane, ammonia",
     dayLength: "10h 33min",
     yearLength: "29.45 Earth years",
-    curiosity: "It has impressive visible rings and more than 80 moons.",
+    curiosity:
+      "Saturn is the only planet in the Solar System that is less dense than water. If there were a bathtub large enough to hold it, Saturn would float.",
     facts: [
-      "Titan, its largest moon, has methane lakes and is the target of future missions.",
+      "Saturn's rings are incredibly thin, estimated to be less than 1 km thick.",
+      "Winds in its upper atmosphere can reach 1,800 km/h.",
+      "It radiates 2.5 times more energy into space than it receives from the Sun.",
+      "The hexagon-shaped storm at its north pole is a unique atmospheric feature.",
     ],
+    records: ["Most extensive rings", "Least dense planet"],
+    explorationMilestone: {
+      year: 2004,
+      description:
+        "Cassini-Huygens entered orbit and studied the system for 13 years",
+    },
     description:
-      "Saturn stands out for its complex rings and its diverse system of moons.",
+      "Saturn is the sixth planet from the Sun and the second-largest in the Solar System, after Jupiter. It is a gas giant with an average radius of about nine and a half times that of Earth. It has only one-eighth the average density of Earth; however, with its larger volume, Saturn is over 95 times more massive. Saturn is famous for its prominent ring system, which is composed mainly of ice particles, with a smaller amount of rocky debris and dust.",
     distanceFromParent: "1,429,400,000 km",
     info: "Ring system.",
     textures: {
@@ -302,8 +388,8 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       ring: TEXTURE_PATH + "8k_saturn_ring_alpha.png",
     },
     ringSystem: {
-      innerRadius: 1.28,
-      outerRadius: 2.35,
+      innerRadius: 1.11, // Start of D ring
+      outerRadius: 2.33, // End of F ring
     },
   },
   {
@@ -331,10 +417,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Hydrogen, helium, 2% methane",
     dayLength: "17h 14min",
     yearLength: "84.05 Earth years",
-    curiosity: "It rotates on its side, with an axial tilt of 97.8°.",
-    facts: ["It has winds of more than 900 km/h."],
+    curiosity:
+      "Uranus rotates on its side, with an axial tilt of 98 degrees. This unique tilt causes the most extreme seasons in the solar system, with each pole getting 42 years of continuous sunlight followed by 42 years of darkness.",
+    facts: [
+      "It was the first planet found with the aid of a telescope (1781).",
+      "Its blue-green color comes from methane gas in its atmosphere.",
+      "It is often called an 'Ice Giant' because of its icy mantle.",
+      "Uranus has the coldest planetary atmosphere, with a minimum temperature of -224°C.",
+    ],
+    records: ["Coldest atmosphere", "Most extreme axial tilt"],
+    explorationMilestone: {
+      year: 1986,
+      description: "Voyager 2 is the only spacecraft to have visited Uranus",
+    },
     description:
-      "Uranus has a bluish coloration due to methane and shows peculiarities in its magnetic poles.",
+      "Uranus is the seventh planet from the Sun. It is named after the Greek god of the sky. It has the third-largest planetary radius and fourth-largest planetary mass in the Solar System. Uranus is similar in composition to Neptune, and both have bulk chemical compositions which differ from that of the larger gas giants Jupiter and Saturn.",
     distanceFromParent: "2,870,990,000 km",
     info: "Ice giant.",
     textures: { map: TEXTURE_PATH + "2k_uranus.jpg" },
@@ -364,12 +461,22 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Hydrogen, helium, methane",
     dayLength: "16h 6min",
     yearLength: "164.8 Earth years",
-    curiosity: "It has the fastest winds in the solar system (>2,100 km/h).",
+    curiosity:
+      "Neptune was the first planet located through mathematical calculations rather than empirical observation. Irregularities in the orbit of Uranus led astronomers to predict Neptune's existence.",
     facts: [
-      "Triton, its largest moon, orbits in the opposite direction to the planet’s rotation.",
+      "Winds on Neptune are the fastest in the solar system, reaching 2,100 km/h.",
+      "It has a 'Great Dark Spot' similar to Jupiter's Red Spot.",
+      "Neptune takes 165 Earth years to orbit the Sun.",
+      "Its moon Triton orbits in the opposite direction to the planet's rotation.",
     ],
+    records: ["Farthest planet", "Fastest winds"],
+    explorationMilestone: {
+      year: 1989,
+      description:
+        "Voyager 2 passed by Neptune, confirming its rings and moons",
+    },
     description:
-      "Neptune is the most distant planet, intense in storms, and has a deep blue coloration.",
+      "Neptune is the eighth and farthest-known Solar planet from the Sun. In the Solar System, it is the fourth-largest planet by diameter, the third-most-massive planet, and the densest giant planet. It is 17 times the mass of Earth, slightly more massive than its near-twin Uranus. Neptune is denser and physically smaller than Uranus because its greater mass causes more gravitational compression of its atmosphere.",
     distanceFromParent: "4,498,250,000 km",
     info: "Winds.",
     textures: { map: TEXTURE_PATH + "2k_neptune.jpg" },
@@ -392,11 +499,23 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "27.32 days (synchronous rotation)",
     yearLength: "27.32 days (orbits around Earth)",
     curiosity:
-      "It is the fifth largest satellite in the solar system and influences Earth’s tides.",
+      "The Moon is in synchronous rotation with Earth, which means it always shows the same face to us. The 'dark side' is not actually dark, just never visible from Earth.",
     facts: [
-      "It is the only celestial body beyond Earth to have been visited by humans (Apollo missions).",
+      "The Moon is drifting away from Earth at a rate of 3.8 cm per year.",
+      "Temperatures on the surface range from 127°C in sunlight to -173°C in shadow.",
+      "There is water ice at the poles in permanently shadowed craters.",
+      "It is the fifth-largest satellite in the Solar System.",
     ],
-    description: "Surface marked by craters, lunar maria, and high mountains.",
+    records: [
+      "Largest satellite relative to parent",
+      "Only celestial body visited by humans",
+    ],
+    explorationMilestone: {
+      year: 1969,
+      description: "Apollo 11 landed the first humans on the surface",
+    },
+    description:
+      "The Moon is Earth's only natural satellite. It is the fifth-largest satellite in the Solar System and the largest among planetary satellites relative to the size of the planet that it orbits. The Moon is a rocky body with a surface cratered by asteroid impacts and covered in regolith. Its gravitational influence produces the ocean tides, body tides, and the slight lengthening of the day.",
     distanceFromParent: "384,400 km",
     info: "Earth satellite.",
     textures: { map: TEXTURE_PATH + "8k_moon.jpg" },
@@ -419,9 +538,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Tenuous, molecular oxygen",
     dayLength: "7.15 days",
     yearLength: "Unknown",
-    curiosity: "Largest moon in the solar system, larger than Mercury.",
-    facts: ["It has its own magnetic field."],
-    description: "Ganymede is believed to have a subsurface ocean.",
+    curiosity:
+      "Ganymede is the only moon in the Solar System known to have a substantial magnetosphere, likely created by convection within its liquid iron core.",
+    facts: [
+      "It has a thin oxygen atmosphere.",
+      "Its surface is a mix of two types of terrain: dark, cratered regions and lighter, grooved regions.",
+      "It participates in a 1:2:4 orbital resonance with Europa and Io.",
+    ],
+    records: ["Largest moon in Solar System", "Only moon with magnetic field"],
+    explorationMilestone: {
+      year: 1996,
+      description: "Galileo spacecraft made multiple close flybys",
+    },
+    description:
+      "Ganymede is a satellite of Jupiter and the largest and most massive of the Solar System's moons. It is the ninth-largest object in the Solar System and is larger than the planet Mercury, though only about half as massive. Ganymede is composed of approximately equal amounts of silicate rock and water ice. It is a fully differentiated body with an iron-rich, liquid core, and an internal ocean that may contain more water than all of Earth's oceans combined.",
     distanceFromParent: "1,070,400 km",
     info: "Largest moon in solar system.",
     textures: { map: TEXTURE_PATH + "4k_ganymede.jpg" },
@@ -443,9 +573,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Very tenuous, carbon dioxide",
     dayLength: "16.69 days",
     yearLength: "Unknown",
-    curiosity: "Its surface is the most heavily cratered in the solar system.",
-    facts: ["It is believed to have an ocean beneath its icy crust."],
-    description: "Callisto is ancient and shows little geological activity.",
+    curiosity:
+      "Callisto is often considered the most 'boring' of the Galilean moons due to its lack of activity, but it is a prime candidate for human exploration due to low radiation levels.",
+    facts: [
+      "It has a very tenuous atmosphere of carbon dioxide.",
+      "Valhalla is the largest multi-ring impact crater on Callisto.",
+      "It may have a subsurface ocean of liquid water.",
+    ],
+    records: ["Most cratered object", "Oldest surface"],
+    explorationMilestone: {
+      year: 1979,
+      description: "Voyager missions provided first detailed maps",
+    },
+    description:
+      "Callisto is the second-largest moon of Jupiter and the third-largest moon in the Solar System. It is not in an orbital resonance like the other three Galilean moons, so it is not subject to significant tidal heating. Callisto is composed of approximately equal amounts of rock and ices. Its surface is the most heavily cratered in the Solar System, suggesting a very old surface with no geological activity for billions of years.",
     distanceFromParent: "1,882,700 km",
     info: "Heavily cratered.",
     textures: { map: TEXTURE_PATH + "4k_callisto.jpg" },
@@ -467,9 +608,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Sulfur dioxide",
     dayLength: "1.77 days",
     yearLength: "Unknown",
-    curiosity: "Most volcanically active body in the solar system.",
-    facts: ["It has constant sulfur eruptions."],
-    description: "Dynamic surface, marked by lava flows.",
+    curiosity:
+      "Io's extreme volcanic activity is the result of tidal heating from friction generated within Io's interior as it is pulled between Jupiter and the other Galilean moons.",
+    facts: [
+      "Plumes of sulfur and sulfur dioxide climb as high as 500 km above the surface.",
+      "Its surface is constantly being renewed by lava flows, erasing any impact craters.",
+      "Io cuts across Jupiter's magnetic field lines, generating a powerful electric current.",
+    ],
+    records: ["Most volcanically active body", "Driest object in Solar System"],
+    explorationMilestone: {
+      year: 1979,
+      description: "Voyager 1 discovered active volcanism",
+    },
+    description:
+      "Io is the innermost and third-largest of the four Galilean moons of the planet Jupiter. It is the fourth-largest moon in the Solar System, has the highest density of all the moons, and has the lowest amount of water (by atomic ratio) of any known astronomical object in the Solar System. With over 400 active volcanoes, Io is the most geologically active object in the Solar System.",
     distanceFromParent: "421,800 km",
     info: "Volcanic world.",
     textures: { map: TEXTURE_PATH + "2k_io.jpg" },
@@ -491,9 +643,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Tenuous, molecular oxygen",
     dayLength: "3.55 days",
     yearLength: "Unknown",
-    curiosity: "It is believed to have a liquid ocean beneath its crust.",
-    facts: ["One of the main targets in the search for extraterrestrial life."],
-    description: "Icy surface with few craters.",
+    curiosity:
+      "Europa is one of the most promising places in the solar system to look for extraterrestrial life. Its subsurface ocean is kept liquid by tidal heating.",
+    facts: [
+      "Its surface is crisscrossed by long, linear fractures called lineae.",
+      "There are very few craters, indicating a young surface (20-180 million years old).",
+      "Water vapor plumes have been detected erupting from the surface.",
+    ],
+    records: ["Smoothest surface", "Most likely to harbor life"],
+    explorationMilestone: {
+      year: 1995,
+      description: "Galileo mission provided evidence of subsurface ocean",
+    },
+    description:
+      "Europa is the smallest of the four Galilean moons orbiting Jupiter, and the sixth-closest to the planet of all the 95 known moons of Jupiter. It is also the sixth-largest moon in the Solar System. Europa has the smoothest surface of any known solid object in the Solar System. The apparent youth and smoothness of the surface have led to the hypothesis that a water ocean exists beneath the surface.",
     distanceFromParent: "670,900 km",
     info: "Subsurface ocean.",
     textures: { map: TEXTURE_PATH + "2k_europa.jpg" },
@@ -516,9 +679,24 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Nitrogen, methane",
     dayLength: "15.95 days",
     yearLength: "Unknown",
-    curiosity: "Only moon with a dense atmosphere and methane lakes.",
-    facts: ["Target of the Cassini-Huygens mission."],
-    description: "Dynamic climate, lakes and rivers of liquid hydrocarbons.",
+    curiosity:
+      "Titan has lakes and seas of liquid methane and ethane. The largest, Kraken Mare, is larger than the Caspian Sea on Earth.",
+    facts: [
+      "Its atmosphere is 98% nitrogen, similar to Earth's.",
+      "The surface pressure is 1.45 times that of Earth's.",
+      "It rains liquid methane on Titan.",
+      "It is the only moon known to have a dense atmosphere.",
+    ],
+    records: [
+      "Only moon with dense atmosphere",
+      "Only extraterrestrial liquid seas",
+    ],
+    explorationMilestone: {
+      year: 2005,
+      description: "Huygens probe landed on the surface",
+    },
+    description:
+      "Titan is the largest moon of Saturn and the second-largest natural satellite in the Solar System. It is the only moon known to have a dense atmosphere, and the only known body in space, other than Earth, where clear evidence of stable bodies of surface liquid has been found. Titan is 50% larger (in diameter) than Earth's Moon and 80% more massive.",
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
     textures: { map: TEXTURE_PATH + "2k_titan.jpg" },
@@ -540,10 +718,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Tenuous (oxygen, carbon dioxide)",
     dayLength: "4.52 days",
     yearLength: "Unknown",
-    curiosity: "Heavily cratered, possible tenuous ring.",
-    facts: ["Signs of molecular oxygen have been detected."],
+    curiosity:
+      "Rhea may have a tenuous ring system of its own, although this has not been definitively confirmed.",
+    facts: [
+      "It has a very thin atmosphere containing oxygen and carbon dioxide.",
+      "The surface is divided into two geologically different areas based on crater density.",
+      "It is named after the Titan Rhea, mother of the gods.",
+    ],
+    records: ["Second largest Saturn moon", "Possible ring system"],
+    explorationMilestone: {
+      year: 1980,
+      description: "Voyager 1 confirmed its icy nature",
+    },
     description:
-      "Rhea is marked by craters and possible hints of past activity.",
+      "Rhea is the second-largest moon of Saturn and the ninth-largest moon in the Solar System. It is an icy body with a density of about 1.236 g/cm³, suggesting it is composed of about 25% rock and 75% water ice. Rhea's surface is heavily cratered and resembles Dione's, with bright wispy terrain on its trailing hemisphere.",
     distanceFromParent: "527,000 km",
     info: "Icy body.",
     textures: { map: TEXTURE_PATH + "2k_rhea.jpg" },
@@ -565,10 +753,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "79.33 days",
     yearLength: "Unknown",
-    curiosity: "Surface with bright and dark hemispheres.",
-    facts: ["It has a unique “equatorial ridge”."],
+    curiosity:
+      "Iapetus has a massive equatorial ridge running three-quarters of the way around the moon, making it look like a walnut.",
+    facts: [
+      "The dark material is believed to be dust from another moon, Phoebe.",
+      "It orbits much farther from Saturn than the other major moons.",
+      "Its orbit is significantly inclined to Saturn's equator.",
+    ],
+    records: ["Highest contrast surface", "Walnut shape"],
+    explorationMilestone: {
+      year: 2007,
+      description: "Cassini flyby revealed the equatorial ridge",
+    },
     description:
-      "Iapetus shows a strong visual contrast due to its two-colored division.",
+      "Iapetus is the third-largest natural satellite of Saturn. It is famous for its dramatic two-tone coloration; one hemisphere is bright as snow, while the other is dark as coal. Iapetus has a low density, indicating it is composed mostly of ice with a small amount of rocky materials.",
     distanceFromParent: "3,560,820 km",
     info: "Two-tone moon.",
     textures: { map: TEXTURE_PATH + "4k_iapetus.jpg" },
@@ -590,9 +788,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Tenuous (oxygen)",
     dayLength: "2.74 days",
     yearLength: "Unknown",
-    curiosity: "Bright fissures (striated terrain).",
-    facts: ["It may have a subsurface ocean."],
-    description: "It displays geological contrasts and tectonic activity.",
+    curiosity:
+      "Dione shares its orbit with two small co-orbital moons, Helene and Polydeuces, which sit at its Lagrangian points.",
+    facts: [
+      "It has a subsurface ocean of liquid water.",
+      "Oxygen ions have been detected in its exosphere.",
+      "The 'wisps' are actually bright ice cliffs created by tectonic fractures.",
+    ],
+    records: ["Co-orbital moons", "Ice cliffs"],
+    explorationMilestone: {
+      year: 1980,
+      description: "Voyager 1 imaged the wispy terrain",
+    },
+    description:
+      "Dione is the fourth-largest moon of Saturn. It consists of about two-thirds water ice and one-third dense rock. Its leading hemisphere is heavily cratered and uniformly bright, while its trailing hemisphere contains a network of bright ice cliffs (chasmata) creating a wispy appearance.",
     distanceFromParent: "377,400 km",
     info: "Cratered ice.",
     textures: { map: TEXTURE_PATH + "2k_dione.jpg" },
@@ -614,10 +823,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "1.89 days",
     yearLength: "Unknown",
-    curiosity: "It has one of the largest craters in the system.",
-    facts: ["Enormous rift “Ithaca Chasma”."],
+    curiosity:
+      "A huge valley called Ithaca Chasma runs about 2,000 km long, covering three-quarters of Tethys' circumference.",
+    facts: [
+      "It has two co-orbital moons, Telesto and Calypso.",
+      "The surface is very bright, second only to Enceladus.",
+      "Odysseus crater flattened out due to the relaxation of the icy crust.",
+    ],
+    records: ["Huge rift valley", "Trojan moons"],
+    explorationMilestone: {
+      year: 1981,
+      description: "Voyager 2 provided high-resolution images",
+    },
     description:
-      "Abundant ice and landscape marked by large geological features.",
+      "Tethys is the fifth-largest moon of Saturn. It is a mid-sized moon composed almost entirely of water ice, as indicated by its low density. Tethys is heavily cratered and cut by a number of large faults/grabens. The largest impact crater, Odysseus, is about 400 km in diameter, nearly 2/5 of Tethys's diameter.",
     distanceFromParent: "294,670 km",
     info: "Huge canyon.",
     textures: { map: TEXTURE_PATH + "2k_tethys.jpg" },
@@ -639,10 +858,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Water vapor (caused by cryovolcanic jets)",
     dayLength: "1.37 days",
     yearLength: "Unknown",
-    curiosity: "Jets of water and possible signs of microbial life.",
-    facts: ["Subsurface ocean."],
+    curiosity:
+      "Enceladus has cryovolcanoes near the south pole which shoot geyser-like jets of water vapor, molecular hydrogen, other volatiles, and solid material, including sodium chloride crystals and ice particles, into space.",
+    facts: [
+      "It is the source of Saturn's E ring.",
+      "It has a global subsurface ocean of liquid water.",
+      "Hydrothermal vents at the ocean floor could support life.",
+    ],
+    records: ["Most reflective body", "Active cryovolcanism"],
+    explorationMilestone: {
+      year: 2005,
+      description: "Cassini discovered the water plumes",
+    },
     description:
-      "Enceladus is active, with plumes of vapor launched from its south pole.",
+      "Enceladus is the sixth-largest moon of Saturn. It is about 500 kilometers in diameter, about a tenth of that of Saturn's largest moon, Titan. Enceladus is covered by fresh, clean ice, making it one of the most reflective bodies of the Solar System. Consequently, its surface temperature at noon only reaches −198 °C.",
     distanceFromParent: "238,020 km",
     info: "Ice geysers.",
     textures: { map: TEXTURE_PATH + "4k_enceladus.jpg" },
@@ -664,10 +893,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "0.94 days",
     yearLength: "Unknown",
-    curiosity: "Herschel crater resembles the “Death Star” from Star Wars.",
-    facts: ["Surface is heavily cratered."],
+    curiosity:
+      "Mimas is dominated by the Herschel crater, which is so large that the impact nearly shattered the moon. This gives it a striking resemblance to the Death Star from Star Wars.",
+    facts: [
+      "The impact that created Herschel caused fractures on the opposite side of the moon.",
+      "It is responsible for clearing the Cassini Division in Saturn's rings.",
+      "It is composed mostly of water ice with a small amount of rock.",
+    ],
+    records: ["Smallest rounded body", "Death Star lookalike"],
+    explorationMilestone: {
+      year: 1980,
+      description: "Voyager 1 revealed the giant crater",
+    },
     description:
-      "Mimas is known for its peculiar appearance due to the large crater.",
+      "Mimas is a moon of Saturn which was discovered in 1789 by William Herschel. It is named after Mimas, a son of Gaia in Greek mythology. With a diameter of 396 kilometres, it is the smallest astronomical body that is known to be rounded in shape because of self-gravitation.",
     distanceFromParent: "185,540 km",
     info: "Death Star lookalike.",
     textures: { map: TEXTURE_PATH + "4k_mimas.jpg" },
@@ -690,10 +929,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Nitrogen, methane",
     dayLength: "5.88 days",
     yearLength: "Unknown",
-    curiosity: "Retrograde orbit.",
-    facts: ["Active ice volcanism detected by Voyager 2."],
+    curiosity:
+      "Triton is geologically active; its surface is young and has few impact craters. Complex cryovolcanic and tectonic terrains suggest a complex geological history.",
+    facts: [
+      "It has a tenuous nitrogen atmosphere.",
+      "Geysers erupt nitrogen gas and dust up to 8 km high.",
+      "It is gradually spiraling toward Neptune and will eventually be torn apart.",
+      "It is the only large moon in the Solar System with a retrograde orbit.",
+    ],
+    records: ["Only large retrograde moon", "Captured Kuiper Belt Object"],
+    explorationMilestone: {
+      year: 1989,
+      description: "Voyager 2 provided the only close-up data",
+    },
     description:
-      "Triton is the only large moon in retrograde orbit, with icy surfaces and active geysers.",
+      "Triton is the largest natural satellite of the planet Neptune, and the first Neptunian moon to be discovered. It is the only large moon in the Solar System with a retrograde orbit, an orbit in the direction opposite to its planet's rotation. At 2,710 kilometers in diameter, it is the seventh-largest moon in the Solar System. Because of its retrograde orbit and composition similar to Pluto, Triton is thought to have been a dwarf planet captured from the Kuiper belt.",
     distanceFromParent: "354,800 km",
     info: "Retrograde orbit.",
     textures: { map: TEXTURE_PATH + "4k_triton.png" },
@@ -715,9 +965,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "8.71 days",
     yearLength: "Unknown",
-    curiosity: "Craters and extensive canyons.",
-    facts: ["Largest moon of Uranus."],
-    description: "Titania has deep fissures and abundant ice.",
+    curiosity:
+      "Titania is marked by a massive canyon system that dwarfs the Grand Canyon on Earth, indicating past tectonic activity.",
+    facts: [
+      "It has a relatively dark, slightly red surface.",
+      "Impact craters reaching 326 km in diameter have been found.",
+      "Infrared spectroscopy revealed the presence of water ice and carbon dioxide.",
+    ],
+    records: ["Largest Uranus moon", "Massive canyon system"],
+    explorationMilestone: {
+      year: 1986,
+      description: "Voyager 2 imaged about 40% of the surface",
+    },
+    description:
+      "Titania is the largest of the moons of Uranus and the eighth largest moon in the Solar System at a diameter of 1,578 kilometres. It was discovered by William Herschel in 1787. Titania consists of approximately equal amounts of ice and rock, and is likely differentiated into a rocky core and an icy mantle.",
     distanceFromParent: "436,300 km",
     info: "Largest Uranus moon.",
     textures: { map: TEXTURE_PATH + "4k_titania.png" },
@@ -739,9 +1000,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "13.46 days",
     yearLength: "Unknown",
-    curiosity: "Numerous canyons.",
-    facts: ["Ridges and well-preserved craters."],
-    description: "Impact regions and rugged terrains predominate.",
+    curiosity:
+      "Oberon has the reddest surface among the major Uranian moons. Its surface is heavily cratered, suggesting it has been stable since the early history of the solar system.",
+    facts: [
+      "It has high mountains, including one that rises 11 km.",
+      "Dark material covers the floors of many craters.",
+      "It is named after the King of the Fairies in Shakespeare's Midsummer Night's Dream.",
+    ],
+    records: ["Outermost major moon", "Highest peak on Uranian moons"],
+    explorationMilestone: {
+      year: 1986,
+      description: "Voyager 2 imaged about 40% of the surface",
+    },
+    description:
+      "Oberon is the outermost major moon of the planet Uranus. It is the second-largest and second most massive of the Uranian moons, and the ninth most massive moon in the Solar System. Consisting of approximately equal amounts of ice and rock, Oberon is likely differentiated into a rocky core and an icy mantle.",
     distanceFromParent: "583,500 km",
     info: "Outermost major moon.",
     textures: { map: TEXTURE_PATH + "4k_oberon.png" },
@@ -763,9 +1035,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "4.14 days",
     yearLength: "Unknown",
-    curiosity: "Dark surface.",
-    facts: ["Wunda crater has a unique bright region."],
-    description: "Umbriel is the least reflective among Uranus’s moons.",
+    curiosity:
+      "Umbriel is the darkest of Uranus's major moons, reflecting only about half as much light as Ariel. Its surface is old and heavily cratered.",
+    facts: [
+      "The Wunda crater has a mysterious bright ring of material on its floor.",
+      "It has very few geological features other than craters.",
+      "It is about the same size as Ariel.",
+    ],
+    records: ["Darkest Uranian moon", "Mysterious bright ring"],
+    explorationMilestone: {
+      year: 1986,
+      description: "Voyager 2 imaged about 40% of the surface",
+    },
+    description:
+      "Umbriel is a moon of Uranus discovered on October 24, 1851, by William Lassell. It was discovered at the same time as Ariel and named after a character in Alexander Pope's poem The Rape of the Lock. Umbriel consists mainly of ice with a substantial fraction of rock, and may be differentiated into a rocky core and an icy mantle.",
     distanceFromParent: "266,000 km",
     info: "Darkest moon.",
     textures: { map: TEXTURE_PATH + "4k_umbriel.png" },
@@ -787,9 +1070,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "2.52 days",
     yearLength: "Unknown",
-    curiosity: "Extensive flow channels.",
-    facts: ["Signs of geological activity."],
-    description: "Ariel shows valleys, bright sections, and steep slopes.",
+    curiosity:
+      "Ariel has the youngest surface of all Uranian moons, with few large craters and many extensive interconnected rift valleys (canyons).",
+    facts: [
+      "Evidence suggests recent geological activity.",
+      "Its surface is crisscrossed by scarps and ridges.",
+      "Flow-like features suggest past cryovolcanism.",
+    ],
+    records: ["Brightest Uranian moon", "Youngest surface among Uranian moons"],
+    explorationMilestone: {
+      year: 1986,
+      description: "Voyager 2 imaged about 35% of the surface",
+    },
+    description:
+      "Ariel is the fourth-largest of the 27 known moons of Uranus. Ariel orbits and rotates in the equatorial plane of Uranus, which is almost perpendicular to the orbit of Uranus and so has an extreme seasonal cycle. It is the brightest of Uranus's major moons.",
     distanceFromParent: "191,000 km",
     info: "Brightest moon.",
     textures: { map: TEXTURE_PATH + "4k_ariel.png" },
@@ -845,12 +1139,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "6.39 Earth days",
     yearLength: "248 Earth years",
     curiosity:
-      "It was once the official ninth planet of the solar system and was reclassified in 2006.",
+      "Pluto has a 'heart' on its surface, a vast nitrogen-ice plain named Sputnik Planitia. It is constantly renewing itself through convection currents.",
     facts: [
-      "It has five moons, with Charon being the largest and almost the size of Pluto.",
+      "Pluto is smaller than Earth's moon.",
+      "Its orbit is so eccentric that it sometimes comes closer to the Sun than Neptune.",
+      "It has five moons: Charon, Styx, Nix, Kerberos, and Hydra.",
+      "A day on Pluto lasts 153 hours.",
     ],
+    records: ["Largest dwarf planet", "Most complex binary system"],
+    explorationMilestone: {
+      year: 2015,
+      description: "New Horizons performed the first historic flyby",
+    },
     description:
-      "Pluto stands out for its highly eccentric orbit and for being the largest dwarf planet in the solar system, with an icy surface and possible seasonal activity.",
+      "Pluto is a dwarf planet in the Kuiper belt, a ring of bodies beyond the orbit of Neptune. It was the first and the largest Kuiper belt object to be discovered. Pluto is primarily made of ice and rock and is relatively small—about one-sixth the mass of the Moon and one-third its volume. It has a moderately eccentric and inclined orbit during which it ranges from 30 to 49 astronomical units or AU from the Sun.",
     distanceFromParent: "5,906,380,000 km",
     info: "Dwarf planet.",
     textures: { map: TEXTURE_PATH + "8k_pluto.jpg" },
@@ -881,12 +1183,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "9h 4min",
     yearLength: "4.60 Earth years",
     curiosity:
-      "It is the largest object in the asteroid belt and the only dwarf planet located between Mars and Jupiter.",
+      "Ceres is the only dwarf planet located in the inner solar system. It comprises 25% of the asteroid belt's total mass.",
     facts: [
-      "The Dawn mission detected activity related to the presence of water on Ceres.",
+      "Bright spots on its surface are deposits of sodium carbonate (salt).",
+      "It releases water vapor into space, creating a temporary atmosphere.",
+      "Ahuna Mons is a cryovolcano that erupts salty water instead of lava.",
     ],
+    records: ["Largest asteroid", "Only dwarf planet in inner solar system"],
+    explorationMilestone: {
+      year: 2015,
+      description: "Dawn spacecraft entered orbit and mapped the surface",
+    },
     description:
-      "Ceres has bright craters and signs of cryovolcanism, suggesting active processes beneath its frozen surface.",
+      "Ceres is the largest object in the main asteroid belt that lies between the orbits of Mars and Jupiter. With a diameter of 940 km, Ceres is both the largest of the asteroids and the only dwarf planet in the inner Solar System. It is the 25th-largest body in the Solar System within the orbit of Neptune.",
     distanceFromParent: "413,700,000 km",
     info: "Asteroid belt.",
     textures: { map: TEXTURE_PATH + "2k_ceres.jpg" },
@@ -916,10 +1225,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "3.92 hours (fastest rotation among dwarf planets)",
     yearLength: "284 Earth years",
-    curiosity: "It has an oval shape due to its rapid rotation and has a ring.",
-    facts: ["In 2017, a ring was detected around Haumea."],
+    curiosity:
+      "Haumea spins so fast that it has been pulled into the shape of a rugby ball. It completes a rotation in less than 4 hours.",
+    facts: [
+      "It is the only known trans-Neptunian object with a ring system.",
+      "Its surface is covered in crystalline water ice.",
+      "It has two moons, Hi'iaka and Namaka.",
+    ],
+    records: ["Fastest rotating large object", "Only TNO with rings"],
+    explorationMilestone: {
+      year: 2004,
+      description: "Discovered by teams from Caltech and Sierra Nevada",
+    },
     description:
-      "Haumea is known for its accelerated rotation, unusual shape, and system of natural satellites.",
+      "Haumea is a dwarf planet located beyond Neptune's orbit. It was discovered in 2004 by a team headed by Mike Brown of Caltech at the Palomar Observatory. Haumea's mass is about one-third that of Pluto, and 1/1400 that of Earth. Although its shape has not been directly observed, calculations from its light curve are consistent with it being a Jacobi ellipsoid (the shape it would be if it were a dwarf planet), with major axes twice as long as its minor axes.",
     distanceFromParent: "6,452,000,000 km",
     info: "Fast spinner.",
     textures: { map: TEXTURE_PATH + "4k_haumea_fictional.jpg" },
@@ -950,10 +1269,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "~7.7 hours",
     yearLength: "305 Earth years",
     curiosity:
-      "It was discovered in 2005 and is the second brightest dwarf planet after Pluto.",
-    facts: ["It has one known moon (discovered in 2016)."],
+      "Makemake is the second-brightest object in the Kuiper Belt as seen from Earth (after Pluto). It is covered in methane and ethane ice.",
+    facts: [
+      "It lacks a significant atmosphere, unlike Pluto.",
+      "Its surface is extremely cold, around -243°C.",
+      "It was discovered shortly after Easter, hence the code name 'Easterbunny'.",
+    ],
+    records: ["Second brightest TNO", "Classic Kuiper Belt Object"],
+    explorationMilestone: {
+      year: 2005,
+      description:
+        "Discovery led to the creation of the 'dwarf planet' category",
+    },
     description:
-      "Makemake is icy, with high brightness due to ice, and travels in an eccentric and distant orbit.",
+      "Makemake is a dwarf planet and perhaps the second-largest Kuiper belt object in the classical population, with a diameter approximately two-thirds that of Pluto. Makemake has one known satellite, S/2015 (136472) 1, nicknamed MK 2. Its extremely low average temperature, about 30 K (−243.2 °C), means its surface is covered with methane, ethane, and possibly nitrogen ices.",
     distanceFromParent: "6,850,000,000 km",
     info: "Dwarf planet.",
     textures: { map: TEXTURE_PATH + "4k_makemake_fictional.jpg" },
@@ -983,12 +1312,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Possible methane atmosphere (temporary)",
     dayLength: "~25.9 hours",
     yearLength: "558 Earth years",
-    curiosity: "Eris is slightly smaller than Pluto, but more massive.",
+    curiosity:
+      "Eris is more massive than Pluto but slightly smaller in diameter. Its discovery was the final straw that led to Pluto's demotion.",
     facts: [
-      "The discovery of Eris motivated the reclassification of dwarf planets in 2006.",
+      "It takes 558 Earth years to orbit the Sun.",
+      "Its surface is highly reflective, suggesting a fresh coating of methane ice.",
+      "It has one moon, Dysnomia.",
     ],
+    records: ["Most massive dwarf planet", "Farthest dwarf planet"],
+    explorationMilestone: {
+      year: 2005,
+      description:
+        "Discovery by Mike Brown, Chad Trujillo, and David Rabinowitz",
+    },
     description:
-      "Orbiting in the outskirts of the solar system, Eris has a highly inclined and eccentric orbit and is the most distant known dwarf planet from the Sun.",
+      "Eris is the most massive and second-largest known dwarf planet in the Solar System. It is a trans-Neptunian object (TNO) in the scattered disk and has a high-eccentricity orbit. Eris was discovered in January 2005 by a Palomar Observatory-based team led by Mike Brown and verified later that year.",
     distanceFromParent: "10,120,000,000 km",
     info: "Massive dwarf.",
     textures: { map: TEXTURE_PATH + "2k_eris.jpg" },
@@ -1011,10 +1349,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "~22 hours",
     yearLength: "~554 Earth years",
-    curiosity: "It has one known moon (Xi Wangmu).",
-    facts: ["It shows a reddish coloration due to organic compounds."],
+    curiosity:
+      "Gonggong is named after a Chinese water god responsible for floods and chaos. It is likely a dwarf planet, though not yet officially recognized.",
+    facts: [
+      "It has a small moon named Xiangliu.",
+      "Its surface is very red, likely due to tholins (organic compounds).",
+      "It has a highly eccentric orbit, taking it far from the Sun.",
+    ],
+    records: ["Reddest TNO", "Largest unnamed dwarf planet candidate"],
+    explorationMilestone: {
+      year: 2007,
+      description:
+        "Discovered by Megan Schwamb, Mike Brown, and David Rabinowitz",
+    },
     description:
-      "Gonggong is one of the largest TNOs, orbits eccentrically, and was discovered in 2007.",
+      "Gonggong is a trans-Neptunian object in the scattered disc, orbiting the Sun. It is the fifth-largest known trans-Neptunian object (not counting Charon). Gonggong is red in color, likely due to the presence of organic compounds called tholins on its surface. It has a rotation period of roughly 22 hours.",
     distanceFromParent: "~10,000,000,000 km",
     info: "Reddish surface.",
     textures: { map: TEXTURE_PATH + "4k_gonggong_fictional.jpg" },
@@ -1036,10 +1385,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "~17.7 hours",
     yearLength: "~287 Earth years",
-    curiosity: "It has the moon Weywot.",
-    facts: ["It has a narrow ring detected in 2023."],
+    curiosity:
+      "Quaoar has a ring system that orbits much further out than the Roche limit, challenging current theories of ring formation.",
+    facts: [
+      "It was named after the creator god of the Tongva people.",
+      "It has a small moon named Weywot.",
+      "Crystalline water ice has been detected on its surface, suggesting cryovolcanism.",
+    ],
+    records: ["Ring beyond Roche limit", "Dense TNO"],
+    explorationMilestone: {
+      year: 2002,
+      description: "Discovered by Chad Trujillo and Mike Brown",
+    },
     description:
-      "Quaoar has an almost circular orbit and is considered one of the most massive objects in the Kuiper Belt.",
+      "Quaoar is a dwarf planet candidate in the Kuiper belt. It was discovered in 2002. Quaoar is about half the size of Pluto. It has one known moon, Weywot. Signs of water ice have been found on the surface, which suggests that cryovolcanism may be occurring. A small amount of methane is present on its surface, which can only be retained by the largest Kuiper belt objects.",
     distanceFromParent: "~6.4 billion km",
     info: "Has rings.",
     textures: { map: TEXTURE_PATH + "4k_quaoar_fictional.jpg" },
@@ -1061,10 +1420,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "~13 hours",
     yearLength: "~247 Earth years",
-    curiosity: "Nicknamed “anti-Pluto” due to its orbit.",
-    facts: ["It has the moon Vanth."],
+    curiosity:
+      "Orcus is often called the 'anti-Pluto' because its orbit is almost a mirror image of Pluto's. When Pluto is at perihelion (closest to Sun), Orcus is at aphelion (farthest).",
+    facts: [
+      "It has a large moon, Vanth, making it a binary system like Pluto-Charon.",
+      "Its surface is covered in crystalline water ice and ammonia.",
+      "It is named after the Etruscan god of the underworld.",
+    ],
+    records: ["Anti-Pluto orbit", "Ammonia-rich surface"],
+    explorationMilestone: {
+      year: 2004,
+      description:
+        "Discovered by Mike Brown, Chad Trujillo, and David Rabinowitz",
+    },
     description:
-      "Orcus has an orbit in resonance with Pluto and is one of the largest objects in the Kuiper Belt.",
+      "Orcus is a trans-Neptunian object in the Kuiper belt. It has a large moon, Vanth. Orcus is a plutino, meaning it is locked in a 2:3 orbital resonance with Neptune, like Pluto. However, its orbit is oriented opposite to Pluto's, earning it the nickname 'anti-Pluto'.",
     distanceFromParent: "~6.2 billion km",
     info: "Anti-Pluto.",
     textures: { map: TEXTURE_PATH + "4k_orcus_fictional.jpg" },
@@ -1087,12 +1457,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "~10 hours",
     yearLength: "~11,400 Earth years",
     curiosity:
-      "Sedna has the most distant and eccentric orbit known among large TNOs.",
+      "Sedna's orbit is exceptionally long and elliptical, taking about 11,400 years to complete one trip around the Sun.",
     facts: [
-      "Discovered in 2003, Sedna may not properly belong to the Kuiper Belt.",
+      "It is one of the reddest objects in the Solar System.",
+      "It never comes close enough to the Sun to be affected by Neptune's gravity.",
+      "Its origin is a mystery; it may have been captured from another star system.",
     ],
+    records: ["Longest orbital period (major body)", "Most distant perihelion"],
+    explorationMilestone: {
+      year: 2003,
+      description:
+        "Discovered by Mike Brown, Chad Trujillo, and David Rabinowitz",
+    },
     description:
-      "Sedna is a mysterious object, considered a future “dwarf planet”, with intense reddish tones.",
+      "Sedna is a large trans-Neptunian object, which as of 2024 is about 84 AU from the Sun, about three times as far as Neptune. Spectroscopy has revealed that Sedna's surface composition is similar to that of some other trans-Neptunian objects, being largely a mixture of water, methane, and nitrogen ices with tholins.",
     distanceFromParent:
       "~12 billion km (ultra eccentric: goes beyond 86 billion km)",
     info: "Far distant object.",
@@ -1115,10 +1493,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "~6.09 hours",
     yearLength: "~271 Earth years",
-    curiosity: "It has the moon Actaea.",
-    facts: ["It is faint and less studied compared to other TNOs."],
+    curiosity:
+      "Salacia has a very low albedo (reflectivity) compared to other large TNOs, meaning its surface is quite dark.",
+    facts: [
+      "It orbits the Sun at an average distance of 42 AU.",
+      "It has a moon named Actaea.",
+      "Its density is low, suggesting it is composed mostly of water ice.",
+    ],
+    records: ["Darkest large TNO", "Low density"],
+    explorationMilestone: {
+      year: 2004,
+      description:
+        "Discovered by Henry Roe, Michael Brown, and Kristina Barkume",
+    },
     description:
-      "Salacia is one of the largest objects in the Kuiper Belt and orbits together with its moon Actaea.",
+      "Salacia is a large trans-Neptunian object in the Kuiper belt. It is approximately 850 kilometers in diameter. Salacia has one known moon, Actaea. Both are named after Roman sea deities. Salacia's low density implies that it is composed primarily of water ice.",
     distanceFromParent: "~6.4 billion km",
     info: "Dark surface.",
     textures: { map: TEXTURE_PATH + "4k_salacia_fictional.jpg" },
@@ -1141,9 +1530,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "6.39 days (synchronized with Pluto)",
     yearLength: "Unknown",
-    curiosity: "Close in size to Pluto.",
-    facts: ["Double system with Pluto (common barycenter)."],
-    description: "Charon may also have subsurface oceans.",
+    curiosity:
+      "Charon is so large relative to Pluto that the two bodies orbit a common center of gravity outside of Pluto, making them a binary dwarf planet system.",
+    facts: [
+      "Its north pole is covered in reddish tholins, nicknamed 'Mordor Macula'.",
+      "It has canyons deeper than the Grand Canyon.",
+      "Charon does not have a significant atmosphere.",
+    ],
+    records: ["Largest moon relative to parent", "Binary dwarf planet"],
+    explorationMilestone: {
+      year: 2015,
+      description: "New Horizons provided the first detailed images",
+    },
+    description:
+      "Charon is the largest of the five known moons of the dwarf planet Pluto. With a mean radius of 606 km, Charon is the sixth-largest trans-Neptunian object after Pluto, Eris, Haumea, Makemake, and Gonggong. It was discovered in 1978 at the United States Naval Observatory in Washington, D.C., using photographic plates taken at the United States Naval Observatory Flagstaff Station (NOFS).",
     distanceFromParent: "19,570 km",
     info: "Binary partner.",
     textures: { map: TEXTURE_PATH + "4k_charon.png" },
@@ -1165,10 +1565,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "Synchronized (~9.5 days)",
     yearLength: "Unknown",
-    curiosity: "It may influence Orcus’s orbit.",
-    facts: ["It is large and dark, discovered by Hubble."],
+    curiosity:
+      "Vanth is remarkably large compared to Orcus; if Orcus were a planet, Vanth would be the third largest moon relative to its planet in the Solar System.",
+    facts: [
+      "It orbits Orcus in a nearly perfect circle.",
+      "Its surface is much darker than Orcus, suggesting a different composition.",
+      "It is likely a captured object or formed from a giant impact.",
+    ],
+    records: ["Large moon relative to parent", "Dark surface"],
+    explorationMilestone: {
+      year: 2005,
+      description: "Discovered by Mike Brown using the Hubble Space Telescope",
+    },
     description:
-      "Vanth was detected recently and has an orbit closely linked to Orcus.",
+      "Vanth is the single known natural satellite of the plutino and likely dwarf planet Orcus. It was discovered by Mike Brown in imagery taken by the Hubble Space Telescope on November 13, 2005. Vanth is massive compared to Orcus, with a mass ratio of about 1:12.",
     distanceFromParent: "~9,000 km",
     info: "Moon of Orcus.",
     textures: { map: TEXTURE_PATH + "4k_vanth_fictional.jpg" },
@@ -1190,9 +1600,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "Synchronized (~12 days)",
     yearLength: "Unknown",
-    curiosity: "Small, dark, difficult to observe.",
-    facts: ["Discovered by direct observation in 2006."],
-    description: "Weywot orbits Quaoar in an almost circular orbit.",
+    curiosity:
+      "Weywot is named after the Tongva sky father, the son of Quaoar. It was discovered in images taken to search for a ring system around Quaoar.",
+    facts: [
+      "It is estimated to be only about 80 km in diameter.",
+      "It orbits Quaoar every 12.4 days.",
+      "Its formation was likely due to a collision event.",
+    ],
+    records: ["Moon of a ringed TNO", "Collision fragment"],
+    explorationMilestone: {
+      year: 2007,
+      description: "Discovered by Michael Brown",
+    },
+    description:
+      "Weywot is the only known moon of the trans-Neptunian object Quaoar. It was discovered by Michael Brown in images acquired on February 14, 2006, by the Hubble Space Telescope. Weywot is estimated to be about 81 km in diameter.",
     distanceFromParent: "~14,500 km",
     info: "Moon of Quaoar.",
     textures: { map: TEXTURE_PATH + "4k_weywot_fictional.jpg" },
@@ -1216,10 +1637,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     dayLength: "5.34 hours",
     yearLength: "3.63 Earth years",
     curiosity:
-      "Vesta has one of the largest impact craters in the solar system.",
-    facts: ["It was visited by the Dawn spacecraft."],
+      "Vesta is the brightest asteroid visible from Earth. It is the only main-belt asteroid visible to the naked eye.",
+    facts: [
+      "It has a giant mountain at its south pole, Rheasilvia, which is 22 km high.",
+      "Vesta is responsible for about 6% of all meteorites found on Earth (HED meteorites).",
+      "It has a differentiated interior with a crust, mantle, and core.",
+    ],
+    records: ["Brightest asteroid", "Tallest mountain in asteroid belt"],
+    explorationMilestone: {
+      year: 2011,
+      description: "Dawn spacecraft orbited Vesta for over a year",
+    },
     description:
-      "Vesta is bright, internally differentiated, and important for studies of planetary formation.",
+      "Vesta is one of the largest objects in the asteroid belt, with a mean diameter of 525 kilometers. It was discovered by the German astronomer Heinrich Wilhelm Matthias Olbers on 29 March 1807 and is named after Vesta, the virgin goddess of home and hearth from Roman mythology. Vesta is the second-most-massive and second-largest body in the asteroid belt after the dwarf planet Ceres.",
     distanceFromParent: "353,400,000 km",
     info: "Brightest asteroid.",
     textures: { map: TEXTURE_PATH + "4k_vesta.jpg" },
@@ -1245,10 +1675,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "7.8 hours",
     yearLength: "4.62 Earth years",
-    curiosity: "Second largest asteroid in the belt.",
-    facts: ["Orbit is quite inclined and elliptical."],
+    curiosity:
+      "Pallas has a highly inclined orbit of 34.8 degrees, which is unusually steep for a large asteroid. This makes it difficult to reach with spacecraft.",
+    facts: [
+      "It is the third-largest asteroid by volume.",
+      "Its surface is likely composed of silicate minerals.",
+      "Pallas was the second asteroid to be discovered.",
+    ],
+    records: ["Most inclined major asteroid", "Second discovered asteroid"],
+    explorationMilestone: {
+      year: 1802,
+      description: "Discovered by Heinrich Wilhelm Olbers",
+    },
     description:
-      "Pallas is an atypical asteroid, standing out for its rotation axis and rich composition.",
+      "Pallas is the second asteroid to have been discovered (after Ceres), and it is one of the largest asteroids in the Solar System. It is estimated to comprise 7% of the mass of the asteroid belt, and its diameter of 512 km makes it the third-largest asteroid, slightly smaller than Vesta. It is likely a remnant protoplanet.",
     distanceFromParent: "414,500,000 km",
     info: "High inclination.",
     textures: { map: TEXTURE_PATH + "4k_pallas_fictional.jpg" },
@@ -1270,10 +1710,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     atmosphere: "Not detected",
     dayLength: "13.8 hours",
     yearLength: "5.56 Earth years",
-    curiosity: "Hygiea may be the smallest dwarf planet if it is spherical.",
-    facts: ["It is the fourth largest body in the asteroid belt."],
+    curiosity:
+      "Hygiea is the fourth-largest asteroid but was discovered much later than the others because of its dark surface. It is the main member of the Hygiea family of asteroids.",
+    facts: [
+      "It is nearly spherical, leading to debates about whether it should be a dwarf planet.",
+      "Its surface is very dark, similar to Ceres.",
+      "It contains water ice on its surface.",
+    ],
+    records: ["Largest dark asteroid", "Spherical asteroid candidate"],
+    explorationMilestone: {
+      year: 1849,
+      description: "Discovered by Annibale de Gasparis",
+    },
     description:
-      "Dark, carbon-rich surface; recent studies try to define its shape as that of a dwarf planet.",
+      "Hygiea is a major asteroid located in the main asteroid belt. With a diameter of 434 km, it is the fourth-largest asteroid in the Solar System by both volume and mass. Hygiea is the largest of the class of dark C-type asteroids with a carbonaceous surface that dominates the outer asteroid belt.",
     distanceFromParent: "470,000,000 km",
     info: "Carbonaceous.",
     textures: { map: TEXTURE_PATH + "4k_hygiea_fictional.jpg" },

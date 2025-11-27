@@ -1,9 +1,81 @@
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { AstroPhysics, AU_IN_KM, AU_TO_3D_UNITS } from "../../lib/astrophysics";
+import { useMemo } from "react";
 
 export const Sidebar = () => {
-  const { selectedId, setSelectedId } = useStore();
+  const { selectedId, setSelectedId, datetime } = useStore();
   const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
+
+  // Helper to parse mass string: "5.972 × 10²⁴ kg" -> 5.972e24
+  const parseMass = (str?: string) => {
+    if (!str) return 0;
+    // Replace superscripts
+    const supers: Record<string, string> = {
+      "⁰": "0",
+      "¹": "1",
+      "²": "2",
+      "³": "3",
+      "⁴": "4",
+      "⁵": "5",
+      "⁶": "6",
+      "⁷": "7",
+      "⁸": "8",
+      "⁹": "9",
+    };
+    let clean = str.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (m) => supers[m] || m);
+    clean = clean
+      .replace("× 10", "e")
+      .replace(" kg", "")
+      .replace(/,/g, "")
+      .replace(/ /g, "");
+    return parseFloat(clean);
+  };
+
+  // Real-time Calculations
+  const stats = useMemo(() => {
+    if (!b) return null;
+
+    // 1. Distance (Relative to parent)
+    // calculateLocalPosition returns scaled 3D units. Divide by AU_TO_3D_UNITS to get AU.
+    const pos3D = AstroPhysics.calculateLocalPosition(
+      b.orbit,
+      datetime,
+      "realistic"
+    );
+    const distAU = pos3D.length() / AU_TO_3D_UNITS;
+    const distKm = distAU * AU_IN_KM;
+
+    // 2. Velocity
+    let parentMass = 1.989e30; // Default Sun
+    if (b.parentId) {
+      const parent = SOLAR_SYSTEM_BODIES.find((p) => p.id === b.parentId);
+      if (parent) parentMass = parseMass(parent.mass);
+    }
+    const velocity = AstroPhysics.calculateOrbitalVelocity(
+      b.orbit,
+      distAU,
+      parentMass
+    );
+
+    // 3. Escape Velocity
+    const myMass = parseMass(b.mass);
+    const escape = AstroPhysics.calculateEscapeVelocity(myMass, b.radiusKm);
+
+    return { distAU, distKm, velocity, escape };
+  }, [b, datetime]);
+
+  // Comparators
+  const getEarthComparison = (
+    val: number,
+    earthVal: number,
+    suffix = "Earth"
+  ) => {
+    if (!val || !earthVal) return null;
+    const ratio = val / earthVal;
+    if (ratio >= 0.99 && ratio <= 1.01) return `1.00× ${suffix}`;
+    return `${ratio.toFixed(2)}× ${suffix}`;
+  };
 
   // Even if no body is selected, we render the container but translate it off-screen
   // This allows for smooth CSS transitions
@@ -68,9 +140,39 @@ export const Sidebar = () => {
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-5 pt-0 custom-scrollbar space-y-4">
             {/* Description */}
-            <div className="text-xs text-gray-300 leading-relaxed font-rajdhani font-light border-t border-white/10 pt-3">
-              <p>{b.description || b.info}</p>
-            </div>
+            <p>{b.description || b.info}</p>
+
+            {/* Live Data Grid */}
+            {stats && b.id !== "sun" && (
+              <div>
+                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  Real-time Telemetry
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatBox
+                    label="Orbital Speed"
+                    value={`${stats.velocity.toFixed(1)} km/s`}
+                  />
+                  <StatBox
+                    label="Current Dist."
+                    value={
+                      stats.distAU < 0.1
+                        ? `${stats.distKm.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })} km`
+                        : `${stats.distAU.toFixed(3)} AU`
+                    }
+                    subLabel={`From ${
+                      b.parentId
+                        ? b.parentId.charAt(0).toUpperCase() +
+                          b.parentId.slice(1)
+                        : "Sun"
+                    }`}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Physical Stats Grid */}
             <div>
@@ -81,8 +183,25 @@ export const Sidebar = () => {
                 <StatBox
                   label="Radius"
                   value={`${b.radiusKm.toLocaleString()} km`}
+                  badge={getEarthComparison(b.radiusKm, 6371)}
                 />
-                <StatBox label="Gravity" value={b.gravity} />
+                <StatBox
+                  label="Gravity"
+                  value={b.gravity}
+                  badge={
+                    b.gravity
+                      ? getEarthComparison(
+                          parseFloat(b.gravity.split(" ")[0]),
+                          9.8,
+                          "g"
+                        )
+                      : undefined
+                  }
+                />
+                <StatBox
+                  label="Escape Vel."
+                  value={`${stats?.escape.toFixed(1)} km/s`}
+                />
                 <StatBox label="Mass" value={b.mass} fullWidth />
                 <StatBox label="Composition" value={b.composition} fullWidth />
                 {b.spectralClass && (
@@ -94,6 +213,50 @@ export const Sidebar = () => {
                 )}
               </div>
             </div>
+
+            {/* Records Section */}
+            {b.records && b.records.length > 0 && (
+              <div>
+                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                  Records
+                </h3>
+                <div className="space-y-1">
+                  {b.records.map((rec, i) => (
+                    <div
+                      key={i}
+                      className="bg-yellow-500/10 p-2 rounded border border-yellow-500/20 flex gap-2 items-start"
+                    >
+                      <span className="text-yellow-500 text-xs">🏆</span>
+                      <p className="text-xs text-gray-300 font-rajdhani">
+                        {rec}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Exploration Milestone */}
+            {b.explorationMilestone && (
+              <div>
+                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                  Exploration
+                </h3>
+                <div className="bg-purple-500/10 p-2 rounded border border-purple-500/20">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] text-purple-400 uppercase font-bold">
+                      Major Milestone
+                    </span>
+                    <span className="text-[9px] text-purple-300 font-mono">
+                      {b.explorationMilestone.year}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-300 font-rajdhani">
+                    {b.explorationMilestone.description}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Orbital Stats Grid */}
             <div>
@@ -174,19 +337,28 @@ const StatBox = ({
   value,
   subLabel,
   fullWidth = false,
+  badge,
 }: {
   label: string;
   value?: string | number;
   subLabel?: string;
   fullWidth?: boolean;
+  badge?: string | null;
 }) => (
   <div
     className={`bg-black/20 p-2 rounded border border-white/5 ${
       fullWidth ? "col-span-2" : ""
-    }`}
+    } relative overflow-hidden`}
   >
-    <div className="text-[9px] text-nasa-dim uppercase tracking-wider mb-0.5">
-      {label}
+    <div className="flex justify-between items-start">
+      <div className="text-[9px] text-nasa-dim uppercase tracking-wider mb-0.5">
+        {label}
+      </div>
+      {badge && (
+        <div className="text-[8px] bg-white/10 px-1 rounded text-nasa-accent font-mono">
+          {badge}
+        </div>
+      )}
     </div>
     <div className="text-gray-200 font-mono text-xs leading-tight break-words">
       {value || "N/A"}

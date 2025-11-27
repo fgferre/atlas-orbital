@@ -193,12 +193,7 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
     // Scaling
     let s = 1;
     if (scaleMode === "didactic") {
-      if (body.type === "star")
-        s = 50; // Reduced from 60
-      else if (body.type === "moon")
-        s = 3; // Reduced from 5
-      // Reduced planet scale to prevent overlap with moons in the new compressed scale
-      else s = body.radiusKm > 50000 ? 25 : 10; // Reduced from 40/20 to 25/10
+      s = AstroPhysics.calculateDidacticRadius(body.radiusKm);
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
@@ -273,8 +268,8 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
               <primitive
                 object={useMemo(() => {
                   // Use defined ring system or fallback to Saturn defaults
-                  const innerRadius = body.ringSystem?.innerRadius || 1.28;
-                  const outerRadius = body.ringSystem?.outerRadius || 2.35;
+                  const innerRadius = body.ringSystem?.innerRadius || 1.11;
+                  const outerRadius = body.ringSystem?.outerRadius || 2.33;
                   const segments = 128;
 
                   const geometry = new THREE.RingGeometry(
@@ -292,6 +287,7 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
                     const radius = Math.sqrt(v3.x * v3.x + v3.y * v3.y);
 
                     // Map U from 0 (inner) to 1 (outer) based on radius
+                    // Standard mapping: 0% at innerRadius, 100% at outerRadius
                     const u =
                       (radius - innerRadius) / (outerRadius - innerRadius);
 
@@ -304,7 +300,6 @@ const PlanetVisual = ({ body }: { body: CelestialBody }) => {
               />
               <meshStandardMaterial
                 map={textureRing}
-                alphaMap={textureRing}
                 transparent={true}
                 side={THREE.DoubleSide}
                 depthWrite={false}
@@ -408,7 +403,7 @@ export const Planet = ({ body, children }: PlanetProps) => {
     if (body.type === "star") return null;
 
     // Use 4x higher resolution for focused bodies
-    const segments = focusId === body.id ? 2048 : 512;
+    const segments = focusId === body.id ? 16384 : 4096;
 
     // Get system multiplier for this body (default to 1)
     const multiplier = body.parentId
