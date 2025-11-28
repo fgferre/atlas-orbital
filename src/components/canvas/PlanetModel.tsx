@@ -44,6 +44,20 @@ export const PlanetModel = ({ body }: PlanetModelProps) => {
       clone.scale.multiplyScalar(scaleFactor);
     }
 
+    // Enable shadows on all meshes
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        // Ensure material is standard (GLTF usually is)
+        if (child.material) {
+          child.material.depthWrite = true;
+          child.material.depthTest = true;
+        }
+      }
+    });
+
     return clone;
   }, [scene]);
 

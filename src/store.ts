@@ -38,17 +38,7 @@ interface AppState {
   setSelectedId: (id: string | null) => void;
   selectId: (id: string | null) => void;
   setFocusId: (id: string | null) => void;
-  setOverlayItems: (
-    items: Array<{
-      id: string;
-      name: string;
-      x: number;
-      y: number;
-      isSmall: boolean;
-      showLabel: boolean;
-      showIcon: boolean;
-    }>
-  ) => void;
+  setOverlayItems: (items: AppState["overlayItems"]) => void;
   toggleLabels: () => void;
   toggleIcons: () => void;
   toggleOrbits: () => void;
@@ -90,7 +80,7 @@ export const useStore = create<AppState>((set) => ({
     })),
   setSpeed: (speed) => set({ speed }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
-  setSelectedId: (selectedId: string | null) => set({ selectedId }),
+  setSelectedId: (selectedId) => set({ selectedId }),
   selectId: (selectedId) => set({ selectedId, focusId: selectedId }),
   setFocusId: (focusId) => set({ focusId }),
   setOverlayItems: (overlayItems) => set({ overlayItems }),

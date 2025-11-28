@@ -3,6 +3,85 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "../../store";
 import { useEffect, useState } from "react";
 
+// Helper for random stars
+const StarField = () => {
+  // Generate static stars once
+  const [stars] = useState(() =>
+    Array.from({ length: 50 }).map((_, i) => ({
+      id: i,
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      size: Math.random() * 2 + 1,
+      opacity: Math.random() * 0.5 + 0.1,
+      animDuration: Math.random() * 3 + 2,
+    }))
+  );
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {stars.map((star) => (
+        <div
+          key={star.id}
+          className="absolute bg-white rounded-full animate-pulse"
+          style={{
+            top: star.top,
+            left: star.left,
+            width: `${star.size}px`,
+            height: `${star.size}px`,
+            opacity: star.opacity,
+            animationDuration: `${star.animDuration}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// HUD Corner Brackets
+const CornerBrackets = () => (
+  <>
+    {/* Top Left */}
+    <div className="absolute top-8 left-8 w-16 h-16 border-t-2 border-l-2 border-cyan-500/30 rounded-tl-lg" />
+    {/* Top Right */}
+    <div className="absolute top-8 right-8 w-16 h-16 border-t-2 border-r-2 border-cyan-500/30 rounded-tr-lg" />
+    {/* Bottom Left */}
+    <div className="absolute bottom-8 left-8 w-16 h-16 border-b-2 border-l-2 border-cyan-500/30 rounded-bl-lg" />
+    {/* Bottom Right */}
+    <div className="absolute bottom-8 right-8 w-16 h-16 border-b-2 border-r-2 border-cyan-500/30 rounded-br-lg" />
+  </>
+);
+
+// Technical Text Readouts
+const TechReadout = () => (
+  <div className="absolute inset-0 pointer-events-none font-mono text-[10px] text-cyan-500/40 tracking-widest select-none">
+    {/* Top Left Data */}
+    <div className="absolute top-12 left-12 flex flex-col gap-1">
+      <span>SYS.INIT.SEQUENCE</span>
+      <span>VER.2.4.0-ALPHA</span>
+      <span>MEM_ALLOC: OK</span>
+    </div>
+
+    {/* Top Right Data */}
+    <div className="absolute top-12 right-12 flex flex-col gap-1 text-right">
+      <span>ORBITAL.MECHANICS</span>
+      <span>PHYSICS_ENGINE: ACTIVE</span>
+      <span>RENDER_CORE: V7</span>
+    </div>
+
+    {/* Bottom Left Data */}
+    <div className="absolute bottom-12 left-12 flex flex-col gap-1">
+      <span>COORDS: 45.22.11</span>
+      <span>SECTOR: 7G-ALPHA</span>
+    </div>
+
+    {/* Bottom Right Data */}
+    <div className="absolute bottom-12 right-12 flex flex-col gap-1 text-right">
+      <span>EST.LATENCY: 12ms</span>
+      <span>CONNECTION: SECURE</span>
+    </div>
+  </div>
+);
+
 export const Loader = () => {
   const { progress, active } = useProgress();
   const isSceneReady = useStore((state) => state.isSceneReady);
@@ -29,22 +108,22 @@ export const Loader = () => {
               "radial-gradient(circle at center, #1a1a2e 0%, #000000 100%)",
           }}
         >
-          {/* Background Stars Effect (CSS based) */}
-          <div className="absolute inset-0 opacity-50">
-            <div
-              className="absolute top-1/4 left-1/4 w-1 h-1 bg-white rounded-full animate-pulse"
-              style={{ animationDuration: "3s" }}
-            />
-            <div
-              className="absolute top-3/4 left-1/3 w-1 h-1 bg-blue-300 rounded-full animate-pulse"
-              style={{ animationDuration: "4s" }}
-            />
-            <div
-              className="absolute top-1/2 left-3/4 w-1 h-1 bg-cyan-300 rounded-full animate-pulse"
-              style={{ animationDuration: "2s" }}
-            />
-            {/* Add more subtle stars as needed or use a background image */}
-          </div>
+          {/* 1. Deep Space Starfield */}
+          <StarField />
+
+          {/* 2. HUD Elements */}
+          <CornerBrackets />
+          <TechReadout />
+
+          {/* 3. Subtle Grid Overlay */}
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+            }}
+          />
 
           {/* Main Content Container */}
           <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-4xl px-4">
@@ -58,40 +137,29 @@ export const Loader = () => {
               ATLAS ORBITAL
             </motion.h1>
 
-            {/* Orbital Loader Animation */}
-            <div className="relative w-32 h-32 md:w-48 md:h-48 mb-12">
-              {/* Inner Core */}
-              <div className="absolute inset-0 m-auto w-4 h-4 bg-cyan-400 rounded-full shadow-[0_0_20px_rgba(34,211,238,0.8)] animate-pulse" />
+            {/* Stylized Solar System Loader */}
+            <div className="relative w-48 h-48 mb-12 flex items-center justify-center">
+              {/* Sun */}
+              <div className="absolute w-10 h-10 bg-gradient-to-br from-yellow-300 to-orange-500 rounded-full shadow-[0_0_40px_rgba(255,165,0,0.6)] animate-pulse z-10" />
 
-              {/* Ring 1 */}
-              <div
-                className="absolute inset-0 border border-cyan-500/30 rounded-full"
-                style={{
-                  animation: "spin 4s linear infinite",
-                  borderTopColor: "transparent",
-                  borderLeftColor: "transparent",
-                }}
-              />
-              {/* Ring 2 (Counter-rotating) */}
-              <div
-                className="absolute inset-2 border border-blue-500/30 rounded-full"
-                style={{
-                  animation: "spin-reverse 6s linear infinite",
-                  borderBottomColor: "transparent",
-                  borderRightColor: "transparent",
-                }}
-              />
-              {/* Ring 3 */}
-              <div
-                className="absolute inset-6 border border-white/10 rounded-full"
-                style={{
-                  animation: "spin 8s linear infinite",
-                }}
-              />
+              {/* Orbit 1: Mercury (Fast, Small, Gray) */}
+              <div className="absolute w-16 h-16 border border-white/5 rounded-full animate-[spin_3s_linear_infinite]">
+                <div className="absolute top-1/2 -right-1 w-1.5 h-1.5 bg-gray-300 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.8)]" />
+              </div>
 
-              {/* Orbiting Planet */}
-              <div className="absolute inset-0 animate-[spin_3s_linear_infinite]">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-[0_0_10px_white]" />
+              {/* Orbit 2: Earth (Medium, Blue) */}
+              <div className="absolute w-24 h-24 border border-white/10 rounded-full animate-[spin_5s_linear_infinite]">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1 w-2.5 h-2.5 bg-blue-400 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+              </div>
+
+              {/* Orbit 3: Mars (Slow, Red) */}
+              <div className="absolute w-32 h-32 border border-white/5 rounded-full animate-[spin_7s_linear_infinite]">
+                <div className="absolute bottom-1/2 -left-1.5 w-2 h-2 bg-red-400 rounded-full shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
+              </div>
+
+              {/* Orbit 4: Jupiter (Very Slow, Large, Orange) */}
+              <div className="absolute w-44 h-44 border border-white/5 rounded-full animate-[spin_12s_linear_infinite]">
+                <div className="absolute bottom-0 right-1/4 w-4 h-4 bg-orange-300 rounded-full shadow-[0_0_10px_rgba(253,186,116,0.8)]" />
               </div>
             </div>
 

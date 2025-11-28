@@ -5,6 +5,8 @@ import { Starfield } from "./Starfield";
 import {
   EffectComposer,
   Bloom,
+  HueSaturation,
+  BrightnessContrast,
   ToneMapping,
 } from "@react-three/postprocessing";
 import { SolarSystem } from "./SolarSystem";
@@ -15,18 +17,21 @@ import { SceneReadyChecker } from "./SceneReadyChecker";
 
 import { useStore } from "../../store";
 
+import { SmartSunLight } from "./SmartSunLight";
+
 export const Scene = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
 
   return (
     <>
       <Canvas
+        shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
         camera={{
           position: [0, 3000, 4000],
           fov: 40,
-          near: 1, // Increased from 0.01 to 1 to improve depth precision and reduce jitter
-          far: 1e13, // Slightly reduced to improve precision distribution
+          near: 1,
+          far: 1e13,
         }}
         gl={{ antialias: true, logarithmicDepthBuffer: true }}
       >
@@ -35,8 +40,24 @@ export const Scene = () => {
           <Starfield />
         </Suspense>
 
-        <ambientLight intensity={0.1} />
-        <pointLight position={[0, 0, 0]} intensity={2} decay={0} />
+        <ambientLight intensity={0.12} />
+
+        {/* 
+          Central Sun Light (Omnidirectional) 
+          - Provides lighting for the whole system
+          - Does NOT cast shadows (too expensive/low res)
+        */}
+        <pointLight
+          position={[0, 0, 0]}
+          intensity={0.18} // Radial illumination from Sun center
+          decay={0}
+        />
+
+        {/* 
+          Smart Sun Light (Directional)
+          - Casts high-quality shadows for the focused object
+        */}
+        <SmartSunLight />
 
         <Suspense fallback={null}>
           <SolarSystem />
@@ -53,12 +74,14 @@ export const Scene = () => {
 
         <EffectComposer>
           <Bloom
-            luminanceThreshold={0.9}
+            luminanceThreshold={0.65}
             mipmapBlur
             intensity={1.5}
             radius={0.4}
           />
           <ToneMapping />
+          <HueSaturation saturation={0.4} hue={0} />
+          <BrightnessContrast brightness={0.0} contrast={0.35} />
         </EffectComposer>
         <SceneReadyChecker />
       </Canvas>

@@ -20,16 +20,20 @@ export const Earth = ({ body }: EarthProps) => {
   const scaleMode = useStore((state) => state.scaleMode);
 
   // Load textures once
-  const dayTexture = useTexture(body.textures?.map || "");
-  const cloudsTexture = useTexture(body.textures?.clouds || "");
+  const dayTexture = body.textures?.map ? useTexture(body.textures.map) : null;
+  const cloudsTexture = body.textures?.clouds
+    ? useTexture(body.textures.clouds)
+    : null;
 
-  // Simple material - no custom shaders for now
+  // Earth material
   const earthMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       map: dayTexture,
       roughness: 0.9,
       metalness: 0.1,
     });
+
+    return mat;
   }, [dayTexture]);
 
   const cloudMaterial = useMemo(() => {
@@ -90,13 +94,13 @@ export const Earth = ({ body }: EarthProps) => {
         {/* Rotation Group */}
         <group ref={rotationRef}>
           {/* 1. Earth Surface */}
-          <mesh>
+          <mesh castShadow receiveShadow>
             <sphereGeometry args={[1, 128, 128]} />
             <primitive object={earthMaterial} attach="material" />
           </mesh>
 
           {/* 2. Clouds */}
-          <mesh scale={1.005}>
+          <mesh scale={1.005} castShadow receiveShadow>
             <sphereGeometry args={[1, 128, 128]} />
             <primitive object={cloudMaterial} attach="material" />
           </mesh>
