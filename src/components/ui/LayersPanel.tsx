@@ -15,6 +15,8 @@ export const LayersPanel = () => {
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
   const visibility = useStore((state) => state.visibility);
   const toggleVisibility = useStore((state) => state.toggleVisibility);
+  const debugMode = useStore((state) => state.debugMode);
+  const toggleDebugMode = useStore((state) => state.toggleDebugMode);
 
   return (
     <div
@@ -105,6 +107,16 @@ export const LayersPanel = () => {
               checked={showStarfield}
               onChange={toggleShowStarfield}
             />
+            <div className="pt-2 border-t border-white/10">
+              <Toggle
+                label="Debug Menu"
+                checked={debugMode}
+                onChange={toggleDebugMode}
+              />
+              <div className="text-[9px] text-gray-500 font-mono text-right mt-1">
+                Ctrl + Shift + D
+              </div>
+            </div>
           </div>
 
           {/* Categories */}

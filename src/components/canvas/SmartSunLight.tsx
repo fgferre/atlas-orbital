@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../../store";
 
-export const SmartSunLight = () => {
+export const SmartSunLight = ({ intensity = 1.5 }: { intensity?: number }) => {
   const focusId = useStore((state) => state.focusId);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const targetRef = useRef<THREE.Object3D>(new THREE.Object3D());
@@ -64,7 +64,7 @@ export const SmartSunLight = () => {
       <primitive object={targetRef.current} />
       <directionalLight
         ref={lightRef}
-        intensity={0.4}
+        intensity={intensity}
         castShadow
         shadow-mapSize={[4096, 4096]}
         shadow-bias={-0.00005}

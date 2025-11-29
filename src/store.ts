@@ -48,6 +48,8 @@ interface AppState {
   closeTutorial: () => void;
   setTutorialStep: (step: number) => void;
   setSceneReady: (ready: boolean) => void;
+  debugMode: boolean;
+  toggleDebugMode: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -106,4 +108,6 @@ export const useStore = create<AppState>((set) => ({
   },
   setTutorialStep: (step) => set({ tutorialStep: step }),
   setSceneReady: (ready) => set({ isSceneReady: ready }),
+  debugMode: false,
+  toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
 }));

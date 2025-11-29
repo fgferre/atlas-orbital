@@ -3,7 +3,21 @@ import { useMemo } from "react";
 import { Planet } from "./Planet";
 import { useStore } from "../../store";
 
-export const SolarSystem = () => {
+interface SolarSystemProps {
+  roughness: number;
+  metalness: number;
+  sunEmissive: number;
+  ringEmissive: number;
+  ringShadowIntensity: number;
+}
+
+export const SolarSystem = ({
+  roughness,
+  metalness,
+  sunEmissive,
+  ringEmissive,
+  ringShadowIntensity,
+}: SolarSystemProps) => {
   const visibility = useStore((state) => state.visibility);
 
   // Group bodies by parentId
@@ -39,7 +53,15 @@ export const SolarSystem = () => {
       if (!isVisible) return null;
 
       return (
-        <Planet key={body.id} body={body}>
+        <Planet
+          key={body.id}
+          body={body}
+          roughness={roughness}
+          metalness={metalness}
+          sunEmissive={sunEmissive}
+          ringEmissive={ringEmissive}
+          ringShadowIntensity={ringShadowIntensity}
+        >
           {renderBody(body.id)}
         </Planet>
       );
