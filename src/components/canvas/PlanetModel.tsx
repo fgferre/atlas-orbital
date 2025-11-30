@@ -134,9 +134,6 @@ export const PlanetModel = ({
   body,
   roughness,
   metalness,
-  sunEmissive,
-  ringEmissive,
-  ringShadowIntensity,
 }: PlanetModelProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);

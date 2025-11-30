@@ -88,7 +88,9 @@ export const CameraController = () => {
     const targetRadius = getTargetScale(bodyData);
     // Calculate ideal distance based on FOV to fit object in view
     // Formula: distance = radius / sin(fov / 2)
-    const fovRad = THREE.MathUtils.degToRad(camera.fov);
+    const fovRad = THREE.MathUtils.degToRad(
+      (camera as THREE.PerspectiveCamera).fov
+    );
     const fitDistance = targetRadius / Math.sin(fovRad / 2);
 
     // Add a safety margin (multiplier) so it doesn't fill 100% of the screen
