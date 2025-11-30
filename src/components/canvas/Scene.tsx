@@ -57,14 +57,14 @@ export const Scene = () => {
   } = useControls({
     Lighting: folder({
       ambientIntensity: {
-        value: 0.21,
+        value: 0.37,
         min: 0,
         max: 1,
         step: 0.01,
         label: "Ambient Light",
       },
       sunIntensity: {
-        value: 0.7,
+        value: 1.4,
         min: 0,
         max: 5,
         step: 0.1,
@@ -78,7 +78,7 @@ export const Scene = () => {
         label: "Shadow Light (Dir)",
       },
       envMapIntensity: {
-        value: 1.1,
+        value: 2.6,
         min: 0,
         max: 5,
         step: 0.1,
@@ -87,34 +87,34 @@ export const Scene = () => {
     }),
     "Post Processing": folder({
       bloomThreshold: {
-        value: 0.9,
+        value: 0.66,
         min: 0,
         max: 1,
         step: 0.01,
         label: "Bloom Threshold",
       },
       bloomIntensity: {
-        value: 1.5,
+        value: 0.1,
         min: 0,
         max: 3,
         step: 0.1,
         label: "Bloom Intensity",
       },
       bloomRadius: {
-        value: 0.81,
+        value: 0.63,
         min: 0,
         max: 1,
         step: 0.01,
         label: "Bloom Radius",
       },
       saturation: {
-        value: 0.55,
+        value: 0.15,
         min: 0,
         max: 1,
         step: 0.05,
         label: "Saturation",
       },
-      contrast: { value: 0.35, min: 0, max: 1, step: 0.05, label: "Contrast" },
+      contrast: { value: 0.5, min: 0, max: 1, step: 0.05, label: "Contrast" },
       brightness: {
         value: -0.1,
         min: -0.5,
@@ -124,23 +124,23 @@ export const Scene = () => {
       },
     }),
     "Planet Material": folder({
-      roughness: { value: 0.5, min: 0, max: 1, step: 0.05, label: "Roughness" },
+      roughness: { value: 0.7, min: 0, max: 1, step: 0.05, label: "Roughness" },
       metalness: {
-        value: 0.15,
+        value: 0.2,
         min: 0,
         max: 1,
         step: 0.05,
         label: "Metalness",
       },
       sunEmissive: {
-        value: 1.5,
+        value: 2.1,
         min: 0,
         max: 10,
         step: 0.1,
         label: "Sun Emissive Power",
       },
       ringEmissive: {
-        value: 0.15,
+        value: 0.2,
         min: 0,
         max: 1,
         step: 0.05,

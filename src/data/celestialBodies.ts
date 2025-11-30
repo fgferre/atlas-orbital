@@ -338,7 +338,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Jupiter is the largest planet in the Solar System, with a mass more than two and a half times that of all the other planets combined. It is a gas giant with a mass one-thousandth that of the Sun. Jupiter is primarily composed of hydrogen with a quarter of its mass being helium. It lacks a well-defined solid surface. Because of its rapid rotation, the planet's shape is that of an oblate spheroid.",
     distanceFromParent: "778,330,000 km",
     info: "Gas giant.",
-    textures: { map: TEXTURE_PATH + "8k_jupiter.jpg" },
+    textures: { map: TEXTURE_PATH + "jupiter_vgr1_2025.jpg" },
   },
   {
     id: "saturn",
@@ -434,7 +434,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Uranus is the seventh planet from the Sun. It is named after the Greek god of the sky. It has the third-largest planetary radius and fourth-largest planetary mass in the Solar System. Uranus is similar in composition to Neptune, and both have bulk chemical compositions which differ from that of the larger gas giants Jupiter and Saturn.",
     distanceFromParent: "2,870,990,000 km",
     info: "Ice giant.",
-    textures: { map: TEXTURE_PATH + "2k_uranus.jpg" },
+    textures: {
+      map:
+        TEXTURE_PATH + "uranus_texture_map_8k_by_floridaemojicat_dj4s9vd.jpg",
+    },
   },
   {
     id: "neptune",
@@ -699,7 +702,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Titan is the largest moon of Saturn and the second-largest natural satellite in the Solar System. It is the only moon known to have a dense atmosphere, and the only known body in space, other than Earth, where clear evidence of stable bodies of surface liquid has been found. Titan is 50% larger (in diameter) than Earth's Moon and 80% more massive.",
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
-    textures: { map: TEXTURE_PATH + "2k_titan.jpg" },
+    textures: {
+      map: TEXTURE_PATH + "titan_map__2010__by_mapperpro_dg0iw6y.png",
+    },
   },
   {
     id: "rhea",
