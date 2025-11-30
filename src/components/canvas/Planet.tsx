@@ -350,6 +350,7 @@ const PlanetVisual = ({
   return (
     <group
       ref={groupRef}
+      name={body.id}
       onClick={(e) => {
         e.stopPropagation();
         selectId(body.id);

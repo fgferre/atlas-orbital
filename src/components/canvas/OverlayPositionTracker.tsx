@@ -27,7 +27,7 @@ export const OverlayPositionTracker = () => {
     }> = [];
 
     SOLAR_SYSTEM_BODIES.forEach((body) => {
-      if (body.type === "star") return; // Skip sun logic for now (handled separately or static)
+      // if (body.type === "star") return; // Skip sun logic for now (handled separately or static)
 
       const mesh = scene.getObjectByName(body.id);
       if (!mesh) return;
