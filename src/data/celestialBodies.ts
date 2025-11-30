@@ -1,6 +1,7 @@
 import { type CelestialBody } from "../lib/astrophysics";
 
 const TEXTURE_PATH = (import.meta.env.BASE_URL || "/") + "textures/";
+const MODEL_PATH = (import.meta.env.BASE_URL || "/") + "models/";
 
 export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
   {
@@ -1248,7 +1249,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     info: "Fast spinner.",
     textures: { map: TEXTURE_PATH + "4k_haumea_fictional.jpg" },
     model: {
-      path: "/models/Haumea_1_1000.glb",
+      path: MODEL_PATH + "Haumea_1_1000.glb",
       scale: 1.2, // Adjusted for ellipsoid shape (1960km max vs 816km mean)
     },
   },
@@ -1663,7 +1664,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     info: "Brightest asteroid.",
     textures: { map: TEXTURE_PATH + "4k_vesta.jpg" },
     model: {
-      path: "/models/Vesta_1_100.glb",
+      path: MODEL_PATH + "Vesta_1_100.glb",
       scale: 1, // Will be adjusted in component
     },
   },
@@ -1702,7 +1703,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     info: "High inclination.",
     textures: { map: TEXTURE_PATH + "4k_pallas_fictional.jpg" },
     model: {
-      path: "/models/Pallas_Torppa.obj",
+      path: MODEL_PATH + "Pallas_Torppa.obj",
       scale: 1,
     },
   },
@@ -1741,7 +1742,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     info: "Carbonaceous.",
     textures: { map: TEXTURE_PATH + "4k_hygiea_fictional.jpg" },
     model: {
-      path: "/models/Hygiea_Vernazza.obj",
+      path: MODEL_PATH + "Hygiea_Vernazza.obj",
       scale: 1,
     },
   },
