@@ -1,6 +1,6 @@
 import { type CelestialBody } from "../lib/astrophysics";
 
-const TEXTURE_PATH = "/textures/";
+const TEXTURE_PATH = (import.meta.env.BASE_URL || "/") + "textures/";
 
 export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
   {
@@ -384,7 +384,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "1,429,400,000 km",
     info: "Ring system.",
     textures: {
-      map: TEXTURE_PATH + "8k_saturn.jpg",
+      map: TEXTURE_PATH + "2k_saturn.jpg",
       ring: TEXTURE_PATH + "8k_saturn_ring_alpha.png",
     },
     ringSystem: {

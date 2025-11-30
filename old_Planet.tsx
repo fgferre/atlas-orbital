@@ -9,49 +9,16 @@ import {
 } from "../../lib/astrophysics";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
+import { Earth } from "./Earth";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { PlanetModel } from "./PlanetModel";
-
-// import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
-import {
-  atmosphereVertexShader,
-  atmosphereFragmentShader,
-} from "./shaders/atmosphereShader";
-import {
-  ringShadowVertexPatch,
-  ringShadowFragmentPatch,
-} from "./shaders/ringShadowShader";
-import {
-  planetShadowVertexPatch,
-  planetShadowFragmentPatch,
-  planetShadowEmissivePatch,
-} from "./shaders/planetShadowShader";
 
 interface PlanetProps {
   body: CelestialBody;
   children?: React.ReactNode;
-  roughness: number;
-  metalness: number;
-  sunEmissive: number;
-  ringEmissive: number;
-  ringShadowIntensity: number;
 }
 
-const PlanetVisual = ({
-  body,
-  roughness,
-  metalness,
-  sunEmissive,
-  ringEmissive,
-  ringShadowIntensity,
-}: {
-  body: CelestialBody;
-  roughness: number;
-  metalness: number;
-  sunEmissive: number;
-  ringEmissive: number;
-  ringShadowIntensity: number;
-}) => {
+const PlanetVisual = ({ body }: { body: CelestialBody }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
@@ -75,40 +42,36 @@ const PlanetVisual = ({
     textureMap = useTexture(body.textures.map);
   }
 
-  // Cloud Material (PBR + Analytical Shadows)
+  // Custom Shader for Clouds (treating black as transparent)
   const cloudMaterial = useMemo(() => {
     if (!textureClouds) return null;
-    const mat = new THREE.MeshStandardMaterial({
-      map: textureClouds,
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        map: { value: textureClouds },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        varying vec2 vUv;
+        void main() {
+          vec4 texColor = texture2D(map, vUv);
+          // Use the brightness (red channel) as alpha
+          // Clouds are white, background is black.
+          gl_FragColor = vec4(1.0, 1.0, 1.0, texColor.r); 
+        }
+      `,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
       depthWrite: false, // Don't write to depth buffer to avoid occlusion issues
-      roughness: 1.0,
-      metalness: 0.0,
     });
-
-    mat.onBeforeCompile = (shader) => {
-      mat.userData.shader = shader;
-      shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
-      shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
-
-      // Inject uniforms and varying
-      shader.vertexShader = `
-        varying vec3 vPos;
-        ${shader.vertexShader}
-      `.replace("#include <begin_vertex>", planetShadowVertexPatch);
-
-      shader.fragmentShader = `
-        uniform vec3 uSunPosition;
-        uniform float uShadowIntensity;
-        varying vec3 vPos;
-        ${shader.fragmentShader}
-      `.replace("#include <map_fragment>", planetShadowFragmentPatch);
-    };
-
-    return mat;
-  }, [textureClouds, ringShadowIntensity]);
+  }, [textureClouds]);
 
   useEffect(() => {
     return () => {
@@ -123,8 +86,27 @@ const PlanetVisual = ({
         color: { value: new THREE.Color(0x00aaff) },
         viewVector: { value: new THREE.Vector3(0, 0, 0) },
       },
-      vertexShader: atmosphereVertexShader,
-      fragmentShader: atmosphereFragmentShader,
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vViewPosition = -mvPosition.xyz;
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        void main() {
+          vec3 normal = normalize(vNormal);
+          vec3 viewDir = normalize(vViewPosition);
+          float intensity = pow(0.6 - dot(normal, viewDir), 4.0);
+          gl_FragColor = vec4(color, intensity);
+        }
+      `,
       transparent: true,
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide, // Render on the inside of a slightly larger sphere
@@ -138,16 +120,16 @@ const PlanetVisual = ({
     };
   }, [atmosphereMaterial]);
 
-  // Analytical Ring Shadow Logic & Earth Night Lights
+  // Analytical Ring Shadow Logic
   const planetMaterial = useMemo(() => {
     const mat = new THREE.MeshStandardMaterial({
       map: textureMap,
       color: textureMap ? "#ffffff" : body.color,
       emissive: body.type === "star" ? body.color : "#000",
       emissiveMap: body.type === "star" ? textureMap : null,
-      emissiveIntensity: body.type === "star" ? sunEmissive : 0,
-      roughness: roughness,
-      metalness: metalness,
+      emissiveIntensity: body.type === "star" ? 1.2 : 0,
+      roughness: 1.0,
+      metalness: 0.1,
     });
 
     // Apply shaders: ring shadows for ringed planets
@@ -158,10 +140,11 @@ const PlanetVisual = ({
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.tRing = { value: textureRing };
-        shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
+        shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) }; // Will be updated in useFrame
         shader.uniforms.uInnerRadius = { value: innerRadius };
         shader.uniforms.uOuterRadius = { value: outerRadius };
 
+        // Inject uniforms and varying
         shader.vertexShader = `
           varying vec3 vPos;
           varying vec3 vObjectNormal;
@@ -226,16 +209,7 @@ const PlanetVisual = ({
     }
 
     return mat;
-  }, [
-    textureMap,
-    textureRing,
-    body.color,
-    body.type,
-    body.ringSystem,
-    roughness,
-    metalness,
-    sunEmissive,
-  ]);
+  }, [textureMap, textureRing, body.color, body.type, body.ringSystem]);
 
   // Analytical Planet Shadow on Rings Logic
   const ringMaterial = useMemo(() => {
@@ -248,7 +222,7 @@ const PlanetVisual = ({
       depthWrite: false,
       emissive: 0xffffff,
       emissiveMap: textureRing,
-      emissiveIntensity: ringEmissive,
+      emissiveIntensity: 0.5,
       roughness: 0.8,
       metalness: 0.0,
     });
@@ -256,33 +230,112 @@ const PlanetVisual = ({
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
       shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
-      shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
 
       // Inject uniforms and varying
       shader.vertexShader = `
         varying vec3 vPos;
         ${shader.vertexShader}
-      `.replace("#include <begin_vertex>", planetShadowVertexPatch);
+      `.replace(
+        "#include <begin_vertex>",
+        `
+        #include <begin_vertex>
+        vPos = position;
+        `
+      );
 
       shader.fragmentShader = `
         uniform vec3 uSunPosition;
-        uniform float uShadowIntensity;
         varying vec3 vPos;
         ${shader.fragmentShader}
       `
-        .replace("#include <map_fragment>", planetShadowFragmentPatch)
-        .replace("#include <emissivemap_fragment>", planetShadowEmissivePatch);
+        .replace(
+          "#include <map_fragment>",
+          `
+        #include <map_fragment>
+        
+        // Analytical Planet Shadow
+        // Ray from fragment (vPos) to Sun (uSunPosition)
+        vec3 lightDir = normalize(uSunPosition - vPos);
+        
+        // Planet is a sphere at (0,0,0) with radius 1.0 (in local space)
+        // Ray-Sphere Intersection: |O + tD|^2 = R^2
+        // (vPos + t*lightDir)^2 = 1.0^2
+        // t^2 + 2*dot(vPos, lightDir)*t + dot(vPos, vPos) - 1.0 = 0
+        
+        float b = 2.0 * dot(vPos, lightDir);
+        float c = dot(vPos, vPos) - 1.0; // Radius is 1.0
+        float delta = b*b - 4.0*c;
+        
+        // If delta > 0, line intersects sphere.
+        // We need to check if intersection is in the direction of the sun (t > 0)
+        // Since c > 0 (ring is outside planet), roots have same sign.
+        // Sum of roots = -b. If b < 0 (pointing towards planet), roots are positive.
+        
+        bool inShadow = false;
+        if (delta >= 0.0 && b < 0.0) {
+           inShadow = true;
+        }
+        
+        if (inShadow) {
+          diffuseColor.rgb = vec3(0.0);
+          // Also kill emissive if possible, but MeshStandardMaterial handles emissive separately.
+          // We can hack it by multiplying the final color? 
+          // Or just set diffuse to black, which kills the base color.
+          // Emissive is added after. To kill emissive, we might need to modify totalEmissiveRadiance.
+        }
+        `
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          `
+        #include <emissivemap_fragment>
+        // Hack to kill emissive in shadow
+        // We need to re-calculate shadow condition or pass it?
+        // Let's just re-calculate, it's cheap.
+        
+        vec3 lDir = normalize(uSunPosition - vPos);
+        float bb = 2.0 * dot(vPos, lDir);
+        float cc = dot(vPos, vPos) - 1.0;
+        float dd = bb*bb - 4.0*cc;
+        
+        if (dd >= 0.0 && bb < 0.0) {
+          totalEmissiveRadiance = vec3(0.0);
+        }
+        `
+        );
     };
 
     return mat;
-  }, [textureRing, ringEmissive, ringShadowIntensity]);
+  }, [textureRing]);
 
-  const ringRef = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    if (!rotationRef.current) return;
+
+    // Update Sun Position uniform for analytical shadows
+    if (rotationRef.current) {
+      const sunWorldPos = new THREE.Vector3(0, 0, 0);
+      const meshWorldMatrix = rotationRef.current.matrixWorld;
+      const inverseMatrix = new THREE.Matrix4().copy(meshWorldMatrix).invert();
+      const sunLocalPos = sunWorldPos.applyMatrix4(inverseMatrix);
+
+      if (planetMaterial.userData.shader && textureRing) {
+        planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
+          sunLocalPos
+        );
+      }
+
+      if (ringMaterial && ringMaterial.userData.shader) {
+        ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
+          sunLocalPos
+        );
+      }
+    }
+  });
 
   useFrame(() => {
     if (!groupRef.current) return;
 
-    // 1. Scaling
+    // Scaling
     let s = 1;
     if (scaleMode === "didactic") {
       s = AstroPhysics.calculateDidacticRadius(body.radiusKm);
@@ -291,59 +344,17 @@ const PlanetVisual = ({
     }
     groupRef.current.scale.setScalar(s);
 
-    // 2. Rotation & Shader Uniforms
-    if (rotationRef.current) {
-      // Rotation
-      if (body.rotationPeriodHours) {
-        const { datetime } = useStore.getState();
-        const currentRotation =
-          (datetime.getTime() / (body.rotationPeriodHours * 3600000)) *
-          Math.PI *
-          2;
-        rotationRef.current.rotation.y = currentRotation;
-      }
-
-      // Shader Uniforms (Analytical Shadows)
-      if (textureRing) {
-        const sunWorldPos = new THREE.Vector3(0, 0, 0);
-
-        // A. Update Planet Material (Planet Shadow on itself / Ring Shadow on Planet)
-        // Planet is direct child of rotationRef, so use rotationRef matrix
-        if (planetMaterial.userData.shader) {
-          const meshWorldMatrix = rotationRef.current.matrixWorld;
-          const inverseMatrix = new THREE.Matrix4()
-            .copy(meshWorldMatrix)
-            .invert();
-          const sunLocalPos = sunWorldPos.clone().applyMatrix4(inverseMatrix);
-
-          planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            sunLocalPos
-          );
-
-          // Update Cloud Material (if exists)
-          if (cloudMaterial && cloudMaterial.userData.shader) {
-            cloudMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-              sunLocalPos
-            );
-          }
-        }
-
-        // B. Update Ring Material (Planet Shadow on Ring)
-        // Ring has extra rotation, so use ringRef matrix if available
-        if (ringMaterial && ringMaterial.userData.shader && ringRef.current) {
-          const ringWorldMatrix = ringRef.current.matrixWorld;
-          const inverseRingMatrix = new THREE.Matrix4()
-            .copy(ringWorldMatrix)
-            .invert();
-          const sunLocalPosRing = sunWorldPos
-            .clone()
-            .applyMatrix4(inverseRingMatrix);
-
-          ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            sunLocalPosRing
-          );
-        }
-      }
+    // Rotation
+    if (rotationRef.current && body.rotationPeriodHours) {
+      const { datetime } = useStore.getState();
+      // Calculate rotation angle: (time / period) * 2PI
+      // Period is in hours, time is in ms.
+      // 1 hour = 3600000 ms
+      const currentRotation =
+        (datetime.getTime() / (body.rotationPeriodHours * 3600000)) *
+        Math.PI *
+        2;
+      rotationRef.current.rotation.y = currentRotation;
     }
   });
 
@@ -380,7 +391,7 @@ const PlanetVisual = ({
 
           {/* 3. Atmosphere Layer (Larger still) */}
           {body.id === "earth" && (
-            <mesh scale={[1.025, 1.025, 1.025]}>
+            <mesh scale={[1.15, 1.15, 1.15]}>
               <sphereGeometry args={[1, 64, 64]} />
               <primitive object={atmosphereMaterial} attach="material" />
             </mesh>
@@ -389,10 +400,9 @@ const PlanetVisual = ({
           {/* 4. Ring System */}
           {textureRing && ringMaterial && (
             <mesh
-              ref={ringRef}
               rotation={[-Math.PI / 2, 0, 0]}
               renderOrder={1000}
-              // receiveShadow removed to prevent double shadows (we use analytical shadows)
+              receiveShadow
               // castShadow removed - using analytical shadows
             >
               <primitive
@@ -431,14 +441,7 @@ const PlanetVisual = ({
 };
 
 // Wrapper to handle Suspense for textures/models
-const PlanetVisualWrapper = (props: {
-  body: CelestialBody;
-  roughness: number;
-  metalness: number;
-  sunEmissive: number;
-  ringEmissive: number;
-  ringShadowIntensity: number;
-}) => {
+const PlanetVisualWrapper = (props: { body: CelestialBody }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleMode = useStore((state) => state.scaleMode);
   const selectId = useStore((state) => state.selectId);
@@ -467,42 +470,40 @@ const PlanetVisualWrapper = (props: {
     </mesh>
   );
 
-  // Check for 3D Model first
-  if (props.body.model) {
+  if (props.body.id === "earth") {
     return (
       <ErrorBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
-          <PlanetModel
-            body={props.body}
-            roughness={props.roughness}
-            metalness={props.metalness}
-            sunEmissive={props.sunEmissive}
-            ringEmissive={props.ringEmissive}
-            ringShadowIntensity={props.ringShadowIntensity}
-          />
+          <Earth body={props.body} />
         </Suspense>
       </ErrorBoundary>
     );
   }
 
-  return (
-    <ErrorBoundary fallback={fallback}>
-      <Suspense fallback={fallback}>
-        <PlanetVisual {...props} />
-      </Suspense>
-    </ErrorBoundary>
-  );
+  // Check for 3D Model first
+  if (props.body.model) {
+    return (
+      <ErrorBoundary fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <PlanetModel body={props.body} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (props.body.textures?.map) {
+    return (
+      <ErrorBoundary fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <PlanetVisual {...props} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  return <PlanetVisual {...props} />;
 };
 
-export const Planet = ({
-  body,
-  children,
-  roughness,
-  metalness,
-  sunEmissive,
-  ringEmissive,
-  ringShadowIntensity,
-}: PlanetProps) => {
+export const Planet = ({ body, children }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<any>(null);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -621,14 +622,7 @@ export const Planet = ({
       )}
 
       <group ref={groupRef} name={body.id}>
-        <PlanetVisualWrapper
-          body={body}
-          roughness={roughness}
-          metalness={metalness}
-          sunEmissive={sunEmissive}
-          ringEmissive={ringEmissive}
-          ringShadowIntensity={ringShadowIntensity}
-        />
+        <PlanetVisualWrapper body={body} />
 
         {/* 
           Moons usually orbit the planet's equatorial plane (which is tilted).
