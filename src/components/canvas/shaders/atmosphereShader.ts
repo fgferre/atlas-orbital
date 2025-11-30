@@ -15,8 +15,10 @@ export const atmosphereFragmentShader = `
   varying vec3 vViewPosition;
   void main() {
     vec3 normal = normalize(vNormal);
-    vec3 viewDir = normalize(vViewPosition);
-    float intensity = pow(0.6 - dot(normal, viewDir), 4.0);
+    float viewDistSq = dot(vViewPosition, vViewPosition);
+    vec3 viewDir = viewDistSq > 0.000001 ? vViewPosition * inversesqrt(viewDistSq) : vec3(0.0, 0.0, 1.0);
+    
+    float intensity = pow(max(0.0, 0.6 - dot(normal, viewDir)), 4.0);
     gl_FragColor = vec4(color, intensity);
   }
 `;

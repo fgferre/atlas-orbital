@@ -87,7 +87,7 @@ export const Scene = () => {
     }),
     "Post Processing": folder({
       bloomThreshold: {
-        value: 0.7,
+        value: 0.9,
         min: 0,
         max: 1,
         step: 0.01,

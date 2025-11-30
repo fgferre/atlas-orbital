@@ -54,7 +54,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set) => ({
   datetime: new Date(),
-  speed: 0.5,
+  speed: 1,
   isPlaying: true,
   selectedId: "sun",
   focusId: "sun",

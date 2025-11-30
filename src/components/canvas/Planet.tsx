@@ -12,7 +12,7 @@ import { ErrorBoundary } from "../utils/ErrorBoundary";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { PlanetModel } from "./PlanetModel";
 
-import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
+// import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
@@ -428,7 +428,14 @@ const PlanetVisualWrapper = (props: {
     return (
       <ErrorBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
-          <PlanetModel body={props.body} />
+          <PlanetModel
+            body={props.body}
+            roughness={props.roughness}
+            metalness={props.metalness}
+            sunEmissive={props.sunEmissive}
+            ringEmissive={props.ringEmissive}
+            ringShadowIntensity={props.ringShadowIntensity}
+          />
         </Suspense>
       </ErrorBoundary>
     );

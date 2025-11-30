@@ -8,7 +8,9 @@ export const planetShadowFragmentPatch = `
   
   // Analytical Planet Shadow
   // Ray from fragment (vPos) to Sun (uSunPosition)
-  vec3 lightDir = normalize(uSunPosition - vPos);
+  vec3 diff = uSunPosition - vPos;
+  float distSq = dot(diff, diff);
+  vec3 lightDir = distSq > 0.000001 ? diff * inversesqrt(distSq) : vec3(0.0, 1.0, 0.0);
   
   // Planet is a sphere at (0,0,0) with radius 1.0 (in local space)
   // Ray-Sphere Intersection: |O + tD|^2 = R^2
@@ -39,10 +41,11 @@ export const planetShadowFragmentPatch = `
 export const planetShadowEmissivePatch = `
   #include <emissivemap_fragment>
   // Hack to kill emissive in shadow
-  // We need to re-calculate shadow condition or pass it?
-  // Let's just re-calculate, it's cheap.
   
-  vec3 lDir = normalize(uSunPosition - vPos);
+  vec3 lDiff = uSunPosition - vPos;
+  float lDistSq = dot(lDiff, lDiff);
+  vec3 lDir = lDistSq > 0.000001 ? lDiff * inversesqrt(lDistSq) : vec3(0.0, 1.0, 0.0);
+
   float bb = 2.0 * dot(vPos, lDir);
   float cc = dot(vPos, vPos) - 1.0;
   float dd = bb*bb - 4.0*cc;

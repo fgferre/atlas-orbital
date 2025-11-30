@@ -86,10 +86,15 @@ export const CameraController = () => {
     prevScaleModeRef.current = scaleMode;
 
     const targetRadius = getTargetScale(bodyData);
-    const isSaturn = focusId === "saturn";
-    const distMultiplier =
-      scaleMode === "realistic" ? 5.0 : isSaturn ? 6.0 : 4.5;
-    const idealDist = targetRadius * distMultiplier;
+    // Calculate ideal distance based on FOV to fit object in view
+    // Formula: distance = radius / sin(fov / 2)
+    const fovRad = THREE.MathUtils.degToRad(camera.fov);
+    const fitDistance = targetRadius / Math.sin(fovRad / 2);
+
+    // Add a safety margin (multiplier) so it doesn't fill 100% of the screen
+    // 2.5x gives a comfortable view with context
+    const FIT_MULTIPLIER = 2.5;
+    const idealDist = fitDistance * FIT_MULTIPLIER;
 
     // Calculate direction from target to camera
     const direction = new THREE.Vector3()
@@ -142,17 +147,20 @@ export const CameraController = () => {
     const targetRadius = getTargetScale(bodyData);
 
     // Dynamic minDistance: allow getting closer to smaller objects
-    // For small objects (radius < 1 unit), allow getting very close
-    controls.minDistance = targetRadius * 1.2;
+    // Allow zooming in until we are almost touching the surface (1.1x radius)
+    controls.minDistance = targetRadius * 1.1;
 
-    // Dynamic near plane: prevent clipping when close, but keep it safe
-    // CRITICAL FIX: Use much smaller multiplier for camera.near to prevent clipping
-    // In didactic mode, radii are artificially large (50 for stars, 25/10 for planets)
-    // So minDistance can be very large, but near plane should stay small
-    // We use 1% of minDistance (instead of 10%) and cap at 0.5 (instead of 2)
-    const newNear = Math.min(0.5, Math.max(0.01, controls.minDistance * 0.01));
-    camera.near = newNear;
-    camera.updateProjectionMatrix();
+    // Dynamic near plane: prevent clipping when close
+    // Set near plane to be a fraction of the minDistance (e.g., 1/100th)
+    // This ensures we never clip the object even at closest zoom
+    // We clamp it to a very small value (1e-7) to support tiny objects in realistic mode
+    const newNear = Math.max(1e-7, controls.minDistance * 0.01);
+
+    // Only update if significantly different to avoid thrashing
+    if (Math.abs(camera.near - newNear) > 1e-8) {
+      camera.near = newNear;
+      camera.updateProjectionMatrix();
+    }
   }, [focusId, scaleMode, controls, camera]);
 
   // Update camera position every frame

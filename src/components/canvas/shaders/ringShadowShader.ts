@@ -9,17 +9,23 @@ export const ringShadowFragmentPatch = `
 
   // Analytical Ring Shadow
   // Ray from fragment (vPos) to Sun (uSunPosition)
-  vec3 lightDir = normalize(uSunPosition - vPos);
+  vec3 diff = uSunPosition - vPos;
+  float distSq = dot(diff, diff);
+  vec3 lightDir = distSq > 0.000001 ? diff * inversesqrt(distSq) : vec3(0.0, 1.0, 0.0);
 
   // Check if surface faces the sun (Day side)
   // We only cast shadows on the lit side.
-  float sunDot = dot(normalize(vLocalNormal), lightDir);
+  vec3 normal = vLocalNormal;
+  float normalSq = dot(normal, normal);
+  vec3 safeNormal = normalSq > 0.000001 ? normal * inversesqrt(normalSq) : vec3(0.0, 1.0, 0.0);
+  
+  float sunDot = dot(safeNormal, lightDir);
 
   // Smoothly fade out the shadow effect as we approach the terminator (day/night line)
   // This prevents hard artifacts at the shadow edge near the dark side.
   float terminatorFade = smoothstep(0.0, 0.2, sunDot);
 
-  if (terminatorFade > 0.0) {
+  if (terminatorFade > 0.0 && abs(lightDir.y) > 0.000001) {
     // Intersect with Ring Plane (y=0)
     // t = -origin.y / dir.y
     float t = -vPos.y / lightDir.y;
