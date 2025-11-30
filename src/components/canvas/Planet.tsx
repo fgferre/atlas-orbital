@@ -17,10 +17,7 @@ import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
 } from "./shaders/atmosphereShader";
-import {
-  ringShadowVertexPatch,
-  ringShadowFragmentPatch,
-} from "./shaders/ringShadowShader";
+
 import {
   planetShadowVertexPatch,
   planetShadowFragmentPatch,
