@@ -34,6 +34,10 @@ export interface CelestialBody {
   orbit: OrbitParams;
   rotationPeriodHours: number; // Sidereal rotation period in hours (negative for retrograde)
   axialTilt: number; // Axial tilt in degrees
+  rotationOffsetDegrees?: number; // Rotation offset at epoch for time synchronization (optional, default 0)
+  rotationEpoch?: string; // ISO date for rotation reference (optional, default J2000.0)
+  poleRA?: number; // Right Ascension of North Pole in degrees (IAU)
+  poleDec?: number; // Declination of North Pole in degrees (IAU)
 
   // Enhanced Data Fields
   classification?: string; // e.g. "Terrestrial Planet", "Gas Giant"
@@ -277,5 +281,104 @@ export class AstroPhysics {
     const r = radiusKm * 1000; // meters
     const v = Math.sqrt((2 * G * massKg) / r);
     return v / 1000; // km/s
+  }
+
+  /**
+   * Calculate rotation angle synchronized with real astronomical time
+   * @param date Current date/time
+   * @param rotationPeriodHours Sidereal rotation period in hours (negative for retrograde)
+   * @param rotationOffsetDegrees Rotation offset at epoch in degrees (default 0)
+   * @param rotationEpoch Reference date for the offset (default J2000.0)
+   * @returns Rotation angle in radians
+   */
+  static calculateRotationAngle(
+    date: Date,
+    rotationPeriodHours: number,
+    rotationOffsetDegrees: number = 0,
+    rotationEpoch: Date = new Date("2000-01-01T12:00:00Z")
+  ): number {
+    const elapsed = date.getTime() - rotationEpoch.getTime();
+    const elapsedHours = elapsed / 3600000;
+    const rotations = elapsedHours / rotationPeriodHours;
+    const angle = (rotations * 360 + rotationOffsetDegrees) % 360;
+    return (angle * Math.PI) / 180; // Convert to radians
+  }
+
+  /**
+   * Convert Equatorial Coordinates (RA, Dec) to Ecliptic Cartesian Vector
+   * Used for orienting planetary poles correctly in the scene.
+   * @param ra Right Ascension in degrees
+   * @param dec Declination in degrees
+   * @returns Normalized Vector3 representing the pole direction in Ecliptic space
+   */
+  static equatorialToEcliptic(ra: number, dec: number): THREE.Vector3 {
+    const rad = Math.PI / 180;
+    const alpha = ra * rad;
+    const delta = dec * rad;
+
+    // 1. Convert to Equatorial Cartesian (ICRF)
+    // x points to Vernal Equinox
+    // z points to Celestial North Pole
+    const x = Math.cos(delta) * Math.cos(alpha);
+    const y = Math.cos(delta) * Math.sin(alpha);
+    const z = Math.sin(delta);
+
+    // 2. Rotate to Ecliptic System
+    // Rotate around X-axis by Earth's obliquity (epsilon)
+    // epsilon ~ 23.43928 degrees
+    const epsilon = 23.43928 * rad;
+    const cosE = Math.cos(epsilon);
+    const sinE = Math.sin(epsilon);
+
+    // Rotation Matrix (X-axis rotation)
+    // [ 1    0      0    ]
+    // [ 0   cosE   sinE  ]
+    // [ 0  -sinE   cosE  ]
+
+    // However, we want to go from Equatorial TO Ecliptic.
+    // The Ecliptic is tilted relative to Equatorial.
+    // Usually, we define Ecliptic as the "flat" plane (XZ in our scene).
+    // So we need to rotate the Equatorial vector by -epsilon (or +epsilon depending on definition).
+    // Let's verify: North Celestial Pole (0, 0, 1) should become tilted by 23.44 deg.
+    // If we rotate by -epsilon around X:
+    // y' = y*cos(-e) - z*sin(-e) = y*cos(e) + z*sin(e)
+    // z' = y*sin(-e) + z*cos(-e) = -y*sin(e) + z*cos(e)
+    // For NCP (0,0,1): y'=sin(e), z'=cos(e). This tilts it "back" towards +Y.
+    // Wait, in Three.js usually Y is up.
+    // Let's assume our Scene: XZ is orbital plane (Ecliptic). Y is Ecliptic North.
+    // So (0, 1, 0) is Ecliptic North Pole.
+    // Earth's axis is tilted 23.44 deg from this.
+    // The NCP (Equatorial North) is tilted 23.44 deg from Ecliptic North.
+
+    // Let's stick to standard conversion:
+    // Equatorial (x, y, z) -> Ecliptic (x', y', z')
+    // x' = x
+    // y' = y * cos(e) + z * sin(e)
+    // z' = -y * sin(e) + z * cos(e)
+
+    const y_ecl = y * cosE + z * sinE;
+    const z_ecl = -y * sinE + z * cosE;
+
+    // Now map to Three.js coordinates
+    // Standard Astronomy: X=Vernal Equinox, Y=90deg East, Z=North Pole
+    // Three.js Scene: X=Right, Y=Up, Z=Back (or similar)
+    // In our app:
+    // XZ plane is the orbit plane.
+    // Y is Up (Ecliptic North).
+    // So we map:
+    // Astro X -> Three X
+    // Astro Y -> Three -Z (since Z is usually "depth") or just Z?
+    // Let's check calculateLocalPosition:
+    // const posAU = new THREE.Vector3(x, z, -y);
+    // It maps Astro X -> Three X
+    // Astro Z (Up/North) -> Three Y
+    // Astro Y -> Three -Z
+
+    // So for our pole vector:
+    // Astro x' -> Three X
+    // Astro z' (Ecliptic North component) -> Three Y
+    // Astro y' -> Three -Z
+
+    return new THREE.Vector3(x, z_ecl, -y_ecl).normalize();
   }
 }

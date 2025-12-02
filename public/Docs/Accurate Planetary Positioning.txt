@@ -1,0 +1,389 @@
+I have created the following plan after thorough exploration and analysis of the codebase. Follow the below plan verbatim. Trust the files and references. Do not re-verify what's written in the plan. Explore only when absolutely necessary. First implement all the proposed file changes and then I'll review all the changes together at the end.
+
+### Observations
+
+Após análise detalhada do código, identifiquei que:
+
+1. **Rotação planetária** é calculada em `Planet.tsx` (linhas 294-300) usando apenas o tempo decorrido e período de rotação, sem offset inicial
+2. **Shader de dia/noite** existe em `earthDayNightShader.ts` mas não está sendo usado
+3. **Posições orbitais** são calculadas corretamente usando elementos Keplerianos em `astrophysics.ts`
+4. **Iluminação** vem de um `pointLight` no Sol (0,0,0) e um `directionalLight` dinâmico
+5. **Texturas** são aplicadas sem considerar a orientação correta do meridiano de Greenwich
+
+### Approach
+
+O problema principal é que a rotação dos planetas, especialmente da Terra, não está sincronizada com a posição real em tempo real. A rotação é calculada desde o epoch Unix (1970) sem considerar qual longitude estava voltada para o Sol naquela data de referência. Além disso, o shader de dia/noite da Terra não está sendo aplicado, impedindo a visualização correta das luzes noturnas. A solução envolve adicionar offsets de rotação iniciais baseados em dados astronômicos reais e implementar o shader de dia/noite para a Terra.
+
+### Reasoning
+
+Explorei a estrutura do projeto, li os arquivos principais de cálculo astronômico (`astrophysics.ts`), renderização de planetas (`Planet.tsx`), dados dos corpos celestes (`celestialBodies.ts`), sistema de iluminação (`SmartSunLight.tsx`), e o loop de animação temporal (`Timeline.tsx`). Identifiquei que o shader de dia/noite existe mas não está sendo usado, e que a rotação não tem offset inicial para sincronização com a realidade.
+
+## Mermaid Diagram
+
+sequenceDiagram
+    participant User
+    participant Timeline
+    participant Store
+    participant Planet
+    participant Astrophysics
+    participant CelestialBodies
+    
+    User->>Timeline: Avança o tempo
+    Timeline->>Store: setDatetime(newDate)
+    Store->>Planet: useFrame atualiza
+    
+    Planet->>CelestialBodies: Busca rotationOffsetDegrees
+    Planet->>Astrophysics: calculateRotationAngle(date, period, offset, epoch)
+    
+    Astrophysics->>Astrophysics: Calcula tempo desde época
+    Astrophysics->>Astrophysics: Calcula rotações completas
+    Astrophysics->>Astrophysics: Aplica offset inicial
+    Astrophysics-->>Planet: Retorna ângulo em radianos
+    
+    Planet->>Planet: Aplica rotação ao rotationRef
+    Planet->>Planet: Atualiza shader uniforms (uSunPosition)
+    
+    alt Terra com shader dia/noite
+        Planet->>Planet: Calcula posição do Sol em espaço local
+        Planet->>Planet: Shader mistura texturas day/night
+        Planet->>Planet: Adiciona luzes noturnas ao emissive
+    end
+    
+    Planet-->>User: Renderiza planeta com rotação correta
+    
+    User->>User: Ativa modo debug (Ctrl+Shift+D)
+    User->>DebugRotation: Visualiza dados de rotação
+    DebugRotation->>RotationCalibration: validateRotation()
+    RotationCalibration-->>DebugRotation: Retorna erro e sugestão
+    User->>DebugRotation: Ajusta offset manualmente
+    DebugRotation->>CelestialBodies: Atualiza rotationOffsetDegrees
+
+## Proposed File Changes
+
+### src\lib\astrophysics.ts(MODIFY)
+
+Adicionar uma nova interface `RotationParams` que inclui:
+- `rotationPeriodHours`: período de rotação sideral
+- `rotationOffsetDegrees`: offset de rotação em graus para sincronização com data de referência
+- `rotationEpoch`: data de referência para o offset (padrão J2000.0)
+
+Adicionar um novo método estático `calculateRotationAngle()` na classe `AstroPhysics` que:
+- Recebe `date: Date`, `rotationPeriodHours: number`, `rotationOffsetDegrees: number`, e `rotationEpoch: Date`
+- Calcula o tempo decorrido desde a época de referência
+- Calcula o número de rotações completas desde a época
+- Aplica o offset inicial
+- Retorna o ângulo de rotação em radianos
+
+Este método garante que a rotação esteja sincronizada com a posição real dos planetas em qualquer data, considerando a orientação inicial conhecida.
+
+### src\data\celestialBodies.ts(MODIFY)
+
+References: 
+
+- src\lib\astrophysics.ts(MODIFY)
+
+Atualizar a interface `CelestialBody` para incluir:
+- `rotationOffsetDegrees?: number`: offset de rotação inicial em graus (opcional, padrão 0)
+- `rotationEpoch?: string`: data de referência ISO para o offset (opcional, padrão J2000.0)
+
+Adicionar valores de `rotationOffsetDegrees` para os planetas principais, especialmente:
+- **Terra**: Calcular o offset para que o meridiano de Greenwich (0°) esteja voltado para o Sol ao meio-dia UTC em uma data de referência conhecida (sugestão: 2000-01-01 12:00 UTC)
+- **Outros planetas**: Adicionar offsets baseados em dados astronômicos quando disponíveis
+
+Documentar no comentário como esses offsets foram calculados e como podem ser ajustados para maior precisão.
+
+Para a Terra especificamente, o offset deve considerar:
+- A longitude solar ao meio-dia UTC na data de referência
+- A orientação da textura (onde está o meridiano de Greenwich na imagem)
+- A rotação acumulada desde a época J2000.0
+
+### src\components\canvas\Planet.tsx(MODIFY)
+
+References: 
+
+- src\lib\astrophysics.ts(MODIFY)
+- src\data\celestialBodies.ts(MODIFY)
+- src\components\canvas\shaders\earthDayNightShader.ts
+
+Modificar o cálculo de rotação no `useFrame` (linhas 294-300) para usar o novo método `AstroPhysics.calculateRotationAngle()` em vez do cálculo direto.
+
+Substituir:
+```
+const currentRotation = (datetime.getTime() / (body.rotationPeriodHours * 3600000)) * Math.PI * 2;
+```
+
+Por:
+```
+const currentRotation = AstroPhysics.calculateRotationAngle(
+  datetime,
+  body.rotationPeriodHours,
+  body.rotationOffsetDegrees || 0,
+  body.rotationEpoch ? new Date(body.rotationEpoch) : new Date('2000-01-01T12:00:00Z')
+);
+```
+
+Isso garante que a rotação considere o offset inicial e esteja sincronizada com a posição real.
+
+Adicionar comentário explicando que o offset de rotação é crítico para precisão científica e deve ser calibrado com dados astronômicos reais.
+Implementar o shader de dia/noite especificamente para a Terra.
+
+No método `planetMaterial` (useMemo, linhas 139-235):
+
+1. Adicionar uma condição especial para `body.id === 'earth'` e `body.textures?.night`
+2. Importar os patches do shader: `earthDayNightVertexPatch`, `earthDayNightFragmentPatch`, `earthDayNightEmissivePatch` de `./shaders/earthDayNightShader`
+3. Aplicar o shader usando `mat.onBeforeCompile` similar ao shader de anéis, mas com os patches de dia/noite
+4. Adicionar uniforms: `tDay` (textura de dia), `tNight` (textura de noite), `uSunPosition` (posição do Sol em coordenadas locais)
+5. Injetar os patches de vertex e fragment shader
+6. No `useFrame`, atualizar o uniform `uSunPosition` para o material da Terra, transformando a posição do Sol (0,0,0) para o espaço local do planeta
+
+Isso permitirá que as luzes das cidades sejam visíveis no lado noturno da Terra, aumentando o realismo e a precisão visual.
+
+Nota: O shader já está implementado em `earthDayNightShader.ts` e só precisa ser integrado ao material da Terra.
+
+### docs\ROTATION_CALIBRATION.md(NEW)
+
+Criar documentação detalhada sobre como calibrar os offsets de rotação para precisão científica.
+
+Incluir:
+
+## Visão Geral
+- Explicar por que os offsets de rotação são necessários
+- Descrever o sistema de referência usado (J2000.0)
+
+## Metodologia de Calibração
+
+### Para a Terra:
+1. Escolher uma data/hora de referência (ex: 2000-01-01 12:00 UTC)
+2. Determinar qual longitude estava voltada para o Sol naquele momento
+3. Considerar a orientação da textura (onde está o meridiano de Greenwich)
+4. Calcular o offset em graus
+
+### Para outros planetas:
+1. Usar dados de efemérides (JPL HORIZONS, SPICE)
+2. Determinar a orientação do meridiano primário na data de referência
+3. Ajustar baseado na textura usada
+
+## Validação
+- Como verificar se a rotação está correta
+- Comparar com dados astronômicos reais
+- Usar eventos conhecidos (ex: eclipses, trânsitos)
+
+## Ferramentas Recomendadas
+- JPL HORIZONS Web Interface
+- Stellarium
+- NASA's Eyes on the Solar System
+
+## Limitações
+- Elementos Keplerianos são aproximações
+- Não consideram perturbações gravitacionais
+- Precisão diminui para datas muito distantes da época de referência
+
+## Melhorias Futuras
+- Integração com APIs de efemérides em tempo real
+- Uso de SPICE kernels para maior precisão
+- Consideração de nutação e precessão
+
+### src\utils\rotationCalibration.ts(NEW)
+
+References: 
+
+- src\lib\astrophysics.ts(MODIFY)
+- src\data\celestialBodies.ts(MODIFY)
+
+Criar utilitário para ajudar na calibração e validação dos offsets de rotação.
+
+Implementar funções:
+
+1. `calculateSolarLongitude(date: Date, latitude: number): number`
+   - Calcula a longitude solar (subsolar point) para uma data específica
+   - Útil para determinar qual longitude da Terra está voltada para o Sol
+
+2. `validateRotation(bodyId: string, date: Date, expectedLongitude: number): { isValid: boolean, error: number, suggestion: number }`
+   - Valida se a rotação atual está correta comparando com um valor esperado
+   - Retorna o erro em graus e sugere um novo offset
+
+3. `getSubsolarPoint(date: Date): { latitude: number, longitude: number }`
+   - Calcula o ponto subsolar da Terra (onde o Sol está no zênite)
+   - Útil para validação visual
+
+4. `exportRotationData(bodyId: string, startDate: Date, endDate: Date, intervalHours: number): Array<{date: Date, rotation: number}>`
+   - Exporta dados de rotação para análise externa
+   - Permite comparação com dados de efemérides
+
+Essas funções facilitam a calibração inicial e a validação contínua da precisão do modelo.
+
+### src\components\ui\DebugRotation.tsx(NEW)
+
+References: 
+
+- src\utils\rotationCalibration.ts(NEW)
+- src\store.ts
+
+Criar componente de debug para visualizar e ajustar os offsets de rotação em tempo real.
+
+O componente deve:
+
+1. Mostrar informações de rotação para o corpo celeste selecionado:
+   - Ângulo de rotação atual
+   - Offset configurado
+   - Longitude voltada para o Sol
+   - Ponto subsolar (para Terra)
+
+2. Permitir ajuste manual do offset com slider
+   - Range: -360° a +360°
+   - Atualização em tempo real
+   - Botão para salvar o novo valor
+
+3. Mostrar comparação com dados esperados:
+   - Diferença em graus
+   - Diferença em tempo (minutos/horas)
+   - Indicador visual de precisão
+
+4. Incluir ferramentas de validação:
+   - Botão para testar em datas específicas
+   - Comparação com eventos astronômicos conhecidos
+   - Exportar dados para análise
+
+5. Ser acessível apenas em modo debug (Ctrl+Shift+D)
+
+Este componente é essencial para calibrar e validar a precisão científica do modelo.
+
+### src\components\canvas\Scene.tsx(MODIFY)
+
+References: 
+
+- src\components\ui\DebugRotation.tsx(NEW)
+
+Adicionar o componente `DebugRotation` à cena, visível apenas quando `debugMode` está ativo.
+
+Importar o componente:
+```
+import { DebugRotation } from '../ui/DebugRotation';
+```
+
+Adicionar após o componente `Leva` (linha 177):
+```
+{debugMode && <DebugRotation />}
+```
+
+Isso permite que desenvolvedores e cientistas calibrem os offsets de rotação visualmente e validem a precisão do modelo em tempo real.
+
+### README.md(MODIFY)
+
+References: 
+
+- docs\ROTATION_CALIBRATION.md(NEW)
+
+Adicionar seção sobre precisão científica e calibração de rotação.
+
+Incluir:
+
+## Precisão Científica
+
+### Posições Orbitais
+- Calculadas usando elementos orbitais Keplerianos
+- Referência: J2000.0 (2000-01-01 12:00 TT)
+- Precisão: Adequada para visualização educacional, mas acumula erros para datas distantes
+
+### Rotação Planetária
+- Sincronizada com tempo real usando offsets calibrados
+- Offsets baseados em dados astronômicos de referência
+- Validação disponível em modo debug (Ctrl+Shift+D)
+
+### Iluminação
+- Shader de dia/noite para Terra com luzes noturnas
+- Sombras analíticas para anéis planetários
+- Iluminação física baseada em PBR
+
+### Calibração
+Para calibrar ou validar os offsets de rotação:
+1. Ative o modo debug (Ctrl+Shift+D)
+2. Selecione um planeta
+3. Use o painel de debug de rotação
+4. Compare com dados de efemérides (JPL HORIZONS)
+5. Ajuste o offset conforme necessário
+
+Veja `docs/ROTATION_CALIBRATION.md` para detalhes.
+
+### Limitações
+- Elementos Keplerianos não consideram perturbações
+- Rotação não considera nutação e precessão
+- Para precisão máxima, considere integração com SPICE kernels
+
+### docs\SCIENTIFIC_ACCURACY.md(NEW)
+
+Criar documentação técnica detalhada sobre a precisão científica do modelo.
+
+Incluir:
+
+## Modelo Orbital
+
+### Elementos Keplerianos
+- Descrição dos 6 elementos orbitais usados
+- Fonte dos dados (NASA, JPL)
+- Época de referência (J2000.0)
+- Fórmulas de cálculo implementadas
+
+### Limitações do Modelo
+- Não considera perturbações gravitacionais de outros corpos
+- Não inclui relatividade geral
+- Precisão diminui para datas > 100 anos da época
+- Órbitas de cometas e asteróides podem ter erros maiores
+
+## Modelo de Rotação
+
+### Rotação Sideral
+- Período de rotação em relação às estrelas fixas
+- Diferença entre dia solar e dia sideral
+- Rotação retrógrada (Vênus, Urano)
+
+### Sincronização Temporal
+- Sistema de offsets de rotação
+- Época de referência para calibração
+- Método de validação
+
+### Orientação Axial
+- Inclinação axial (obliquidade)
+- Precessão (não implementada)
+- Nutação (não implementada)
+
+## Iluminação e Renderização
+
+### Modelo de Iluminação
+- PBR (Physically Based Rendering)
+- Luz pontual no Sol (sem atenuação)
+- Luz direcional para sombras
+- Luz ambiente para visibilidade
+
+### Shaders Especiais
+- Dia/noite da Terra
+- Sombras de anéis
+- Atmosfera (Fresnel)
+- Nuvens
+
+## Validação e Testes
+
+### Eventos Astronômicos para Validação
+- Eclipses solares e lunares
+- Trânsitos planetários
+- Oposições e conjunções
+- Equinócios e solstícios
+
+### Ferramentas de Comparação
+- JPL HORIZONS
+- Stellarium
+- NASA's Eyes
+- PyEphem/Skyfield
+
+## Melhorias Futuras
+
+### Curto Prazo
+- Calibração automática via API
+- Mais validações visuais
+- Exportação de dados
+
+### Longo Prazo
+- Integração com SPICE kernels
+- Modelo de perturbações
+- Precessão e nutação
+- Relatividade geral

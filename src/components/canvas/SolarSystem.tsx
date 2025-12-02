@@ -9,6 +9,8 @@ interface SolarSystemProps {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
+  earthRotationOffset: number;
+  nightLightIntensity: number;
 }
 
 export const SolarSystem = ({
@@ -17,6 +19,8 @@ export const SolarSystem = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
+  earthRotationOffset,
+  nightLightIntensity,
 }: SolarSystemProps) => {
   const visibility = useStore((state) => state.visibility);
 
@@ -61,6 +65,8 @@ export const SolarSystem = ({
           sunEmissive={sunEmissive}
           ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
+          earthRotationOffset={earthRotationOffset}
+          nightLightIntensity={nightLightIntensity}
         >
           {renderBody(body.id)}
         </Planet>

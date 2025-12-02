@@ -32,6 +32,8 @@ interface PlanetProps {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
+  earthRotationOffset: number;
+  nightLightIntensity: number;
 }
 
 const PlanetVisual = ({
@@ -41,6 +43,8 @@ const PlanetVisual = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
+  earthRotationOffset,
+  nightLightIntensity,
 }: {
   body: CelestialBody;
   roughness: number;
@@ -48,11 +52,35 @@ const PlanetVisual = ({
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
+  earthRotationOffset: number;
+  nightLightIntensity: number;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
   const scaleMode = useStore((state) => state.scaleMode);
+
+  // Calculate orientation quaternion based on IAU pole data
+  const orientationQuaternion = useMemo(() => {
+    if (body.poleRA !== undefined && body.poleDec !== undefined) {
+      // Get pole direction in Ecliptic space
+      const poleDir = AstroPhysics.equatorialToEcliptic(
+        body.poleRA,
+        body.poleDec
+      );
+
+      // Default Up is (0, 1, 0) in our scene (Ecliptic North)
+      const defaultUp = new THREE.Vector3(0, 1, 0);
+
+      // Create quaternion to rotate Up to Pole Direction
+      return new THREE.Quaternion().setFromUnitVectors(defaultUp, poleDir);
+    } else {
+      // Fallback to simple axial tilt (around Z axis)
+      return new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, 0, -(body.axialTilt || 0) * (Math.PI / 180))
+      );
+    }
+  }, [body.poleRA, body.poleDec, body.axialTilt]);
 
   // Handle ring texture
   let textureRing: THREE.Texture | undefined;
@@ -70,6 +98,12 @@ const PlanetVisual = ({
   let textureMap: THREE.Texture | undefined;
   if (body.textures?.map) {
     textureMap = useTexture(body.textures.map);
+  }
+
+  // Handle night texture (for Earth city lights)
+  let textureNight: THREE.Texture | undefined;
+  if (body.textures?.night) {
+    textureNight = useTexture(body.textures.night);
   }
 
   // Cloud Material (PBR + Analytical Shadows)
@@ -90,18 +124,8 @@ const PlanetVisual = ({
       shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
       shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
 
-      // Inject uniforms and varying
-      shader.vertexShader = `
-        varying vec3 vPos;
-        ${shader.vertexShader}
-      `.replace("#include <begin_vertex>", planetShadowVertexPatch);
-
-      shader.fragmentShader = `
-        uniform vec3 uSunPosition;
-        uniform float uShadowIntensity;
-        varying vec3 vPos;
-        ${shader.fragmentShader}
-      `.replace("#include <map_fragment>", planetShadowFragmentPatch);
+      // Removed analytical shadow patch from clouds to prevent self-shadowing artifacts
+      // Clouds should be visible on the night side (faintly)
     };
 
     return mat;
@@ -147,8 +171,65 @@ const PlanetVisual = ({
       metalness: metalness,
     });
 
-    // Apply shaders: ring shadows for ringed planets
-    if (textureRing && body.ringSystem) {
+    // Apply Earth day/night shader (takes priority over ring shadows)
+    if (body.id === "earth" && textureNight) {
+      mat.onBeforeCompile = (shader) => {
+        mat.userData.shader = shader;
+        shader.uniforms.tNight = { value: textureNight };
+        shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
+        shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
+
+        // Inject varyings in vertex shader
+        shader.vertexShader = `
+          varying vec3 vPos;
+          varying vec3 vObjectNormal;
+          varying vec2 vUv;
+          ${shader.vertexShader}
+        `.replace(
+          "#include <begin_vertex>",
+          `
+          #include <begin_vertex>
+          vPos = position;
+          vObjectNormal = normal;
+          vUv = uv;
+          `
+        );
+
+        // Inject day texture handling in fragment shader
+        shader.fragmentShader = `
+          uniform sampler2D tNight;
+          uniform vec3 uSunPosition;
+          uniform float uNightLightIntensity;
+          varying vec3 vPos;
+          varying vec3 vObjectNormal;
+          varying vec2 vUv;
+          ${shader.fragmentShader}
+        `;
+
+        // Apply night lights to emissive channel
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <emissivemap_fragment>",
+          `
+          #include <emissivemap_fragment>
+          
+          // Calculate lighting for day/night transition
+          vec3 lightDir = normalize(uSunPosition - vPos);
+          float intensity = dot(normalize(vObjectNormal), lightDir);
+          
+          // Night lights appear where intensity is low
+          float nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity);
+          
+          vec4 nightColor = texture2D(tNight, vUv);
+          
+          // Add night lights to emissive
+          // Use uNightLightIntensity uniform for dynamic control
+          totalEmissiveRadiance += nightColor.rgb * nightFactor * uNightLightIntensity;
+          `
+        );
+      };
+    }
+    // Apply shaders: ring shadows for ringed planets (if not Earth)
+    else if (textureRing && body.ringSystem) {
       const innerRadius = body.ringSystem.innerRadius;
       const outerRadius = body.ringSystem.outerRadius;
 
@@ -225,7 +306,9 @@ const PlanetVisual = ({
     return mat;
   }, [
     textureMap,
+    textureNight,
     textureRing,
+    body.id,
     body.color,
     body.type,
     body.ringSystem,
@@ -290,21 +373,29 @@ const PlanetVisual = ({
 
     // 2. Rotation & Shader Uniforms
     if (rotationRef.current) {
-      // Rotation
+      // Rotation (synchronized with astronomical time using offset)
       if (body.rotationPeriodHours) {
         const { datetime } = useStore.getState();
-        const currentRotation =
-          (datetime.getTime() / (body.rotationPeriodHours * 3600000)) *
-          Math.PI *
-          2;
+        const rotationEpoch = body.rotationEpoch
+          ? new Date(body.rotationEpoch)
+          : new Date("2000-01-01T12:00:00Z");
+        const currentRotation = AstroPhysics.calculateRotationAngle(
+          datetime,
+          body.rotationPeriodHours,
+          body.id === "earth"
+            ? earthRotationOffset
+            : body.rotationOffsetDegrees || 0,
+          rotationEpoch
+        );
         rotationRef.current.rotation.y = currentRotation;
       }
 
-      // Shader Uniforms (Analytical Shadows)
-      if (textureRing) {
+      // Shader Uniforms (Analytical Shadows & Day/Night)
+      // Update sun position for shaders that need it (Earth day/night, ring shadows)
+      if (textureRing || (body.id === "earth" && textureNight)) {
         const sunWorldPos = new THREE.Vector3(0, 0, 0);
 
-        // A. Update Planet Material (Planet Shadow on itself / Ring Shadow on Planet)
+        // Update Planet Material shader uniforms
         // Planet is direct child of rotationRef, so use rotationRef matrix
         if (planetMaterial.userData.shader) {
           const meshWorldMatrix = rotationRef.current.matrixWorld;
@@ -317,6 +408,15 @@ const PlanetVisual = ({
             sunLocalPos
           );
 
+          // Update Night Light Intensity
+          if (
+            body.id === "earth" &&
+            planetMaterial.userData.shader.uniforms.uNightLightIntensity
+          ) {
+            planetMaterial.userData.shader.uniforms.uNightLightIntensity.value =
+              nightLightIntensity;
+          }
+
           // Update Cloud Material (if exists)
           if (cloudMaterial && cloudMaterial.userData.shader) {
             cloudMaterial.userData.shader.uniforms.uSunPosition.value.copy(
@@ -325,8 +425,7 @@ const PlanetVisual = ({
           }
         }
 
-        // B. Update Ring Material (Planet Shadow on Ring)
-        // Ring has extra rotation, so use ringRef matrix if available
+        // B. Update Ring Material (Planet Shadow on Ring) - only for ringed planets
         if (ringMaterial && ringMaterial.userData.shader && ringRef.current) {
           const ringWorldMatrix = ringRef.current.matrixWorld;
           const inverseRingMatrix = new THREE.Matrix4()
@@ -355,8 +454,8 @@ const PlanetVisual = ({
       onPointerOver={() => (document.body.style.cursor = "pointer")}
       onPointerOut={() => (document.body.style.cursor = "auto")}
     >
-      {/* Axial Tilt Group */}
-      <group rotation={[0, 0, (body.axialTilt || 0) * (Math.PI / 180)]}>
+      {/* Axial Tilt Group - Now using Quaternion for accurate orientation */}
+      <group quaternion={orientationQuaternion}>
         {/* Rotation Group */}
         <group ref={rotationRef}>
           {/* 1. Base Planet Sphere */}
@@ -436,6 +535,8 @@ const PlanetVisualWrapper = (props: {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
+  earthRotationOffset: number; // Added this prop
+  nightLightIntensity: number;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -500,9 +601,34 @@ export const Planet = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
+  earthRotationOffset,
+  nightLightIntensity,
 }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<any>(null);
+
+  // Calculate orientation quaternion based on IAU pole data
+  const orientationQuaternion = useMemo(() => {
+    if (body.poleRA !== undefined && body.poleDec !== undefined) {
+      // Get pole direction in Ecliptic space
+      const poleDir = AstroPhysics.equatorialToEcliptic(
+        body.poleRA,
+        body.poleDec
+      );
+
+      // Default Up is (0, 1, 0) in our scene (Ecliptic North)
+      const defaultUp = new THREE.Vector3(0, 1, 0);
+
+      // Create quaternion to rotate Up to Pole Direction
+      return new THREE.Quaternion().setFromUnitVectors(defaultUp, poleDir);
+    } else {
+      // Fallback to simple axial tilt (around Z axis)
+      return new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, 0, -(body.axialTilt || 0) * (Math.PI / 180))
+      );
+    }
+  }, [body.poleRA, body.poleDec, body.axialTilt]);
+
   const scaleMode = useStore((state) => state.scaleMode);
   const showOrbits = useStore((state) => state.showOrbits);
   const focusId = useStore((state) => state.focusId);
@@ -626,6 +752,8 @@ export const Planet = ({
           sunEmissive={sunEmissive}
           ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
+          earthRotationOffset={earthRotationOffset} // Passed down
+          nightLightIntensity={nightLightIntensity}
         />
 
         {/* 
@@ -634,10 +762,8 @@ export const Planet = ({
           EXCEPTION: Earth's Moon orbits the ecliptic (mostly), not Earth's equator.
         */}
         <group
-          rotation={
-            body.id !== "earth"
-              ? [0, 0, (body.axialTilt || 0) * (Math.PI / 180)]
-              : [0, 0, 0]
+          quaternion={
+            body.id !== "earth" ? orientationQuaternion : new THREE.Quaternion()
           }
         >
           {children}

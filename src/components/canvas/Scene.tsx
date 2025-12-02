@@ -54,31 +54,33 @@ export const Scene = () => {
     sunEmissive,
     ringEmissive,
     ringShadowIntensity,
+    earthRotationOffset,
+    nightLightIntensity,
   } = useControls({
     Lighting: folder({
       ambientIntensity: {
-        value: 0.37,
+        value: 0.18,
         min: 0,
         max: 1,
         step: 0.01,
         label: "Ambient Light",
       },
       sunIntensity: {
-        value: 1.4,
+        value: 1.1,
         min: 0,
         max: 5,
         step: 0.1,
         label: "Sun Brightness (Point)",
       },
       shadowIntensity: {
-        value: 1.5,
+        value: 2.5,
         min: 0,
         max: 5,
         step: 0.1,
         label: "Shadow Light (Dir)",
       },
       envMapIntensity: {
-        value: 2.6,
+        value: 1.8,
         min: 0,
         max: 5,
         step: 0.1,
@@ -111,25 +113,25 @@ export const Scene = () => {
         value: 0.15,
         min: 0,
         max: 1,
-        step: 0.05,
+        step: 0.01,
         label: "Saturation",
       },
-      contrast: { value: 0.5, min: 0, max: 1, step: 0.05, label: "Contrast" },
+      contrast: { value: 0.5, min: 0, max: 1, step: 0.01, label: "Contrast" },
       brightness: {
         value: -0.1,
-        min: -0.5,
-        max: 0.5,
-        step: 0.05,
+        min: -1,
+        max: 1,
+        step: 0.01,
         label: "Brightness",
       },
     }),
     "Planet Material": folder({
-      roughness: { value: 0.7, min: 0, max: 1, step: 0.05, label: "Roughness" },
+      roughness: { value: 0.7, min: 0, max: 1, step: 0.1, label: "Roughness" },
       metalness: {
         value: 0.2,
         min: 0,
         max: 1,
-        step: 0.05,
+        step: 0.1,
         label: "Metalness",
       },
       sunEmissive: {
@@ -142,18 +144,34 @@ export const Scene = () => {
       ringEmissive: {
         value: 0.2,
         min: 0,
-        max: 1,
-        step: 0.05,
+        max: 5,
+        step: 0.1,
         label: "Ring Emissive Power",
       },
     }),
     Shadows: folder({
       ringShadowIntensity: {
-        value: 0.8,
+        value: 0.45,
         min: 0,
         max: 1,
-        step: 0.05,
+        step: 0.01,
         label: "Ring Shadow Opacity",
+      },
+    }),
+    Calibration: folder({
+      earthRotationOffset: {
+        value: 0,
+        min: 0,
+        max: 360,
+        step: 1,
+        label: "Earth Rotation Offset",
+      },
+      nightLightIntensity: {
+        value: 0.4,
+        min: 0,
+        max: 10,
+        step: 0.1,
+        label: "Night Light Intensity",
       },
     }),
   });
@@ -226,6 +244,8 @@ export const Scene = () => {
             sunEmissive={sunEmissive}
             ringEmissive={ringEmissive}
             ringShadowIntensity={ringShadowIntensity}
+            earthRotationOffset={earthRotationOffset}
+            nightLightIntensity={nightLightIntensity}
           />
         </Suspense>
         <OverlayPositionTracker />
