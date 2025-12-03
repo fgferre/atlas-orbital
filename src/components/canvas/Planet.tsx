@@ -112,9 +112,9 @@ const PlanetVisual = ({
     const mat = new THREE.MeshStandardMaterial({
       map: textureClouds,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.AdditiveBlending, // Reverted to Additive for visual look
       side: THREE.DoubleSide,
-      depthWrite: false, // Don't write to depth buffer to avoid occlusion issues
+      depthWrite: false,
       roughness: 1.0,
       metalness: 0.0,
     });
@@ -123,13 +123,44 @@ const PlanetVisual = ({
       mat.userData.shader = shader;
       shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
       shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
-
-      // Removed analytical shadow patch from clouds to prevent self-shadowing artifacts
-      // Clouds should be visible on the night side (faintly)
     };
 
     return mat;
   }, [textureClouds, ringShadowIntensity]);
+
+  // Shadow Caster Material (Custom Depth Material)
+  // This material is used ONLY for casting shadows from the clouds.
+  // It converts the black-and-white cloud texture into an alpha map for the shadow depth buffer.
+  const cloudShadowMaterial = useMemo(() => {
+    if (!textureClouds) return null;
+
+    // We use MeshDepthMaterial for the shadow map
+    const mat = new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
+      map: textureClouds, // Use the cloud texture
+      alphaTest: 0.2, // Cutoff for shadows
+    });
+
+    // Custom shader to use luminance (brightness) as alpha
+    mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = `
+        uniform sampler2D map;
+        varying vec2 vUv;
+        ${shader.fragmentShader}
+      `.replace(
+        "#include <map_fragment>",
+        `
+        #ifdef USE_MAP
+          vec4 texColor = texture2D(map, vUv);
+          // Use luminance (brightness) as alpha
+          float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+          if (luminance < 0.2) discard; // Alpha test based on brightness
+        #endif
+        `
+      );
+    };
+    return mat;
+  }, [textureClouds]);
 
   useEffect(() => {
     return () => {
@@ -161,12 +192,21 @@ const PlanetVisual = ({
 
   // Analytical Ring Shadow Logic & Earth Night Lights
   const planetMaterial = useMemo(() => {
+    // Use MeshBasicMaterial for stars (Sun) so they are not affected by lights/shadows
+    if (body.type === "star") {
+      return new THREE.MeshBasicMaterial({
+        map: textureMap,
+        color: new THREE.Color(body.color).multiplyScalar(sunEmissive),
+        toneMapped: false, // Allow HDR values for Bloom
+      });
+    }
+
     const mat = new THREE.MeshStandardMaterial({
       map: textureMap,
       color: textureMap ? "#ffffff" : body.color,
-      emissive: body.type === "star" ? body.color : "#000",
-      emissiveMap: body.type === "star" ? textureMap : null,
-      emissiveIntensity: body.type === "star" ? sunEmissive : 0,
+      emissive: "#000", // Stars handled above, so this is always black for planets
+      emissiveMap: null,
+      emissiveIntensity: 0,
       roughness: roughness,
       metalness: metalness,
     });
@@ -467,11 +507,24 @@ const PlanetVisual = ({
             <primitive object={planetMaterial} attach="material" />
           </mesh>
 
-          {/* 2. Cloud Layer (Slightly larger) */}
+          {/* 2. Cloud Layer (Visual - Additive) */}
           {cloudMaterial && (
-            <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow>
+            <mesh scale={[1.01, 1.01, 1.01]} castShadow={false} receiveShadow>
               <sphereGeometry args={[1, 64, 64]} />
               <primitive object={cloudMaterial} attach="material" />
+            </mesh>
+          )}
+
+          {/* 2b. Cloud Shadow Caster (Invisible, only casts shadow) */}
+          {cloudShadowMaterial && (
+            <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow={false}>
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive
+                object={cloudShadowMaterial}
+                attach="customDepthMaterial"
+              />
+              {/* We need a basic material to make it renderable, but we make it invisible */}
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
           )}
 

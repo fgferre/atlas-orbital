@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { VisualPresetType } from "./config/visualPresets";
 
 interface AppState {
   datetime: Date;
@@ -11,6 +12,8 @@ interface AppState {
   showStarfield: boolean;
   showOrbits: boolean;
   scaleMode: "didactic" | "realistic";
+  visualPreset: VisualPresetType;
+  autoPresetEnabled: boolean;
   overlayItems: Array<{
     id: string;
     name: string;
@@ -43,6 +46,8 @@ interface AppState {
   toggleIcons: () => void;
   toggleOrbits: () => void;
   toggleScaleMode: () => void;
+  setVisualPreset: (preset: VisualPresetType) => void;
+  toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
   closeTutorial: () => void;
@@ -62,6 +67,8 @@ export const useStore = create<AppState>((set) => ({
   showIcons: true,
   showOrbits: true,
   scaleMode: "didactic",
+  visualPreset: "DEEP_SPACE",
+  autoPresetEnabled: true,
   overlayItems: [],
   showStarfield: true,
   visibility: {
@@ -95,6 +102,9 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
     })),
+  setVisualPreset: (visualPreset) => set({ visualPreset }),
+  toggleAutoPreset: () =>
+    set((state) => ({ autoPresetEnabled: !state.autoPresetEnabled })),
   toggleVisibility: (category) =>
     set((state) => ({
       visibility: {

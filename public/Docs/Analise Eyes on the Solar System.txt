@@ -1,0 +1,138 @@
+Análise Detalhada do Código NASA Eyes vs. Adaptação para Atlas Orbital
+
+Analisei o código legacy da NASA Eyes on the Solar System (_legacy/nasa eyes of the solar system study). É um app baseado no engine Pioneer (framework 3D custom da NASA/JPL com entities, components e controllers). Os arquivos principais são webpack-bundled/minified:
+
+config.js: Config centralizada para assets (static/dynamic) e SPICE kernels (animdataUrl).
+
+app.js: SolarSystemApp estende BaseApp, gerencia Layers (starfield, planets, trails, labels), CameraFollowManager, LayerPanel, presets por contexto.
+
+preload.js: PreloadManager, dados de entities (planets/moons/spacecraft) e stories.
+
+commons.js: Webpack runtime.
+
+O app usa managers para abstrair (LayerManager, CameraManager, ContentManager). Não há shaders custom como no nosso R3F, mas components como StarfieldComponent, LightSourceComponent, OrbitalElementsController. Presets são contextuais via managers que toggle layers/lights baseado em entidade/foco/distância.
+
+Adaptação Geral
+NASA: Engine proprietário com ECS (Entity-Component-System). Layers/components ativados por contexto (distância, alvo).
+
+Nosso App: React Three Fiber + Zustand. Replicar com store.ts states, useFrame para contexto dinâmico, configs centralizadas.
+
+Abaixo, por ticket, como implementado na NASA e reaplicação detalhada no nosso stack atual (R3F/Zustand/Leva).
+
+1. Implementar Sistema de Presets Visuais Contextuais (472b7f43-5d05-4d11-bc02-f9087affc7e8)
+NASA: Em app.js, pós-processamento/lighting por contexto via SceneManager/LightSourceComponent. Presets implícitos em views (deep space vs flyby) ajustam bloom/contrast via shaders dinâmicos. CameraFollowManager triggera mudanças em exposure/IBL baseado em distância/alvo.
+
+Reaplicação:
+
+src/config/visualPresets.ts: { DEEP_SPACE: { bloomIntensity: 0.05, contrast: 0.3 }, PLANET_ORBIT: { bloomIntensity: 0.8, contrast: 0.6 }, CLOSE_FLYBY: { bloomIntensity: 1.2, contrast: 1.0 } }
+
+store.ts: Adicionar visualPreset: 'DEEP_SPACE', setVisualPreset(preset: string).
+
+Scene.tsx: useEffect em focusId/camera.distanceToTarget → autoSelectPreset() (if distance > 1e6 AU → DEEP_SPACE, etc.). Substituir Leva values por presetValues[visualPreset].
+
+Passar para <Bloom intensity={preset.bloomIntensity} />, etc. Use useFrame para lerp suave.
+
+2. Criar Presets de Camadas de Visibilidade (0108d2db-2089-4c1e-a9e1-6dbf836df298)
+NASA: LayerManager (app.js lines ~132-144) com layers explícitas: starfield, ui, planets, trails, labels, icons, asteroids. LayerPanel toggles grupos. Presets via toggleLayer('all') ou contexto (e.g., close-up esconde asteroids).
+
+Reaplicação:
+
+src/config/layerPresets.ts: { CLEAN: { showStarfield: true, visibility: {planets:true, others:false}, showLabels:false }, SCIENCE: {all:true}, EDU: {showIcons:true, labels:true, orbits:true} }
+
+store.ts: layerPreset: 'CLEAN', setLayerPreset(preset) que batch-seta states.
+
+LayersPanel.tsx: Dropdown/seletor preset → setLayerPreset. Manter toggles individuais.
+
+useEffect(store.layerPreset, applyPreset).
+
+3. Criar Painel de Usuário Final e Ocultar Leva (70010896-8e6c-4f49-b4c8-73628c4675db)
+NASA: LayerPanel e Settings como UI polida (não debug). Loading/Embed screens em PreloadManager. Debug via kiosk mode.
+
+Reaplicação:
+
+PresetsPanel.tsx: Glass-panel com selects para visualPreset/layerPreset, toggle debug.
+
+Scene.tsx: <Leva hidden={!debugMode} /> (já existe).
+
+Sidebar/TopBar integra PresetsPanel. Estilo: glass-panel w-64 como LayersPanel.
+
+Toggle debug: Ctrl+Shift+D mantém.
+
+4. Implementar Controlador de Câmera Híbrido (584ed2f5-4021-493b-a7f8-fcbbbc7ec35c)
+NASA: CameraFollowManager (app.js), OrbitController, TransitionController. Splines suaves entre alvos, modos follow/lock, FOV/near dinâmico por raio entidade.
+
+Reaplicação:
+
+EnhancedCameraController.tsx: Extend CameraController.tsx. Use THREE.CatmullRomCurve3 para spline entre current → target pos.
+
+store.ts: cameraMode: 'ORBIT' | 'FOLLOW'.
+
+useFrame: Se focusId muda, gera spline (10-20 pontos), lerp position (0.05). FOV: fov = 40 + log(raio/alvoRadius). near: max(1e-7, distance*0.01).
+
+OrbitControls sobreposto.
+
+5. Implementar Modelo de Iluminação Física e IBL (f925a5d2-88a1-4f0a-86db-9ae7fd2165fd)
+NASA: LightSourceComponent com 1/r² decay (OrbitalElementsController). DynamicEnvironmentMapComponent troca IBL por contexto (deep space vs planetary).
+
+Reaplicação:
+
+SmartSunLight.tsx: intensity = Math.max(0.1, base / (distAU * distAU)) onde distAU = targetPos.length() / AU_TO_3D_UNITS.
+
+src/config/environmentMaps.ts: { deepSpace: '/hdri/deep.hdr', planet: '/hdri/planet.hdr' }.
+
+Scene.tsx: <Environment preset={contextualPreset} /> ou useTexture(envMap[context]). Context: if planet → 'planet', distance>10AU → 'deep'.
+
+6. Ajustar Pós-Processamento Dinâmico (fd3e36c1-f2a3-4ad0-b89e-e5c70c939480)
+NASA: MaterialUtilsStandard ajusta bloom/contrast em useFrame-like (render loop) baseado em camera distance/target angle.
+
+Reaplicação:
+
+Scene.tsx: useFrame(({camera}) => { dist = cameraToFocus; bloomIntensity = lerp(0.1 + dist/1e6, 0.05,1.2); ... }).
+
+Update <Bloom intensity={bloomIntensity} /> via ref ou state.
+
+Close: bloom--, contrast++; Far: contrast++, starfield threshold--.
+
+7. Sistema de Configuração Centralizado (6f230740-ce39-4126-bacb-9c50d8a7cb80)
+NASA: config.js central: static/dynamic assets, SPICE URLs. preload.js carrega entities dinâmico.
+
+Reaplicação:
+
+src/config/astroDataConfig.ts: { textures: {earth: {map:'url'}}, stars: 'tycho2.json', ephem: {spice: 'url', validUntil:'2025'} }.
+
+celestialBodies.ts: import config; bodies.map(b => ({...b, texture: config.textures[b.id]})).
+
+Starfield.tsx: useEffect(load(config.stars)).
+
+8. Melhorar Solver Kepleriano (af0b76b6-64c4-48e2-a65a-27554cdb5bf5)
+NASA: OrbitalElementsController com iterações Kepler + perturbações (SPICE fallback).
+
+Reaplicação:
+
+astrophysics.ts: calculateLocalPosition(..., precisionLevel='fast') { iterations = level==='accurate'?15:5; if(e>0.9) perturbCorrection(); }.
+
+store.ts: precisionLevel: 'fast', toggle.
+
+9. Camada de Abstração Efemérides (e9f2e278-9297-4218-a8e0-e4c9e0f5caf8)
+NASA: AnimdataController carrega SPICE kernels via animdataUrl. Fallback kepleriano.
+
+Reaplicação:
+
+src/lib/ephemeris/KeplerianProvider.ts: getPosition(body,date) usa atual.
+
+Interface EphemerisProvider { getPosition(id,date): Vector3 }.
+
+astrophysics.ts: provider = new KeplerianProvider();.
+
+Mock SPICE: fetch(config.ephem.spice).then(kernel => parseSPICE).
+
+10. LOD Starfield Adaptativo (abd053bf-a217-4ffd-b0ea-e988972c257d)
+NASA: StarfieldComponent com LOD por magnitude + distance (LayerManager toggles baseado em zoom/dist).
+
+Reaplicação:
+
+Starfield.tsx shader: uniform float cameraDist; maxVisibleMag = 6.0 + log(cameraDist/1e6)* (-2.0);.
+
+useFrame: uniforms.cameraDist.value = camera.position.length();.
+
+Impacto: Plano 100% viável hoje. NASA prova conceitos funcionam em prod. Nosso R3F é mais moderno/flexível.

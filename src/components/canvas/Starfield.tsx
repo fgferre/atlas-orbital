@@ -89,10 +89,10 @@ const fragmentShader = `
     // Space Realism: Sharp, point-like stars (Diffraction limited)
     // No soft atmospheric glow
     float strength = 1.0 - (dist * 2.0);
-    strength = pow(strength, 3.0); // Very sharp falloff
+    strength = pow(strength, 3.0); // Softened falloff (was 4.0/5.0) to reduce aliasing
     
     // Boost core brightness
-    strength *= 4.0; 
+    strength *= 2.0; // Reduced boost (was 4.0) to prevent bloom ringing 
     
     // No Twinkling in space!
     // Stars are steady points of light.

@@ -1,12 +1,22 @@
-import { useRef } from "react";
+import { useRef, forwardRef, useImperativeHandle } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../../store";
 
-export const SmartSunLight = ({ intensity = 1.5 }: { intensity?: number }) => {
+/**
+ * Smart directional light that follows the focused celestial body.
+ * Intensity is controlled by visual presets in Scene.tsx via ref.
+ * Future: Will implement 1/r² falloff based on distance from Sun.
+ */
+export const SmartSunLight = forwardRef<
+  THREE.DirectionalLight,
+  { intensity?: number }
+>(({ intensity = 1.5 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const targetRef = useRef<THREE.Object3D>(new THREE.Object3D());
+
+  useImperativeHandle(ref, () => lightRef.current!);
 
   useFrame(({ scene }) => {
     if (!lightRef.current) return;
@@ -83,4 +93,4 @@ export const SmartSunLight = ({ intensity = 1.5 }: { intensity?: number }) => {
       </directionalLight>
     </>
   );
-};
+});
