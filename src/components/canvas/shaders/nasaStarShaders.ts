@@ -37,6 +37,12 @@ export const nasaStarVertexShader = `
     // Adjust the color and size so that it is visually pleasing. (NASA EXACT)
     fColor.a = clamp(brightness * particleSize, 0.05, 1.0);
     gl_PointSize = clamp(brightness * 4.0 * particleSize, 5.0, 50.0);
+
+    // If it is too close, fade the star. (NASA EXACT - app.js line 15008)
+    // NASA: (distance - 1.0e12) / 9.0e12 in km
+    // Ours: calibrated for our scale (km * KM_TO_PARSEC * DISTANCE_SCALE)
+    float nearFade = clamp((distance - 6.684e6) / 6.016e7, 0.0, 1.0);
+    fColor.a = mix(0.0, fColor.a, nearFade);
   }
 `;
 
