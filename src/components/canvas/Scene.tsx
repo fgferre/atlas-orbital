@@ -2,6 +2,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { Suspense, useEffect, useRef, memo } from "react";
 import { OrbitControls, Environment } from "@react-three/drei";
 import { Starfield } from "./Starfield";
+import { NASAStarfield } from "./NASAStarfield";
 import {
   EffectComposer,
   Bloom,
@@ -140,11 +141,43 @@ const PostProcessingEffects = memo(
   }
 );
 
+/**
+ * Dynamic zoom speed based on camera distance.
+ * Close to planets: slow zoom for precision
+ * Far away: fast zoom to cover astronomical distances
+ */
+const DynamicZoom = ({
+  controlsRef,
+}: {
+  controlsRef: React.RefObject<any>;
+}) => {
+  const { camera } = useThree();
+
+  useFrame(() => {
+    if (!controlsRef.current) return;
+
+    // Get distance from origin (where solar system is centered)
+    const distance = camera.position.length();
+
+    // Logarithmic zoom speed: increases as you get farther
+    // At 1000 units (roughly Saturn): zoomSpeed ~2
+    // At 1,000,000 units: zoomSpeed ~6
+    // At 1,000,000,000 units: zoomSpeed ~10
+    const logDistance = Math.log10(Math.max(distance, 100));
+    const zoomSpeed = Math.max(1, logDistance - 1);
+
+    controlsRef.current.zoomSpeed = zoomSpeed;
+  });
+
+  return null;
+};
+
 export const Scene = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
   const visualPreset = useStore((state) => state.visualPreset); // Get current preset
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
+  const useNASAStarfield = useStore((state) => state.useNASAStarfield);
 
   // Debug Controls - Refactored to use function API to get 'set'
   const [values, set] = useControls(() => ({
@@ -417,10 +450,10 @@ export const Scene = () => {
         />
         <color attach="background" args={["#000000"]} />
         <Suspense fallback={null}>
-          <Starfield />
+          {useNASAStarfield ? <NASAStarfield /> : <Starfield />}
           <Environment resolution={256} frames={1} far={1e9}>
-            <Starfield />
-            {/* Sun Representation for Reflections */}
+            {/* Starfield removed from Environment - was causing planet lighting issues */}
+            {/* Only sun mesh for reflections */}
             <mesh position={[0, 0, 0]} scale={[100, 100, 100]}>
               <sphereGeometry args={[1, 32, 32]} />
               <meshBasicMaterial color={[10, 10, 10]} toneMapped={false} />
@@ -459,11 +492,12 @@ export const Scene = () => {
         <OrbitControls
           ref={controlsRef}
           enablePan={true}
-          maxDistance={1e12} // Reduced to prevent extreme zoom-out jitter
+          maxDistance={1e12} // Large distance for proper zoom
           minDistance={10} // Increased to prevent near-plane clipping/jitter
           zoomSpeed={2.0}
           makeDefault
         />
+        <DynamicZoom controlsRef={controlsRef} />
 
         <PostProcessingEffects
           bloomRef={bloomRef}

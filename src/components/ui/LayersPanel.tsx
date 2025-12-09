@@ -17,6 +17,10 @@ export const LayersPanel = () => {
   const toggleVisibility = useStore((state) => state.toggleVisibility);
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
+  const useNASAStarfield = useStore((state) => state.useNASAStarfield);
+  const toggleStarfieldImplementation = useStore(
+    (state) => state.toggleStarfieldImplementation
+  );
 
   return (
     <div
@@ -107,6 +111,39 @@ export const LayersPanel = () => {
               checked={showStarfield}
               onChange={toggleShowStarfield}
             />
+            {showStarfield && (
+              <div className="ml-4 mt-2">
+                <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
+                  Starfield Source
+                </div>
+                <div className="flex bg-black/40 rounded p-1 border border-white/10">
+                  <button
+                    onClick={() =>
+                      useNASAStarfield && toggleStarfieldImplementation()
+                    }
+                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                      !useNASAStarfield
+                        ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                        : "text-gray-500 hover:text-white"
+                    }`}
+                  >
+                    Tycho-2
+                  </button>
+                  <button
+                    onClick={() =>
+                      !useNASAStarfield && toggleStarfieldImplementation()
+                    }
+                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                      useNASAStarfield
+                        ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                        : "text-gray-500 hover:text-white"
+                    }`}
+                  >
+                    NASA Eyes
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="pt-2 border-t border-white/10">
               <Toggle
                 label="Debug Menu"

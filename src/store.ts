@@ -10,6 +10,7 @@ interface AppState {
   showLabels: boolean;
   showIcons: boolean;
   showStarfield: boolean;
+  useNASAStarfield: boolean;
   showOrbits: boolean;
   scaleMode: "didactic" | "realistic";
   visualPreset: VisualPresetType;
@@ -49,6 +50,7 @@ interface AppState {
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
+  toggleStarfieldImplementation: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
   closeTutorial: () => void;
   setTutorialStep: (step: number) => void;
@@ -71,6 +73,7 @@ export const useStore = create<AppState>((set) => ({
   autoPresetEnabled: true,
   overlayItems: [],
   showStarfield: true,
+  useNASAStarfield: false,
   visibility: {
     planets: true,
     dwarfs: true,
@@ -98,6 +101,8 @@ export const useStore = create<AppState>((set) => ({
   toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
   toggleShowStarfield: () =>
     set((state) => ({ showStarfield: !state.showStarfield })),
+  toggleStarfieldImplementation: () =>
+    set((state) => ({ useNASAStarfield: !state.useNASAStarfield })),
   toggleScaleMode: () =>
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
