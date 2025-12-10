@@ -492,6 +492,8 @@ export const Scene = () => {
         <OrbitControls
           ref={controlsRef}
           enablePan={true}
+          enableDamping={true}
+          dampingFactor={0.05}
           maxDistance={1e12} // Large distance for proper zoom
           minDistance={10} // Increased to prevent near-plane clipping/jitter
           zoomSpeed={2.0}
