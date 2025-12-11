@@ -41,6 +41,7 @@ export const SearchBar = () => {
     <div
       ref={containerRef}
       className="relative pointer-events-auto flex justify-end"
+      data-tutorial-target="search"
     >
       <div
         className={`flex items-center tech-panel tech-transition ${isOpen ? "w-64" : "w-12 h-12"}`}

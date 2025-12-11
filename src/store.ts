@@ -38,6 +38,10 @@ interface AppState {
   isLoaderHidden: boolean;
   hasPlayedIntroAnimation: boolean;
   isIntroAnimating: boolean;
+  isLiveMode: boolean;
+  tutorialCompletionStatus: "not-seen" | "skipped" | "completed" | null;
+
+  setLiveMode: (isLive: boolean) => void;
 
   setDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
@@ -55,7 +59,10 @@ interface AppState {
   toggleShowStarfield: () => void;
   toggleStarfieldImplementation: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
-  closeTutorial: () => void;
+  closeTutorial: (status?: "completed" | "skipped") => void;
+  completeTutorial: () => void;
+  openTutorial: () => void;
+  reopenTutorial: () => void;
   setTutorialStep: (step: number) => void;
   setSceneReady: (ready: boolean) => void;
   setLoaderHidden: (hidden: boolean) => void;
@@ -88,12 +95,25 @@ export const useStore = create<AppState>((set) => ({
     comets: true,
     tnos: true,
   },
-  showTutorial: !localStorage.getItem("hasSeenTutorial"),
+  showTutorial:
+    typeof window !== "undefined" && window.localStorage
+      ? !localStorage.getItem("tutorialStatus")
+      : true, // Default true for SSR
+  tutorialCompletionStatus:
+    typeof window !== "undefined" && window.localStorage
+      ? (localStorage.getItem("tutorialStatus") as
+          | "skipped"
+          | "completed"
+          | null)
+      : null,
   tutorialStep: 0,
   isSceneReady: false,
   isLoaderHidden: false,
   hasPlayedIntroAnimation: false, // Always play on page load
   isIntroAnimating: false,
+  isLiveMode: true,
+
+  setLiveMode: (isLiveMode) => set({ isLiveMode }),
 
   setDatetime: (value) =>
     set((state) => ({
@@ -126,10 +146,30 @@ export const useStore = create<AppState>((set) => ({
         [category]: !state.visibility[category],
       },
     })),
-  closeTutorial: () => {
+  closeTutorial: (status = "completed") => {
+    localStorage.setItem("tutorialStatus", status);
+    // Also keep the legacy key for backward compatibility if needed, or just rely on new one
     localStorage.setItem("hasSeenTutorial", "true");
-    set({ showTutorial: false });
+    set({ showTutorial: false, tutorialCompletionStatus: status });
   },
+  completeTutorial: () => {
+    localStorage.setItem("tutorialStatus", "completed");
+    localStorage.setItem("hasSeenTutorial", "true");
+    set({
+      showTutorial: false,
+      tutorialCompletionStatus: "completed",
+      selectedId: null,
+      focusId: null,
+    });
+  },
+  openTutorial: () => set({ showTutorial: true, tutorialStep: 0 }),
+  reopenTutorial: () =>
+    set({
+      showTutorial: true,
+      tutorialStep: 0,
+      tutorialCompletionStatus: null,
+      hasPlayedIntroAnimation: false, // Triggers intro animation to replay
+    }),
   setTutorialStep: (step) => set({ tutorialStep: step }),
   setSceneReady: (ready) => set({ isSceneReady: ready }),
   setLoaderHidden: (hidden) => set({ isLoaderHidden: hidden }),

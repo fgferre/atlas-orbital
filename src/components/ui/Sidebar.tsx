@@ -86,6 +86,7 @@ export const Sidebar = () => {
       className={`absolute top-20 left-4 w-80 glass-panel flex flex-col z-30 transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) pointer-events-auto ${
         isVisible ? "translate-x-0" : "-translate-x-[120%]"
       }`}
+      data-tutorial-target="info-panel"
       style={{
         maxHeight: "calc(100vh - 160px)",
         clipPath:

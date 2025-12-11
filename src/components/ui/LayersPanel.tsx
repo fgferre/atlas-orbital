@@ -21,12 +21,14 @@ export const LayersPanel = () => {
   const toggleStarfieldImplementation = useStore(
     (state) => state.toggleStarfieldImplementation
   );
+  const reopenTutorial = useStore((state) => state.reopenTutorial);
 
   return (
     <div
       className={`relative tech-panel tech-transition z-40 flex flex-col pointer-events-auto ${
         isCollapsed ? "w-12 h-12" : "w-64 p-4"
       }`}
+      data-tutorial-target="settings"
       style={{
         overflow: isCollapsed ? "hidden" : "visible",
         transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
@@ -35,6 +37,7 @@ export const LayersPanel = () => {
       {/* Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
+        title="Settings • Ctrl+Shift+T to replay tutorial"
         className={`absolute top-0 right-0 w-12 h-12 flex items-center justify-center text-nasa-accent hover:text-white transition-colors z-50 ${
           isCollapsed ? "bg-transparent" : "bg-white/5"
         }`}
@@ -93,6 +96,19 @@ export const LayersPanel = () => {
               >
                 Realistic
               </button>
+            </div>
+          </div>
+
+          {/* Replay Tutorial - Positioned early for discoverability */}
+          <div className="border-t border-white/10 pt-3">
+            <button
+              onClick={reopenTutorial}
+              className="w-full py-2 text-[10px] font-orbitron text-nasa-dim border border-white/10 hover:border-nasa-accent hover:text-nasa-accent transition-colors uppercase tracking-widest"
+            >
+              Replay Tutorial
+            </button>
+            <div className="text-[9px] text-gray-500 font-mono text-center mt-1">
+              Ctrl + Shift + T
             </div>
           </div>
 

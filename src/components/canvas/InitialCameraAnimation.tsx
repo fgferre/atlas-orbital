@@ -87,6 +87,12 @@ export const InitialCameraAnimation = () => {
     animationRef.current.isRunning = false;
     setHasPlayed(true);
     setIsIntroAnimating(false);
+
+    // If tutorial is open, select Sun to show Info Panel
+    const showTutorial = useStore.getState().showTutorial;
+    if (showTutorial) {
+      useStore.getState().selectId("sun");
+    }
   };
 
   // Start animation when loader has fully hidden

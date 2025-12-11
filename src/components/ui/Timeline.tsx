@@ -67,6 +67,8 @@ export const Timeline = () => {
   const setIsPlaying = useStore((state) => state.setIsPlaying);
   const speed = useStore((state) => state.speed);
   const setSpeed = useStore((state) => state.setSpeed);
+  const isLiveMode = useStore((state) => state.isLiveMode);
+  const setLiveMode = useStore((state) => state.setLiveMode);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const requestRef = useRef<number | undefined>(undefined);
   const previousTimeRef = useRef<number | undefined>(undefined);
@@ -108,6 +110,7 @@ export const Timeline = () => {
   }, [speed, currentStepIndex]);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLiveMode(false);
     const val = parseInt(e.target.value);
     if (val === 0) {
       setSpeed(NORMAL_SPEED);
@@ -119,6 +122,7 @@ export const Timeline = () => {
   };
 
   const handleForward = () => {
+    setLiveMode(false);
     if (speed < 0) {
       // If going backward, reduce speed magnitude or go to normal
       if (currentStepIndex === 0) {
@@ -142,6 +146,7 @@ export const Timeline = () => {
   };
 
   const handleRewind = () => {
+    setLiveMode(false);
     if (speed > 0) {
       // If going forward, reduce speed or go to normal
       if (currentStepIndex === 0) {
@@ -165,6 +170,7 @@ export const Timeline = () => {
   };
 
   const handleNormalTime = () => {
+    setLiveMode(false);
     setSpeed(NORMAL_SPEED);
     setIsPlaying(true);
   };
@@ -172,7 +178,9 @@ export const Timeline = () => {
   const animate = (time: number) => {
     if (previousTimeRef.current !== undefined) {
       const deltaTime = time - previousTimeRef.current;
-      if (useStore.getState().isPlaying) {
+      if (useStore.getState().isLiveMode) {
+        useStore.getState().setDatetime(new Date());
+      } else if (useStore.getState().isPlaying) {
         useStore
           .getState()
           .setDatetime(
@@ -203,22 +211,17 @@ export const Timeline = () => {
     return "Custom Speed";
   }, [speed, currentStepIndex]);
 
-  const isLiveMode = useMemo(() => {
-    if (!isPlaying || Math.abs(speed - NORMAL_SPEED) > 1e-10) return false;
-    // Check if datetime is close to now (within 2 seconds)
-    const now = new Date();
-    const diff = Math.abs(datetime.getTime() - now.getTime());
-    return diff < 2000;
-  }, [datetime, isPlaying, speed]);
-
   const handleLiveMode = () => {
-    useStore.getState().setDatetime(new Date());
+    setLiveMode(true);
     setSpeed(NORMAL_SPEED);
     setIsPlaying(true);
   };
 
   return (
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-auto tech-transition">
+    <div
+      className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-auto tech-transition"
+      data-tutorial-target="timeline"
+    >
       {/* Collapse Toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -285,7 +288,10 @@ export const Timeline = () => {
 
             {/* Play/Pause */}
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                setLiveMode(false);
+                setIsPlaying(!isPlaying);
+              }}
               className={`w-14 h-14 border-2 flex items-center justify-center transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
                 isPlaying
                   ? "border-nasa-accent bg-nasa-accent/10 shadow-[0_0_15px_rgba(0,240,255,0.3)]"
