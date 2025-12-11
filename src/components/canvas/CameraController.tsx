@@ -83,20 +83,13 @@ export const CameraController = () => {
       // Use effective bounding sphere (includes rings for Saturn/Uranus)
       const targetRadius = getEffectiveBoundingSphere(bodyData);
 
-      // Calculate ideal distance considering both vertical and horizontal FOV (aspect ratio)
+      // Calculate ideal distance using PrivilegedPosition utility (1.6 = 60% breathing room margin)
       const cam = camera as THREE.PerspectiveCamera;
-      const fovVertRad = THREE.MathUtils.degToRad(cam.fov);
-      const distVertical = targetRadius / Math.sin(fovVertRad / 2);
-
-      // Check horizontal FOV for ultrawide screens (21:9, etc.)
-      const fovHorizRad = 2 * Math.atan(Math.tan(fovVertRad / 2) * cam.aspect);
-      const distHorizontal = targetRadius / Math.sin(fovHorizRad / 2);
-
-      // Use larger distance to ensure object fits in both dimensions
-      const distBase = Math.max(distVertical, distHorizontal);
-
-      // Add 60% breathing room margin (less aggressive zoom)
-      const idealDist = distBase * 1.6;
+      const idealDist = PrivilegedPosition.calculateIdealDistance(
+        targetRadius,
+        cam,
+        1.6
+      );
 
       // Calculate camera direction using solar alignment (Rembrandt lighting)
       const sunPosition = new THREE.Vector3(0, 0, 0);

@@ -84,16 +84,6 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
         if (allStars.length === 0) {
           setError("No star data loaded. Run: npm run download:nasa-stars");
         } else {
-          // Debug: Log magnitude range
-          const mags = allStars.map((s) => s.absMag);
-          const minMag = Math.min(...mags);
-          const maxMag = Math.max(...mags);
-          console.log(
-            `NASA Starfield: Loaded ${allStars.length} stars from ${loadedCount}/${STAR_FILES.length} files`
-          );
-          console.log(
-            `  Magnitude range: ${minMag.toFixed(2)} to ${maxMag.toFixed(2)}`
-          );
           setStars(allStars);
         }
       } catch (err) {
@@ -159,7 +149,7 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
   }, [stars]);
 
   // Update uniforms each frame
-  useFrame(({ camera }) => {
+  useFrame(() => {
     if (!materialRef.current) return;
 
     // NO camera-following - allows zoom out to see starfield from outside

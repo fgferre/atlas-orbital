@@ -75,8 +75,6 @@ export const InitialCameraAnimation = () => {
   const completeAnimation = () => {
     if (!animationRef.current.isRunning) return;
 
-    console.log("🎬 Completing animation");
-
     // Set exact end position (top-down inner solar system view)
     camera.position.copy(animationRef.current.endPos);
 
@@ -93,28 +91,17 @@ export const InitialCameraAnimation = () => {
 
   // Start animation when loader has fully hidden
   useEffect(() => {
-    console.log("🔄 useEffect triggered:", {
-      isLoaderHidden,
-      hasPlayed,
-      isRunning: animationRef.current.isRunning,
-    });
-
     if (!isLoaderHidden) {
-      console.log("⏳ Waiting for loader to hide...");
       return;
     }
 
     if (hasPlayed) {
-      console.log("✅ Intro already played, skipping");
       return;
     }
 
     if (animationRef.current.isRunning) {
-      console.log("🎬 Animation already running");
       return;
     }
-
-    console.log("🚀 Starting intro animation!");
 
     // Start positions - captured via debug tool
     const startPos = new THREE.Vector3(-95809369, 999990981402, 4245931557);
@@ -135,7 +122,6 @@ export const InitialCameraAnimation = () => {
 
     // Start animation after a brief delay
     const timer = setTimeout(() => {
-      console.log("🎬 Animation timer fired!");
       animationRef.current.startTime = performance.now();
       animationRef.current.isRunning = true;
       setIsIntroAnimating(true);
@@ -150,7 +136,6 @@ export const InitialCameraAnimation = () => {
 
     const stopIntro = () => {
       if (animationRef.current.isRunning) {
-        console.log("🛑 User interrupted animation");
         animationRef.current.isRunning = false;
         setHasPlayed(true);
         setIsIntroAnimating(false);
@@ -180,15 +165,6 @@ export const InitialCameraAnimation = () => {
     // Keep looking at sun
     if (controls) {
       controls.target.set(0, 0, 0);
-    }
-
-    // Log progress every second
-    const currentSecond = Math.floor(elapsed / 1000);
-    const prevSecond = Math.floor((elapsed - 16.67) / 1000);
-    if (currentSecond !== prevSecond) {
-      console.log(
-        `🎬 Progress: ${(rawT * 100).toFixed(0)}%, distance: ${camera.position.length().toExponential(2)}`
-      );
     }
 
     // Check completion

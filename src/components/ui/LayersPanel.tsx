@@ -121,6 +121,7 @@ export const LayersPanel = () => {
                     onClick={() =>
                       useNASAStarfield && toggleStarfieldImplementation()
                     }
+                    title="Tycho-2: ~2M estrelas próximas com dados de paralaxe. Ideal para visualização precisa do sistema solar local."
                     className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
                       !useNASAStarfield
                         ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
@@ -133,6 +134,7 @@ export const LayersPanel = () => {
                     onClick={() =>
                       !useNASAStarfield && toggleStarfieldImplementation()
                     }
+                    title="NASA Eyes: Catálogo completo incluindo galáxias distantes e objetos do espaço profundo. Dados oficiais da NASA."
                     className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
                       useNASAStarfield
                         ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"

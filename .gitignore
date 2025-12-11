@@ -23,3 +23,6 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Legacy/reference files (not needed in version control)
+_legacy/

@@ -135,6 +135,16 @@ export class CameraTransition {
     this.isActive = false;
   }
 
+  // ===========================================================================
+  // Easing Functions Library
+  //
+  // Atualmente apenas easeOutQuint é utilizada (método update, linha 101).
+  // Outras funções mantidas para:
+  // - Flexibilidade em futuras animações de câmera com diferentes características
+  // - Possível uso em transições de UI (timeline, panels, overlays)
+  // - Referência matemática para implementação de novos easings
+  // ===========================================================================
+
   /**
    * Cubic ease-in-out function for smooth acceleration/deceleration
    */

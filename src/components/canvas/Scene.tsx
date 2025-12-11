@@ -29,6 +29,29 @@ import { SmartSunLight } from "./SmartSunLight";
 
 import { useControls, Leva, folder, button } from "leva";
 
+interface SceneContentProps {
+  bloomRef: React.RefObject<any>;
+  hueSatRef: React.RefObject<any>;
+  brightnessRef: React.RefObject<any>;
+  ambientLightRef: React.RefObject<THREE.AmbientLight | null>;
+  sunLightRef: React.RefObject<THREE.PointLight | null>;
+  smartSunLightRef: React.RefObject<THREE.DirectionalLight | null>;
+  controlsRef: React.RefObject<any>;
+  debugValues: {
+    ambientIntensity: number;
+    sunIntensity: number;
+    shadowIntensity: number;
+    envMapIntensity: number;
+    bloomThreshold: number;
+    bloomIntensity: number;
+    bloomRadius: number;
+    saturation: number;
+    contrast: number;
+    brightness: number;
+  };
+  debugMode: boolean;
+}
+
 const SceneContent = ({
   bloomRef,
   hueSatRef,
@@ -39,7 +62,7 @@ const SceneContent = ({
   controlsRef,
   debugValues,
   debugMode,
-}: any) => {
+}: SceneContentProps) => {
   const { scene } = useThree();
   const visualPreset = useStore((state) => state.visualPreset);
   const setVisualPreset = useStore((state) => state.setVisualPreset);

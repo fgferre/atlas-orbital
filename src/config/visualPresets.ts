@@ -1,3 +1,31 @@
+/**
+ * Visual Presets System
+ *
+ * NOTA: Atualmente todos os presets possuem valores idênticos como placeholder.
+ * O sistema está preparado para diferenciação futura baseada em contexto.
+ *
+ * TODO: Implementar diferenciação entre presets para melhorar UX contextual:
+ *
+ * Sugestões de diferenciação:
+ * - DEEP_SPACE: Maior bloom (0.8), mais contraste (0.5), menos saturação (0.2)
+ *   → Para visualização de objetos distantes no cinturão de Kuiper
+ *
+ * - PLANET_ORBIT: Valores balanceados (atuais)
+ *   → Para órbita ao redor de planetas principais
+ *
+ * - CLOSE_FLYBY: Menos bloom (0.4), mais detalhe, maior brilho (0.1)
+ *   → Para aproximação de superfícies planetárias
+ *
+ * - INNER_SYSTEM: Mais saturação (0.4), cores quentes, maior intensidade solar
+ *   → Para sistema solar interno (Mercúrio a Marte)
+ *
+ * - OUTER_SYSTEM: Menos saturação (0.2), cores frias, menor intensidade solar
+ *   → Para sistema solar externo (Júpiter a Netuno)
+ *
+ * A função getPresetForContext() já implementa a lógica de seleção automática
+ * baseada em distância do Sol e distância da câmera.
+ */
+
 export type VisualPresetType =
   | "DEEP_SPACE"
   | "PLANET_ORBIT"
