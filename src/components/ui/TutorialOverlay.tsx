@@ -78,8 +78,8 @@ export const TutorialOverlay = () => {
           initial={{ opacity: 0, y: 20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -20, scale: 0.95 }}
-          transition={{ duration: 0.3 }}
-          className="bg-black/80 border border-white/20 rounded-2xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden"
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="tech-panel p-8 max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden"
         >
           {/* Background decoration */}
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-nasa-accent to-transparent" />
@@ -118,7 +118,7 @@ export const TutorialOverlay = () => {
               {TUTORIAL_STEPS.map((_, index) => (
                 <div
                   key={index}
-                  className={`w-2 h-2 rounded-full transition-colors ${
+                  className={`w-2 h-2 transition-colors ${
                     index === tutorialStep ? "bg-nasa-accent" : "bg-white/20"
                   }`}
                 />
@@ -129,14 +129,14 @@ export const TutorialOverlay = () => {
               {tutorialStep > 0 && (
                 <button
                   onClick={handlePrev}
-                  className="px-6 py-2 rounded-full border border-white/20 text-white hover:bg-white/10 transition-colors font-rajdhani uppercase tracking-wider text-sm"
+                  className="px-6 py-2 border border-white/20 text-white hover:bg-white/10 transition-colors font-rajdhani uppercase tracking-wider text-sm"
                 >
                   Previous
                 </button>
               )}
               <button
                 onClick={handleNext}
-                className="px-8 py-2 rounded-full bg-nasa-accent text-black font-bold hover:bg-cyan-300 transition-colors font-rajdhani uppercase tracking-wider text-sm shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+                className="px-8 py-2 bg-nasa-accent text-black font-bold hover:bg-cyan-300 transition-colors font-rajdhani uppercase tracking-wider text-sm"
               >
                 {isLastStep ? "Start Journey" : "Next"}
               </button>

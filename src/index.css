@@ -63,6 +63,29 @@ body {
   border-right: 2px solid var(--color-nasa-accent);
 }
 
+/* Tech Panel - Angular container with glass effect (matches Sidebar) */
+.tech-panel {
+  background: var(--color-nasa-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-nasa-border);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%
+  );
+}
+
+/* Tech Transition - Standard animation curve for panels/overlays
+   Use only on high-level containers, not micro-interactions */
+.tech-transition {
+  transition-property: opacity, transform, width, height;
+  transition-duration: 0.5s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;

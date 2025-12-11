@@ -218,7 +218,7 @@ export const Timeline = () => {
   };
 
   return (
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-auto transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1)">
+    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-auto tech-transition">
       {/* Collapse Toggle */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -226,7 +226,7 @@ export const Timeline = () => {
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className={`h-6 w-6 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
+          className={`h-6 w-6 transition-transform duration-500 ${isCollapsed ? "rotate-180" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -241,7 +241,7 @@ export const Timeline = () => {
       </button>
 
       <div
-        className={`glass-panel px-8 py-4 rounded-2xl flex flex-col items-center gap-4 transition-all duration-500 ease-in-out overflow-hidden ${
+        className={`tech-panel px-8 py-4 flex flex-col items-center gap-4 tech-transition overflow-hidden ${
           isCollapsed ? "w-0 h-0 opacity-0 p-0" : "w-auto h-auto opacity-100"
         }`}
       >
@@ -286,7 +286,7 @@ export const Timeline = () => {
             {/* Play/Pause */}
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
+              className={`w-14 h-14 border-2 flex items-center justify-center transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
                 isPlaying
                   ? "border-nasa-accent bg-nasa-accent/10 shadow-[0_0_15px_rgba(0,240,255,0.3)]"
                   : "border-nasa-alert bg-nasa-alert/10 shadow-[0_0_15px_rgba(255,157,0,0.3)]"
@@ -337,7 +337,7 @@ export const Timeline = () => {
           <div className="flex gap-2">
             <button
               onClick={handleLiveMode}
-              className={`text-[10px] font-orbitron border px-2 py-1 rounded transition-colors whitespace-nowrap flex items-center gap-2 ${
+              className={`text-[10px] font-orbitron border px-2 py-1 transition-colors whitespace-nowrap flex items-center gap-2 ${
                 isLiveMode
                   ? "text-green-400 border-green-400/50 bg-green-400/10"
                   : "text-nasa-accent border-nasa-accent/50 hover:bg-nasa-accent/20"
@@ -350,7 +350,7 @@ export const Timeline = () => {
             </button>
             <button
               onClick={handleNormalTime}
-              className="text-[10px] font-orbitron text-nasa-accent border border-nasa-accent/50 px-2 py-1 rounded hover:bg-nasa-accent/20 transition-colors whitespace-nowrap"
+              className="text-[10px] font-orbitron text-nasa-accent border border-nasa-accent/50 px-2 py-1 hover:bg-nasa-accent/20 transition-colors whitespace-nowrap"
             >
               NORMAL RATE
             </button>
@@ -362,14 +362,14 @@ export const Timeline = () => {
             step={1}
             value={sliderValue}
             onChange={handleSliderChange}
-            className="w-full h-1 bg-nasa-dim/30 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-nasa-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(0,240,255,0.8)]"
+            className="w-full h-1 bg-nasa-dim/30 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-nasa-accent [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(0,240,255,0.8)]"
           />
         </div>
       </div>
 
       {/* Time Display when collapsed */}
       {isCollapsed && (
-        <div className="glass-panel px-4 py-2 rounded-full mt-2 animate-fade-in">
+        <div className="tech-panel px-4 py-2 mt-2 animate-fade-in">
           <span className="text-sm font-orbitron text-nasa-accent tracking-widest">
             {datetime.toLocaleDateString().toUpperCase()}
           </span>

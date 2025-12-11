@@ -43,7 +43,7 @@ export const SearchBar = () => {
       className="relative pointer-events-auto flex justify-end"
     >
       <div
-        className={`flex items-center transition-all duration-300 glass-panel rounded-lg ${isOpen ? "w-64" : "w-12 h-12"}`}
+        className={`flex items-center tech-panel tech-transition ${isOpen ? "w-64" : "w-12 h-12"}`}
       >
         <AnimatePresence>
           {isOpen && (
@@ -66,7 +66,7 @@ export const SearchBar = () => {
             setIsOpen(!isOpen);
             if (!isOpen) setTimeout(() => inputRef.current?.focus(), 100);
           }}
-          className={`absolute right-0 w-12 h-12 flex items-center justify-center rounded-lg text-nasa-accent hover:text-white transition-colors z-10`}
+          className={`absolute right-0 w-12 h-12 flex items-center justify-center text-nasa-accent hover:text-white transition-colors z-10`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -92,7 +92,7 @@ export const SearchBar = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute top-14 right-0 w-64 bg-black/90 border border-white/20 rounded-lg overflow-hidden backdrop-blur-md shadow-lg z-50"
+            className="absolute top-14 right-0 w-64 tech-panel overflow-hidden shadow-lg z-50"
           >
             {filteredBodies.length > 0 ? (
               filteredBodies.map((body) => (

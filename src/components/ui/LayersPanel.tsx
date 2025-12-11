@@ -24,10 +24,13 @@ export const LayersPanel = () => {
 
   return (
     <div
-      className={`relative transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) z-40 flex flex-col pointer-events-auto glass-panel ${
-        isCollapsed ? "w-12 h-12 rounded-lg" : "w-64 p-4 rounded-lg"
+      className={`relative tech-panel tech-transition z-40 flex flex-col pointer-events-auto ${
+        isCollapsed ? "w-12 h-12" : "w-64 p-4"
       }`}
-      style={{ overflow: isCollapsed ? "hidden" : "visible" }}
+      style={{
+        overflow: isCollapsed ? "hidden" : "visible",
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
     >
       {/* Toggle Button */}
       <button
@@ -69,12 +72,12 @@ export const LayersPanel = () => {
             <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
               Scale Mode
             </div>
-            <div className="flex bg-black/40 rounded p-1 border border-white/10">
+            <div className="flex bg-black/40 p-1 border border-white/10">
               <button
                 onClick={() => scaleMode !== "didactic" && toggleScaleMode()}
-                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
                   scaleMode === "didactic"
-                    ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                    ? "bg-nasa-accent text-black shadow-[0_0_5px_rgba(0,240,255,0.3)]"
                     : "text-gray-500 hover:text-white"
                 }`}
               >
@@ -82,9 +85,9 @@ export const LayersPanel = () => {
               </button>
               <button
                 onClick={() => scaleMode !== "realistic" && toggleScaleMode()}
-                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
                   scaleMode === "realistic"
-                    ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                    ? "bg-nasa-accent text-black shadow-[0_0_5px_rgba(0,240,255,0.3)]"
                     : "text-gray-500 hover:text-white"
                 }`}
               >
@@ -112,19 +115,19 @@ export const LayersPanel = () => {
               onChange={toggleShowStarfield}
             />
             {showStarfield && (
-              <div className="ml-4 mt-2">
+              <div className="mt-2 pt-2 border-t border-white/5">
                 <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
                   Starfield Source
                 </div>
-                <div className="flex bg-black/40 rounded p-1 border border-white/10">
+                <div className="flex bg-black/40 p-1 border border-white/10">
                   <button
                     onClick={() =>
                       useNASAStarfield && toggleStarfieldImplementation()
                     }
                     title="Tycho-2: ~2M estrelas próximas com dados de paralaxe. Ideal para visualização precisa do sistema solar local."
-                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
                       !useNASAStarfield
-                        ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                        ? "bg-nasa-accent text-black"
                         : "text-gray-500 hover:text-white"
                     }`}
                   >
@@ -135,9 +138,9 @@ export const LayersPanel = () => {
                       !useNASAStarfield && toggleStarfieldImplementation()
                     }
                     title="NASA Eyes: Catálogo completo incluindo galáxias distantes e objetos do espaço profundo. Dados oficiais da NASA."
-                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all rounded ${
+                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
                       useNASAStarfield
-                        ? "bg-nasa-accent text-black shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                        ? "bg-nasa-accent text-black"
                         : "text-gray-500 hover:text-white"
                     }`}
                   >
@@ -163,7 +166,7 @@ export const LayersPanel = () => {
             <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-3 font-rajdhani">
               Visibility
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               <CategoryToggle
                 label="Planets"
                 checked={visibility.planets}
@@ -214,13 +217,15 @@ const Toggle = ({
       {label}
     </span>
     <div
-      className={`w-8 h-4 rounded-full relative transition-colors ${checked ? "bg-nasa-accent/20" : "bg-gray-800"}`}
+      className={`w-7 h-4 relative transition-colors border ${
+        checked
+          ? "bg-nasa-accent/20 border-nasa-accent/50"
+          : "bg-gray-800 border-gray-700"
+      }`}
     >
       <div
-        className={`absolute top-0.5 w-3 h-3 rounded-full transition-all shadow-sm ${
-          checked
-            ? "left-4.5 bg-nasa-accent shadow-[0_0_5px_#00f0ff]"
-            : "left-0.5 bg-gray-500"
+        className={`absolute top-0.5 w-2.5 h-2.5 transition-all ${
+          checked ? "left-3.5 bg-nasa-accent" : "left-0.5 bg-gray-500"
         }`}
       ></div>
     </div>
@@ -238,7 +243,7 @@ const CategoryToggle = ({
 }) => (
   <button
     onClick={onChange}
-    className={`px-2 py-1 text-[10px] uppercase border rounded transition-all ${
+    className={`px-1.5 py-1 text-[9px] uppercase border transition-all ${
       checked
         ? "border-nasa-accent text-nasa-accent bg-nasa-accent/10"
         : "border-gray-700 text-gray-600 hover:border-gray-500"
