@@ -159,7 +159,7 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
   }, [stars]);
 
   // Update uniforms each frame
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!materialRef.current) return;
 
     // NO camera-following - allows zoom out to see starfield from outside

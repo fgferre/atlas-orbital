@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(powershell -Command \"(Get-Content ''c:\\Users\\fgfer\\OneDrive\\Documents\\GitHub\\atlas-orbital\\src\\data\\tycho2-processed.json'' | Measure-Object -Character).Characters\")"
+      "Bash(powershell -Command \"(Get-Content ''c:\\Users\\fgfer\\OneDrive\\Documents\\GitHub\\atlas-orbital\\src\\data\\tycho2-processed.json'' | Measure-Object -Character).Characters\")",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

@@ -13,19 +13,18 @@ import {
 
 // Vertex Shader - Simple magnitude-based (like NASA)
 const vertexShader = `
-  attribute float size;
   attribute vec3 color;
   attribute float mag;
-  
+
   varying vec4 fColor;
-  
+
   uniform float pixelRatio;
   uniform float particleSize;
 
   void main() {
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
-    
+
     // Simple magnitude-based brightness
     // Tycho-2 mag range: roughly -1.5 (Sirius) to +12 (faint)
     // Map to 0-1: brighter = lower mag
@@ -116,9 +115,6 @@ export const Starfield = () => {
 
   useFrame(() => {
     if (!materialRef.current) return;
-
-    // NO camera-following - allows zoom out to see starfield from outside
-    // (Unlike NASA which uses camera-following)
 
     // Viewport-adaptive sizing
     const viewportScale =

@@ -85,6 +85,7 @@ const TechReadout = () => (
 export const Loader = () => {
   const { progress, active } = useProgress();
   const isSceneReady = useStore((state) => state.isSceneReady);
+  const setLoaderHidden = useStore((state) => state.setLoaderHidden);
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export const Loader = () => {
   }, [active, isSceneReady, progress]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={() => setLoaderHidden(true)}>
       {visible && (
         <motion.div
           initial={{ opacity: 1 }}

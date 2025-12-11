@@ -31,6 +31,7 @@ export const nasaStarVertexShader = `
     // Get the flux and brightness of the star at the camera's point.
     float absMag = starColor.a;
     float distance = length(viewPosition);
+
     float flux = absoluteMagnitudeToFlux(absMag, distance);
     float brightness = 2.0 * log(1.0 + flux * 1e4);
 

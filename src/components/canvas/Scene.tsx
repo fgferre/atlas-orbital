@@ -18,6 +18,7 @@ import {
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { SolarSystem } from "./SolarSystem";
 import { CameraController } from "./CameraController";
+import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
@@ -347,6 +348,37 @@ export const Scene = () => {
           });
       }),
     }),
+    Camera: folder(
+      {
+        "Copy Camera Position": button(() => {
+          const cam = controlsRef.current?.object;
+          if (cam) {
+            const pos = `new THREE.Vector3(${cam.position.x.toFixed(0)}, ${cam.position.y.toFixed(0)}, ${cam.position.z.toFixed(0)})`;
+            navigator.clipboard.writeText(pos).then(() => {
+              console.log("Camera position copied:", pos);
+              alert(`Copied: ${pos}`);
+            });
+          } else {
+            alert("Camera not available");
+          }
+        }),
+        "Log Camera Info": button(() => {
+          const cam = controlsRef.current?.object;
+          const target = controlsRef.current?.target;
+          if (cam && target) {
+            console.log("=== Camera Debug ===");
+            console.log(
+              `Position: new THREE.Vector3(${cam.position.x.toFixed(0)}, ${cam.position.y.toFixed(0)}, ${cam.position.z.toFixed(0)})`
+            );
+            console.log(
+              `Target: new THREE.Vector3(${target.x.toFixed(0)}, ${target.y.toFixed(0)}, ${target.z.toFixed(0)})`
+            );
+            console.log(`Distance: ${cam.position.length().toFixed(0)} units`);
+          }
+        }),
+      },
+      { collapsed: true }
+    ),
   }));
 
   // Sync Leva controls with current preset when entering debug mode
@@ -427,10 +459,10 @@ export const Scene = () => {
         shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
         camera={{
-          position: [0, 3000, 4000],
-          fov: 40,
-          near: 1,
-          far: 1e13,
+          position: [-95809369, 999990981402, 4245931557], // Far position for intro animation (Milky Way view)
+          fov: 45,
+          near: 0.1,
+          far: 1e15,
         }}
         gl={{ antialias: true, logarithmicDepthBuffer: true }}
         onCreated={({ gl }) => {
@@ -489,6 +521,7 @@ export const Scene = () => {
         </Suspense>
         <OverlayPositionTracker />
         <CameraController />
+        <InitialCameraAnimation />
         <OrbitControls
           ref={controlsRef}
           enablePan={true}

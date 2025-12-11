@@ -14,6 +14,7 @@ export const CameraController = () => {
   ) as OrbitControlsImpl | null;
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
+  const isIntroAnimating = useStore((state) => state.isIntroAnimating);
 
   const flyingRef = useRef({
     isFlying: false,
@@ -53,6 +54,8 @@ export const CameraController = () => {
 
   // Initialize flying animation when focus changes or scale mode changes
   useEffect(() => {
+    // Skip normal camera setup during intro animation
+    if (isIntroAnimating) return;
     if (!focusId || !controls || !camera) return;
 
     const bodyData = SOLAR_SYSTEM_BODIES.find((b) => b.id === focusId);
@@ -159,7 +162,7 @@ export const CameraController = () => {
     } else {
       setupCamera();
     }
-  }, [focusId, scaleMode, controls, camera, scene]);
+  }, [focusId, scaleMode, controls, camera, scene, isIntroAnimating]);
 
   // Stop flying when user manually moves camera
   useEffect(() => {

@@ -35,6 +35,9 @@ interface AppState {
   showTutorial: boolean;
   tutorialStep: number;
   isSceneReady: boolean;
+  isLoaderHidden: boolean;
+  hasPlayedIntroAnimation: boolean;
+  isIntroAnimating: boolean;
 
   setDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
@@ -55,6 +58,9 @@ interface AppState {
   closeTutorial: () => void;
   setTutorialStep: (step: number) => void;
   setSceneReady: (ready: boolean) => void;
+  setLoaderHidden: (hidden: boolean) => void;
+  setHasPlayedIntroAnimation: (played: boolean) => void;
+  setIsIntroAnimating: (animating: boolean) => void;
   debugMode: boolean;
   toggleDebugMode: () => void;
 }
@@ -63,8 +69,8 @@ export const useStore = create<AppState>((set) => ({
   datetime: new Date(),
   speed: 1,
   isPlaying: true,
-  selectedId: "sun",
-  focusId: "sun",
+  selectedId: null,
+  focusId: null,
   showLabels: true,
   showIcons: true,
   showOrbits: true,
@@ -85,6 +91,9 @@ export const useStore = create<AppState>((set) => ({
   showTutorial: !localStorage.getItem("hasSeenTutorial"),
   tutorialStep: 0,
   isSceneReady: false,
+  isLoaderHidden: false,
+  hasPlayedIntroAnimation: false, // Always play on page load
+  isIntroAnimating: false,
 
   setDatetime: (value) =>
     set((state) => ({
@@ -123,6 +132,10 @@ export const useStore = create<AppState>((set) => ({
   },
   setTutorialStep: (step) => set({ tutorialStep: step }),
   setSceneReady: (ready) => set({ isSceneReady: ready }),
+  setLoaderHidden: (hidden) => set({ isLoaderHidden: hidden }),
+  setHasPlayedIntroAnimation: (played) =>
+    set({ hasPlayedIntroAnimation: played }),
+  setIsIntroAnimating: (animating) => set({ isIntroAnimating: animating }),
   debugMode: false,
   toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
 }));
