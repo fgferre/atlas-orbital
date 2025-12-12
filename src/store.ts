@@ -11,6 +11,7 @@ interface AppState {
   showIcons: boolean;
   showStarfield: boolean;
   useNASAStarfield: boolean;
+  showCredits: boolean;
   showOrbits: boolean;
   scaleMode: "didactic" | "realistic";
   visualPreset: VisualPresetType;
@@ -58,6 +59,7 @@ interface AppState {
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
   toggleStarfieldImplementation: () => void;
+  toggleCredits: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
   closeTutorial: (status?: "completed" | "skipped") => void;
   completeTutorial: () => void;
@@ -87,6 +89,7 @@ export const useStore = create<AppState>((set) => ({
   overlayItems: [],
   showStarfield: true,
   useNASAStarfield: false,
+  showCredits: false,
   visibility: {
     planets: true,
     dwarfs: true,
@@ -132,6 +135,7 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({ showStarfield: !state.showStarfield })),
   toggleStarfieldImplementation: () =>
     set((state) => ({ useNASAStarfield: !state.useNASAStarfield })),
+  toggleCredits: () => set((state) => ({ showCredits: !state.showCredits })),
   toggleScaleMode: () =>
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",

@@ -22,6 +22,7 @@ export const LayersPanel = () => {
     (state) => state.toggleStarfieldImplementation
   );
   const reopenTutorial = useStore((state) => state.reopenTutorial);
+  const toggleCredits = useStore((state) => state.toggleCredits);
 
   return (
     <div
@@ -208,6 +209,36 @@ export const LayersPanel = () => {
                 checked={visibility.tnos}
                 onChange={() => toggleVisibility("tnos")}
               />
+            </div>
+          </div>
+
+          {/* Project */}
+          <div className="border-t border-white/10 pt-4">
+            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-3 font-rajdhani">
+              System Info
+            </div>
+            <button
+              onClick={toggleCredits}
+              className="w-full py-2 text-[10px] font-orbitron text-nasa-dim border border-white/10 hover:border-nasa-accent hover:text-nasa-accent transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              <span>Mission Report</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </button>
+            <div className="text-[9px] text-gray-600 font-mono text-center mt-2">
+              v0.1.0 • Atlas Orbital
             </div>
           </div>
         </div>
