@@ -1,3 +1,0 @@
-# NASA Eyes Star Data - Binary files tracked with Git LFS
-# Remove this file if you prefer to commit binaries directly (< 50MB total)
-public/data/nasa-stars/*.bin filter=lfs diff=lfs merge=lfs -text
