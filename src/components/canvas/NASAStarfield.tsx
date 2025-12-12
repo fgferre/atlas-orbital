@@ -64,11 +64,7 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
 
         // Try to load all files, continue with partial data if some fail
         const results = await Promise.allSettled(
-          STAR_FILES.map((file) => {
-            const url = getStarFilePath(file);
-            console.log("Loading star file:", url);
-            return parseNASAStarFile(url);
-          })
+          STAR_FILES.map((file) => parseNASAStarFile(getStarFilePath(file)))
         );
 
         if (cancelled) return;
@@ -173,26 +169,10 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
   });
 
   // Don't render if hidden (but allow loading to happen in background if we wanted, currently we just return null)
-  if (!showStarfield) return null;
-
-  if (error) {
-    return (
-      <group>
-        {/* Fallback to default starfield so it's not empty */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshBasicMaterial color="red" wireframe />
-        </mesh>
-        {/* Make error visible in console */}
-        {(() => {
-          console.error("NASA Starfield Error:", error);
-          return null;
-        })()}
-      </group>
-    );
+  // Don't render if hidden, loading, or no data
+  if (!showStarfield || isLoading || error || !geometry) {
+    return null;
   }
-
-  if (isLoading || !geometry) return null;
 
   return (
     <points
