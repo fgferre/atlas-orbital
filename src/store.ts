@@ -13,9 +13,13 @@ interface AppState {
   useNASAStarfield: boolean;
   showCredits: boolean;
   showOrbits: boolean;
+  declutterOrbits: boolean;
+  showEclipticGrid: boolean;
+  showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   visualPreset: VisualPresetType;
   autoPresetEnabled: boolean;
+  focusHistory: string[];
   overlayItems: Array<{
     id: string;
     name: string;
@@ -54,12 +58,17 @@ interface AppState {
   toggleLabels: () => void;
   toggleIcons: () => void;
   toggleOrbits: () => void;
+  toggleDeclutterOrbits: () => void;
+  toggleEclipticGrid: () => void;
+  toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
   toggleStarfieldImplementation: () => void;
   toggleCredits: () => void;
+  focusHome: () => void;
+  focusBack: () => void;
   toggleVisibility: (category: keyof AppState["visibility"]) => void;
   closeTutorial: (status?: "completed" | "skipped") => void;
   completeTutorial: () => void;
@@ -83,9 +92,13 @@ export const useStore = create<AppState>((set) => ({
   showLabels: true,
   showIcons: true,
   showOrbits: true,
+  declutterOrbits: true,
+  showEclipticGrid: true,
+  showProgradeVector: true,
   scaleMode: "didactic",
   visualPreset: "DEEP_SPACE",
   autoPresetEnabled: true,
+  focusHistory: [],
   overlayItems: [],
   showStarfield: true,
   useNASAStarfield: false,
@@ -125,17 +138,53 @@ export const useStore = create<AppState>((set) => ({
   setSpeed: (speed) => set({ speed }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setSelectedId: (selectedId) => set({ selectedId }),
-  selectId: (selectedId) => set({ selectedId, focusId: selectedId }),
+  selectId: (selectedId) =>
+    set((state) => {
+      if (selectedId === state.focusId) {
+        return { selectedId, focusId: selectedId };
+      }
+
+      const focusHistory = [...state.focusHistory];
+      if (state.focusId && state.focusId !== selectedId) {
+        const last = focusHistory[focusHistory.length - 1];
+        if (last !== state.focusId) focusHistory.push(state.focusId);
+      }
+
+      return { selectedId, focusId: selectedId, focusHistory };
+    }),
   setFocusId: (focusId) => set({ focusId }),
   setOverlayItems: (overlayItems) => set({ overlayItems }),
   toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
   toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
   toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
+  toggleDeclutterOrbits: () =>
+    set((state) => ({ declutterOrbits: !state.declutterOrbits })),
+  toggleEclipticGrid: () =>
+    set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
+  toggleProgradeVector: () =>
+    set((state) => ({ showProgradeVector: !state.showProgradeVector })),
   toggleShowStarfield: () =>
     set((state) => ({ showStarfield: !state.showStarfield })),
   toggleStarfieldImplementation: () =>
     set((state) => ({ useNASAStarfield: !state.useNASAStarfield })),
   toggleCredits: () => set((state) => ({ showCredits: !state.showCredits })),
+  focusHome: () =>
+    set((state) => {
+      const focusHistory = [...state.focusHistory];
+      if (state.focusId && state.focusId !== "sun") {
+        const last = focusHistory[focusHistory.length - 1];
+        if (last !== state.focusId) focusHistory.push(state.focusId);
+      }
+      return { focusId: "sun", selectedId: null, focusHistory };
+    }),
+  focusBack: () =>
+    set((state) => {
+      if (state.focusHistory.length === 0) return {};
+      const focusHistory = [...state.focusHistory];
+      const prev = focusHistory.pop() ?? null;
+      if (!prev) return { focusHistory };
+      return { focusId: prev, selectedId: prev, focusHistory };
+    }),
   toggleScaleMode: () =>
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",

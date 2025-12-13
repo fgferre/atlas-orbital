@@ -1,4 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import * as THREE from "three";
@@ -8,11 +9,15 @@ import * as THREE from "three";
 export const OverlayPositionTracker = () => {
   const { scene, camera } = useThree();
   const setOverlayItems = useStore((state) => state.setOverlayItems);
+  const prevVisibleRef = useRef<{ labels: Set<string>; icons: Set<string> }>({
+    labels: new Set(),
+    icons: new Set(),
+  });
 
   // Priority: 10 means this runs AFTER normal updates
   useFrame((state) => {
     const { width, height } = state.size;
-    const focusId = useStore.getState().focusId;
+    const { focusId, visibility, showLabels, showIcons } = useStore.getState();
 
     // 1. Calculate Screen Positions for ALL bodies
     let candidates: Array<{
@@ -28,6 +33,14 @@ export const OverlayPositionTracker = () => {
 
     SOLAR_SYSTEM_BODIES.forEach((body) => {
       // if (body.type === "star") return; // Skip sun logic for now (handled separately or static)
+
+      // Respect visibility toggles (prevents "ghost" overlays when categories are hidden).
+      if (body.type === "planet" && !visibility.planets) return;
+      if (body.type === "dwarf" && !visibility.dwarfs) return;
+      if (body.type === "moon" && !visibility.moons) return;
+      if (body.type === "asteroid" && !visibility.asteroids) return;
+      if (body.type === "comet" && !visibility.comets) return;
+      if (body.type === "tno" && !visibility.tnos) return;
 
       const mesh = scene.getObjectByName(body.id);
       if (!mesh) return;
@@ -57,6 +70,12 @@ export const OverlayPositionTracker = () => {
         else if (body.type === "moon") basePriority = 6;
         else basePriority = 4;
 
+        // Hysteresis: keep labels stable when there are close collisions.
+        // Previously-visible labels get a small bonus so they don't flicker.
+        const stabilityBonus = prevVisibleRef.current.labels.has(body.id)
+          ? basePriority * 0.2
+          : 0;
+
         candidates.push({
           id: body.id,
           name: body.name.en,
@@ -65,7 +84,7 @@ export const OverlayPositionTracker = () => {
           x,
           y,
           dist,
-          priority: basePriority,
+          priority: basePriority + stabilityBonus,
         });
       }
     });
@@ -155,6 +174,15 @@ export const OverlayPositionTracker = () => {
     });
 
     setOverlayItems(finalOverlays);
+
+    // Track which overlays were actually visible (resets when global toggles are off).
+    const nextLabels = new Set<string>();
+    const nextIcons = new Set<string>();
+    for (const o of finalOverlays) {
+      if (showLabels && o.showLabel) nextLabels.add(o.id);
+      if (showIcons && o.showIcon) nextIcons.add(o.id);
+    }
+    prevVisibleRef.current = { labels: nextLabels, icons: nextIcons };
   }, 10);
 
   return null;

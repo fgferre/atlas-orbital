@@ -22,6 +22,7 @@ import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
+import { EclipticGrid } from "./EclipticGrid";
 
 import { useStore } from "../../store";
 
@@ -202,6 +203,7 @@ export const Scene = () => {
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const useNASAStarfield = useStore((state) => state.useNASAStarfield);
+  const showEclipticGrid = useStore((state) => state.showEclipticGrid);
 
   // Debug Controls - Refactored to use function API to get 'set'
   const [values, set] = useControls(() => ({
@@ -504,6 +506,7 @@ export const Scene = () => {
           debugMode={debugMode}
         />
         <color attach="background" args={["#000000"]} />
+        {showEclipticGrid && <EclipticGrid />}
         <Suspense fallback={null}>
           {useNASAStarfield ? <NASAStarfield /> : <Starfield />}
           <Environment resolution={256} frames={1} far={1e9}>

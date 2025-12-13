@@ -9,6 +9,14 @@ export const LayersPanel = () => {
   const toggleIcons = useStore((state) => state.toggleIcons);
   const showOrbits = useStore((state) => state.showOrbits);
   const toggleOrbits = useStore((state) => state.toggleOrbits);
+  const declutterOrbits = useStore((state) => state.declutterOrbits);
+  const toggleDeclutterOrbits = useStore(
+    (state) => state.toggleDeclutterOrbits
+  );
+  const showEclipticGrid = useStore((state) => state.showEclipticGrid);
+  const toggleEclipticGrid = useStore((state) => state.toggleEclipticGrid);
+  const showProgradeVector = useStore((state) => state.showProgradeVector);
+  const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
   const showStarfield = useStore((state) => state.showStarfield);
@@ -38,7 +46,7 @@ export const LayersPanel = () => {
       {/* Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        title="Settings • Ctrl+Shift+T to replay tutorial"
+        title="Settings | Ctrl+Shift+T to replay tutorial"
         className={`absolute top-0 right-0 w-12 h-12 flex items-center justify-center text-nasa-accent hover:text-white transition-colors z-50 ${
           isCollapsed ? "bg-transparent" : "bg-white/5"
         }`}
@@ -126,6 +134,36 @@ export const LayersPanel = () => {
               checked={showOrbits}
               onChange={toggleOrbits}
             />
+            {showOrbits && (
+              <div className="pl-3 border-l border-white/10">
+                <Toggle
+                  label="Context Orbits"
+                  checked={declutterOrbits}
+                  onChange={toggleDeclutterOrbits}
+                />
+                <div className="text-[9px] text-gray-600 font-rajdhani mt-1 leading-tight">
+                  Reduces clutter by emphasizing the focused body, its moons and
+                  ancestry.
+                </div>
+              </div>
+            )}
+            <div className="pt-2 border-t border-white/10">
+              <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
+                Guides
+              </div>
+              <div className="space-y-3">
+                <Toggle
+                  label="Ecliptic Grid"
+                  checked={showEclipticGrid}
+                  onChange={toggleEclipticGrid}
+                />
+                <Toggle
+                  label="Prograde Vector"
+                  checked={showProgradeVector}
+                  onChange={toggleProgradeVector}
+                />
+              </div>
+            </div>
             <Toggle
               label="Starfield"
               checked={showStarfield}
@@ -238,7 +276,7 @@ export const LayersPanel = () => {
               </svg>
             </button>
             <div className="text-[9px] text-gray-600 font-mono text-center mt-2">
-              v0.1.0 • Atlas Orbital
+              v0.1.0 | Atlas Orbital
             </div>
           </div>
         </div>

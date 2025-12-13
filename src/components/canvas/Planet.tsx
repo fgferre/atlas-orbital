@@ -12,6 +12,8 @@ import { ErrorBoundary } from "../utils/ErrorBoundary";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { PlanetModel } from "./PlanetModel";
 
+const BODIES_BY_ID = new Map(SOLAR_SYSTEM_BODIES.map((b) => [b.id, b]));
+
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
   atmosphereVertexShader,
@@ -659,6 +661,7 @@ export const Planet = ({
 }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<any>(null);
+  const progradeRef = useRef<THREE.Group>(null);
 
   // Calculate orientation quaternion based on IAU pole data
   const orientationQuaternion = useMemo(() => {
@@ -684,16 +687,54 @@ export const Planet = ({
 
   const scaleMode = useStore((state) => state.scaleMode);
   const showOrbits = useStore((state) => state.showOrbits);
+  const declutterOrbits = useStore((state) => state.declutterOrbits);
   const focusId = useStore((state) => state.focusId);
+  const showProgradeVector = useStore((state) => state.showProgradeVector);
 
   // Calculate system multipliers once
   const systemMultipliers = useMemo(() => {
     return AstroPhysics.calculateSystemMultipliers(SOLAR_SYSTEM_BODIES);
   }, []);
 
+  const orbitSalience = useMemo(() => {
+    if (!declutterOrbits) return 1;
+
+    // In overview, keep the scene clean by default.
+    if (!focusId) {
+      if (body.type === "planet" || body.type === "dwarf") return 1;
+      return 0;
+    }
+
+    if (body.id === focusId) return 1;
+
+    const focusBody = BODIES_BY_ID.get(focusId);
+    if (!focusBody) return 1;
+
+    // 1) Emphasize direct context: children and siblings.
+    if (body.parentId === focusId) return 0.55;
+    if (focusBody.parentId && body.parentId === focusBody.parentId) return 0.25;
+
+    // 2) Keep the ancestry chain visible (e.g., Moon -> Earth -> Sun).
+    const ancestors = new Set<string>();
+    let curParentId = focusBody.parentId ?? null;
+    while (curParentId) {
+      const parent = BODIES_BY_ID.get(curParentId);
+      if (!parent) break;
+      ancestors.add(parent.id);
+      curParentId = parent.parentId ?? null;
+    }
+    if (ancestors.has(body.id)) return 0.45;
+
+    // 3) Keep major bodies faintly for global orientation.
+    if (body.type === "planet" || body.type === "dwarf") return 0.08;
+
+    return 0.02;
+  }, [declutterOrbits, focusId, body.id, body.type, body.parentId]);
+
   // Orbit points with adaptive resolution
   const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
+    if (declutterOrbits && orbitSalience <= 0) return null;
 
     // Use 4x higher resolution for focused bodies
     const segments = focusId === body.id ? 16384 : 4096;
@@ -711,9 +752,17 @@ export const Planet = ({
     );
 
     return pts;
-  }, [body, scaleMode, focusId, systemMultipliers]);
+  }, [
+    body,
+    scaleMode,
+    focusId,
+    systemMultipliers,
+    declutterOrbits,
+    orbitSalience,
+  ]);
 
-  useFrame(({ camera }) => {
+  useFrame((state) => {
+    const { camera, size } = state;
     if (!groupRef.current) return;
     const { datetime } = useStore.getState();
 
@@ -773,11 +822,89 @@ export const Planet = ({
         );
       }
 
+      opacity *= orbitSalience;
+
+      // Keep the focused orbit legible as a primary cue.
+      if (body.id === focusId) {
+        opacity = Math.max(opacity, 0.08);
+      }
+
       const material = orbitLineRef.current.material as THREE.ShaderMaterial;
       if (material.uniforms?.opacity) {
         material.uniforms.opacity.value = opacity;
       } else {
         material.opacity = opacity;
+      }
+    }
+
+    // Prograde (velocity) indicator for the focused body (didactic cue).
+    if (progradeRef.current) {
+      const isActive =
+        showProgradeVector && focusId === body.id && body.type !== "star";
+      progradeRef.current.visible = isActive;
+
+      if (isActive) {
+        const worldPos = new THREE.Vector3();
+        groupRef.current.getWorldPosition(worldPos);
+
+        // Pick a delta that corresponds to ~0.1° of mean anomaly (clamped).
+        const meanMotion = Math.max(1e-6, Math.abs(body.orbit?.n ?? 1e-6));
+        const dtDays = THREE.MathUtils.clamp(0.1 / meanMotion, 1 / 1440, 60);
+        const dtMs = dtDays * 86400000;
+
+        const later = new Date(datetime.getTime() + dtMs);
+        const posLater = AstroPhysics.calculateLocalPosition(
+          body.orbit,
+          later,
+          scaleMode,
+          multiplier
+        );
+
+        const velDir = posLater.sub(pos).normalize();
+
+        const radius =
+          scaleMode === "didactic"
+            ? AstroPhysics.calculateDidacticRadius(body.radiusKm)
+            : body.radiusKm * KM_TO_3D_UNITS;
+
+        // Make the indicator stable across scale modes using screen-space sizing.
+        const cam = camera as THREE.PerspectiveCamera;
+        const fovVertRad = THREE.MathUtils.degToRad(cam.fov);
+        const d = camera.position.distanceTo(worldPos);
+        const worldPerPixel =
+          (2 * d * Math.tan(fovVertRad / 2)) / Math.max(1, size.height);
+
+        const desiredLengthPx = 70;
+        const desiredWidthPx = 6;
+
+        const arrowLengthWorld = THREE.MathUtils.clamp(
+          desiredLengthPx * worldPerPixel,
+          Math.max(4, radius * 1.2),
+          240
+        );
+
+        const shaftRadiusWorld = THREE.MathUtils.clamp(
+          (desiredWidthPx * worldPerPixel) / 2,
+          0.02,
+          6
+        );
+
+        // Our base shaft radius is ~0.03 world units (see cylinderGeometry args).
+        const shaftScale = shaftRadiusWorld / 0.03;
+
+        progradeRef.current.scale.set(shaftScale, arrowLengthWorld, shaftScale);
+
+        // Place the arrow just above the surface along the direction of travel.
+        const offset = Math.max(radius * 1.35, shaftRadiusWorld * 4);
+        progradeRef.current.position.copy(
+          velDir.clone().multiplyScalar(offset)
+        );
+
+        // Arrow geometry points along +Y in local space.
+        progradeRef.current.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          velDir
+        );
       }
     }
   });
@@ -789,15 +916,39 @@ export const Planet = ({
           ref={orbitLineRef}
           points={orbitPoints}
           color={body.color}
-          lineWidth={1.5} // Thicker, volumetric look
+          lineWidth={body.id === focusId ? 2.5 : 1.5} // Emphasize focused orbit
           transparent
-          opacity={0.3}
+          opacity={0.3 * orbitSalience}
           depthTest={true}
           depthWrite={false}
         />
       )}
 
       <group ref={groupRef} name={body.id}>
+        {showProgradeVector && focusId === body.id && body.type !== "star" && (
+          <group ref={progradeRef} renderOrder={2000}>
+            <mesh position={[0, 0.35, 0]} raycast={() => null}>
+              <cylinderGeometry args={[0.03, 0.03, 0.7, 8]} />
+              <meshBasicMaterial
+                color="#00f0ff"
+                transparent
+                opacity={0.9}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+            <mesh position={[0, 0.85, 0]} raycast={() => null}>
+              <coneGeometry args={[0.07, 0.3, 8]} />
+              <meshBasicMaterial
+                color="#00f0ff"
+                transparent
+                opacity={0.95}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+          </group>
+        )}
         <PlanetVisualWrapper
           body={body}
           roughness={roughness}
