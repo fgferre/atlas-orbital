@@ -61,10 +61,12 @@ export const OverlayPositionTracker = () => {
         const y = (-(pos.y * 0.5) + 0.5) * height;
 
         // Calculate Priority Score
-        // Base Priority: Planet(10) > Dwarf(8) > Moon(6) > Asteroid(4)
+        // Base Priority: Focus(100) > Sun(90) > Planet(10) > Dwarf(8) > Moon(6) > Others(4)
         let basePriority = 0;
         if (body.id === focusId)
           basePriority = 100; // Focused object always wins
+        else if (body.type === "star")
+          basePriority = 90; // Sun wins conflicts unless something is focused
         else if (body.type === "planet") basePriority = 10;
         else if (body.type === "dwarf") basePriority = 8;
         else if (body.type === "moon") basePriority = 6;

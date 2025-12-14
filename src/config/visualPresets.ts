@@ -44,6 +44,8 @@ export interface VisualPreset {
   sunIntensity: number;
   shadowIntensity: number;
   envMapIntensity: number;
+  guideIntensity: number;
+  vectorIntensity: number;
 }
 
 export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
@@ -58,6 +60,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     sunIntensity: 0.4,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
+    guideIntensity: 0.85,
+    vectorIntensity: 1.0,
   },
   PLANET_ORBIT: {
     bloomIntensity: 0.6,
@@ -70,6 +74,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     sunIntensity: 0.4,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
+    guideIntensity: 1.0,
+    vectorIntensity: 1.0,
   },
   CLOSE_FLYBY: {
     bloomIntensity: 0.6,
@@ -82,6 +88,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     sunIntensity: 0.4,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
+    guideIntensity: 0.7,
+    vectorIntensity: 1.0,
   },
   INNER_SYSTEM: {
     bloomIntensity: 0.6,
@@ -94,6 +102,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     sunIntensity: 0.4,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
+    guideIntensity: 1.0,
+    vectorIntensity: 1.0,
   },
   OUTER_SYSTEM: {
     bloomIntensity: 0.6,
@@ -106,6 +116,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     sunIntensity: 0.4,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
+    guideIntensity: 0.95,
+    vectorIntensity: 1.0,
   },
 };
 

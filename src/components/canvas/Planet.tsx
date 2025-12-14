@@ -1,5 +1,5 @@
 import { useRef, useMemo, Suspense, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
+import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useTexture, Line } from "@react-three/drei";
 import {
@@ -7,6 +7,7 @@ import {
   AstroPhysics,
   KM_TO_3D_UNITS,
 } from "../../lib/astrophysics";
+import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
@@ -25,6 +26,293 @@ import {
   planetShadowFragmentPatch,
   planetShadowEmissivePatch,
 } from "./shaders/planetShadowShader";
+
+const PROGRADE_ARROW_BASE_WIDTH = 0.68;
+const PROGRADE_ARROW_BASE_LENGTH = 1.0;
+const PROGRADE_ARROW_BASE_DEPTH = 0.06;
+
+function createRadialGradientTexture(size: number) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center
+  );
+  gradient.addColorStop(0.0, "rgba(255, 255, 255, 1.0)");
+  gradient.addColorStop(0.12, "rgba(255, 255, 255, 0.85)");
+  gradient.addColorStop(0.32, "rgba(255, 255, 255, 0.25)");
+  gradient.addColorStop(1.0, "rgba(255, 255, 255, 0.0)");
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  (texture as any).colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createStarburstTexture(size: number, rays: number) {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const center = size / 2;
+  const radius = size * 0.48;
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.translate(center, center);
+
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < rays; i++) {
+    const a = (i / rays) * Math.PI * 2;
+    const w = i % 2 === 0 ? 5 : 2.5;
+    const inner = radius * 0.2;
+    const outer = radius;
+
+    const grad = ctx.createLinearGradient(
+      Math.cos(a) * inner,
+      Math.sin(a) * inner,
+      Math.cos(a) * outer,
+      Math.sin(a) * outer
+    );
+    grad.addColorStop(0.0, "rgba(255,255,255,0.0)");
+    grad.addColorStop(0.25, "rgba(255,255,255,0.35)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.15)");
+    grad.addColorStop(1.0, "rgba(255,255,255,0.0)");
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+    ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+    ctx.stroke();
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  (texture as any).colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const SunScreenFlare = ({
+  targetRef,
+  radiusKm,
+  color,
+}: {
+  targetRef: { current: THREE.Object3D | null };
+  radiusKm: number;
+  color: string;
+}) => {
+  const scene = useThree((s) => s.scene);
+  const scaleMode = useStore((state) => state.scaleMode);
+
+  const rootRef = useRef<THREE.Group>(null);
+
+  const coreMatRef = useRef<THREE.SpriteMaterial>(null);
+  const haloMatRef = useRef<THREE.SpriteMaterial>(null);
+  const raysMatRef = useRef<THREE.SpriteMaterial>(null);
+
+  const tmpWorld = useMemo(() => new THREE.Vector3(), []);
+  const tmpNdc = useMemo(() => new THREE.Vector3(), []);
+  const tmpTint = useMemo(() => new THREE.Color(), []);
+  const tmpTintCore = useMemo(() => new THREE.Color(), []);
+  const tmpTintHalo = useMemo(() => new THREE.Color(), []);
+  const warmColor = useMemo(() => new THREE.Color("#FFD88A"), []);
+
+  const textures = useMemo(() => {
+    const radial = createRadialGradientTexture(512);
+    const rays = createStarburstTexture(512, 14);
+    if (!radial || !rays) return null;
+    return { radial, rays };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      textures?.radial.dispose();
+      textures?.rays.dispose();
+    };
+  }, [textures]);
+
+  useFrame((state) => {
+    if (!textures) return;
+    if (!rootRef.current) return;
+    if (!targetRef.current) return;
+
+    const cam = state.camera as THREE.PerspectiveCamera;
+    if (!(cam as any).isPerspectiveCamera) return;
+
+    targetRef.current.getWorldPosition(tmpWorld);
+
+    tmpNdc.copy(tmpWorld).project(cam);
+    const onScreen =
+      tmpNdc.z > -1 &&
+      tmpNdc.z < 1 &&
+      tmpNdc.x > -1.05 &&
+      tmpNdc.x < 1.05 &&
+      tmpNdc.y > -1.05 &&
+      tmpNdc.y < 1.05;
+
+    const distToCamera = cam.position.distanceTo(tmpWorld);
+    const fovVertRad = THREE.MathUtils.degToRad(cam.fov);
+    const worldPerPixelAtSun =
+      (2 * distToCamera * Math.tan(fovVertRad / 2)) /
+      Math.max(1, state.size.height);
+
+    const radiusWorld =
+      scaleMode === "didactic"
+        ? AstroPhysics.calculateDidacticRadius(radiusKm)
+        : radiusKm * KM_TO_3D_UNITS;
+
+    const radiusPx = radiusWorld / Math.max(1e-9, worldPerPixelAtSun);
+
+    // Fade in when the Sun is only a handful of pixels.
+    const appearAtPx = 12;
+    const fullAtPx = 3;
+    const t = THREE.MathUtils.clamp(
+      (appearAtPx - radiusPx) / (appearAtPx - fullAtPx),
+      0,
+      1
+    );
+    const strength = t * t * (3 - 2 * t);
+
+    const visible = onScreen && strength > 0.001;
+    rootRef.current.visible = visible;
+    if (!visible) return;
+
+    rootRef.current.position.copy(tmpWorld);
+
+    tmpTint.set(color).lerp(warmColor, 0.55);
+    tmpTintCore.copy(tmpTint).multiplyScalar(8.0);
+    tmpTintHalo.copy(tmpTint).multiplyScalar(2.6);
+
+    const corePx = 8;
+    const haloPx = 44;
+    const raysPx = 64;
+
+    const coreWorld = corePx * worldPerPixelAtSun;
+    const haloWorld = haloPx * worldPerPixelAtSun;
+    const raysWorld = raysPx * worldPerPixelAtSun;
+
+    const coreMat = coreMatRef.current;
+    const haloMat = haloMatRef.current;
+    const raysMat = raysMatRef.current;
+
+    if (coreMat) {
+      coreMat.color.copy(tmpTintCore);
+      coreMat.opacity = strength * 0.9;
+    }
+    if (haloMat) {
+      haloMat.color.copy(tmpTintHalo);
+      haloMat.opacity = strength * 0.58;
+    }
+    if (raysMat) {
+      raysMat.color.copy(tmpTintHalo);
+      raysMat.opacity = strength * 0.12;
+      raysMat.rotation = state.clock.getElapsedTime() * 0.04;
+    }
+
+    const coreSprite = rootRef.current.children[0] as THREE.Sprite | undefined;
+    const haloSprite = rootRef.current.children[1] as THREE.Sprite | undefined;
+    const raysSprite = rootRef.current.children[2] as THREE.Sprite | undefined;
+    coreSprite?.scale.set(coreWorld, coreWorld, 1);
+    haloSprite?.scale.set(haloWorld, haloWorld, 1);
+    raysSprite?.scale.set(raysWorld, raysWorld, 1);
+  });
+
+  if (!textures) return null;
+
+  return createPortal(
+    <group ref={rootRef} frustumCulled={false} renderOrder={5000}>
+      <sprite raycast={() => null} frustumCulled={false} renderOrder={5001}>
+        <spriteMaterial
+          ref={coreMatRef}
+          map={textures.radial}
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </sprite>
+      <sprite raycast={() => null} frustumCulled={false} renderOrder={5002}>
+        <spriteMaterial
+          ref={haloMatRef}
+          map={textures.radial}
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </sprite>
+      <sprite raycast={() => null} frustumCulled={false} renderOrder={5003}>
+        <spriteMaterial
+          ref={raysMatRef}
+          map={textures.rays}
+          transparent
+          opacity={0}
+          depthTest={false}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </sprite>
+    </group>,
+    scene
+  );
+};
+
+const PROGRADE_ARROW_SHAPE = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(-0.18, 0.0);
+  s.lineTo(-0.18, 0.62);
+  s.lineTo(-0.34, 0.62);
+  s.lineTo(0.0, 1.0);
+  s.lineTo(0.34, 0.62);
+  s.lineTo(0.18, 0.62);
+  s.lineTo(0.18, 0.0);
+  s.lineTo(-0.18, 0.0);
+  return s;
+})();
+
+const PROGRADE_ARROW_EXTRUDE_SETTINGS: THREE.ExtrudeGeometryOptions = {
+  depth: PROGRADE_ARROW_BASE_DEPTH,
+  bevelEnabled: true,
+  bevelThickness: 0.012,
+  bevelSize: 0.012,
+  bevelSegments: 2,
+  curveSegments: 6,
+  steps: 1,
+};
 
 interface PlanetProps {
   body: CelestialBody;
@@ -690,6 +978,21 @@ export const Planet = ({
   const declutterOrbits = useStore((state) => state.declutterOrbits);
   const focusId = useStore((state) => state.focusId);
   const showProgradeVector = useStore((state) => state.showProgradeVector);
+  const visualPreset = useStore((state) => state.visualPreset);
+  const vectorIntensity = VISUAL_PRESETS[visualPreset]?.vectorIntensity ?? 1;
+
+  const progradeColors = useMemo(() => {
+    const base = new THREE.Color(body.color);
+    const haloBias = new THREE.Color("#00f0ff");
+
+    const main = base.clone().multiplyScalar(3.8 * vectorIntensity);
+    const halo = base
+      .clone()
+      .lerp(haloBias, 0.35)
+      .multiplyScalar(1.6 * vectorIntensity);
+
+    return { main, halo };
+  }, [body.color, vectorIntensity]);
 
   // Calculate system multipliers once
   const systemMultipliers = useMemo(() => {
@@ -874,28 +1177,42 @@ export const Planet = ({
         const worldPerPixel =
           (2 * d * Math.tan(fovVertRad / 2)) / Math.max(1, size.height);
 
-        const desiredLengthPx = 70;
-        const desiredWidthPx = 6;
+        const desiredLengthPx = 72;
+        const desiredWidthPx = 10;
 
+        // One algorithm for both modes: size stays proportional to the body's visual radius,
+        // while remaining readable at typical zoom levels.
+        const targetLengthWorld = desiredLengthPx * worldPerPixel;
+        const minLengthWorld = radius * 1.25;
+        const maxLengthWorld = radius * 4.25;
         const arrowLengthWorld = THREE.MathUtils.clamp(
-          desiredLengthPx * worldPerPixel,
-          Math.max(4, radius * 1.2),
-          240
+          targetLengthWorld,
+          minLengthWorld,
+          maxLengthWorld
         );
 
-        const shaftRadiusWorld = THREE.MathUtils.clamp(
-          (desiredWidthPx * worldPerPixel) / 2,
-          0.02,
-          6
+        const targetWidthWorld = desiredWidthPx * worldPerPixel;
+        const minWidthWorld = radius * 0.32;
+        const maxWidthWorld = radius * 0.85;
+        const arrowWidthWorld = THREE.MathUtils.clamp(
+          targetWidthWorld,
+          minWidthWorld,
+          maxWidthWorld
         );
 
-        // Our base shaft radius is ~0.03 world units (see cylinderGeometry args).
-        const shaftScale = shaftRadiusWorld / 0.03;
+        const thicknessWorld = THREE.MathUtils.clamp(
+          arrowWidthWorld * 0.18,
+          radius * 0.08,
+          radius * 0.22
+        );
 
-        progradeRef.current.scale.set(shaftScale, arrowLengthWorld, shaftScale);
+        const scaleX = arrowWidthWorld / PROGRADE_ARROW_BASE_WIDTH;
+        const scaleY = arrowLengthWorld / PROGRADE_ARROW_BASE_LENGTH;
+        const scaleZ = thicknessWorld / PROGRADE_ARROW_BASE_DEPTH;
+        progradeRef.current.scale.set(scaleX, scaleY, scaleZ);
 
         // Place the arrow just above the surface along the direction of travel.
-        const offset = Math.max(radius * 1.35, shaftRadiusWorld * 4);
+        const offset = radius * 1.22 + thicknessWorld * 0.7;
         progradeRef.current.position.copy(
           velDir.clone().multiplyScalar(offset)
         );
@@ -921,28 +1238,41 @@ export const Planet = ({
           opacity={0.3 * orbitSalience}
           depthTest={true}
           depthWrite={false}
+          raycast={() => null}
         />
       )}
 
       <group ref={groupRef} name={body.id}>
+        {body.type === "star" && (
+          <SunScreenFlare
+            targetRef={groupRef}
+            radiusKm={body.radiusKm}
+            color={body.color}
+          />
+        )}
         {showProgradeVector && focusId === body.id && body.type !== "star" && (
           <group ref={progradeRef} renderOrder={2000}>
-            <mesh position={[0, 0.35, 0]} raycast={() => null}>
-              <cylinderGeometry args={[0.03, 0.03, 0.7, 8]} />
+            <mesh raycast={() => null}>
+              <extrudeGeometry
+                args={[PROGRADE_ARROW_SHAPE, PROGRADE_ARROW_EXTRUDE_SETTINGS]}
+              />
               <meshBasicMaterial
-                color="#00f0ff"
+                color={progradeColors.main}
                 transparent
-                opacity={0.9}
+                opacity={0.95}
                 depthWrite={false}
                 toneMapped={false}
               />
             </mesh>
-            <mesh position={[0, 0.85, 0]} raycast={() => null}>
-              <coneGeometry args={[0.07, 0.3, 8]} />
+            <mesh scale={[1.12, 1.03, 1.55]} raycast={() => null}>
+              <extrudeGeometry
+                args={[PROGRADE_ARROW_SHAPE, PROGRADE_ARROW_EXTRUDE_SETTINGS]}
+              />
               <meshBasicMaterial
-                color="#00f0ff"
+                color={progradeColors.halo}
                 transparent
-                opacity={0.95}
+                opacity={0.24}
+                blending={THREE.AdditiveBlending}
                 depthWrite={false}
                 toneMapped={false}
               />

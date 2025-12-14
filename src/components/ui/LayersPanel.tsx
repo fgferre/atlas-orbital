@@ -162,6 +162,9 @@ export const LayersPanel = () => {
                   checked={showProgradeVector}
                   onChange={toggleProgradeVector}
                 />
+                <div className="text-[9px] text-gray-600 font-rajdhani -mt-2 leading-tight">
+                  Shows the direction of the focused body's orbital velocity.
+                </div>
               </div>
             </div>
             <Toggle
