@@ -1,0 +1,9 @@
+# Reduce default search noise for local tooling and coding agents.
+output/
+package-lock.json
+public/Docs/*
+public/data/nasa-stars/*
+public/models/*
+public/textures/*
+src/assets/solar_system_catalog_en.md
+src/data/tycho2-processed.json
