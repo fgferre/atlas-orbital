@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "prepare": "husky",
     "download:nasa-stars": "node scripts/download-nasa-stars.js",
+    "generate:tycho2-binary": "node scripts/generate-tycho2-binary.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"

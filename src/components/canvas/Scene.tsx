@@ -4,8 +4,7 @@ import {
   OrbitControls as DreiOrbitControls,
   Environment,
 } from "@react-three/drei";
-import { Starfield } from "./Starfield";
-import { NASAStarfield } from "./NASAStarfield";
+import { StarfieldManager } from "./StarfieldManager";
 import {
   EffectComposer,
   Bloom,
@@ -238,7 +237,6 @@ export const Scene = () => {
   const visualPreset = useStore((state) => state.visualPreset); // Get current preset
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
-  const useNASAStarfield = useStore((state) => state.useNASAStarfield);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
 
   // Debug Controls - Refactored to use function API to get 'set'
@@ -544,7 +542,7 @@ export const Scene = () => {
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <EclipticGrid />}
         <Suspense fallback={null}>
-          {useNASAStarfield ? <NASAStarfield /> : <Starfield />}
+          <StarfieldManager />
           <Environment resolution={256} frames={1} far={1e9}>
             {/* Starfield removed from Environment - was causing planet lighting issues */}
             {/* Only sun mesh for reflections */}

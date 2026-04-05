@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { VisualPresetType } from "./config/visualPresets";
+import type { StarfieldProviderState, StarfieldSource } from "./lib/starfield";
 
 interface AppState {
   datetime: Date;
@@ -10,7 +11,8 @@ interface AppState {
   showLabels: boolean;
   showIcons: boolean;
   showStarfield: boolean;
-  useNASAStarfield: boolean;
+  starfieldSource: StarfieldSource;
+  starfieldProviderStates: Record<StarfieldSource, StarfieldProviderState>;
   showCredits: boolean;
   showOrbits: boolean;
   declutterOrbits: boolean;
@@ -65,6 +67,11 @@ interface AppState {
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
+  setStarfieldSource: (source: StarfieldSource) => void;
+  setStarfieldProviderState: (
+    source: StarfieldSource,
+    nextState: Partial<StarfieldProviderState>
+  ) => void;
   toggleStarfieldImplementation: () => void;
   toggleCredits: () => void;
   focusHome: () => void;
@@ -101,7 +108,11 @@ export const useStore = create<AppState>((set) => ({
   focusHistory: [],
   overlayItems: [],
   showStarfield: true,
-  useNASAStarfield: false,
+  starfieldSource: "tycho2",
+  starfieldProviderStates: {
+    tycho2: { status: "idle", error: null },
+    nasa: { status: "idle", error: null },
+  },
   showCredits: false,
   visibility: {
     planets: true,
@@ -165,8 +176,36 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({ showProgradeVector: !state.showProgradeVector })),
   toggleShowStarfield: () =>
     set((state) => ({ showStarfield: !state.showStarfield })),
+  setStarfieldSource: (starfieldSource) =>
+    set((state) =>
+      state.starfieldSource === starfieldSource ? state : { starfieldSource }
+    ),
+  setStarfieldProviderState: (source, nextState) =>
+    set((state) => {
+      const currentState = state.starfieldProviderStates[source];
+      const mergedState = {
+        ...currentState,
+        ...nextState,
+      };
+
+      if (
+        currentState.status === mergedState.status &&
+        currentState.error === mergedState.error
+      ) {
+        return state;
+      }
+
+      return {
+        starfieldProviderStates: {
+          ...state.starfieldProviderStates,
+          [source]: mergedState,
+        },
+      };
+    }),
   toggleStarfieldImplementation: () =>
-    set((state) => ({ useNASAStarfield: !state.useNASAStarfield })),
+    set((state) => ({
+      starfieldSource: state.starfieldSource === "nasa" ? "tycho2" : "nasa",
+    })),
   toggleCredits: () => set((state) => ({ showCredits: !state.showCredits })),
   focusHome: () =>
     set((state) => {

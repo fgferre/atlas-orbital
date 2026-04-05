@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
 
 export const LayersPanel = () => {
@@ -21,16 +22,25 @@ export const LayersPanel = () => {
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
   const showStarfield = useStore((state) => state.showStarfield);
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
+  const starfieldSource = useStore((state) => state.starfieldSource);
+  const setStarfieldSource = useStore((state) => state.setStarfieldSource);
+  const activeStarfieldProviderState = useStore(
+    (state) => state.starfieldProviderStates[state.starfieldSource]
+  );
   const visibility = useStore((state) => state.visibility);
   const toggleVisibility = useStore((state) => state.toggleVisibility);
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
-  const useNASAStarfield = useStore((state) => state.useNASAStarfield);
-  const toggleStarfieldImplementation = useStore(
-    (state) => state.toggleStarfieldImplementation
-  );
   const reopenTutorial = useStore((state) => state.reopenTutorial);
   const toggleCredits = useStore((state) => state.toggleCredits);
+  const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
+  const starfieldStatusMessage =
+    activeStarfieldProviderState.status === "loading"
+      ? `Loading ${activeStarfieldLabel} catalog...`
+      : activeStarfieldProviderState.status === "error"
+        ? (activeStarfieldProviderState.error ??
+          `${activeStarfieldLabel} failed to load.`)
+        : `Active source: ${activeStarfieldLabel}`;
 
   return (
     <div
@@ -179,12 +189,10 @@ export const LayersPanel = () => {
                 </div>
                 <div className="flex bg-black/40 p-1 border border-white/10">
                   <button
-                    onClick={() =>
-                      useNASAStarfield && toggleStarfieldImplementation()
-                    }
+                    onClick={() => setStarfieldSource("tycho2")}
                     title="Tycho-2: ~2M estrelas próximas com dados de paralaxe. Ideal para visualização precisa do sistema solar local."
                     className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                      !useNASAStarfield
+                      starfieldSource === "tycho2"
                         ? "bg-nasa-accent text-black"
                         : "text-gray-500 hover:text-white"
                     }`}
@@ -192,18 +200,25 @@ export const LayersPanel = () => {
                     Tycho-2
                   </button>
                   <button
-                    onClick={() =>
-                      !useNASAStarfield && toggleStarfieldImplementation()
-                    }
+                    onClick={() => setStarfieldSource("nasa")}
                     title="NASA Eyes: Catálogo completo incluindo galáxias distantes e objetos do espaço profundo. Dados oficiais da NASA."
                     className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                      useNASAStarfield
+                      starfieldSource === "nasa"
                         ? "bg-nasa-accent text-black"
                         : "text-gray-500 hover:text-white"
                     }`}
                   >
                     NASA Eyes
                   </button>
+                </div>
+                <div
+                  className={`mt-2 text-[9px] font-rajdhani leading-tight ${
+                    activeStarfieldProviderState.status === "error"
+                      ? "text-amber-300"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {starfieldStatusMessage}
                 </div>
               </div>
             )}

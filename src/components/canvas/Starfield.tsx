@@ -3,13 +3,17 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
-import starDataRaw from "../../data/tycho2-processed.json";
+import { getCachedTycho2Catalog, loadTycho2Catalog } from "../../lib/starfield";
 import {
   sphericalToCartesian,
   magnitudeToSize,
   colorIndexToRGB,
-  type StarData,
 } from "../../utils/astronomy";
+import {
+  TYCHO2_VALUES_PER_STAR,
+  type Tycho2CatalogData,
+} from "../../utils/tycho2Binary";
+import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 // Vertex Shader - Simple magnitude-based (like NASA)
 const vertexShader = `
@@ -57,15 +61,24 @@ const fragmentShader = `
 `;
 
 export const Starfield = () => {
-  const { scaleMode, showStarfield } = useStore();
+  const scaleMode = useStore((state) => state.scaleMode);
   const { gl, size } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
+  const catalog = useStarfieldCatalog<Tycho2CatalogData>({
+    source: "tycho2",
+    loadCatalog: loadTycho2Catalog,
+    getCachedCatalog: getCachedTycho2Catalog,
+    errorMessage: "Failed to load Tycho-2 catalog",
+  });
 
   // Process data once
   const geometry = useMemo(() => {
-    const stars = starDataRaw as StarData[];
-    const count = stars.length;
+    if (!catalog) {
+      return null;
+    }
+
+    const { count, data } = catalog;
 
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
@@ -73,14 +86,15 @@ export const Starfield = () => {
     const mags = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      const star = stars[i];
+      const offset = i * TYCHO2_VALUES_PER_STAR;
+      const ra = data[offset];
+      const dec = data[offset + 1];
+      const parallax = data[offset + 2];
+      const mag = data[offset + 3];
+      const colorIndex = data[offset + 4];
 
       // Convert coordinates
-      const { x, y, z } = sphericalToCartesian(
-        star.ra,
-        star.dec,
-        star.parallax
-      );
+      const { x, y, z } = sphericalToCartesian(ra, dec, parallax);
 
       // Scale distance for visualization
       const DISTANCE_SCALE = 206265000.0; // 1 parsec in our units
@@ -90,18 +104,18 @@ export const Starfield = () => {
       positions[i * 3 + 2] = -y * DISTANCE_SCALE; // Y -> -Z
 
       // Color
-      const rgb = colorIndexToRGB(star.colorIndex || 0.6);
+      const rgb = colorIndexToRGB(colorIndex || 0.6);
       colors[i * 3] = rgb.r;
       colors[i * 3 + 1] = rgb.g;
       colors[i * 3 + 2] = rgb.b;
 
       // Size (still used for fallback)
-      let s = magnitudeToSize(star.mag);
+      let s = magnitudeToSize(mag);
       if (scaleMode === "didactic") s *= 1.5;
       sizes[i] = s;
 
       // Magnitude for physics calculations
-      mags[i] = star.mag;
+      mags[i] = mag;
     }
 
     const geom = new THREE.BufferGeometry();
@@ -111,7 +125,7 @@ export const Starfield = () => {
     geom.setAttribute("mag", new THREE.BufferAttribute(mags, 1));
 
     return geom;
-  }, [scaleMode]);
+  }, [catalog, scaleMode]);
 
   useFrame(() => {
     if (!materialRef.current) return;
@@ -124,8 +138,6 @@ export const Starfield = () => {
     materialRef.current.uniforms.particleSize.value = viewportScale;
   });
 
-  if (!showStarfield) return null;
-
   // Axial Tilt (Obliquity of the Ecliptic)
   // The star data is in Equatorial coordinates (aligned with Earth's equator).
   // The solar system is in Ecliptic coordinates (aligned with Earth's orbit).
@@ -137,6 +149,10 @@ export const Starfield = () => {
   // Astronomy Z (North) -> Three.js Y (Up)
   // Astronomy X (Vernal Equinox) -> Three.js X
   // Astronomy Y -> Three -Z (Right Hand Rule)
+
+  if (!geometry) {
+    return null;
+  }
 
   return (
     <points

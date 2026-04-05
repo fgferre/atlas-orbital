@@ -2,6 +2,11 @@ import { type CelestialBody } from "../lib/astrophysics";
 
 const TEXTURE_PATH = (import.meta.env.BASE_URL || "/") + "textures/";
 const MODEL_PATH = (import.meta.env.BASE_URL || "/") + "models/";
+const FICTIONAL_TNO_RED_TEXTURE = TEXTURE_PATH + "4k_makemake_fictional.jpg";
+const FICTIONAL_TNO_ICY_TEXTURE = TEXTURE_PATH + "4k_haumea_fictional.jpg";
+const FICTIONAL_TNO_NEUTRAL_TEXTURE = TEXTURE_PATH + "4k_eris_fictional.jpg";
+const FICTIONAL_DARK_SURFACE_TEXTURE = TEXTURE_PATH + "4k_ceres_fictional.jpg";
+const FICTIONAL_TNO_MOON_TEXTURE = TEXTURE_PATH + "4k_charon.png";
 
 export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
   {
@@ -1439,7 +1444,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Gonggong is a trans-Neptunian object in the scattered disc, orbiting the Sun. It is the fifth-largest known trans-Neptunian object (not counting Charon). Gonggong is red in color, likely due to the presence of organic compounds called tholins on its surface. It has a rotation period of roughly 22 hours.",
     distanceFromParent: "~10,000,000,000 km",
     info: "Reddish surface.",
-    textures: { map: TEXTURE_PATH + "4k_gonggong_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_RED_TEXTURE },
   },
   {
     id: "quaoar",
@@ -1474,7 +1479,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Quaoar is a dwarf planet candidate in the Kuiper belt. It was discovered in 2002. Quaoar is about half the size of Pluto. It has one known moon, Weywot. Signs of water ice have been found on the surface, which suggests that cryovolcanism may be occurring. A small amount of methane is present on its surface, which can only be retained by the largest Kuiper belt objects.",
     distanceFromParent: "~6.4 billion km",
     info: "Has rings.",
-    textures: { map: TEXTURE_PATH + "4k_quaoar_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_ICY_TEXTURE },
   },
   {
     id: "orcus",
@@ -1510,7 +1515,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Orcus is a trans-Neptunian object in the Kuiper belt. It has a large moon, Vanth. Orcus is a plutino, meaning it is locked in a 2:3 orbital resonance with Neptune, like Pluto. However, its orbit is oriented opposite to Pluto's, earning it the nickname 'anti-Pluto'.",
     distanceFromParent: "~6.2 billion km",
     info: "Anti-Pluto.",
-    textures: { map: TEXTURE_PATH + "4k_orcus_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_NEUTRAL_TEXTURE },
   },
   {
     id: "sedna",
@@ -1547,7 +1552,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent:
       "~12 billion km (ultra eccentric: goes beyond 86 billion km)",
     info: "Far distant object.",
-    textures: { map: TEXTURE_PATH + "4k_sedna_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_RED_TEXTURE },
   },
   {
     id: "salacia",
@@ -1583,7 +1588,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Salacia is a large trans-Neptunian object in the Kuiper belt. It is approximately 850 kilometers in diameter. Salacia has one known moon, Actaea. Both are named after Roman sea deities. Salacia's low density implies that it is composed primarily of water ice.",
     distanceFromParent: "~6.4 billion km",
     info: "Dark surface.",
-    textures: { map: TEXTURE_PATH + "4k_salacia_fictional.jpg" },
+    textures: { map: FICTIONAL_DARK_SURFACE_TEXTURE },
   },
   // Moons of Dwarfs
   {
@@ -1654,7 +1659,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Vanth is the single known natural satellite of the plutino and likely dwarf planet Orcus. It was discovered by Mike Brown in imagery taken by the Hubble Space Telescope on November 13, 2005. Vanth is massive compared to Orcus, with a mass ratio of about 1:12.",
     distanceFromParent: "~9,000 km",
     info: "Moon of Orcus.",
-    textures: { map: TEXTURE_PATH + "4k_vanth_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_MOON_TEXTURE },
   },
   {
     id: "weywot",
@@ -1689,7 +1694,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Weywot is the only known moon of the trans-Neptunian object Quaoar. It was discovered by Michael Brown in images acquired on February 14, 2006, by the Hubble Space Telescope. Weywot is estimated to be about 81 km in diameter.",
     distanceFromParent: "~14,500 km",
     info: "Moon of Quaoar.",
-    textures: { map: TEXTURE_PATH + "4k_weywot_fictional.jpg" },
+    textures: { map: FICTIONAL_TNO_MOON_TEXTURE },
   },
   // Major Asteroids
   {
@@ -1725,7 +1730,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Vesta is one of the largest objects in the asteroid belt, with a mean diameter of 525 kilometers. It was discovered by the German astronomer Heinrich Wilhelm Matthias Olbers on 29 March 1807 and is named after Vesta, the virgin goddess of home and hearth from Roman mythology. Vesta is the second-most-massive and second-largest body in the asteroid belt after the dwarf planet Ceres.",
     distanceFromParent: "353,400,000 km",
     info: "Brightest asteroid.",
-    textures: { map: TEXTURE_PATH + "4k_vesta.jpg" },
+    textures: { map: FICTIONAL_DARK_SURFACE_TEXTURE },
     model: {
       path: MODEL_PATH + "Vesta_1_100.glb",
       scale: 1, // Will be adjusted in component
@@ -1764,7 +1769,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Pallas is the second asteroid to have been discovered (after Ceres), and it is one of the largest asteroids in the Solar System. It is estimated to comprise 7% of the mass of the asteroid belt, and its diameter of 512 km makes it the third-largest asteroid, slightly smaller than Vesta. It is likely a remnant protoplanet.",
     distanceFromParent: "414,500,000 km",
     info: "High inclination.",
-    textures: { map: TEXTURE_PATH + "4k_pallas_fictional.jpg" },
+    textures: { map: FICTIONAL_DARK_SURFACE_TEXTURE },
     model: {
       path: MODEL_PATH + "Pallas_Torppa.obj",
       scale: 1,
@@ -1803,7 +1808,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Hygiea is a major asteroid located in the main asteroid belt. With a diameter of 434 km, it is the fourth-largest asteroid in the Solar System by both volume and mass. Hygiea is the largest of the class of dark C-type asteroids with a carbonaceous surface that dominates the outer asteroid belt.",
     distanceFromParent: "470,000,000 km",
     info: "Carbonaceous.",
-    textures: { map: TEXTURE_PATH + "4k_hygiea_fictional.jpg" },
+    textures: { map: FICTIONAL_DARK_SURFACE_TEXTURE },
     model: {
       path: MODEL_PATH + "Hygiea_Vernazza.obj",
       scale: 1,

@@ -15,29 +15,18 @@
  */
 
 import * as THREE from "three";
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useStore } from "../../store";
-import { parseNASAStarFile, type NASAStar } from "../../utils/nasaStarParser";
+import {
+  getCachedNASAStarCatalog,
+  loadNASAStarCatalog,
+  type NASAStar,
+} from "../../lib/starfield";
 import {
   nasaStarVertexShader,
   nasaStarFragmentShader,
 } from "./shaders/nasaStarShaders";
-
-// NASA star file relative paths (loaded via download-nasa-stars.js)
-const STAR_FILES = [
-  "galaxies.0.bin",
-  "stars.0.bin",
-  "stars.1.bin",
-  "stars.2.bin",
-  "stars.3.bin",
-  "stars.4.bin",
-  "stars.5.bin",
-];
-
-// Build base path with BASE_URL for GitHub Pages compatibility
-const getStarFilePath = (filename: string) =>
-  `${import.meta.env.BASE_URL || "/"}data/nasa-stars/${filename}`;
+import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 interface NASAStarfieldProps {
   /** Base particle size multiplier (default: 1.0) */
@@ -45,65 +34,20 @@ interface NASAStarfieldProps {
 }
 
 export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
-  const { showStarfield } = useStore();
   const { size } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
-  const [stars, setStars] = useState<NASAStar[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load NASA star binary files
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStars() {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Try to load all files, continue with partial data if some fail
-        const results = await Promise.allSettled(
-          STAR_FILES.map((file) => parseNASAStarFile(getStarFilePath(file)))
-        );
-
-        if (cancelled) return;
-
-        const allStars: NASAStar[] = [];
-        for (const result of results) {
-          if (result.status === "fulfilled") {
-            allStars.push(...result.value);
-          } else {
-            console.warn("Failed to load star file:", result.reason);
-          }
-        }
-
-        if (allStars.length === 0) {
-          setError("No star data loaded. Run: npm run download:nasa-stars");
-        } else {
-          setStars(allStars);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load stars");
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadStars();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const stars = useStarfieldCatalog<NASAStar[]>({
+    source: "nasa",
+    loadCatalog: loadNASAStarCatalog,
+    getCachedCatalog: getCachedNASAStarCatalog,
+    errorMessage: "Failed to load NASA Eyes catalog",
+  });
 
   // Build geometry from loaded stars
   // NASA packs absMag into color.a (4-component color attribute)
   const geometry = useMemo(() => {
-    if (stars.length === 0) return null;
+    if (!stars || stars.length === 0) return null;
 
     const count = stars.length;
     const positions = new Float32Array(count * 3);
@@ -165,9 +109,7 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
       particleSize * viewportScale;
   });
 
-  // Don't render if hidden (but allow loading to happen in background if we wanted, currently we just return null)
-  // Don't render if hidden, loading, or no data
-  if (!showStarfield || isLoading || error || !geometry) {
+  if (!geometry) {
     return null;
   }
 

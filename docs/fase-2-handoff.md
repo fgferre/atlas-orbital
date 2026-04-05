@@ -4,6 +4,40 @@
 
 Executar a fase de performance e reducao de peso do projeto sem perder recursos existentes. O foco principal e reduzir custo de bundle, carregamento e trabalho por frame, preservando o comportamento atual do produto.
 
+## Status da execucao em 2026-04-05
+
+### Implementado nesta execucao
+
+- contrato do recurso de starfield duplo preservado com fonte explicita no estado global
+- store migrado de `useNASAStarfield: boolean` para `starfieldSource: "tycho2" | "nasa"`
+- adicionada camada de orquestracao em `src/components/canvas/StarfieldManager.tsx`
+- Tycho-2 removido do bundle principal usando asset externo emitido pelo Vite em runtime
+- Tycho-2 convertido para assets binarios dedicados com variante `gzip` para reduzir custo de rede
+- cache em memoria adicionado para Tycho-2 e NASA Eyes em `src/lib/starfield.ts`
+- estados de provider `idle | loading | ready | error` conectados ao store
+- painel de settings continua exibindo `Tycho-2` e `NASA Eyes` e agora mostra estado textual da fonte ativa
+
+### Validacao desta execucao
+
+- `npm run lint`: OK
+- `npm run test:run`: OK, 27 testes passando
+- `npm run build`: OK
+- bundle atual:
+  - `dist/assets/index-BU8fnsOH.js`: `1,823.70 kB` minificado
+  - `dist/assets/index-BU8fnsOH.js`: `532.04 kB` gzip
+  - `dist/assets/tycho2-processed-Dwk7VLab.bin`: `2,358.63 kB`
+  - `dist/assets/tycho2-processed.bin-CBVGUs5x.gz`: `1,668.91 kB`
+- smoke local via preview de producao + Playwright:
+  - painel continua mostrando `Starfield`, `Tycho-2` e `NASA Eyes`
+  - troca entre `Tycho-2` e `NASA Eyes` respondeu no navegador
+  - desligar `Starfield` removeu a secao de fonte do painel e religar a trouxe de volta
+
+### Observacoes
+
+- o ganho principal desta execucao veio da retirada do catalogo Tycho-2 do JS inicial
+- a segunda iteracao desta execucao reduziu tambem o custo de rede do Tycho-2 ao trocar JSON por binario compactado
+- os erros de console observados no smoke local foram majoritariamente 404 de texturas faltantes e `favicon.ico`, nao introduzidos por esta fase
+
 ## Regra numero 1
 
 Nao remover o recurso de ter duas fontes de campo estelar.
