@@ -224,11 +224,26 @@ export const useStore = create<AppState>((set) => ({
       hasPlayedIntroAnimation: false, // Triggers intro animation to replay
     }),
   setTutorialStep: (step) => set({ tutorialStep: step }),
-  setSceneReady: (ready) => set({ isSceneReady: ready }),
-  setLoaderHidden: (hidden) => set({ isLoaderHidden: hidden }),
+  setSceneReady: (ready) =>
+    set((state) =>
+      state.isSceneReady === ready ? state : { isSceneReady: ready }
+    ),
+  setLoaderHidden: (hidden) =>
+    set((state) =>
+      state.isLoaderHidden === hidden ? state : { isLoaderHidden: hidden }
+    ),
   setHasPlayedIntroAnimation: (played) =>
-    set({ hasPlayedIntroAnimation: played }),
-  setIsIntroAnimating: (animating) => set({ isIntroAnimating: animating }),
+    set((state) =>
+      state.hasPlayedIntroAnimation === played
+        ? state
+        : { hasPlayedIntroAnimation: played }
+    ),
+  setIsIntroAnimating: (animating) =>
+    set((state) =>
+      state.isIntroAnimating === animating
+        ? state
+        : { isIntroAnimating: animating }
+    ),
   debugMode: false,
   toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
 }));

@@ -2,7 +2,6 @@ import { useRef, useMemo } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
-// @ts-ignore
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import {
   type CelestialBody,
@@ -10,6 +9,38 @@ import {
   AstroPhysics,
 } from "../../lib/astrophysics";
 import { useStore } from "../../store";
+
+const TRANSPARENT_TEXTURE_DATA_URL =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+const applyDepthSettings = (material: THREE.Material | THREE.Material[]) => {
+  const materials = Array.isArray(material) ? material : [material];
+
+  for (const currentMaterial of materials) {
+    currentMaterial.depthWrite = true;
+    currentMaterial.depthTest = true;
+  }
+};
+
+const applyStandardSurfaceSettings = (
+  material: THREE.Material | THREE.Material[],
+  roughness?: number,
+  metalness?: number
+) => {
+  const materials = Array.isArray(material) ? material : [material];
+
+  for (const currentMaterial of materials) {
+    applyDepthSettings(currentMaterial);
+
+    if (
+      currentMaterial instanceof THREE.MeshStandardMaterial ||
+      currentMaterial instanceof THREE.MeshPhysicalMaterial
+    ) {
+      if (roughness !== undefined) currentMaterial.roughness = roughness;
+      if (metalness !== undefined) currentMaterial.metalness = metalness;
+    }
+  }
+};
 
 interface PlanetModelProps {
   body: CelestialBody;
@@ -40,13 +71,7 @@ const GLBModel = ({
       if (child instanceof THREE.Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        if (child.material) {
-          child.material.depthWrite = true;
-          child.material.depthTest = true;
-          // Apply global material settings if provided
-          if (roughness !== undefined) child.material.roughness = roughness;
-          if (metalness !== undefined) child.material.metalness = metalness;
-        }
+        applyStandardSurfaceSettings(child.material, roughness, metalness);
       }
     });
 
@@ -87,7 +112,8 @@ const OBJModel = ({
   metalness?: number;
 }) => {
   const obj = useLoader(OBJLoader, path);
-  const texture = texturePath ? useTexture(texturePath) : null;
+  const loadedTexture = useTexture(texturePath ?? TRANSPARENT_TEXTURE_DATA_URL);
+  const texture = texturePath ? loadedTexture : undefined;
 
   const { cloned, normalizationScale } = useMemo(() => {
     const c = obj.clone();
@@ -104,8 +130,7 @@ const OBJModel = ({
           color: 0xffffff, // Ensure white base color so texture shows correctly
         });
 
-        child.material.depthWrite = true;
-        child.material.depthTest = true;
+        applyDepthSettings(child.material);
       }
     });
 

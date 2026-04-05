@@ -5,19 +5,26 @@ import { useEffect, useRef } from "react";
 export const SceneReadyChecker = () => {
   const setSceneReady = useStore((state) => state.setSceneReady);
   const frameCount = useRef(0);
+  const hasMarkedReady = useRef(false);
 
   // We wait for a few frames to ensure the GPU is actually pushing pixels
   // and the heavy assets (like textures) are fully uploaded and displayed.
   useFrame(() => {
+    if (hasMarkedReady.current) return;
+
     if (frameCount.current < 2) {
       frameCount.current += 1;
     } else {
+      hasMarkedReady.current = true;
       setSceneReady(true);
     }
   });
 
-  // Reset on unmount
   useEffect(() => {
+    frameCount.current = 0;
+    hasMarkedReady.current = false;
+    setSceneReady(false);
+
     return () => setSceneReady(false);
   }, [setSceneReady]);
 

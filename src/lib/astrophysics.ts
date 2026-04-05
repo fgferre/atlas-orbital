@@ -94,7 +94,7 @@ export class AstroPhysics {
     const J2000 = new Date("2000-01-01T12:00:00Z").getTime();
     const d = (date.getTime() - J2000) / 86400000;
     const { a, e, i, O, w, M0, n } = orbitParams;
-    let M = (M0 + n * d) % 360;
+    const M = (M0 + n * d) % 360;
     const rad = Math.PI / 180;
     let E = M * rad;
     for (let k = 0; k < 5; k++)

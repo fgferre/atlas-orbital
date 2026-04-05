@@ -175,25 +175,25 @@ export const Timeline = () => {
     setIsPlaying(true);
   };
 
-  const animate = (time: number) => {
-    if (previousTimeRef.current !== undefined) {
-      const deltaTime = time - previousTimeRef.current;
-      if (useStore.getState().isLiveMode) {
-        useStore.getState().setDatetime(new Date());
-      } else if (useStore.getState().isPlaying) {
-        useStore
-          .getState()
-          .setDatetime(
-            (prev) =>
-              new Date(prev.getTime() + useStore.getState().speed * deltaTime)
-          );
-      }
-    }
-    previousTimeRef.current = time;
-    requestRef.current = requestAnimationFrame(animate);
-  };
-
   useEffect(() => {
+    const animate = (time: number) => {
+      if (previousTimeRef.current !== undefined) {
+        const deltaTime = time - previousTimeRef.current;
+        if (useStore.getState().isLiveMode) {
+          useStore.getState().setDatetime(new Date());
+        } else if (useStore.getState().isPlaying) {
+          useStore
+            .getState()
+            .setDatetime(
+              (prev) =>
+                new Date(prev.getTime() + useStore.getState().speed * deltaTime)
+            );
+        }
+      }
+      previousTimeRef.current = time;
+      requestRef.current = requestAnimationFrame(animate);
+    };
+
     requestRef.current = requestAnimationFrame(animate);
     return () => {
       if (requestRef.current !== undefined) {

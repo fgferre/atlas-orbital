@@ -4,6 +4,27 @@ import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import * as THREE from "three";
 
+interface OverlayCandidate {
+  id: string;
+  name: string;
+  type: string;
+  radius: number;
+  x: number;
+  y: number;
+  dist: number;
+  priority: number;
+}
+
+interface OverlayItem {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  isSmall: boolean;
+  showLabel: boolean;
+  showIcon: boolean;
+}
+
 // This component runs INSIDE the Canvas and calculates overlay positions
 // Runs with LOWER priority (after planets update) to avoid lag
 export const OverlayPositionTracker = () => {
@@ -20,16 +41,7 @@ export const OverlayPositionTracker = () => {
     const { focusId, visibility, showLabels, showIcons } = useStore.getState();
 
     // 1. Calculate Screen Positions for ALL bodies
-    let candidates: Array<{
-      id: string;
-      name: string;
-      type: string;
-      radius: number;
-      x: number;
-      y: number;
-      dist: number;
-      priority: number;
-    }> = [];
+    const candidates: OverlayCandidate[] = [];
 
     SOLAR_SYSTEM_BODIES.forEach((body) => {
       // if (body.type === "star") return; // Skip sun logic for now (handled separately or static)
@@ -102,7 +114,7 @@ export const OverlayPositionTracker = () => {
     const placedIcons: { x: number; y: number; w: number; h: number }[] = [];
     const placedLabels: { x: number; y: number; w: number; h: number }[] = [];
 
-    const finalOverlays: any[] = [];
+    const finalOverlays: OverlayItem[] = [];
 
     // Helper: Check intersection
     const intersects = (

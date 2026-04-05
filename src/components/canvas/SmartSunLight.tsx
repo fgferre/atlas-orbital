@@ -1,4 +1,10 @@
-import { useRef, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../../store";
@@ -14,9 +20,15 @@ export const SmartSunLight = forwardRef<
 >(({ intensity = 1.5 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const lightRef = useRef<THREE.DirectionalLight>(null);
-  const targetRef = useRef<THREE.Object3D>(new THREE.Object3D());
+  const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
   useImperativeHandle(ref, () => lightRef.current!);
+
+  useEffect(() => {
+    if (lightRef.current) {
+      lightRef.current.target = lightTarget;
+    }
+  }, [lightTarget]);
 
   useFrame(({ scene }) => {
     if (!lightRef.current) return;
@@ -65,13 +77,13 @@ export const SmartSunLight = forwardRef<
     lightRef.current.position.copy(lightPos);
 
     // Update target
-    lightRef.current.target.position.copy(targetPos);
-    lightRef.current.target.updateMatrixWorld();
+    lightTarget.position.copy(targetPos);
+    lightTarget.updateMatrixWorld();
   });
 
   return (
     <>
-      <primitive object={targetRef.current} />
+      <primitive object={lightTarget} />
       <directionalLight
         ref={lightRef}
         intensity={intensity}

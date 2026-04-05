@@ -1,6 +1,9 @@
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { Suspense, useEffect, useRef, memo } from "react";
-import { OrbitControls, Environment } from "@react-three/drei";
+import { Suspense, useEffect, useRef, memo, type RefObject } from "react";
+import {
+  OrbitControls as DreiOrbitControls,
+  Environment,
+} from "@react-three/drei";
 import { Starfield } from "./Starfield";
 import { NASAStarfield } from "./NASAStarfield";
 import {
@@ -29,27 +32,48 @@ import { useStore } from "../../store";
 import { SmartSunLight } from "./SmartSunLight";
 
 import { useControls, Leva, folder, button } from "leva";
+import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+
+interface BloomController {
+  intensity: number;
+  luminanceThreshold: number;
+}
+
+interface HueSaturationController {
+  saturation: number;
+}
+
+interface BrightnessContrastController {
+  brightness: number;
+  contrast: number;
+}
+
+interface DebugValues {
+  ambientIntensity: number;
+  sunIntensity: number;
+  shadowIntensity: number;
+  envMapIntensity: number;
+  bloomThreshold: number;
+  bloomIntensity: number;
+  bloomRadius: number;
+  saturation: number;
+  contrast: number;
+  brightness: number;
+}
+
+type SceneWithEnvironmentIntensity = THREE.Scene & {
+  environmentIntensity?: number;
+};
 
 interface SceneContentProps {
-  bloomRef: React.RefObject<any>;
-  hueSatRef: React.RefObject<any>;
-  brightnessRef: React.RefObject<any>;
-  ambientLightRef: React.RefObject<THREE.AmbientLight | null>;
-  sunLightRef: React.RefObject<THREE.PointLight | null>;
-  smartSunLightRef: React.RefObject<THREE.DirectionalLight | null>;
-  controlsRef: React.RefObject<any>;
-  debugValues: {
-    ambientIntensity: number;
-    sunIntensity: number;
-    shadowIntensity: number;
-    envMapIntensity: number;
-    bloomThreshold: number;
-    bloomIntensity: number;
-    bloomRadius: number;
-    saturation: number;
-    contrast: number;
-    brightness: number;
-  };
+  bloomRef: RefObject<BloomController | null>;
+  hueSatRef: RefObject<HueSaturationController | null>;
+  brightnessRef: RefObject<BrightnessContrastController | null>;
+  ambientLightRef: RefObject<THREE.AmbientLight | null>;
+  sunLightRef: RefObject<THREE.PointLight | null>;
+  smartSunLightRef: RefObject<THREE.DirectionalLight | null>;
+  controlsRef: RefObject<OrbitControlsImpl | null>;
+  debugValues: DebugValues;
   debugMode: boolean;
 }
 
@@ -71,6 +95,13 @@ const SceneContent = ({
   const focusId = useStore((state) => state.focusId);
 
   const currentValues = useRef({ ...VISUAL_PRESETS[visualPreset] });
+  const sceneRef = useRef<SceneWithEnvironmentIntensity>(
+    scene as SceneWithEnvironmentIntensity
+  );
+
+  useEffect(() => {
+    sceneRef.current = scene as SceneWithEnvironmentIntensity;
+  }, [scene]);
 
   useFrame(() => {
     // 1. Auto-select preset
@@ -140,8 +171,9 @@ const SceneContent = ({
 
     // Environment Intensity
     // scene.environmentIntensity is available in newer Three.js versions (r163+)
-    // We assign it unconditionally (casting to any) to ensure it's updated if supported.
-    (scene as any).environmentIntensity = debugMode
+    // We keep the mutable scene handle in a ref so the React hooks lint rule
+    // doesn't treat this imperative Three.js update as a render-time mutation.
+    sceneRef.current.environmentIntensity = debugMode
       ? debugValues.envMapIntensity
       : currentValues.current.envMapIntensity;
   });
@@ -150,7 +182,11 @@ const SceneContent = ({
 };
 
 const PostProcessingEffects = memo(
-  ({ bloomRef, hueSatRef, brightnessRef }: any) => {
+  ({
+    bloomRef,
+    hueSatRef,
+    brightnessRef,
+  }: Pick<SceneContentProps, "bloomRef" | "hueSatRef" | "brightnessRef">) => {
     return (
       <EffectComposer>
         <Bloom
@@ -174,7 +210,7 @@ const PostProcessingEffects = memo(
 const DynamicZoom = ({
   controlsRef,
 }: {
-  controlsRef: React.RefObject<any>;
+  controlsRef: RefObject<OrbitControlsImpl | null>;
 }) => {
   const { camera } = useThree();
 
@@ -456,13 +492,13 @@ export const Scene = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleDebugMode]);
 
-  const bloomRef = useRef<any>(null);
-  const hueSatRef = useRef<any>(null);
-  const brightnessRef = useRef<any>(null);
-  const ambientLightRef = useRef<THREE.AmbientLight>(null);
-  const sunLightRef = useRef<THREE.PointLight>(null);
-  const smartSunLightRef = useRef<THREE.DirectionalLight>(null);
-  const controlsRef = useRef<any>(null);
+  const bloomRef = useRef<BloomController | null>(null);
+  const hueSatRef = useRef<HueSaturationController | null>(null);
+  const brightnessRef = useRef<BrightnessContrastController | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const sunLightRef = useRef<THREE.PointLight | null>(null);
+  const smartSunLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   const debugValues = {
     ambientIntensity,
@@ -548,7 +584,7 @@ export const Scene = () => {
         <OverlayPositionTracker />
         <CameraController />
         <InitialCameraAnimation />
-        <OrbitControls
+        <DreiOrbitControls
           ref={controlsRef}
           enablePan={true}
           enableDamping={true}

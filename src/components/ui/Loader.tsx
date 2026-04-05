@@ -1,7 +1,7 @@
 import { useProgress } from "@react-three/drei";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "../../store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Helper for random stars
 const StarField = () => {
@@ -85,17 +85,32 @@ const TechReadout = () => (
 export const Loader = () => {
   const { progress, active } = useProgress();
   const isSceneReady = useStore((state) => state.isSceneReady);
+  const isLoaderHidden = useStore((state) => state.isLoaderHidden);
   const setLoaderHidden = useStore((state) => state.setLoaderHidden);
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(() => !isLoaderHidden);
+  const exitStartedRef = useRef(false);
+
+  const canHideSoon = progress >= 95 || (!active && progress > 0);
 
   useEffect(() => {
-    // Only hide when assets are loaded AND scene has rendered frames
-    if (!active && isSceneReady && progress === 100) {
-      // Small buffer to ensure smooth transition
-      const timer = setTimeout(() => setVisible(false), 500);
-      return () => clearTimeout(timer);
+    if (!visible || exitStartedRef.current) {
+      return;
     }
-  }, [active, isSceneReady, progress]);
+
+    // Only hide after the scene has rendered frames. If useProgress stalls on
+    // a non-critical trailing asset, we still fall back to a one-shot timeout
+    // so the intro can begin instead of leaving the experience stuck forever.
+    if (!isSceneReady) {
+      return;
+    }
+
+    const delayMs = canHideSoon ? 500 : 12000;
+    const timer = window.setTimeout(() => {
+      exitStartedRef.current = true;
+      setVisible(false);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [canHideSoon, isSceneReady, visible]);
 
   return (
     <AnimatePresence onExitComplete={() => setLoaderHidden(true)}>

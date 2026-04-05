@@ -52,11 +52,10 @@ export const TutorialHighlight = ({
   useEffect(() => {
     // Skip polling when tutorial is inactive or no target
     if (!isActive || !target) {
-      setTargetRect(null);
       return;
     }
 
-    updateTargetRect();
+    const frameId = window.requestAnimationFrame(updateTargetRect);
 
     // Update on resize
     const handleResize = () => updateTargetRect();
@@ -66,12 +65,14 @@ export const TutorialHighlight = ({
     const interval = setInterval(updateTargetRect, 500);
 
     return () => {
+      window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", handleResize);
       clearInterval(interval);
     };
   }, [updateTargetRect, isActive, target]);
 
-  const shouldRender = isActive && target && targetRect;
+  const visibleTargetRect = isActive && target ? targetRect : null;
+  const shouldRender = Boolean(visibleTargetRect);
   const padding = 8; // Padding around the highlight
 
   return (
@@ -95,10 +96,14 @@ export const TutorialHighlight = ({
                 <motion.rect
                   initial={{ opacity: 0 }}
                   animate={{
-                    x: targetRect.x - padding,
-                    y: targetRect.y - padding,
-                    width: targetRect.width + padding * 2,
-                    height: targetRect.height + padding * 2,
+                    x: visibleTargetRect?.x ? visibleTargetRect.x - padding : 0,
+                    y: visibleTargetRect?.y ? visibleTargetRect.y - padding : 0,
+                    width: visibleTargetRect
+                      ? visibleTargetRect.width + padding * 2
+                      : 0,
+                    height: visibleTargetRect
+                      ? visibleTargetRect.height + padding * 2
+                      : 0,
                     opacity: 1,
                   }}
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
@@ -124,15 +129,19 @@ export const TutorialHighlight = ({
             animate={{
               opacity: 1,
               scale: 1,
-              x: targetRect.x - padding,
-              y: targetRect.y - padding,
+              x: visibleTargetRect ? visibleTargetRect.x - padding : 0,
+              y: visibleTargetRect ? visibleTargetRect.y - padding : 0,
             }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="fixed z-[99] pointer-events-none"
             style={{
-              width: targetRect.width + padding * 2,
-              height: targetRect.height + padding * 2,
+              width: visibleTargetRect
+                ? visibleTargetRect.width + padding * 2
+                : 0,
+              height: visibleTargetRect
+                ? visibleTargetRect.height + padding * 2
+                : 0,
               left: 0,
               top: 0,
             }}

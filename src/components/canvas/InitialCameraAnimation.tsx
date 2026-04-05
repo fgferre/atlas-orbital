@@ -1,8 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useStore } from "../../store";
+
+const INTRO_DURATION_MS = 12000;
+const INTRO_START_POSITION = new THREE.Vector3(
+  -95809369,
+  999990981402,
+  4245931557
+);
+const INTRO_END_POSITION = new THREE.Vector3(0, 1746, 7);
+const INTRO_TARGET = new THREE.Vector3(0, 0, 0);
+const INTRO_DELAY_MS = 100;
 
 /**
  * InitialCameraAnimation - Cinematic intro animation
@@ -21,159 +31,128 @@ export const InitialCameraAnimation = () => {
   const isLoaderHidden = useStore((s) => s.isLoaderHidden);
   const setIsIntroAnimating = useStore((s) => s.setIsIntroAnimating);
 
-  // Use REFS for animation state (useFrame has stale closures with React state)
+  const cameraRef = useRef(camera);
+  const controlsRef = useRef<OrbitControlsImpl | null>(controls);
   const animationRef = useRef({
     isRunning: false,
     startTime: 0,
-    startPos: new THREE.Vector3(),
-    endPos: new THREE.Vector3(),
+    startPos: INTRO_START_POSITION.clone(),
+    endPos: INTRO_END_POSITION.clone(),
   });
 
-  // Animation duration in ms
-  const DURATION = 12000;
+  useEffect(() => {
+    cameraRef.current = camera;
+    controlsRef.current = controls;
+  }, [camera, controls]);
 
-  /**
-   * Logarithmic interpolation for smooth animation across orders of magnitude
-   */
-  const logLerp = (a: number, b: number, t: number): number => {
-    if (a <= 0) a = 1;
-    if (b <= 0) b = 1;
-    const logA = Math.log(a);
-    const logB = Math.log(b);
+  const logLerp = useCallback((a: number, b: number, t: number): number => {
+    const start = a <= 0 ? 1 : a;
+    const end = b <= 0 ? 1 : b;
+    const logA = Math.log(start);
+    const logB = Math.log(end);
     return Math.exp(logA + (logB - logA) * t);
-  };
+  }, []);
 
-  /**
-   * Smooth easing function - easeInOutCubic
-   */
-  const easeInOutCubic = (t: number): number => {
+  const easeInOutCubic = useCallback((t: number): number => {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  };
+  }, []);
 
-  /**
-   * Interpolate camera position using logarithmic distance interpolation
-   */
-  const interpolatePosition = (
-    start: THREE.Vector3,
-    end: THREE.Vector3,
-    t: number
-  ): THREE.Vector3 => {
-    const startDist = start.length();
-    const endDist = end.length();
-    const currentDist = logLerp(startDist, endDist, t);
+  const interpolatePosition = useCallback(
+    (start: THREE.Vector3, end: THREE.Vector3, t: number): THREE.Vector3 => {
+      const startDist = start.length();
+      const endDist = end.length();
+      const currentDist = logLerp(startDist, endDist, t);
 
-    const startDir = start.clone().normalize();
-    const endDir = end.clone().normalize();
-    const currentDir = new THREE.Vector3()
-      .lerpVectors(startDir, endDir, t)
-      .normalize();
+      const startDir = start.clone().normalize();
+      const endDir = end.clone().normalize();
+      const currentDir = new THREE.Vector3()
+        .lerpVectors(startDir, endDir, t)
+        .normalize();
 
-    return currentDir.multiplyScalar(currentDist);
-  };
+      return currentDir.multiplyScalar(currentDist);
+    },
+    [logLerp]
+  );
 
-  // Complete animation helper
-  const completeAnimation = () => {
+  const syncControlsToSun = useCallback(() => {
+    const controlsInstance = controlsRef.current;
+    if (!controlsInstance) return;
+
+    controlsInstance.target.copy(INTRO_TARGET);
+    controlsInstance.update();
+  }, []);
+
+  const completeAnimation = useCallback(() => {
     if (!animationRef.current.isRunning) return;
 
-    // Set exact end position (top-down inner solar system view)
-    camera.position.copy(animationRef.current.endPos);
-
-    // Keep camera looking at sun center
-    if (controls) {
-      controls.target.set(0, 0, 0);
-      controls.update();
-    }
+    cameraRef.current.position.copy(animationRef.current.endPos);
+    syncControlsToSun();
 
     animationRef.current.isRunning = false;
     setHasPlayed(true);
     setIsIntroAnimating(false);
 
-    // If tutorial is open, select Sun to show Info Panel
-    const showTutorial = useStore.getState().showTutorial;
-    if (showTutorial) {
+    if (useStore.getState().showTutorial) {
       useStore.getState().selectId("sun");
     }
-  };
+  }, [setHasPlayed, setIsIntroAnimating, syncControlsToSun]);
 
-  // Start animation when loader has fully hidden
   useEffect(() => {
-    if (!isLoaderHidden) {
+    if (!isLoaderHidden || hasPlayed || animationRef.current.isRunning) {
       return;
     }
 
-    if (hasPlayed) {
-      return;
-    }
+    animationRef.current.startPos.copy(INTRO_START_POSITION);
+    animationRef.current.endPos.copy(INTRO_END_POSITION);
 
-    if (animationRef.current.isRunning) {
-      return;
-    }
+    cameraRef.current.position.copy(INTRO_START_POSITION);
+    syncControlsToSun();
 
-    // Start positions - captured via debug tool
-    const startPos = new THREE.Vector3(-95809369, 999990981402, 4245931557);
-    const endPos = new THREE.Vector3(0, 1746, 7);
-
-    // Store in ref
-    animationRef.current.startPos.copy(startPos);
-    animationRef.current.endPos.copy(endPos);
-
-    // Set camera to start position immediately
-    camera.position.copy(startPos);
-
-    // Set target to sun
-    if (controls) {
-      controls.target.set(0, 0, 0);
-      controls.update();
-    }
-
-    // Start animation after a brief delay
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       animationRef.current.startTime = performance.now();
       animationRef.current.isRunning = true;
       setIsIntroAnimating(true);
-    }, 100);
+    }, INTRO_DELAY_MS);
 
-    return () => clearTimeout(timer);
-  }, [isLoaderHidden, hasPlayed]);
+    return () => window.clearTimeout(timer);
+  }, [hasPlayed, isLoaderHidden, setIsIntroAnimating, syncControlsToSun]);
 
-  // Stop on user interaction
   useEffect(() => {
     if (!controls) return;
 
     const stopIntro = () => {
-      if (animationRef.current.isRunning) {
-        animationRef.current.isRunning = false;
-        setHasPlayed(true);
-        setIsIntroAnimating(false);
-      }
+      if (!animationRef.current.isRunning) return;
+
+      animationRef.current.isRunning = false;
+      setHasPlayed(true);
+      setIsIntroAnimating(false);
     };
 
     controls.addEventListener("start", stopIntro);
-    return () => controls.removeEventListener("start", stopIntro);
-  }, [controls]);
+    return () => {
+      controls.removeEventListener("start", stopIntro);
+    };
+  }, [controls, setHasPlayed, setIsIntroAnimating]);
 
-  // Animation loop - uses REF so it always has current values
   useFrame(() => {
     if (!animationRef.current.isRunning) return;
 
     const elapsed = performance.now() - animationRef.current.startTime;
-    const rawT = Math.min(elapsed / DURATION, 1);
+    const rawT = Math.min(elapsed / INTRO_DURATION_MS, 1);
     const t = easeInOutCubic(rawT);
 
-    // Interpolate position logarithmically
     const newPos = interpolatePosition(
       animationRef.current.startPos,
       animationRef.current.endPos,
       t
     );
-    camera.position.copy(newPos);
+    cameraRef.current.position.copy(newPos);
 
-    // Keep looking at sun
-    if (controls) {
-      controls.target.set(0, 0, 0);
+    const controlsInstance = controlsRef.current;
+    if (controlsInstance) {
+      controlsInstance.target.copy(INTRO_TARGET);
     }
 
-    // Check completion
     if (rawT >= 1) {
       completeAnimation();
     }

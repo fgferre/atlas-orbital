@@ -70,12 +70,9 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
         if (cancelled) return;
 
         const allStars: NASAStar[] = [];
-        let loadedCount = 0;
-
         for (const result of results) {
           if (result.status === "fulfilled") {
             allStars.push(...result.value);
-            loadedCount++;
           } else {
             console.warn("Failed to load star file:", result.reason);
           }

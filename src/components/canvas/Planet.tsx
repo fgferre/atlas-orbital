@@ -26,10 +26,20 @@ import {
   planetShadowFragmentPatch,
   planetShadowEmissivePatch,
 } from "./shaders/planetShadowShader";
+import type { Line2 } from "three-stdlib";
 
 const PROGRADE_ARROW_BASE_WIDTH = 0.68;
 const PROGRADE_ARROW_BASE_LENGTH = 1.0;
 const PROGRADE_ARROW_BASE_DEPTH = 0.06;
+const TRANSPARENT_TEXTURE_DATA_URL =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+type OrbitLineMaterial = THREE.Material & {
+  opacity: number;
+  uniforms?: {
+    opacity?: { value: number };
+  };
+};
 
 function createRadialGradientTexture(size: number) {
   if (typeof document === "undefined") return null;
@@ -62,7 +72,7 @@ function createRadialGradientTexture(size: number) {
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
-  (texture as any).colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
@@ -116,7 +126,7 @@ function createStarburstTexture(size: number, rays: number) {
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = false;
-  (texture as any).colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
@@ -165,8 +175,8 @@ const SunScreenFlare = ({
     if (!rootRef.current) return;
     if (!targetRef.current) return;
 
-    const cam = state.camera as THREE.PerspectiveCamera;
-    if (!(cam as any).isPerspectiveCamera) return;
+    if (!(state.camera instanceof THREE.PerspectiveCamera)) return;
+    const cam = state.camera;
 
     targetRef.current.getWorldPosition(tmpWorld);
 
@@ -349,6 +359,17 @@ const PlanetVisual = ({
   const rotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
   const scaleMode = useStore((state) => state.scaleMode);
+  const [
+    ringTextureLoaded,
+    cloudTextureLoaded,
+    bodyTextureLoaded,
+    nightTextureLoaded,
+  ] = useTexture([
+    body.textures?.ring ?? TRANSPARENT_TEXTURE_DATA_URL,
+    body.textures?.clouds ?? TRANSPARENT_TEXTURE_DATA_URL,
+    body.textures?.map ?? TRANSPARENT_TEXTURE_DATA_URL,
+    body.textures?.night ?? TRANSPARENT_TEXTURE_DATA_URL,
+  ]);
 
   // Calculate orientation quaternion based on IAU pole data
   const orientationQuaternion = useMemo(() => {
@@ -372,29 +393,10 @@ const PlanetVisual = ({
     }
   }, [body.poleRA, body.poleDec, body.axialTilt]);
 
-  // Handle ring texture
-  let textureRing: THREE.Texture | undefined;
-  if (body.textures?.ring) {
-    textureRing = useTexture(body.textures.ring);
-  }
-
-  // Handle cloud texture
-  let textureClouds: THREE.Texture | undefined;
-  if (body.textures?.clouds) {
-    textureClouds = useTexture(body.textures.clouds);
-  }
-
-  // Handle body texture
-  let textureMap: THREE.Texture | undefined;
-  if (body.textures?.map) {
-    textureMap = useTexture(body.textures.map);
-  }
-
-  // Handle night texture (for Earth city lights)
-  let textureNight: THREE.Texture | undefined;
-  if (body.textures?.night) {
-    textureNight = useTexture(body.textures.night);
-  }
+  const textureRing = body.textures?.ring ? ringTextureLoaded : undefined;
+  const textureClouds = body.textures?.clouds ? cloudTextureLoaded : undefined;
+  const textureMap = body.textures?.map ? bodyTextureLoaded : undefined;
+  const textureNight = body.textures?.night ? nightTextureLoaded : undefined;
 
   // Cloud Material (PBR + Analytical Shadows)
   const cloudMaterial = useMemo(() => {
@@ -645,6 +647,7 @@ const PlanetVisual = ({
     roughness,
     metalness,
     sunEmissive,
+    nightLightIntensity,
   ]);
 
   // Analytical Planet Shadow on Rings Logic
@@ -686,6 +689,32 @@ const PlanetVisual = ({
 
     return mat;
   }, [textureRing, ringEmissive, ringShadowIntensity]);
+
+  const ringGeometry = useMemo(() => {
+    if (!body.ringSystem) return null;
+
+    const innerRadius = body.ringSystem.innerRadius;
+    const outerRadius = body.ringSystem.outerRadius;
+    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+    const positions = geometry.attributes.position;
+    const uvs = geometry.attributes.uv;
+    const vertex = new THREE.Vector3();
+
+    for (let i = 0; i < positions.count; i++) {
+      vertex.fromBufferAttribute(positions, i);
+      const radius = Math.sqrt(vertex.x * vertex.x + vertex.y * vertex.y);
+      const u = (radius - innerRadius) / (outerRadius - innerRadius);
+      uvs.setXY(i, u, 0.5);
+    }
+
+    return geometry;
+  }, [body.ringSystem]);
+
+  useEffect(() => {
+    return () => {
+      ringGeometry?.dispose();
+    };
+  }, [ringGeometry]);
 
   const ringRef = useRef<THREE.Mesh>(null);
 
@@ -737,15 +766,6 @@ const PlanetVisual = ({
           planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
             sunLocalPos
           );
-
-          // Update Night Light Intensity
-          if (
-            body.id === "earth" &&
-            planetMaterial.userData.shader.uniforms.uNightLightIntensity
-          ) {
-            planetMaterial.userData.shader.uniforms.uNightLightIntensity.value =
-              nightLightIntensity;
-          }
 
           // Update Cloud Material (if exists)
           if (cloudMaterial && cloudMaterial.userData.shader) {
@@ -827,7 +847,7 @@ const PlanetVisual = ({
           )}
 
           {/* 4. Ring System */}
-          {textureRing && ringMaterial && (
+          {textureRing && ringMaterial && ringGeometry && (
             <mesh
               ref={ringRef}
               rotation={[-Math.PI / 2, 0, 0]}
@@ -835,32 +855,7 @@ const PlanetVisual = ({
               // receiveShadow removed to prevent double shadows (we use analytical shadows)
               // castShadow removed - using analytical shadows
             >
-              <primitive
-                object={useMemo(() => {
-                  const innerRadius = body.ringSystem?.innerRadius || 1.11;
-                  const outerRadius = body.ringSystem?.outerRadius || 2.33;
-                  const segments = 128;
-
-                  const geometry = new THREE.RingGeometry(
-                    innerRadius,
-                    outerRadius,
-                    segments
-                  );
-                  const positions = geometry.attributes.position;
-                  const uvs = geometry.attributes.uv;
-
-                  const v3 = new THREE.Vector3();
-                  for (let i = 0; i < positions.count; i++) {
-                    v3.fromBufferAttribute(positions, i);
-                    const radius = Math.sqrt(v3.x * v3.x + v3.y * v3.y);
-                    const u =
-                      (radius - innerRadius) / (outerRadius - innerRadius);
-                    uvs.setXY(i, u, 0.5);
-                  }
-
-                  return geometry;
-                }, [body.ringSystem])}
-              />
+              <primitive object={ringGeometry} />
               <primitive object={ringMaterial} attach="material" />
             </mesh>
           )}
@@ -948,7 +943,7 @@ export const Planet = ({
   nightLightIntensity,
 }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
-  const orbitLineRef = useRef<any>(null);
+  const orbitLineRef = useRef<Line2 | null>(null);
   const progradeRef = useRef<THREE.Group>(null);
 
   // Calculate orientation quaternion based on IAU pole data
@@ -1132,7 +1127,7 @@ export const Planet = ({
         opacity = Math.max(opacity, 0.08);
       }
 
-      const material = orbitLineRef.current.material as THREE.ShaderMaterial;
+      const material = orbitLineRef.current.material as OrbitLineMaterial;
       if (material.uniforms?.opacity) {
         material.uniforms.opacity.value = opacity;
       } else {
