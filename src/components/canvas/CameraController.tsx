@@ -36,11 +36,37 @@ export const CameraController = () => {
 
   const getBodyRadius = useCallback(
     (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
-      return scaleMode === "didactic"
-        ? AstroPhysics.calculateDidacticRadius(body.radiusKm)
-        : body.radiusKm * KM_TO_3D_UNITS;
+      const baseRadius =
+        scaleMode === "didactic"
+          ? AstroPhysics.calculateDidacticRadius(body.radiusKm)
+          : body.radiusKm * KM_TO_3D_UNITS;
+
+      const shapeMultiplier = Math.max(...(body.shapeScale ?? [1, 1, 1]));
+      const modelScale = body.model?.scale ?? 1;
+      return baseRadius * shapeMultiplier * modelScale;
     },
     [scaleMode]
+  );
+
+  const getFocusMargin = useCallback(
+    (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
+      const fidelity = body.visualProvenance?.fidelity;
+
+      if (body.type === "moon" && fidelity === "interpretive") {
+        return 3.6;
+      }
+
+      if (fidelity === "interpretive") {
+        return 2.2;
+      }
+
+      if (fidelity === "observational-model") {
+        return 1.95;
+      }
+
+      return 1.6;
+    },
+    []
   );
 
   const getEffectiveBoundingSphere = useCallback(
@@ -81,13 +107,24 @@ export const CameraController = () => {
       const idealDist = PrivilegedPosition.calculateIdealDistance(
         targetRadius,
         cameraInstance,
-        1.6
+        getFocusMargin(bodyData)
       );
 
       const sunPosition = new THREE.Vector3(0, 0, 0);
-      const direction = PrivilegedPosition.calculateSolarAlignedDirection(
+      const parentPos = bodyData.parentId
+        ? (() => {
+            const parentMesh = scene.getObjectByName(bodyData.parentId!);
+            if (!parentMesh) return undefined;
+            const parentWorldPos = new THREE.Vector3();
+            parentMesh.getWorldPosition(parentWorldPos);
+            return parentWorldPos;
+          })()
+        : undefined;
+
+      const direction = PrivilegedPosition.calculateContextAwareDirection(
         targetPos,
-        sunPosition
+        sunPosition,
+        parentPos
       );
 
       let newCamPos = targetPos
@@ -145,7 +182,14 @@ export const CameraController = () => {
     }
 
     setupCamera();
-  }, [focusId, getEffectiveBoundingSphere, isIntroAnimating, scaleMode, scene]);
+  }, [
+    focusId,
+    getEffectiveBoundingSphere,
+    getFocusMargin,
+    isIntroAnimating,
+    scaleMode,
+    scene,
+  ]);
 
   useEffect(() => {
     if (!controls) return;

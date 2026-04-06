@@ -3,34 +3,16 @@ import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM, AU_TO_3D_UNITS } from "../../lib/astrophysics";
 import { useMemo } from "react";
 
+const VISUAL_FIDELITY_LABELS = {
+  measured: "Measured Asset",
+  "observational-model": "Observational Model",
+  interpretive: "Interpretive Visual",
+  procedural: "Procedural Visual",
+} as const;
+
 export const Sidebar = () => {
   const { selectedId, setSelectedId, datetime } = useStore();
   const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
-
-  // Helper to parse mass string: "5.972 × 10²⁴ kg" -> 5.972e24
-  const parseMass = (str?: string) => {
-    if (!str) return 0;
-    // Replace superscripts
-    const supers: Record<string, string> = {
-      "⁰": "0",
-      "¹": "1",
-      "²": "2",
-      "³": "3",
-      "⁴": "4",
-      "⁵": "5",
-      "⁶": "6",
-      "⁷": "7",
-      "⁸": "8",
-      "⁹": "9",
-    };
-    let clean = str.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (m) => supers[m] || m);
-    clean = clean
-      .replace("× 10", "e")
-      .replace(" kg", "")
-      .replace(/,/g, "")
-      .replace(/ /g, "");
-    return parseFloat(clean);
-  };
 
   // Real-time Calculations
   const stats = useMemo(() => {
@@ -50,7 +32,7 @@ export const Sidebar = () => {
     let parentMass = 1.989e30; // Default Sun
     if (b.parentId) {
       const parent = SOLAR_SYSTEM_BODIES.find((p) => p.id === b.parentId);
-      if (parent) parentMass = parseMass(parent.mass);
+      if (parent) parentMass = AstroPhysics.parseScientificValue(parent.mass);
     }
     const velocity = AstroPhysics.calculateOrbitalVelocity(
       b.orbit,
@@ -59,7 +41,7 @@ export const Sidebar = () => {
     );
 
     // 3. Escape Velocity
-    const myMass = parseMass(b.mass);
+    const myMass = AstroPhysics.parseScientificValue(b.mass);
     const escape = AstroPhysics.calculateEscapeVelocity(myMass, b.radiusKm);
 
     return { distAU, distKm, velocity, escape };
@@ -71,10 +53,17 @@ export const Sidebar = () => {
     earthVal: number,
     suffix = "Earth"
   ) => {
-    if (!val || !earthVal) return null;
+    if (!Number.isFinite(val) || !Number.isFinite(earthVal) || !earthVal) {
+      return null;
+    }
     const ratio = val / earthVal;
     if (ratio >= 0.99 && ratio <= 1.01) return `1.00× ${suffix}`;
     return `${ratio.toFixed(2)}× ${suffix}`;
+  };
+
+  const formatTelemetryValue = (value: number, unit: string) => {
+    if (!Number.isFinite(value)) return "N/A";
+    return `${value.toFixed(1)} ${unit}`;
   };
 
   // Even if no body is selected, we render the container but translate it off-screen
@@ -143,6 +132,50 @@ export const Sidebar = () => {
             {/* Description */}
             <p>{b.description || b.info}</p>
 
+            {b.visualProvenance && (
+              <div>
+                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                  Visual Fidelity
+                </h3>
+                <div className="bg-black/20 p-3 rounded border border-white/5 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[9px] text-nasa-dim uppercase tracking-wider">
+                      Source Type
+                    </span>
+                    <span className="text-[9px] bg-white/10 px-2 py-1 rounded text-nasa-accent font-mono uppercase tracking-wide">
+                      {VISUAL_FIDELITY_LABELS[b.visualProvenance.fidelity]}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-300 font-rajdhani">
+                    {b.visualProvenance.summary}
+                  </p>
+                  {b.visualProvenance.limitationReason && (
+                    <p className="text-xs text-gray-400 font-rajdhani">
+                      {b.visualProvenance.limitationReason}
+                    </p>
+                  )}
+                  {b.visualProvenance.sources &&
+                    b.visualProvenance.sources.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {b.visualProvenance.sources
+                          .slice(0, 2)
+                          .map((source) => (
+                            <a
+                              key={source.url}
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-nasa-accent hover:text-white transition-colors underline underline-offset-2"
+                            >
+                              {source.label}
+                            </a>
+                          ))}
+                      </div>
+                    )}
+                </div>
+              </div>
+            )}
+
             {/* Live Data Grid */}
             {stats && b.id !== "sun" && (
               <div>
@@ -153,7 +186,7 @@ export const Sidebar = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <StatBox
                     label="Orbital Speed"
-                    value={`${stats.velocity.toFixed(1)} km/s`}
+                    value={formatTelemetryValue(stats.velocity, "km/s")}
                   />
                   <StatBox
                     label="Current Dist."
@@ -192,7 +225,7 @@ export const Sidebar = () => {
                   badge={
                     b.gravity
                       ? getEarthComparison(
-                          parseFloat(b.gravity.split(" ")[0]),
+                          AstroPhysics.parseScientificValue(b.gravity),
                           9.8,
                           "g"
                         )
@@ -201,7 +234,10 @@ export const Sidebar = () => {
                 />
                 <StatBox
                   label="Escape Vel."
-                  value={`${stats?.escape.toFixed(1)} km/s`}
+                  value={formatTelemetryValue(
+                    stats?.escape ?? Number.NaN,
+                    "km/s"
+                  )}
                 />
                 <StatBox label="Mass" value={b.mass} fullWidth />
                 <StatBox label="Composition" value={b.composition} fullWidth />

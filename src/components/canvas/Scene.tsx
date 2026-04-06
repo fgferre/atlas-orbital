@@ -327,7 +327,7 @@ export const Scene = () => {
   const qualityProfile = useQualityProfile(qualityMode);
   const [rendererAntialias] = useState(() => qualityProfile.antialias);
   const canvasDpr = useMemo(
-    () => [1, qualityProfile.dprMax] as const,
+    () => [1, qualityProfile.dprMax] as [number, number],
     [qualityProfile.dprMax]
   );
   const cameraConfig = useMemo(

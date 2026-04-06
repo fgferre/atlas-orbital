@@ -37,21 +37,21 @@ const SURFACE_PROFILES: Record<string, Partial<SurfaceProfile>> = {
     accentStrength: 0.12,
   },
   hygiea: {
-    base: "#2E3235",
-    secondary: "#565F61",
-    accent: "#15181A",
-    contrast: 0.16,
+    base: "#51585B",
+    secondary: "#8A9498",
+    accent: "#23282B",
+    contrast: 0.18,
     featureCount: 4,
     featureSize: 0.24,
     bandFrequency: 0.85,
-    accentStrength: 0.08,
-    polarDarkening: 0.1,
+    accentStrength: 0.1,
+    polarDarkening: 0.06,
   },
   quaoar: {
-    base: "#74462B",
-    secondary: "#9B6B4A",
-    accent: "#4D2D1A",
-    contrast: 0.11,
+    base: "#885442",
+    secondary: "#B77C5F",
+    accent: "#5D3322",
+    contrast: 0.13,
     featureCount: 4,
     featureSize: 0.19,
     bandFrequency: 1.15,
@@ -69,14 +69,14 @@ const SURFACE_PROFILES: Record<string, Partial<SurfaceProfile>> = {
     polarDarkening: 0.04,
   },
   orcus: {
-    base: "#81868B",
-    secondary: "#B6BBC0",
-    accent: "#565A5F",
-    contrast: 0.08,
+    base: "#7C8993",
+    secondary: "#A8B4BD",
+    accent: "#505A62",
+    contrast: 0.1,
     featureCount: 4,
     featureSize: 0.21,
     bandFrequency: 1.25,
-    accentStrength: 0.08,
+    accentStrength: 0.1,
   },
   sedna: {
     base: "#8A2318",
@@ -89,36 +89,51 @@ const SURFACE_PROFILES: Record<string, Partial<SurfaceProfile>> = {
     accentStrength: 0.2,
   },
   salacia: {
-    base: "#555B60",
-    secondary: "#757C83",
-    accent: "#30353A",
-    contrast: 0.1,
+    base: "#738089",
+    secondary: "#A3B0B8",
+    accent: "#454F57",
+    contrast: 0.13,
     featureCount: 4,
     featureSize: 0.22,
     bandFrequency: 0.9,
-    accentStrength: 0.1,
-    polarDarkening: 0.08,
+    accentStrength: 0.12,
+    polarDarkening: 0.05,
   },
   vanth: {
-    base: "#6C7073",
-    secondary: "#8E9498",
-    accent: "#3C4045",
-    contrast: 0.1,
+    base: "#6E7C86",
+    secondary: "#95A2AB",
+    accent: "#404A52",
+    contrast: 0.11,
     featureCount: 4,
     featureSize: 0.2,
     bandFrequency: 1.1,
     accentStrength: 0.1,
   },
   weywot: {
-    base: "#7B4F31",
-    secondary: "#A86C42",
-    accent: "#442614",
-    contrast: 0.14,
+    base: "#8D5C3B",
+    secondary: "#C28150",
+    accent: "#512E1B",
+    contrast: 0.16,
     featureCount: 4,
     featureSize: 0.18,
     bandFrequency: 1.2,
     accentStrength: 0.15,
   },
+};
+
+const FILL_LIGHT_OVERRIDES: Record<
+  string,
+  {
+    color: string;
+    intensity: number;
+  }
+> = {
+  hygiea: { color: "#8A9498", intensity: 0.28 },
+  quaoar: { color: "#B77C5F", intensity: 0.18 },
+  salacia: { color: "#A3B0B8", intensity: 0.22 },
+  orcus: { color: "#A8B4BD", intensity: 0.14 },
+  vanth: { color: "#95A2AB", intensity: 0.16 },
+  weywot: { color: "#C28150", intensity: 0.18 },
 };
 
 const TAU = Math.PI * 2;
@@ -174,6 +189,35 @@ const createFeatureSet = (
 
 export const shouldRenderDirectSurfaceMap = (body: CelestialBody) => {
   return body.id !== "hygiea";
+};
+
+export const getSurfaceFillLight = (body: CelestialBody) => {
+  if (body.type === "star" || body.visualProvenance?.fidelity === "measured") {
+    return null;
+  }
+
+  const override = FILL_LIGHT_OVERRIDES[body.id];
+  if (override) {
+    return override;
+  }
+
+  const profile = getSurfaceProfile(body);
+  const intensityByFidelity = {
+    "observational-model": 0.08,
+    interpretive: 0.1,
+    procedural: 0.12,
+  } as const;
+
+  const intensity =
+    body.visualProvenance?.fidelity &&
+    body.visualProvenance.fidelity in intensityByFidelity
+      ? intensityByFidelity[body.visualProvenance.fidelity]
+      : 0.08;
+
+  return {
+    color: profile.secondary,
+    intensity,
+  };
 };
 
 export const createProceduralSurfaceTexture = (

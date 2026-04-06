@@ -109,6 +109,32 @@ export class PrivilegedPosition {
     return cameraDir;
   }
 
+  static calculateContextAwareDirection(
+    targetPos: THREE.Vector3,
+    sunPos: THREE.Vector3,
+    parentPos?: THREE.Vector3,
+    targetUpVector?: THREE.Vector3
+  ): THREE.Vector3 {
+    const solarDirection = this.calculateSolarAlignedDirection(
+      targetPos,
+      sunPos,
+      targetUpVector
+    );
+
+    if (!parentPos) {
+      return solarDirection;
+    }
+
+    const awayFromParent = targetPos.clone().sub(parentPos);
+    if (awayFromParent.lengthSq() < 1e-9) {
+      return solarDirection;
+    }
+
+    // For close moons, favor the side away from the parent so the planet does
+    // not dominate the frame, while keeping some solar bias for readable lighting.
+    return solarDirection.lerp(awayFromParent.normalize(), 0.78).normalize();
+  }
+
   /**
    * Check if camera position is occluded by another body
    * Only checks against solid sphere meshes (planets), not orbit lines

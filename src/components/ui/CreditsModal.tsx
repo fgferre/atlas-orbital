@@ -92,6 +92,21 @@ export const CreditsModal = () => {
                   link="https://www.solarsystemscope.com/"
                 />
                 <CreditItem
+                  title="NASA Science / Dawn / USGS"
+                  description="Observation-based Vesta model and Dawn-era surface products used for high-fidelity asteroid visuals."
+                  link="https://science.nasa.gov/resource/vesta-3d-model/"
+                />
+                <CreditItem
+                  title="DAMIT / Observatoire de la Cote d'Azur"
+                  description="Observation-derived asteroid shape models for bodies such as Pallas and Hygiea."
+                  link="https://observations.lam.fr/astero/3Dshape/"
+                />
+                <CreditItem
+                  title="ESO VLT / Wikimedia Commons"
+                  description="Remote-observation reference maps used where no spacecraft global texture exists, including Hygiea."
+                  link="https://upload.wikimedia.org/wikipedia/commons/f/f9/Hygiea_VLT_2017-2018_map.png"
+                />
+                <CreditItem
                   title="NASA Image and Video Library"
                   description="Official imagery for backgrounds and deep space objects."
                 />

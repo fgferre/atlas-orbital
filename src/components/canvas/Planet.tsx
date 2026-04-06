@@ -19,6 +19,7 @@ import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { PlanetModel } from "./PlanetModel";
 import {
   createProceduralSurfaceTexture,
+  getSurfaceFillLight,
   shouldRenderDirectSurfaceMap,
 } from "../../utils/proceduralSurface";
 
@@ -500,6 +501,10 @@ const PlanetVisual = ({
     if (body.type === "star" || textureMap) return null;
     return createProceduralSurfaceTexture(body);
   }, [body, textureMap]);
+  const surfaceFillLight = useMemo(() => {
+    if (body.type === "star" || textureMap) return null;
+    return getSurfaceFillLight(body);
+  }, [body, textureMap]);
   const surfaceMap = textureMap ?? proceduralSurfaceMap ?? undefined;
 
   useEffect(() => {
@@ -616,9 +621,9 @@ const PlanetVisual = ({
 
     const planetParams: THREE.MeshStandardMaterialParameters = {
       color: surfaceMap ? "#ffffff" : body.color,
-      emissive: "#000", // Stars handled above, so this is always black for planets
+      emissive: surfaceFillLight?.color ?? "#000",
       emissiveMap: null,
-      emissiveIntensity: 0,
+      emissiveIntensity: surfaceFillLight?.intensity ?? 0,
       roughness: roughness,
       metalness: metalness,
     };
@@ -774,6 +779,7 @@ const PlanetVisual = ({
     metalness,
     sunEmissive,
     nightLightIntensity,
+    surfaceFillLight,
   ]);
 
   useEffect(() => {

@@ -17,6 +17,7 @@ import { useStore } from "../../store";
 import { ensureSphericalUvProjection } from "../../utils/sphericalUv";
 import {
   createProceduralSurfaceTexture,
+  getSurfaceFillLight,
   shouldRenderDirectSurfaceMap,
 } from "../../utils/proceduralSurface";
 
@@ -164,6 +165,10 @@ const OBJModel = ({
     if (directTexture) return null;
     return createProceduralSurfaceTexture(body);
   }, [body, directTexture]);
+  const surfaceFillLight = useMemo(() => {
+    if (directTexture) return null;
+    return getSurfaceFillLight(body);
+  }, [body, directTexture]);
   const surfaceTexture = directTexture ?? proceduralTexture ?? undefined;
 
   useEffect(() => {
@@ -187,6 +192,8 @@ const OBJModel = ({
           roughness: roughness ?? 1,
           metalness: metalness ?? 0,
           color: surfaceTexture ? 0xffffff : body.color,
+          emissive: surfaceFillLight?.color ?? "#000",
+          emissiveIntensity: surfaceFillLight?.intensity ?? 0,
         };
 
         if (surfaceTexture) {
@@ -211,7 +218,7 @@ const OBJModel = ({
     }
 
     return { cloned: c, normalizationScale: normScale };
-  }, [obj, surfaceTexture, roughness, metalness, body.color]);
+  }, [obj, surfaceTexture, surfaceFillLight, roughness, metalness, body.color]);
 
   useEffect(() => {
     return () => {
