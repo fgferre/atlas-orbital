@@ -104,7 +104,7 @@ export const Loader = () => {
       return;
     }
 
-    const delayMs = canHideSoon ? 500 : 12000;
+    const delayMs = canHideSoon ? 450 : 900;
     const timer = window.setTimeout(() => {
       exitStartedRef.current = true;
       setVisible(false);

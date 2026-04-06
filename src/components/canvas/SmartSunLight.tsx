@@ -16,8 +16,8 @@ import { useStore } from "../../store";
  */
 export const SmartSunLight = forwardRef<
   THREE.DirectionalLight,
-  { intensity?: number }
->(({ intensity = 1.5 }, ref) => {
+  { intensity?: number; shadowMapSize?: number }
+>(({ intensity = 1.5, shadowMapSize = 4096 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
@@ -88,7 +88,7 @@ export const SmartSunLight = forwardRef<
         ref={lightRef}
         intensity={intensity}
         castShadow
-        shadow-mapSize={[4096, 4096]}
+        shadow-mapSize={[shadowMapSize, shadowMapSize]}
         shadow-bias={-0.00005}
       >
         {/* 

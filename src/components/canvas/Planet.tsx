@@ -1,25 +1,41 @@
-import { useRef, useMemo, Suspense, useEffect } from "react";
+import { useRef, useMemo, Suspense, useEffect, useState } from "react";
 import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useTexture, Line } from "@react-three/drei";
+import { Line } from "@react-three/drei";
 import {
   type CelestialBody,
   AstroPhysics,
   KM_TO_3D_UNITS,
 } from "../../lib/astrophysics";
+import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
+import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
+import { getOrbitCacheKey, getOrbitSegments } from "../../lib/orbitQuality";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { resolveTextureRequest } from "../../lib/textureVariants";
+import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { PlanetModel } from "./PlanetModel";
+import {
+  createProceduralSurfaceTexture,
+  shouldRenderDirectSurfaceMap,
+} from "../../utils/proceduralSurface";
 
 const BODIES_BY_ID = new Map(SOLAR_SYSTEM_BODIES.map((b) => [b.id, b]));
+const PARENT_BY_ID = Object.fromEntries(
+  SOLAR_SYSTEM_BODIES.map((body) => [body.id, body.parentId ?? null])
+);
+const SYSTEM_MULTIPLIERS =
+  AstroPhysics.calculateSystemMultipliers(SOLAR_SYSTEM_BODIES);
+const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
 } from "./shaders/atmosphereShader";
+import type { ResolvedQualityName } from "../../lib/qualityProfile";
 
 import {
   planetShadowVertexPatch,
@@ -31,8 +47,6 @@ import type { Line2 } from "three-stdlib";
 const PROGRADE_ARROW_BASE_WIDTH = 0.68;
 const PROGRADE_ARROW_BASE_LENGTH = 1.0;
 const PROGRADE_ARROW_BASE_DEPTH = 0.06;
-const TRANSPARENT_TEXTURE_DATA_URL =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
 type OrbitLineMaterial = THREE.Material & {
   opacity: number;
@@ -334,6 +348,7 @@ interface PlanetProps {
   ringShadowIntensity: number;
   earthRotationOffset: number;
   nightLightIntensity: number;
+  qualityProfileName: ResolvedQualityName;
 }
 
 const PlanetVisual = ({
@@ -345,6 +360,9 @@ const PlanetVisual = ({
   ringShadowIntensity,
   earthRotationOffset,
   nightLightIntensity,
+  qualityProfileName,
+  assetPriority,
+  baseTextureSalience,
 }: {
   body: CelestialBody;
   roughness: number;
@@ -354,22 +372,101 @@ const PlanetVisual = ({
   ringShadowIntensity: number;
   earthRotationOffset: number;
   nightLightIntensity: number;
+  qualityProfileName: ResolvedQualityName;
+  assetPriority: number;
+  baseTextureSalience: number;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
+  const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
-  const [
-    ringTextureLoaded,
-    cloudTextureLoaded,
-    bodyTextureLoaded,
-    nightTextureLoaded,
-  ] = useTexture([
-    body.textures?.ring ?? TRANSPARENT_TEXTURE_DATA_URL,
-    body.textures?.clouds ?? TRANSPARENT_TEXTURE_DATA_URL,
-    body.textures?.map ?? TRANSPARENT_TEXTURE_DATA_URL,
-    body.textures?.night ?? TRANSPARENT_TEXTURE_DATA_URL,
-  ]);
+  const [screenSalience, setScreenSalience] = useState(baseTextureSalience);
+  const screenSalienceRef = useRef(baseTextureSalience);
+  const directSurfaceMapEnabled =
+    Boolean(body.textures?.map) && shouldRenderDirectSurfaceMap(body);
+  const mapSalience = Math.max(baseTextureSalience, screenSalience);
+  const shouldPinMap =
+    assetPriority <= 1 || body.id === "sun" || focusId === body.id;
+  const shouldLoadMap =
+    body.id === "sun" || assetPriority <= 2 || mapSalience >= 0.35;
+  const shouldLoadSecondary =
+    assetPriority <= 1 || focusId === body.id || mapSalience >= 0.78;
+
+  const mapRequest = useMemo(() => {
+    if (!directSurfaceMapEnabled) {
+      return null;
+    }
+
+    return resolveTextureRequest(
+      body,
+      "map",
+      qualityProfileName,
+      mapSalience,
+      TEXTURE_VARIANT_MANIFEST
+    );
+  }, [body, directSurfaceMapEnabled, mapSalience, qualityProfileName]);
+
+  const ringRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "ring",
+        qualityProfileName,
+        mapSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, mapSalience, qualityProfileName]
+  );
+
+  const cloudRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "clouds",
+        qualityProfileName,
+        mapSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, mapSalience, qualityProfileName]
+  );
+
+  const nightRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "night",
+        qualityProfileName,
+        mapSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, mapSalience, qualityProfileName]
+  );
+
+  const ringTextureLoaded = useDeferredTexture(ringRequest.selectedPath, {
+    enabled: shouldLoadSecondary,
+    pin: shouldPinMap,
+  });
+  const cloudTextureLoaded = useDeferredTexture(cloudRequest.selectedPath, {
+    enabled: shouldLoadSecondary,
+    pin: shouldPinMap,
+  });
+  const bodyTextureLoaded = useDeferredTexture(mapRequest?.selectedPath, {
+    enabled: shouldLoadMap,
+    pin: shouldPinMap,
+  });
+  const nightTextureLoaded = useDeferredTexture(nightRequest.selectedPath, {
+    enabled: shouldLoadSecondary,
+    pin: shouldPinMap,
+  });
+
+  useEffect(() => {
+    if (assetPriority !== 1 || !mapRequest?.selectedPath) {
+      return;
+    }
+
+    void preloadDeferredTexture(mapRequest.selectedPath);
+  }, [assetPriority, mapRequest?.selectedPath]);
 
   // Calculate orientation quaternion based on IAU pole data
   const orientationQuaternion = useMemo(() => {
@@ -393,10 +490,23 @@ const PlanetVisual = ({
     }
   }, [body.poleRA, body.poleDec, body.axialTilt]);
 
-  const textureRing = body.textures?.ring ? ringTextureLoaded : undefined;
-  const textureClouds = body.textures?.clouds ? cloudTextureLoaded : undefined;
-  const textureMap = body.textures?.map ? bodyTextureLoaded : undefined;
-  const textureNight = body.textures?.night ? nightTextureLoaded : undefined;
+  const textureRing = ringTextureLoaded.texture ?? undefined;
+  const textureClouds = cloudTextureLoaded.texture ?? undefined;
+  const textureMap = directSurfaceMapEnabled
+    ? (bodyTextureLoaded.texture ?? undefined)
+    : undefined;
+  const textureNight = nightTextureLoaded.texture ?? undefined;
+  const proceduralSurfaceMap = useMemo(() => {
+    if (body.type === "star" || textureMap) return null;
+    return createProceduralSurfaceTexture(body);
+  }, [body, textureMap]);
+  const surfaceMap = textureMap ?? proceduralSurfaceMap ?? undefined;
+
+  useEffect(() => {
+    return () => {
+      proceduralSurfaceMap?.dispose();
+    };
+  }, [proceduralSurfaceMap]);
 
   // Cloud Material (PBR + Analytical Shadows)
   const cloudMaterial = useMemo(() => {
@@ -460,6 +570,12 @@ const PlanetVisual = ({
     };
   }, [cloudMaterial]);
 
+  useEffect(() => {
+    return () => {
+      cloudShadowMaterial?.dispose();
+    };
+  }, [cloudShadowMaterial]);
+
   // Atmosphere Shader (Fresnel Glow)
   const atmosphereMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -486,22 +602,32 @@ const PlanetVisual = ({
   const planetMaterial = useMemo(() => {
     // Use MeshBasicMaterial for stars (Sun) so they are not affected by lights/shadows
     if (body.type === "star") {
-      return new THREE.MeshBasicMaterial({
-        map: textureMap,
+      const starParams: THREE.MeshBasicMaterialParameters = {
         color: new THREE.Color(body.color).multiplyScalar(sunEmissive),
         toneMapped: false, // Allow HDR values for Bloom
-      });
+      };
+
+      if (surfaceMap) {
+        starParams.map = surfaceMap;
+      }
+
+      return new THREE.MeshBasicMaterial(starParams);
     }
 
-    const mat = new THREE.MeshStandardMaterial({
-      map: textureMap,
-      color: textureMap ? "#ffffff" : body.color,
+    const planetParams: THREE.MeshStandardMaterialParameters = {
+      color: surfaceMap ? "#ffffff" : body.color,
       emissive: "#000", // Stars handled above, so this is always black for planets
       emissiveMap: null,
       emissiveIntensity: 0,
       roughness: roughness,
       metalness: metalness,
-    });
+    };
+
+    if (surfaceMap) {
+      planetParams.map = surfaceMap;
+    }
+
+    const mat = new THREE.MeshStandardMaterial(planetParams);
 
     // Apply Earth day/night shader (takes priority over ring shadows)
     if (body.id === "earth" && textureNight) {
@@ -637,7 +763,7 @@ const PlanetVisual = ({
 
     return mat;
   }, [
-    textureMap,
+    surfaceMap,
     textureNight,
     textureRing,
     body.id,
@@ -649,6 +775,12 @@ const PlanetVisual = ({
     sunEmissive,
     nightLightIntensity,
   ]);
+
+  useEffect(() => {
+    return () => {
+      planetMaterial?.dispose();
+    };
+  }, [planetMaterial]);
 
   // Analytical Planet Shadow on Rings Logic
   const ringMaterial = useMemo(() => {
@@ -690,6 +822,12 @@ const PlanetVisual = ({
     return mat;
   }, [textureRing, ringEmissive, ringShadowIntensity]);
 
+  useEffect(() => {
+    return () => {
+      ringMaterial?.dispose();
+    };
+  }, [ringMaterial]);
+
   const ringGeometry = useMemo(() => {
     if (!body.ringSystem) return null;
 
@@ -718,7 +856,7 @@ const PlanetVisual = ({
 
   const ringRef = useRef<THREE.Mesh>(null);
 
-  useFrame(() => {
+  useFrame(({ camera, size }) => {
     if (!groupRef.current) return;
 
     // 1. Scaling
@@ -728,7 +866,30 @@ const PlanetVisual = ({
     } else {
       s = body.radiusKm * KM_TO_3D_UNITS;
     }
-    groupRef.current.scale.setScalar(s);
+    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
+    groupRef.current.scale.set(s * sx, s * sy, s * sz);
+
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const worldPos = new THREE.Vector3();
+      groupRef.current.getWorldPosition(worldPos);
+      const distance = camera.position.distanceTo(worldPos);
+      const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
+      const worldPerPixel =
+        (2 * distance * Math.tan(fovVertRad / 2)) / Math.max(1, size.height);
+      const visualRadius = s * Math.max(sx, sy, sz);
+      const radiusPx = visualRadius / Math.max(worldPerPixel, 1e-6);
+
+      let nextScreenSalience = 0.12;
+      if (radiusPx >= 140) nextScreenSalience = 1;
+      else if (radiusPx >= 84) nextScreenSalience = 0.82;
+      else if (radiusPx >= 42) nextScreenSalience = 0.62;
+      else if (radiusPx >= 18) nextScreenSalience = 0.38;
+
+      if (Math.abs(nextScreenSalience - screenSalienceRef.current) > 0.04) {
+        screenSalienceRef.current = nextScreenSalience;
+        setScreenSalience(nextScreenSalience);
+      }
+    }
 
     // 2. Rotation & Shader Uniforms
     if (rotationRef.current) {
@@ -875,10 +1036,23 @@ const PlanetVisualWrapper = (props: {
   ringShadowIntensity: number;
   earthRotationOffset: number; // Added this prop
   nightLightIntensity: number;
+  qualityProfileName: ResolvedQualityName;
+  assetPriority: number;
+  baseTextureSalience: number;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleMode = useStore((state) => state.scaleMode);
   const selectId = useStore((state) => state.selectId);
+  const fallbackSurfaceMap = useMemo(() => {
+    if (props.body.type === "star") return null;
+    return createProceduralSurfaceTexture(props.body, 256, 128);
+  }, [props.body]);
+
+  useEffect(() => {
+    return () => {
+      fallbackSurfaceMap?.dispose();
+    };
+  }, [fallbackSurfaceMap]);
 
   useFrame(() => {
     if (!meshRef.current) return;
@@ -888,7 +1062,8 @@ const PlanetVisualWrapper = (props: {
     } else {
       s = props.body.radiusKm * KM_TO_3D_UNITS;
     }
-    meshRef.current.scale.setScalar(s);
+    const [sx, sy, sz] = props.body.shapeScale ?? [1, 1, 1];
+    meshRef.current.scale.set(s * sx, s * sy, s * sz);
   });
 
   const fallback = (
@@ -900,12 +1075,23 @@ const PlanetVisualWrapper = (props: {
       }}
     >
       <sphereGeometry args={[1, 32, 32]} />
-      <meshStandardMaterial color={props.body.color} />
+      <meshStandardMaterial
+        {...(fallbackSurfaceMap
+          ? { map: fallbackSurfaceMap, color: "#ffffff" }
+          : { color: props.body.color })}
+      />
     </mesh>
   );
 
   // Check for 3D Model first
   if (props.body.model) {
+    const shouldLoadModel =
+      props.assetPriority <= 1 || props.baseTextureSalience >= 0.82;
+
+    if (!shouldLoadModel) {
+      return fallback;
+    }
+
     return (
       <ErrorBoundary fallback={fallback}>
         <Suspense fallback={fallback}>
@@ -916,6 +1102,9 @@ const PlanetVisualWrapper = (props: {
             sunEmissive={props.sunEmissive}
             ringEmissive={props.ringEmissive}
             ringShadowIntensity={props.ringShadowIntensity}
+            qualityProfileName={props.qualityProfileName}
+            assetPriority={props.assetPriority}
+            baseTextureSalience={props.baseTextureSalience}
           />
         </Suspense>
       </ErrorBoundary>
@@ -941,6 +1130,7 @@ export const Planet = ({
   ringShadowIntensity,
   earthRotationOffset,
   nightLightIntensity,
+  qualityProfileName,
 }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<Line2 | null>(null);
@@ -989,10 +1179,20 @@ export const Planet = ({
     return { main, halo };
   }, [body.color, vectorIntensity]);
 
-  // Calculate system multipliers once
-  const systemMultipliers = useMemo(() => {
-    return AstroPhysics.calculateSystemMultipliers(SOLAR_SYSTEM_BODIES);
-  }, []);
+  const focusAncestorIds = useMemo(() => {
+    if (!focusId) return new Set<string>();
+
+    const ancestors = new Set<string>();
+    let curParentId = PARENT_BY_ID[focusId] ?? null;
+
+    while (curParentId) {
+      if (ancestors.has(curParentId)) break;
+      ancestors.add(curParentId);
+      curParentId = PARENT_BY_ID[curParentId] ?? null;
+    }
+
+    return ancestors;
+  }, [focusId]);
 
   const orbitSalience = useMemo(() => {
     if (!declutterOrbits) return 1;
@@ -1013,34 +1213,76 @@ export const Planet = ({
     if (focusBody.parentId && body.parentId === focusBody.parentId) return 0.25;
 
     // 2) Keep the ancestry chain visible (e.g., Moon -> Earth -> Sun).
-    const ancestors = new Set<string>();
-    let curParentId = focusBody.parentId ?? null;
-    while (curParentId) {
-      const parent = BODIES_BY_ID.get(curParentId);
-      if (!parent) break;
-      ancestors.add(parent.id);
-      curParentId = parent.parentId ?? null;
-    }
-    if (ancestors.has(body.id)) return 0.45;
+    if (focusAncestorIds.has(body.id)) return 0.45;
 
     // 3) Keep major bodies faintly for global orientation.
     if (body.type === "planet" || body.type === "dwarf") return 0.08;
 
     return 0.02;
-  }, [declutterOrbits, focusId, body.id, body.type, body.parentId]);
+  }, [
+    body.id,
+    body.parentId,
+    body.type,
+    declutterOrbits,
+    focusAncestorIds,
+    focusId,
+  ]);
+
+  const assetPriority = useMemo(() => {
+    if (body.id === "sun") return 0;
+
+    if (!focusId) {
+      return body.type === "planet" || body.type === "dwarf" ? 1 : 2;
+    }
+
+    if (body.id === focusId) return 0;
+
+    const focusBody = BODIES_BY_ID.get(focusId);
+    if (!focusBody) return 1;
+
+    if (body.parentId === focusId) return 1;
+    if (focusBody.parentId && body.parentId === focusBody.parentId) return 1;
+    if (focusAncestorIds.has(body.id)) return 1;
+    if (body.type === "planet" || body.type === "dwarf") return 2;
+
+    return 3;
+  }, [body.id, body.parentId, body.type, focusAncestorIds, focusId]);
+
+  const baseTextureSalience = useMemo(() => {
+    if (body.id === "sun") return 1;
+    if (assetPriority === 0) return 1;
+    if (assetPriority === 1) return 0.72;
+    if (assetPriority === 2) return 0.38;
+    return 0.14;
+  }, [assetPriority, body.id]);
 
   // Orbit points with adaptive resolution
   const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
     if (declutterOrbits && orbitSalience <= 0) return null;
 
-    // Use 4x higher resolution for focused bodies
-    const segments = focusId === body.id ? 16384 : 4096;
+    const segments = getOrbitSegments({
+      bodyId: body.id,
+      focusId,
+      orbitProfile: qualityProfileName,
+    });
 
     // Get system multiplier for this body (default to 1)
     const multiplier = body.parentId
-      ? systemMultipliers[body.parentId] || 1
+      ? SYSTEM_MULTIPLIERS[body.parentId] || 1
       : 1;
+    const cacheKey = getOrbitCacheKey({
+      bodyId: body.id,
+      focusId,
+      orbitProfile: qualityProfileName,
+      scaleMode,
+      multiplier,
+    });
+
+    const cachedPoints = ORBIT_POINTS_CACHE.get(cacheKey);
+    if (cachedPoints) {
+      return cachedPoints;
+    }
 
     const pts = AstroPhysics.getRelativeOrbitPoints(
       body.orbit,
@@ -1049,14 +1291,15 @@ export const Planet = ({
       multiplier
     );
 
+    ORBIT_POINTS_CACHE.set(cacheKey, pts);
     return pts;
   }, [
     body,
-    scaleMode,
-    focusId,
-    systemMultipliers,
     declutterOrbits,
     orbitSalience,
+    focusId,
+    qualityProfileName,
+    scaleMode,
   ]);
 
   useFrame((state) => {
@@ -1066,7 +1309,7 @@ export const Planet = ({
 
     // 1. Update Group Position (Orbital motion)
     const multiplier = body.parentId
-      ? systemMultipliers[body.parentId] || 1
+      ? SYSTEM_MULTIPLIERS[body.parentId] || 1
       : 1;
 
     const pos = AstroPhysics.calculateLocalPosition(
@@ -1283,6 +1526,9 @@ export const Planet = ({
           ringShadowIntensity={ringShadowIntensity}
           earthRotationOffset={earthRotationOffset} // Passed down
           nightLightIntensity={nightLightIntensity}
+          qualityProfileName={qualityProfileName}
+          assetPriority={assetPriority}
+          baseTextureSalience={baseTextureSalience}
         />
 
         {/* 

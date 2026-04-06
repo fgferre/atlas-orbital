@@ -23,6 +23,22 @@ export interface OrbitParams {
   n: number; // Mean Motion (deg/day)
 }
 
+export type VisualFidelity =
+  | "measured"
+  | "observational-model"
+  | "interpretive"
+  | "procedural";
+
+export interface VisualProvenance {
+  fidelity: VisualFidelity;
+  summary: string;
+  limitationReason?: string;
+  sources?: Array<{
+    label: string;
+    url: string;
+  }>;
+}
+
 export interface CelestialBody {
   id: string;
   parentId?: string;
@@ -77,14 +93,51 @@ export interface CelestialBody {
     outerRadius: number; // In planetary radii
   };
 
+  // Optional non-uniform scale for observation-based ellipsoids.
+  shapeScale?: [number, number, number];
+
   model?: {
     path: string;
     scale?: number;
     rotationOffset?: [number, number, number];
   };
+
+  visualProvenance?: VisualProvenance;
 }
 
 export class AstroPhysics {
+  static parseScientificValue(value?: string): number {
+    if (!value) return Number.NaN;
+
+    const supers: Record<string, string> = {
+      "⁰": "0",
+      "¹": "1",
+      "²": "2",
+      "³": "3",
+      "⁴": "4",
+      "⁵": "5",
+      "⁶": "6",
+      "⁷": "7",
+      "⁸": "8",
+      "⁹": "9",
+      "⁻": "-",
+      "⁺": "+",
+    };
+
+    const normalized = value
+      .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]/g, (match) => supers[match] ?? match)
+      .replace(/[~≈]/g, "")
+      .replace(/\([^)]*\)/g, "")
+      .replace(/×\s*10/g, "e")
+      .replace(/,/g, "")
+      .replace(/\s+/g, "");
+
+    const numeric = normalized.match(/[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?/i);
+    if (!numeric) return Number.NaN;
+
+    return Number.parseFloat(numeric[0]);
+  }
+
   static calculateLocalPosition(
     orbitParams: OrbitParams,
     date: Date,
@@ -259,7 +312,13 @@ export class AstroPhysics {
     // But we can simplify for solar system relative to Earth/Sun if needed,
     // or use standard units. Let's use standard SI units.
 
-    if (currentDistanceAU <= 0) return 0;
+    if (
+      currentDistanceAU <= 0 ||
+      !Number.isFinite(parentMassKg) ||
+      parentMassKg <= 0
+    ) {
+      return Number.NaN;
+    }
 
     const G = 6.6743e-11;
     const r = currentDistanceAU * AU_IN_KM * 1000; // meters
@@ -277,6 +336,10 @@ export class AstroPhysics {
 
   static calculateEscapeVelocity(massKg: number, radiusKm: number): number {
     // v_e = sqrt(2GM/r)
+    if (!Number.isFinite(massKg) || massKg <= 0 || radiusKm <= 0) {
+      return Number.NaN;
+    }
+
     const G = 6.6743e-11;
     const r = radiusKm * 1000; // meters
     const v = Math.sqrt((2 * G * massKg) / r);

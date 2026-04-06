@@ -1,5 +1,14 @@
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { Suspense, useEffect, useRef, memo, type RefObject } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+  type RefObject,
+} from "react";
 import {
   OrbitControls as DreiOrbitControls,
   Environment,
@@ -18,6 +27,12 @@ import {
   getPresetForContext,
 } from "../../config/visualPresets";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
+import {
+  resolveDeferredTextureBudget,
+  setDeferredTextureBudget,
+} from "../../lib/deferredTextureCache";
+import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
 import { SolarSystem } from "./SolarSystem";
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
@@ -74,6 +89,7 @@ interface SceneContentProps {
   controlsRef: RefObject<OrbitControlsImpl | null>;
   debugValues: DebugValues;
   debugMode: boolean;
+  bloomIntensityMultiplier: number;
 }
 
 const SceneContent = ({
@@ -86,6 +102,7 @@ const SceneContent = ({
   controlsRef,
   debugValues,
   debugMode,
+  bloomIntensityMultiplier,
 }: SceneContentProps) => {
   const { scene } = useThree();
   const visualPreset = useStore((state) => state.visualPreset);
@@ -137,7 +154,7 @@ const SceneContent = ({
     if (bloomRef.current) {
       bloomRef.current.intensity = debugMode
         ? debugValues.bloomIntensity
-        : currentValues.current.bloomIntensity;
+        : currentValues.current.bloomIntensity * bloomIntensityMultiplier;
       bloomRef.current.luminanceThreshold = debugMode
         ? debugValues.bloomThreshold
         : currentValues.current.bloomThreshold;
@@ -185,21 +202,89 @@ const PostProcessingEffects = memo(
     bloomRef,
     hueSatRef,
     brightnessRef,
-  }: Pick<SceneContentProps, "bloomRef" | "hueSatRef" | "brightnessRef">) => {
+    bloomEnabled,
+  }: Pick<SceneContentProps, "bloomRef" | "hueSatRef" | "brightnessRef"> & {
+    bloomEnabled: boolean;
+  }) => {
+    const assignBloomRef = useCallback(
+      (effect: BloomController | null) => {
+        bloomRef.current = effect;
+      },
+      [bloomRef]
+    );
+    const assignHueSatRef = useCallback(
+      (effect: HueSaturationController | null) => {
+        hueSatRef.current = effect;
+      },
+      [hueSatRef]
+    );
+    const assignBrightnessRef = useCallback(
+      (effect: BrightnessContrastController | null) => {
+        brightnessRef.current = effect;
+      },
+      [brightnessRef]
+    );
+
     return (
       <EffectComposer>
-        <Bloom
-          ref={bloomRef}
-          mipmapBlur
-          // radius={bloomRadius} // Removed to prevent serialization issues
-        />
+        {bloomEnabled ? (
+          <Bloom
+            ref={assignBloomRef}
+            mipmapBlur
+            // radius={bloomRadius} // Removed to prevent serialization issues
+          />
+        ) : (
+          <></>
+        )}
         <ToneMapping />
-        <HueSaturation ref={hueSatRef} hue={0} />
-        <BrightnessContrast ref={brightnessRef} />
+        <HueSaturation ref={assignHueSatRef} hue={0} />
+        <BrightnessContrast ref={assignBrightnessRef} />
       </EffectComposer>
     );
   }
 );
+
+const CriticalSceneAssetsGate = () => {
+  const showStarfield = useStore((state) => state.showStarfield);
+  const starfieldSource = useStore((state) => state.starfieldSource);
+  const starfieldProviderStates = useStore(
+    (state) => state.starfieldProviderStates
+  );
+  const setCriticalAssetsReady = useStore(
+    (state) => state.setCriticalAssetsReady
+  );
+
+  useEffect(() => {
+    const providerState = starfieldProviderStates[starfieldSource];
+    const ready = isCriticalStarfieldReady(
+      showStarfield,
+      providerState?.status
+    );
+
+    setCriticalAssetsReady(ready);
+
+    return () => setCriticalAssetsReady(false);
+  }, [
+    setCriticalAssetsReady,
+    showStarfield,
+    starfieldProviderStates,
+    starfieldSource,
+  ]);
+
+  return null;
+};
+
+const DeferredTextureBudgetGate = ({
+  profileName,
+}: {
+  profileName: "ultra" | "high" | "balanced" | "constrained";
+}) => {
+  useEffect(() => {
+    setDeferredTextureBudget(resolveDeferredTextureBudget(profileName));
+  }, [profileName]);
+
+  return null;
+};
 
 /**
  * Dynamic zoom speed based on camera distance.
@@ -234,10 +319,45 @@ const DynamicZoom = ({
 
 export const Scene = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
+  const qualityMode = useStore((state) => state.qualityMode);
   const visualPreset = useStore((state) => state.visualPreset); // Get current preset
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
+  const qualityProfile = useQualityProfile(qualityMode);
+  const [rendererAntialias] = useState(() => qualityProfile.antialias);
+  const canvasDpr = useMemo(
+    () => [1, qualityProfile.dprMax] as const,
+    [qualityProfile.dprMax]
+  );
+  const cameraConfig = useMemo(
+    () => ({
+      position: [-95809369, 999990981402, 4245931557] as [
+        number,
+        number,
+        number,
+      ],
+      fov: 45,
+      near: 0.1,
+      far: 1e15,
+    }),
+    []
+  );
+  const glConfig = useMemo(
+    () => ({
+      // The WebGL antialias flag is fixed at context creation time.
+      // Keeping it stable avoids context loss when users switch profiles live.
+      antialias: rendererAntialias,
+      logarithmicDepthBuffer: true,
+    }),
+    [rendererAntialias]
+  );
+  const handleCanvasCreated = useCallback(
+    ({ gl }: { gl: THREE.WebGLRenderer }) => {
+      gl.toneMapping = THREE.ReinhardToneMapping;
+    },
+    []
+  );
 
   // Debug Controls - Refactored to use function API to get 'set'
   const [values, set] = useControls(() => ({
@@ -517,16 +637,10 @@ export const Scene = () => {
       <Canvas
         shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
-        camera={{
-          position: [-95809369, 999990981402, 4245931557], // Far position for intro animation (Milky Way view)
-          fov: 45,
-          near: 0.1,
-          far: 1e15,
-        }}
-        gl={{ antialias: true, logarithmicDepthBuffer: true }}
-        onCreated={({ gl }) => {
-          gl.toneMapping = THREE.ReinhardToneMapping;
-        }}
+        dpr={canvasDpr}
+        camera={cameraConfig}
+        gl={glConfig}
+        onCreated={handleCanvasCreated}
       >
         <SceneContent
           bloomRef={bloomRef}
@@ -538,12 +652,17 @@ export const Scene = () => {
           controlsRef={controlsRef}
           debugValues={debugValues}
           debugMode={debugMode}
+          bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
         />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <EclipticGrid />}
         <Suspense fallback={null}>
           <StarfieldManager />
-          <Environment resolution={256} frames={1} far={1e9}>
+          <Environment
+            resolution={qualityProfile.environmentResolution}
+            frames={1}
+            far={1e9}
+          >
             {/* Starfield removed from Environment - was causing planet lighting issues */}
             {/* Only sun mesh for reflections */}
             <mesh position={[0, 0, 0]} scale={[100, 100, 100]}>
@@ -566,7 +685,10 @@ export const Scene = () => {
           Smart Sun Light (Directional)
           - Casts high-quality shadows for the focused object
         */}
-        <SmartSunLight ref={smartSunLightRef} />
+        <SmartSunLight
+          ref={smartSunLightRef}
+          shadowMapSize={qualityProfile.shadowMapSize}
+        />
 
         <Suspense fallback={null}>
           <SolarSystem
@@ -577,6 +699,7 @@ export const Scene = () => {
             ringShadowIntensity={ringShadowIntensity}
             earthRotationOffset={earthRotationOffset}
             nightLightIntensity={nightLightIntensity}
+            qualityProfileName={qualityProfile.name}
           />
         </Suspense>
         <OverlayPositionTracker />
@@ -598,7 +721,10 @@ export const Scene = () => {
           bloomRef={bloomRef}
           hueSatRef={hueSatRef}
           brightnessRef={brightnessRef}
+          bloomEnabled={qualityProfile.bloomEnabled}
         />
+        <DeferredTextureBudgetGate profileName={qualityProfile.name} />
+        <CriticalSceneAssetsGate />
         <SceneReadyChecker />
       </Canvas>
       <PlanetOverlay />

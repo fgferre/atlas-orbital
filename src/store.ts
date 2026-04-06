@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { VisualPresetType } from "./config/visualPresets";
+import type { QualityMode } from "./lib/qualityProfile";
 import type { StarfieldProviderState, StarfieldSource } from "./lib/starfield";
 
 interface AppState {
@@ -19,6 +20,7 @@ interface AppState {
   showEclipticGrid: boolean;
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
+  qualityMode: QualityMode;
   visualPreset: VisualPresetType;
   autoPresetEnabled: boolean;
   focusHistory: string[];
@@ -41,6 +43,7 @@ interface AppState {
   };
   showTutorial: boolean;
   tutorialStep: number;
+  criticalAssetsReady: boolean;
   isSceneReady: boolean;
   isLoaderHidden: boolean;
   hasPlayedIntroAnimation: boolean;
@@ -64,6 +67,7 @@ interface AppState {
   toggleEclipticGrid: () => void;
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
+  setQualityMode: (mode: QualityMode) => void;
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
@@ -82,6 +86,7 @@ interface AppState {
   openTutorial: () => void;
   reopenTutorial: () => void;
   setTutorialStep: (step: number) => void;
+  setCriticalAssetsReady: (ready: boolean) => void;
   setSceneReady: (ready: boolean) => void;
   setLoaderHidden: (hidden: boolean) => void;
   setHasPlayedIntroAnimation: (played: boolean) => void;
@@ -89,6 +94,27 @@ interface AppState {
   debugMode: boolean;
   toggleDebugMode: () => void;
 }
+
+const QUALITY_MODE_STORAGE_KEY = "qualityMode";
+
+const getInitialQualityMode = (): QualityMode => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return "auto";
+  }
+
+  const storedValue = localStorage.getItem(QUALITY_MODE_STORAGE_KEY);
+  if (
+    storedValue === "auto" ||
+    storedValue === "ultra" ||
+    storedValue === "high" ||
+    storedValue === "balanced" ||
+    storedValue === "constrained"
+  ) {
+    return storedValue;
+  }
+
+  return "auto";
+};
 
 export const useStore = create<AppState>((set) => ({
   datetime: new Date(),
@@ -103,6 +129,7 @@ export const useStore = create<AppState>((set) => ({
   showEclipticGrid: true,
   showProgradeVector: true,
   scaleMode: "didactic",
+  qualityMode: getInitialQualityMode(),
   visualPreset: "DEEP_SPACE",
   autoPresetEnabled: true,
   focusHistory: [],
@@ -134,6 +161,7 @@ export const useStore = create<AppState>((set) => ({
           | null)
       : null,
   tutorialStep: 0,
+  criticalAssetsReady: false,
   isSceneReady: false,
   isLoaderHidden: false,
   hasPlayedIntroAnimation: false, // Always play on page load
@@ -228,6 +256,15 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({
       scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
     })),
+  setQualityMode: (qualityMode) => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(QUALITY_MODE_STORAGE_KEY, qualityMode);
+    }
+
+    set((state) =>
+      state.qualityMode === qualityMode ? state : { qualityMode }
+    );
+  },
   setVisualPreset: (visualPreset) => set({ visualPreset }),
   toggleAutoPreset: () =>
     set((state) => ({ autoPresetEnabled: !state.autoPresetEnabled })),
@@ -263,6 +300,12 @@ export const useStore = create<AppState>((set) => ({
       hasPlayedIntroAnimation: false, // Triggers intro animation to replay
     }),
   setTutorialStep: (step) => set({ tutorialStep: step }),
+  setCriticalAssetsReady: (ready) =>
+    set((state) =>
+      state.criticalAssetsReady === ready
+        ? state
+        : { criticalAssetsReady: ready }
+    ),
   setSceneReady: (ready) =>
     set((state) =>
       state.isSceneReady === ready ? state : { isSceneReady: ready }

@@ -1,6 +1,15 @@
 import { useState } from "react";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
+
+const QUALITY_MODE_LABELS = {
+  auto: "Auto",
+  ultra: "Ultra",
+  high: "High",
+  balanced: "Balanced",
+  constrained: "Saver",
+} as const;
 
 export const LayersPanel = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -20,6 +29,8 @@ export const LayersPanel = () => {
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
+  const qualityMode = useStore((state) => state.qualityMode);
+  const setQualityMode = useStore((state) => state.setQualityMode);
   const showStarfield = useStore((state) => state.showStarfield);
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
   const starfieldSource = useStore((state) => state.starfieldSource);
@@ -33,6 +44,7 @@ export const LayersPanel = () => {
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const reopenTutorial = useStore((state) => state.reopenTutorial);
   const toggleCredits = useStore((state) => state.toggleCredits);
+  const qualityProfile = useQualityProfile(qualityMode);
   const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
   const starfieldStatusMessage =
     activeStarfieldProviderState.status === "loading"
@@ -116,6 +128,36 @@ export const LayersPanel = () => {
                 Realistic
               </button>
             </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
+              Quality
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(
+                Object.keys(QUALITY_MODE_LABELS) as Array<
+                  keyof typeof QUALITY_MODE_LABELS
+                >
+              ).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setQualityMode(mode)}
+                  className={`py-1 text-[10px] font-bold uppercase transition-all border ${
+                    qualityMode === mode
+                      ? "bg-nasa-accent text-black border-nasa-accent shadow-[0_0_5px_rgba(0,240,255,0.3)]"
+                      : "text-gray-500 hover:text-white border-white/10 bg-black/40"
+                  } ${mode === "auto" ? "col-span-2" : ""}`}
+                >
+                  {QUALITY_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+            {qualityMode === "auto" && (
+              <div className="text-[9px] text-gray-500 font-rajdhani mt-2 leading-tight">
+                Resolved: {qualityProfile.name}
+              </div>
+            )}
           </div>
 
           {/* Replay Tutorial - Positioned early for discoverability */}

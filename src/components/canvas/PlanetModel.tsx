@@ -1,17 +1,24 @@
-import { useRef, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
-import { useGLTF, useTexture } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   type CelestialBody,
   KM_TO_3D_UNITS,
   AstroPhysics,
 } from "../../lib/astrophysics";
+import { useDeferredTexture } from "../../hooks/useDeferredTexture";
+import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
+import { resolveTextureRequest } from "../../lib/textureVariants";
 import { useStore } from "../../store";
-
-const TRANSPARENT_TEXTURE_DATA_URL =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+import { ensureSphericalUvProjection } from "../../utils/sphericalUv";
+import {
+  createProceduralSurfaceTexture,
+  shouldRenderDirectSurfaceMap,
+} from "../../utils/proceduralSurface";
 
 const applyDepthSettings = (material: THREE.Material | THREE.Material[]) => {
   const materials = Array.isArray(material) ? material : [material];
@@ -42,6 +49,23 @@ const applyStandardSurfaceSettings = (
   }
 };
 
+const disposeObjectResources = (object: THREE.Object3D) => {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return;
+    }
+
+    child.geometry?.dispose();
+
+    if (Array.isArray(child.material)) {
+      child.material.forEach((material) => material.dispose());
+      return;
+    }
+
+    child.material?.dispose();
+  });
+};
+
 interface PlanetModelProps {
   body: CelestialBody;
   roughness?: number;
@@ -49,6 +73,9 @@ interface PlanetModelProps {
   sunEmissive?: number;
   ringEmissive?: number;
   ringShadowIntensity?: number;
+  qualityProfileName: ResolvedQualityName;
+  assetPriority: number;
+  baseTextureSalience: number;
 }
 
 // Sub-component for GLB models
@@ -69,6 +96,10 @@ const GLBModel = ({
     const c = scene.clone();
     c.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        child.geometry = child.geometry.clone();
+        child.material = Array.isArray(child.material)
+          ? child.material.map((material) => material.clone())
+          : child.material.clone();
         child.castShadow = true;
         child.receiveShadow = true;
         applyStandardSurfaceSettings(child.material, roughness, metalness);
@@ -90,6 +121,12 @@ const GLBModel = ({
     return { cloned: c, normalizationScale: normScale };
   }, [scene, roughness, metalness]);
 
+  useEffect(() => {
+    return () => {
+      disposeObjectResources(cloned);
+    };
+  }, [cloned]);
+
   return (
     <group rotation={new THREE.Euler(0, 0, 0)}>
       <primitive object={cloned} scale={normalizationScale * (scale || 1)} />
@@ -99,36 +136,64 @@ const GLBModel = ({
 
 // Sub-component for OBJ models
 const OBJModel = ({
+  body,
   path,
   texturePath,
   scale,
   roughness,
   metalness,
+  assetPriority,
 }: {
+  body: CelestialBody;
   path: string;
   texturePath?: string;
   scale?: number;
   roughness?: number;
   metalness?: number;
+  assetPriority: number;
 }) => {
   const obj = useLoader(OBJLoader, path);
-  const loadedTexture = useTexture(texturePath ?? TRANSPARENT_TEXTURE_DATA_URL);
-  const texture = texturePath ? loadedTexture : undefined;
+  const directTexture = useDeferredTexture(
+    texturePath && shouldRenderDirectSurfaceMap(body) ? texturePath : null,
+    {
+      enabled: true,
+      pin: assetPriority <= 1,
+    }
+  ).texture;
+  const proceduralTexture = useMemo(() => {
+    if (directTexture) return null;
+    return createProceduralSurfaceTexture(body);
+  }, [body, directTexture]);
+  const surfaceTexture = directTexture ?? proceduralTexture ?? undefined;
+
+  useEffect(() => {
+    return () => {
+      proceduralTexture?.dispose();
+    };
+  }, [proceduralTexture]);
 
   const { cloned, normalizationScale } = useMemo(() => {
     const c = obj.clone();
     c.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        child.geometry = mergeVertices(
+          ensureSphericalUvProjection(child.geometry.clone())
+        );
+        child.geometry.computeVertexNormals();
         child.castShadow = true;
         child.receiveShadow = true;
 
-        // Apply texture and material settings
-        child.material = new THREE.MeshStandardMaterial({
-          map: texture,
+        const materialParams: THREE.MeshStandardMaterialParameters = {
           roughness: roughness ?? 1,
           metalness: metalness ?? 0,
-          color: 0xffffff, // Ensure white base color so texture shows correctly
-        });
+          color: surfaceTexture ? 0xffffff : body.color,
+        };
+
+        if (surfaceTexture) {
+          materialParams.map = surfaceTexture;
+        }
+
+        child.material = new THREE.MeshStandardMaterial(materialParams);
 
         applyDepthSettings(child.material);
       }
@@ -146,7 +211,13 @@ const OBJModel = ({
     }
 
     return { cloned: c, normalizationScale: normScale };
-  }, [obj, texture, roughness, metalness]);
+  }, [obj, surfaceTexture, roughness, metalness, body.color]);
+
+  useEffect(() => {
+    return () => {
+      disposeObjectResources(cloned);
+    };
+  }, [cloned]);
 
   return (
     <group rotation={new THREE.Euler(0, 0, 0)}>
@@ -159,6 +230,9 @@ export const PlanetModel = ({
   body,
   roughness,
   metalness,
+  qualityProfileName,
+  assetPriority,
+  baseTextureSalience,
 }: PlanetModelProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
@@ -168,6 +242,17 @@ export const PlanetModel = ({
   // Determine loader type
   const isGLTF =
     body.model!.path.endsWith(".glb") || body.model!.path.endsWith(".gltf");
+  const mapRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "map",
+        qualityProfileName,
+        baseTextureSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, baseTextureSalience, qualityProfileName]
+  );
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -185,7 +270,8 @@ export const PlanetModel = ({
       s *= body.model.scale;
     }
 
-    groupRef.current.scale.setScalar(s);
+    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
+    groupRef.current.scale.set(s * sx, s * sy, s * sz);
 
     // Rotation
     if (rotationRef.current && body.rotationPeriodHours) {
@@ -229,11 +315,13 @@ export const PlanetModel = ({
               />
             ) : (
               <OBJModel
+                body={body}
                 path={body.model!.path}
-                texturePath={body.textures?.map}
+                texturePath={mapRequest.selectedPath ?? undefined}
                 scale={1}
                 roughness={roughness}
                 metalness={metalness}
+                assetPriority={assetPriority}
               />
             )}
           </group>

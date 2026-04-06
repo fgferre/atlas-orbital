@@ -1,9 +1,11 @@
 import { useFrame } from "@react-three/fiber";
+import { canMarkSceneReady } from "../../lib/sceneReadiness";
 import { useStore } from "../../store";
 import { useEffect, useRef } from "react";
 
 export const SceneReadyChecker = () => {
   const setSceneReady = useStore((state) => state.setSceneReady);
+  const criticalAssetsReady = useStore((state) => state.criticalAssetsReady);
   const frameCount = useRef(0);
   const hasMarkedReady = useRef(false);
 
@@ -11,8 +13,9 @@ export const SceneReadyChecker = () => {
   // and the heavy assets (like textures) are fully uploaded and displayed.
   useFrame(() => {
     if (hasMarkedReady.current) return;
+    if (!criticalAssetsReady) return;
 
-    if (frameCount.current < 2) {
+    if (!canMarkSceneReady(criticalAssetsReady, frameCount.current, 2)) {
       frameCount.current += 1;
     } else {
       hasMarkedReady.current = true;
@@ -26,7 +29,7 @@ export const SceneReadyChecker = () => {
     setSceneReady(false);
 
     return () => setSceneReady(false);
-  }, [setSceneReady]);
+  }, [criticalAssetsReady, setSceneReady]);
 
   return null;
 };
