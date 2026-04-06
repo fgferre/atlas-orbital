@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CelestialBody } from "../lib/astrophysics";
+import { getVisualAssetByBodyPath } from "../data/assetManifest";
 
 type SurfaceProfile = {
   base: string;
@@ -188,7 +189,22 @@ const createFeatureSet = (
 };
 
 export const shouldRenderDirectSurfaceMap = (body: CelestialBody) => {
-  return body.id !== "hygiea";
+  if (!body.textures?.map) {
+    return false;
+  }
+
+  const mappedAsset = getVisualAssetByBodyPath(
+    body.id,
+    body.textures.map,
+    "texture"
+  );
+  if (!mappedAsset) {
+    return true;
+  }
+
+  return (
+    mappedAsset.status !== "candidate" && mappedAsset.status !== "rejected"
+  );
 };
 
 export const getSurfaceFillLight = (body: CelestialBody) => {

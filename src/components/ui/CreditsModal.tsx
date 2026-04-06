@@ -93,18 +93,23 @@ export const CreditsModal = () => {
                 />
                 <CreditItem
                   title="NASA Science / Dawn / USGS"
-                  description="Observation-based Vesta model and Dawn-era surface products used for high-fidelity asteroid visuals."
+                  description="Observation-based Vesta model and Dawn-era surface products used for one of the app's highest-fidelity asteroid visuals."
                   link="https://science.nasa.gov/resource/vesta-3d-model/"
                 />
                 <CreditItem
-                  title="DAMIT / Observatoire de la Cote d'Azur"
-                  description="Observation-derived asteroid shape models for bodies such as Pallas and Hygiea."
-                  link="https://observations.lam.fr/astero/3Dshape/"
+                  title="DAMIT / Charles University"
+                  description="Observation-derived shape models promoted for Pallas and Hygiea, replacing older local OBJ references."
+                  link="https://damit.cuni.cz/projects/damit/"
+                />
+                <CreditItem
+                  title="USGS Astrogeology / Voyager / Galileo / Cassini ISS"
+                  description="Official global mosaics now used for Europa and Titan, based on Voyager, Galileo SSI, and Cassini ISS products."
+                  link="https://astrogeology.usgs.gov/"
                 />
                 <CreditItem
                   title="ESO VLT / Wikimedia Commons"
-                  description="Remote-observation reference maps used where no spacecraft global texture exists, including Hygiea."
-                  link="https://upload.wikimedia.org/wikipedia/commons/f/f9/Hygiea_VLT_2017-2018_map.png"
+                  description="Remote-observation reference maps kept for candidate review where no spacecraft-style global texture exists, including Hygiea."
+                  link="https://commons.wikimedia.org/wiki/File:Hygiea_VLT_2017-2018_map.png"
                 />
                 <CreditItem
                   title="NASA Image and Video Library"

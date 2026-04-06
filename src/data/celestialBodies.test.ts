@@ -45,9 +45,16 @@ describe("minor-body visual provenance", () => {
   it("uses observational upgrades where the handoff calls for them", () => {
     expect(getBody("vesta").model?.path).toContain("Vesta_1_100.glb");
     expect(getBody("vesta").textures?.map).toContain("vesta_dawn_embedded");
-    expect(getBody("hygiea").model?.path).toContain("Hygiea_Vernazza.obj");
+    expect(getBody("pallas").model?.path).toContain("Pallas_DAMIT_101.obj");
+    expect(getBody("hygiea").model?.path).toContain("Hygiea_DAMIT_4392.obj");
     expect(getBody("hygiea").textures?.map).toContain(
       "hygiea_vlt_2017_2018_map"
+    );
+    expect(getBody("titan").textures?.map).toContain(
+      "titan_cassini_iss_global_mosaic_4km"
+    );
+    expect(getBody("europa").textures?.map).toContain(
+      "europa_voyager_galileo_global_mosaic_500m"
     );
     expect(getBody("quaoar").shapeScale).toEqual([1.18, 0.99, 0.86]);
   });

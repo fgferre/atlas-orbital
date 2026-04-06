@@ -688,7 +688,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Europa is the smallest of the four Galilean moons orbiting Jupiter, and the sixth-closest to the planet of all the 95 known moons of Jupiter. It is also the sixth-largest moon in the Solar System. Europa has the smoothest surface of any known solid object in the Solar System. The apparent youth and smoothness of the surface have led to the hypothesis that a water ocean exists beneath the surface.",
     distanceFromParent: "670,900 km",
     info: "Subsurface ocean.",
-    textures: { map: TEXTURE_PATH + "4k_europa_gemini.png" },
+    textures: {
+      map: TEXTURE_PATH + "europa_voyager_galileo_global_mosaic_500m.jpg",
+    },
   },
   // Saturn's Major Moons
   {
@@ -729,7 +731,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
     textures: {
-      map: TEXTURE_PATH + "titan_map__2010__by_mapperpro_dg0iw6y.png",
+      map: TEXTURE_PATH + "titan_cassini_iss_global_mosaic_4km.jpg",
     },
   },
   {
@@ -1869,19 +1871,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "414,500,000 km",
     info: "High inclination.",
     model: {
-      path: MODEL_PATH + "Pallas_Torppa.obj",
+      path: MODEL_PATH + "Pallas_DAMIT_101.obj",
       scale: 1,
     },
     visualProvenance: {
       fidelity: "observational-model",
       summary:
-        "The overall form comes from an observation-based shape model rather than a perfect sphere.",
+        "The overall form comes from an observation-based DAMIT shape model rather than a perfect sphere.",
       limitationReason:
         "No spacecraft-style global photographic texture exists for Pallas, so the surface is intentionally kept as a simple material.",
       sources: [
         {
-          label: "Pallas shape model",
-          url: "https://observations.lam.fr/astero/3Dshape/2_Pallas_mpcd.obj",
+          label: "DAMIT model 101",
+          url: "https://damit.cuni.cz/projects/damit/asteroid_models/view/101",
         },
       ],
     },
@@ -1921,23 +1923,23 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     info: "Carbonaceous.",
     textures: { map: HYGIEA_VLT_TEXTURE },
     model: {
-      path: MODEL_PATH + "Hygiea_Vernazza.obj",
+      path: MODEL_PATH + "Hygiea_DAMIT_4392.obj",
       scale: 1,
     },
     visualProvenance: {
       fidelity: "observational-model",
       summary:
-        "Shape comes from a remote-observation-based model, paired with a published Hygiea map reference for surface appearance.",
+        "Shape comes from a DAMIT observation-based model, with a published VLT map kept as a candidate reference for surface appearance.",
       limitationReason:
-        "The result is observation-based but less resolved than a body visited by a dedicated mission, so fine detail remains limited.",
+        "The geometry is observation-based, but the remote VLT map is still under visual validation before it is promoted into the active diffuse render path.",
       sources: [
         {
-          label: "Hygiea shape model",
-          url: "https://observations.lam.fr/astero/3Dshape/10_Hygiea_mpcd.obj",
+          label: "DAMIT model 4392",
+          url: "https://damit.cuni.cz/projects/damit/asteroid_models/view/4392",
         },
         {
           label: "VLT reference map",
-          url: "https://upload.wikimedia.org/wikipedia/commons/f/f9/Hygiea_VLT_2017-2018_map.png",
+          url: "https://commons.wikimedia.org/wiki/File:Hygiea_VLT_2017-2018_map.png",
         },
       ],
     },

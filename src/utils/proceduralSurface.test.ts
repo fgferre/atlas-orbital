@@ -12,7 +12,7 @@ const getBody = (id: string) => {
 };
 
 describe("shouldRenderDirectSurfaceMap", () => {
-  it("keeps Hygiea's annotated reference map out of the diffuse render path", () => {
+  it("keeps Hygiea's candidate map out of the diffuse render path", () => {
     expect(shouldRenderDirectSurfaceMap(getBody("hygiea"))).toBe(false);
   });
 
