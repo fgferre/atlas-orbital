@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStore } from "../../store";
 import { motion, AnimatePresence } from "framer-motion";
 import { TutorialHighlight } from "./TutorialHighlight";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 
 import type { ReactNode } from "react";
 
@@ -63,24 +64,28 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: "Search",
     content: (
       <p>
-        Click the magnifying glass icon (top right) to search for any celestial
-        body. Results limited to 5 matches.
+        Pull the Search drawer from the edge tabs to find bodies by English or
+        Portuguese name, type, or classification.
       </p>
     ),
     target: "search",
   },
   {
-    title: "Display Settings",
+    title: "Control Stack",
     content: (
       <>
         <p className="mb-2">
-          Click the gear icon (top right) to open Settings:
+          Use the edge drawer tabs to keep every major tool one click away:
         </p>
         <ul className="space-y-1">
-          <li>• Didactic Mode: Enhanced visibility for learning</li>
-          <li>• Realistic Mode: True-to-scale proportions</li>
-          <li>• Toggle Icons, Labels, Orbits, Starfield</li>
-          <li>• Filter by category (Planets, Moons, Dwarfs, etc.)</li>
+          <li>
+            • Scene keeps Starfield, Tycho-2, NASA Eyes, scale, and quality
+          </li>
+          <li>• Overlay keeps Icons, Labels, Orbits, and category filters</li>
+          <li>
+            • Project keeps Replay Tutorial, Mission Report, and Debug Menu
+          </li>
+          <li>• Comets remain visible as a first-class overlay category</li>
         </ul>
       </>
     ),
@@ -91,9 +96,12 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     content: (
       <>
         <p className="mb-2">
-          The Timeline at the bottom controls simulation time:
+          The floating time cluster controls simulation time:
         </p>
         <ul className="space-y-1">
+          <li>
+            • Keep it collapsed for a cleaner viewport or expand the sheet
+          </li>
           <li>• Play/Pause the simulation</li>
           <li>• Rewind/Forward through time</li>
           <li>• LIVE MODE syncs with real-world time</li>
@@ -126,9 +134,18 @@ export const TutorialOverlay = () => {
   const completeTutorial = useStore((state) => state.completeTutorial);
   const reopenTutorial = useStore((state) => state.reopenTutorial);
   const setTutorialStep = useStore((state) => state.setTutorialStep);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   // Effective visibility: show tutorial only when not animating
   const isTutorialVisible = showTutorial && !isIntroAnimating;
+
+  useDialogFocus({
+    isOpen: isTutorialVisible,
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+    onClose: () => closeTutorial("skipped"),
+  });
 
   // Keyboard shortcut to reopen tutorial
   useEffect(() => {
@@ -187,22 +204,32 @@ export const TutorialOverlay = () => {
             <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
               <motion.div
                 key={tutorialStep}
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="atlas-tutorial-title"
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -20, scale: 0.95 }}
                 transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="tech-panel p-8 max-w-lg w-full shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden pointer-events-auto"
+                className="tech-panel pointer-events-auto relative w-full max-w-lg overflow-hidden p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] focus:outline-none"
+                tabIndex={-1}
               >
                 {/* Background decoration */}
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-nasa-accent to-transparent" />
 
                 <div className="flex justify-between items-start mb-6">
-                  <h2 className="text-2xl font-orbitron font-bold text-white tracking-wider">
+                  <h2
+                    id="atlas-tutorial-title"
+                    className="text-2xl font-orbitron font-bold text-white tracking-wider"
+                  >
                     {currentStep.title}
                   </h2>
                   <button
+                    ref={closeButtonRef}
                     onClick={() => closeTutorial("skipped")}
-                    className="text-white/50 hover:text-white transition-colors"
+                    aria-label="Skip tutorial"
+                    className="text-white/50 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -210,6 +237,7 @@ export const TutorialOverlay = () => {
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -243,14 +271,14 @@ export const TutorialOverlay = () => {
                     {tutorialStep > 0 && (
                       <button
                         onClick={handlePrev}
-                        className="px-6 py-2 border border-white/20 text-white hover:bg-white/10 transition-colors font-rajdhani uppercase tracking-wider text-sm"
+                        className="px-6 py-2 border border-white/20 text-white hover:bg-white/10 transition-colors font-rajdhani uppercase tracking-wider text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
                       >
                         Previous
                       </button>
                     )}
                     <button
                       onClick={handleNext}
-                      className="px-8 py-2 bg-nasa-accent text-black font-bold hover:bg-cyan-300 transition-colors font-rajdhani uppercase tracking-wider text-sm"
+                      className="px-8 py-2 bg-nasa-accent text-black font-bold hover:bg-cyan-300 transition-colors font-rajdhani uppercase tracking-wider text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
                     >
                       {isLastStep ? "Start Journey" : "Next"}
                     </button>

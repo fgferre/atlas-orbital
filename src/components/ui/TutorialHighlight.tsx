@@ -74,10 +74,18 @@ export const TutorialHighlight = ({
   const visibleTargetRect = isActive && target ? targetRect : null;
   const shouldRender = Boolean(visibleTargetRect);
   const padding = 8; // Padding around the highlight
+  const spotlightRect = visibleTargetRect
+    ? {
+        x: visibleTargetRect.x - padding,
+        y: visibleTargetRect.y - padding,
+        width: Math.max(0, visibleTargetRect.width + padding * 2),
+        height: Math.max(0, visibleTargetRect.height + padding * 2),
+      }
+    : null;
 
   return (
     <AnimatePresence>
-      {shouldRender && (
+      {shouldRender && spotlightRect && (
         <>
           {/* SVG Spotlight/Cutout Overlay - positioned below modal z-index */}
           <motion.svg
@@ -93,20 +101,11 @@ export const TutorialHighlight = ({
                 {/* White = visible, Black = cutout */}
                 <rect x="0" y="0" width="100%" height="100%" fill="white" />
                 {/* Cutout rect for the target element */}
-                <motion.rect
-                  initial={{ opacity: 0 }}
-                  animate={{
-                    x: visibleTargetRect?.x ? visibleTargetRect.x - padding : 0,
-                    y: visibleTargetRect?.y ? visibleTargetRect.y - padding : 0,
-                    width: visibleTargetRect
-                      ? visibleTargetRect.width + padding * 2
-                      : 0,
-                    height: visibleTargetRect
-                      ? visibleTargetRect.height + padding * 2
-                      : 0,
-                    opacity: 1,
-                  }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                <rect
+                  x={spotlightRect.x}
+                  y={spotlightRect.y}
+                  width={spotlightRect.width}
+                  height={spotlightRect.height}
                   fill="black"
                   rx="4"
                 />
@@ -129,19 +128,15 @@ export const TutorialHighlight = ({
             animate={{
               opacity: 1,
               scale: 1,
-              x: visibleTargetRect ? visibleTargetRect.x - padding : 0,
-              y: visibleTargetRect ? visibleTargetRect.y - padding : 0,
+              x: spotlightRect.x,
+              y: spotlightRect.y,
             }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="fixed z-[99] pointer-events-none"
             style={{
-              width: visibleTargetRect
-                ? visibleTargetRect.width + padding * 2
-                : 0,
-              height: visibleTargetRect
-                ? visibleTargetRect.height + padding * 2
-                : 0,
+              width: spotlightRect.width,
+              height: spotlightRect.height,
               left: 0,
               top: 0,
             }}

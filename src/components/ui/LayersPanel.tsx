@@ -1,18 +1,55 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+
+import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
+import {
+  OVERLAY_FILTER_OPTIONS,
+  RIGHT_CONTROL_BUTTONS,
+  SCENE_QUALITY_OPTIONS,
+  SCENE_SCALE_OPTIONS,
+  SCENE_SOURCE_OPTIONS,
+  type RightControlPanelId,
+} from "./controlPanelConfig";
 
-const QUALITY_MODE_LABELS = {
-  auto: "Auto",
-  ultra: "Ultra",
-  high: "High",
-  balanced: "Balanced",
-  constrained: "Saver",
+interface LayersPanelProps {
+  activePanel: RightControlPanelId | null;
+  setActivePanel: (panel: RightControlPanelId | null) => void;
+}
+
+const PANEL_COPY = {
+  scene: {
+    title: "Scene",
+    meta: "render controls",
+  },
+  overlay: {
+    title: "Overlay",
+    meta: "scientific guides",
+  },
+  project: {
+    title: "Project",
+    meta: "ops & help",
+  },
 } as const;
 
-export const LayersPanel = () => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+export const LayersPanel = ({
+  activePanel,
+  setActivePanel,
+}: LayersPanelProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const openPanel =
+    activePanel === "scene" ||
+    activePanel === "overlay" ||
+    activePanel === "project"
+      ? activePanel
+      : null;
+
   const showLabels = useStore((state) => state.showLabels);
   const toggleLabels = useStore((state) => state.toggleLabels);
   const showIcons = useStore((state) => state.showIcons);
@@ -46,304 +83,519 @@ export const LayersPanel = () => {
   const toggleCredits = useStore((state) => state.toggleCredits);
   const qualityProfile = useQualityProfile(qualityMode);
   const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
-  const starfieldStatusMessage =
-    activeStarfieldProviderState.status === "loading"
-      ? `Loading ${activeStarfieldLabel} catalog...`
-      : activeStarfieldProviderState.status === "error"
-        ? (activeStarfieldProviderState.error ??
-          `${activeStarfieldLabel} failed to load.`)
-        : `Active source: ${activeStarfieldLabel}`;
+
+  const starfieldStatusMessage = useMemo(() => {
+    if (activeStarfieldProviderState.status === "loading") {
+      return `Loading ${activeStarfieldLabel} catalog…`;
+    }
+
+    if (activeStarfieldProviderState.status === "error") {
+      return (
+        activeStarfieldProviderState.error ??
+        `${activeStarfieldLabel} failed to load.`
+      );
+    }
+
+    return `Active source: ${activeStarfieldLabel}`;
+  }, [activeStarfieldLabel, activeStarfieldProviderState]);
+
+  useDialogFocus({
+    isOpen: Boolean(openPanel) && isMobile,
+    containerRef: panelRef,
+    initialFocusRef: closeButtonRef,
+    onClose: () => setActivePanel(null),
+  });
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        openPanel &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setActivePanel(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [openPanel, setActivePanel]);
+
+  const panelClassName = isMobile
+    ? "fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[2.8rem] right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50"
+    : "absolute right-0 z-50 flex -translate-y-1/2 items-center";
+
+  const openPanelCopy = openPanel ? PANEL_COPY[openPanel] : null;
+  const controlButtons = RIGHT_CONTROL_BUTTONS.filter(
+    (button) => button.id !== "search"
+  );
+  const openPanelButton =
+    openPanel && openPanelCopy
+      ? (controlButtons.find((button) => button.id === openPanel) ?? null)
+      : null;
+  const openPanelIndex =
+    openPanel && openPanelCopy
+      ? controlButtons.findIndex((button) => button.id === openPanel)
+      : -1;
+  const openPanelOffsetStyle =
+    !isMobile && openPanelIndex >= 0
+      ? {
+          top: `${openPanelIndex * 88 + 40}px`,
+        }
+      : undefined;
+  const mobileClosedTabClassName =
+    "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 -translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const mobileActiveTabClassName =
+    "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const desktopClosedTabClassName =
+    "command-shell ghost-border relative z-[60] flex h-[5rem] w-10 translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const desktopOpenTabClassName =
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const desktopPanelShellClassName =
+    "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
+  const panelBodyClassName = isMobile
+    ? "flex h-full max-h-[inherit] flex-col overflow-hidden"
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4";
+
+  const panelSections =
+    openPanel === "scene" ? (
+      <div className="space-y-3">
+        <SectionLabel>Scene</SectionLabel>
+        <Toggle
+          label="Starfield"
+          checked={showStarfield}
+          onChange={toggleShowStarfield}
+        />
+
+        <div className="space-y-3 border border-white/5 bg-black/20 p-3">
+          <div>
+            <SubsectionLabel>Starfield Source</SubsectionLabel>
+            <div
+              role="group"
+              aria-label="Starfield source"
+              className="grid grid-cols-2 gap-2"
+            >
+              {SCENE_SOURCE_OPTIONS.map((option) => (
+                <ChoiceButton
+                  key={option.id}
+                  label={option.label}
+                  isActive={starfieldSource === option.id}
+                  onClick={() => setStarfieldSource(option.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div
+            aria-live="polite"
+            className={`text-[11px] leading-relaxed ${
+              activeStarfieldProviderState.status === "error"
+                ? "text-amber-300"
+                : "text-white/55"
+            }`}
+          >
+            {showStarfield
+              ? starfieldStatusMessage
+              : "Background stars hidden. Re-enable Starfield to compare Tycho-2 and NASA Eyes."}
+          </div>
+        </div>
+
+        <div>
+          <SubsectionLabel>Scale Mode</SubsectionLabel>
+          <div
+            role="group"
+            aria-label="Scale mode"
+            className="grid grid-cols-2 gap-2"
+          >
+            {SCENE_SCALE_OPTIONS.map((option) => (
+              <ChoiceButton
+                key={option.id}
+                label={option.label}
+                isActive={scaleMode === option.id}
+                onClick={() => scaleMode !== option.id && toggleScaleMode()}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <SubsectionLabel>Quality</SubsectionLabel>
+          <div
+            role="group"
+            aria-label="Quality mode"
+            className="grid grid-cols-2 gap-2"
+          >
+            {SCENE_QUALITY_OPTIONS.map((option) => (
+              <ChoiceButton
+                key={option.id}
+                label={option.label}
+                isActive={qualityMode === option.id}
+                onClick={() => setQualityMode(option.id)}
+                isWide={option.id === "auto"}
+              />
+            ))}
+          </div>
+          {qualityMode === "auto" && (
+            <div className="mt-2 text-[11px] text-white/55">
+              Resolved profile: {qualityProfile.name}
+            </div>
+          )}
+          {qualityMode === "ultra" && (
+            <div className="mt-3 border border-nasa-alert/20 bg-nasa-alert/8 px-3 py-2 text-[11px] leading-relaxed text-white/70">
+              Ultra favors maximum scene fidelity and may cost responsiveness on
+              smaller laptops.
+            </div>
+          )}
+        </div>
+      </div>
+    ) : openPanel === "overlay" ? (
+      <>
+        <div className="space-y-3">
+          <SectionLabel>Categories</SectionLabel>
+          <div
+            role="group"
+            aria-label="Body visibility filters"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+          >
+            {OVERLAY_FILTER_OPTIONS.map((option) => (
+              <CategoryToggle
+                key={option.id}
+                label={option.label}
+                checked={visibility[option.id]}
+                onChange={() => toggleVisibility(option.id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <SectionLabel>Guides & Overlays</SectionLabel>
+          <Toggle label="Icons" checked={showIcons} onChange={toggleIcons} />
+          <Toggle label="Labels" checked={showLabels} onChange={toggleLabels} />
+          <Toggle label="Orbits" checked={showOrbits} onChange={toggleOrbits} />
+          {showOrbits && (
+            <div className="border-l border-white/10 pl-3">
+              <Toggle
+                label="Context Orbits"
+                checked={declutterOrbits}
+                onChange={toggleDeclutterOrbits}
+              />
+            </div>
+          )}
+          <Toggle
+            label="Ecliptic Grid"
+            checked={showEclipticGrid}
+            onChange={toggleEclipticGrid}
+          />
+          <Toggle
+            label="Prograde Vector"
+            checked={showProgradeVector}
+            onChange={toggleProgradeVector}
+          />
+        </div>
+      </>
+    ) : openPanel === "project" ? (
+      <div className="space-y-3">
+        <SectionLabel>Project</SectionLabel>
+        <button
+          type="button"
+          onClick={reopenTutorial}
+          className="w-full border border-white/10 px-3 py-3 text-left text-[11px] font-orbitron uppercase tracking-[0.16em] text-white transition-[border-color,color,background-color] hover:border-nasa-accent hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+        >
+          Replay Tutorial
+        </button>
+        <div className="-mt-1 text-[11px] text-white/45">
+          Shortcut: Ctrl + Shift + T
+        </div>
+        <button
+          type="button"
+          onClick={toggleCredits}
+          className="flex w-full items-center justify-center gap-2 border border-white/10 px-3 py-3 text-[11px] font-orbitron uppercase tracking-[0.16em] text-white transition-[border-color,color,background-color] hover:border-nasa-accent hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+        >
+          <span>Mission Report</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-3 w-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </button>
+        <Toggle
+          label="Debug Menu"
+          checked={debugMode}
+          onChange={toggleDebugMode}
+        />
+        <div className="-mt-1 text-right text-[11px] text-white/45">
+          Shortcut: Ctrl + Shift + D
+        </div>
+        <div className="text-center text-[11px] text-white/45">
+          v0.1.0 | Atlas Orbital
+        </div>
+      </div>
+    ) : null;
+
+  const panelContent =
+    openPanel && openPanelCopy ? (
+      <div
+        id={`atlas-${openPanel}-panel`}
+        ref={panelRef}
+        role={isMobile ? "dialog" : undefined}
+        aria-modal={isMobile ? true : undefined}
+        aria-labelledby={`atlas-${openPanel}-title`}
+        tabIndex={-1}
+        className={panelBodyClassName}
+      >
+        <div className="mb-4 flex items-center justify-between gap-4 border-b border-white/8 pb-3">
+          <div className="min-w-0">
+            <div
+              id={`atlas-${openPanel}-title`}
+              className="text-sm font-orbitron uppercase tracking-[0.18em] text-nasa-accent"
+            >
+              {openPanelCopy.title}
+            </div>
+            <div className="mt-1 text-[10px] font-rajdhani uppercase tracking-[0.2em] text-white/45">
+              {openPanelCopy.meta}
+            </div>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={() => setActivePanel(null)}
+            aria-label={`Close ${openPanelCopy.title.toLowerCase()} panel`}
+            className="rounded border border-white/10 px-2 py-1 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/70 transition-colors hover:border-nasa-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="custom-scrollbar min-h-0 space-y-6 overflow-y-auto overscroll-contain pr-1">
+          {panelSections}
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div
-      className={`relative tech-panel tech-transition z-40 flex flex-col pointer-events-auto ${
-        isCollapsed ? "w-12 h-12" : "w-64 p-4"
-      }`}
+      ref={containerRef}
+      className="relative pointer-events-auto"
       data-tutorial-target="settings"
-      style={{
-        overflow: isCollapsed ? "hidden" : "visible",
-        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-      }}
     >
-      {/* Toggle Button */}
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        title="Settings | Ctrl+Shift+T to replay tutorial"
-        className={`absolute top-0 right-0 w-12 h-12 flex items-center justify-center text-nasa-accent hover:text-white transition-colors z-50 ${
-          isCollapsed ? "bg-transparent" : "bg-white/5"
-        }`}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className={`h-6 w-6 transition-transform duration-500 ${!isCollapsed ? "rotate-90" : ""}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
-      </button>
+      <div className="flex flex-col items-stretch gap-2">
+        {controlButtons.map((button) => {
+          const isOpen = activePanel === button.id;
 
-      {!isCollapsed && (
-        <div className="animate-fade-in space-y-6 mt-2">
-          <div className="text-xs text-nasa-accent font-orbitron tracking-widest uppercase border-b border-nasa-accent/30 pb-2">
-            Data Control
-          </div>
+          if (!isMobile && isOpen) {
+            return (
+              <div
+                key={button.id}
+                aria-hidden="true"
+                className="h-[5rem] w-10"
+              ></div>
+            );
+          }
 
-          {/* Scale Mode */}
-          <div>
-            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
-              Scale Mode
-            </div>
-            <div className="flex bg-black/40 p-1 border border-white/10">
-              <button
-                onClick={() => scaleMode !== "didactic" && toggleScaleMode()}
-                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                  scaleMode === "didactic"
-                    ? "bg-nasa-accent text-black shadow-[0_0_5px_rgba(0,240,255,0.3)]"
-                    : "text-gray-500 hover:text-white"
-                }`}
-              >
-                Didactic
-              </button>
-              <button
-                onClick={() => scaleMode !== "realistic" && toggleScaleMode()}
-                className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                  scaleMode === "realistic"
-                    ? "bg-nasa-accent text-black shadow-[0_0_5px_rgba(0,240,255,0.3)]"
-                    : "text-gray-500 hover:text-white"
-                }`}
-              >
-                Realistic
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
-              Quality
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(
-                Object.keys(QUALITY_MODE_LABELS) as Array<
-                  keyof typeof QUALITY_MODE_LABELS
-                >
-              ).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setQualityMode(mode)}
-                  className={`py-1 text-[10px] font-bold uppercase transition-all border ${
-                    qualityMode === mode
-                      ? "bg-nasa-accent text-black border-nasa-accent shadow-[0_0_5px_rgba(0,240,255,0.3)]"
-                      : "text-gray-500 hover:text-white border-white/10 bg-black/40"
-                  } ${mode === "auto" ? "col-span-2" : ""}`}
-                >
-                  {QUALITY_MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
-            {qualityMode === "auto" && (
-              <div className="text-[9px] text-gray-500 font-rajdhani mt-2 leading-tight">
-                Resolved: {qualityProfile.name}
-              </div>
-            )}
-          </div>
-
-          {/* Replay Tutorial - Positioned early for discoverability */}
-          <div className="border-t border-white/10 pt-3">
+          return (
             <button
-              onClick={reopenTutorial}
-              className="w-full py-2 text-[10px] font-orbitron text-nasa-dim border border-white/10 hover:border-nasa-accent hover:text-nasa-accent transition-colors uppercase tracking-widest"
+              key={button.id}
+              type="button"
+              onClick={() => setActivePanel(isOpen ? null : button.id)}
+              aria-expanded={isOpen}
+              aria-controls={isOpen ? `atlas-${button.id}-panel` : undefined}
+              className={
+                isMobile
+                  ? isOpen
+                    ? mobileActiveTabClassName
+                    : mobileClosedTabClassName
+                  : desktopClosedTabClassName
+              }
             >
-              Replay Tutorial
+              <RailButtonIcon panelId={button.id} />
+              <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
+                {button.label}
+              </span>
             </button>
-            <div className="text-[9px] text-gray-500 font-mono text-center mt-1">
-              Ctrl + Shift + T
-            </div>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Toggles */}
-          <div className="space-y-3">
-            <Toggle label="Icons" checked={showIcons} onChange={toggleIcons} />
-            <Toggle
-              label="Labels"
-              checked={showLabels}
-              onChange={toggleLabels}
-            />
-            <Toggle
-              label="Orbits"
-              checked={showOrbits}
-              onChange={toggleOrbits}
-            />
-            {showOrbits && (
-              <div className="pl-3 border-l border-white/10">
-                <Toggle
-                  label="Context Orbits"
-                  checked={declutterOrbits}
-                  onChange={toggleDeclutterOrbits}
-                />
-                <div className="text-[9px] text-gray-600 font-rajdhani mt-1 leading-tight">
-                  Reduces clutter by emphasizing the focused body, its moons and
-                  ancestry.
-                </div>
+      <AnimatePresence>
+        {openPanel && openPanelCopy && (
+          <motion.div
+            className={panelClassName}
+            style={openPanelOffsetStyle}
+            initial={{
+              opacity: 0,
+              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              scale: 0.98,
+            }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              scale: 0.98,
+            }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {isMobile ? (
+              <div className="tech-panel tech-corners panel-scan flex h-full max-h-[inherit] flex-col overflow-hidden p-4 shadow-[0_0_30px_rgba(0,0,0,0.45)]">
+                {panelContent}
+              </div>
+            ) : (
+              <div className="relative flex items-center">
+                {openPanelButton && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel(null)}
+                    aria-label={`Close ${openPanelCopy.title.toLowerCase()} panel`}
+                    aria-expanded={true}
+                    aria-controls={`atlas-${openPanel}-panel`}
+                    className={desktopOpenTabClassName}
+                  >
+                    <RailButtonIcon panelId={openPanelButton.id} />
+                    <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
+                      {openPanelButton.label}
+                    </span>
+                  </button>
+                )}
+                <div className={desktopPanelShellClassName}>{panelContent}</div>
               </div>
             )}
-            <div className="pt-2 border-t border-white/10">
-              <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
-                Guides
-              </div>
-              <div className="space-y-3">
-                <Toggle
-                  label="Ecliptic Grid"
-                  checked={showEclipticGrid}
-                  onChange={toggleEclipticGrid}
-                />
-                <Toggle
-                  label="Prograde Vector"
-                  checked={showProgradeVector}
-                  onChange={toggleProgradeVector}
-                />
-                <div className="text-[9px] text-gray-600 font-rajdhani -mt-2 leading-tight">
-                  Shows the direction of the focused body's orbital velocity.
-                </div>
-              </div>
-            </div>
-            <Toggle
-              label="Starfield"
-              checked={showStarfield}
-              onChange={toggleShowStarfield}
-            />
-            {showStarfield && (
-              <div className="mt-2 pt-2 border-t border-white/5">
-                <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-2 font-rajdhani">
-                  Starfield Source
-                </div>
-                <div className="flex bg-black/40 p-1 border border-white/10">
-                  <button
-                    onClick={() => setStarfieldSource("tycho2")}
-                    title="Tycho-2: ~2M estrelas próximas com dados de paralaxe. Ideal para visualização precisa do sistema solar local."
-                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                      starfieldSource === "tycho2"
-                        ? "bg-nasa-accent text-black"
-                        : "text-gray-500 hover:text-white"
-                    }`}
-                  >
-                    Tycho-2
-                  </button>
-                  <button
-                    onClick={() => setStarfieldSource("nasa")}
-                    title="NASA Eyes: Catálogo completo incluindo galáxias distantes e objetos do espaço profundo. Dados oficiais da NASA."
-                    className={`flex-1 py-1 text-[10px] font-bold uppercase transition-all ${
-                      starfieldSource === "nasa"
-                        ? "bg-nasa-accent text-black"
-                        : "text-gray-500 hover:text-white"
-                    }`}
-                  >
-                    NASA Eyes
-                  </button>
-                </div>
-                <div
-                  className={`mt-2 text-[9px] font-rajdhani leading-tight ${
-                    activeStarfieldProviderState.status === "error"
-                      ? "text-amber-300"
-                      : "text-gray-500"
-                  }`}
-                >
-                  {starfieldStatusMessage}
-                </div>
-              </div>
-            )}
-            <div className="pt-2 border-t border-white/10">
-              <Toggle
-                label="Debug Menu"
-                checked={debugMode}
-                onChange={toggleDebugMode}
-              />
-              <div className="text-[9px] text-gray-500 font-mono text-right mt-1">
-                Ctrl + Shift + D
-              </div>
-            </div>
-          </div>
-
-          {/* Categories */}
-          <div className="border-t border-white/10 pt-4">
-            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-3 font-rajdhani">
-              Visibility
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              <CategoryToggle
-                label="Planets"
-                checked={visibility.planets}
-                onChange={() => toggleVisibility("planets")}
-              />
-              <CategoryToggle
-                label="Moons"
-                checked={visibility.moons}
-                onChange={() => toggleVisibility("moons")}
-              />
-              <CategoryToggle
-                label="Dwarfs"
-                checked={visibility.dwarfs}
-                onChange={() => toggleVisibility("dwarfs")}
-              />
-              <CategoryToggle
-                label="Asteroids"
-                checked={visibility.asteroids}
-                onChange={() => toggleVisibility("asteroids")}
-              />
-              <CategoryToggle
-                label="TNOs"
-                checked={visibility.tnos}
-                onChange={() => toggleVisibility("tnos")}
-              />
-            </div>
-          </div>
-
-          {/* Project */}
-          <div className="border-t border-white/10 pt-4">
-            <div className="text-[10px] text-nasa-dim uppercase tracking-widest mb-3 font-rajdhani">
-              System Info
-            </div>
-            <button
-              onClick={toggleCredits}
-              className="w-full py-2 text-[10px] font-orbitron text-nasa-dim border border-white/10 hover:border-nasa-accent hover:text-nasa-accent transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
-            >
-              <span>Mission Report</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-3 w-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </button>
-            <div className="text-[9px] text-gray-600 font-mono text-center mt-2">
-              v0.1.0 | Atlas Orbital
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
+const RailButtonIcon = ({
+  panelId,
+}: {
+  panelId: Exclude<RightControlPanelId, "search">;
+}) => {
+  if (panelId === "scene") {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="h-4 w-4"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 14.25A2.25 2.25 0 1 0 12 9.75a2.25 2.25 0 0 0 0 4.5Z"
+        />
+      </svg>
+    );
+  }
+
+  if (panelId === "overlay") {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="h-4 w-4"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 4.5 4.5 8.25 12 12l7.5-3.75L12 4.5Z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.5 12 12 15.75 19.5 12"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.5 15.75 12 19.5l7.5-3.75"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7.5 4.5h9m-9 5.25h9m-9 5.25h5.25"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 4.5h.75v.75H4.5Zm0 5.25h.75v.75H4.5Zm0 5.25h.75v.75H4.5Z"
+      />
+    </svg>
+  );
+};
+
+const SectionLabel = ({ children }: { children: string }) => (
+  <div className="border-b border-nasa-accent/25 pb-2 text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
+    {children}
+  </div>
+);
+
+const SubsectionLabel = ({ children }: { children: string }) => (
+  <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/55">
+    {children}
+  </div>
+);
+
+const ChoiceButton = ({
+  label,
+  isActive,
+  onClick,
+  isWide = false,
+}: {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+  isWide?: boolean;
+}) => (
+  <button
+    type="button"
+    aria-pressed={isActive}
+    onClick={onClick}
+    className={`border px-3 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+      isActive
+        ? "border-nasa-accent bg-nasa-accent/10 text-white shadow-[0_0_12px_rgba(0,240,255,0.18)]"
+        : "border-white/10 bg-black/35 text-white/60 hover:border-white/25 hover:text-white"
+    } ${isWide ? "col-span-2" : ""}`}
+  >
+    {label}
+  </button>
+);
 
 const Toggle = ({
   label,
@@ -354,27 +606,36 @@ const Toggle = ({
   checked: boolean;
   onChange: () => void;
 }) => (
-  <div
-    className="flex items-center justify-between cursor-pointer group"
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
     onClick={onChange}
+    className="flex w-full items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2.5 text-left transition-[border-color,color,background-color] hover:border-white/20 hover:bg-black/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
   >
-    <span className="text-xs text-gray-300 group-hover:text-white font-rajdhani transition-colors">
-      {label}
-    </span>
-    <div
-      className={`w-7 h-4 relative transition-colors border ${
-        checked
-          ? "bg-nasa-accent/20 border-nasa-accent/50"
-          : "bg-gray-800 border-gray-700"
-      }`}
-    >
-      <div
-        className={`absolute top-0.5 w-2.5 h-2.5 transition-all ${
-          checked ? "left-3.5 bg-nasa-accent" : "left-0.5 bg-gray-500"
+    <div className="min-w-0 text-sm text-white">{label}</div>
+    <div className="flex shrink-0 items-center gap-3">
+      <span className="text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/55">
+        {checked ? "On" : "Off"}
+      </span>
+      <span
+        aria-hidden="true"
+        className={`relative block h-6 w-11 border transition-[background-color,border-color] ${
+          checked
+            ? "border-nasa-accent/60 bg-nasa-accent/20"
+            : "border-white/15 bg-white/5"
         }`}
-      ></div>
+      >
+        <span
+          className={`absolute top-1 h-3.5 w-3.5 rounded-full transition-transform ${
+            checked
+              ? "translate-x-[1.35rem] bg-nasa-accent"
+              : "translate-x-1 bg-white/45"
+          }`}
+        />
+      </span>
     </div>
-  </div>
+  </button>
 );
 
 const CategoryToggle = ({
@@ -387,11 +648,13 @@ const CategoryToggle = ({
   onChange: () => void;
 }) => (
   <button
+    type="button"
+    aria-pressed={checked}
     onClick={onChange}
-    className={`px-1.5 py-1 text-[9px] uppercase border transition-all ${
+    className={`border px-2 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[border-color,color,background-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
       checked
-        ? "border-nasa-accent text-nasa-accent bg-nasa-accent/10"
-        : "border-gray-700 text-gray-600 hover:border-gray-500"
+        ? "border-nasa-accent bg-nasa-accent/10 text-white"
+        : "border-white/10 bg-black/20 text-white/55 hover:border-white/25 hover:text-white"
     }`}
   >
     {label}

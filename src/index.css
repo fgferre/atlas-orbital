@@ -15,26 +15,75 @@
   --font-rajdhani: "Rajdhani", sans-serif;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--color-nasa-black);
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(20, 24, 42, 0.82) 0%,
+      rgba(0, 0, 0, 0.98) 68%
+    ),
+    var(--color-nasa-black);
   color: var(--color-nasa-text);
   font-family: var(--font-rajdhani);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #root {
   width: 100vw;
   height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Utilities */
 .glass-panel {
-  background: var(--color-nasa-panel);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--color-nasa-border);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(195, 245, 255, 0.05) 0%,
+      rgba(195, 245, 255, 0) 100%
+    ),
+    var(--color-nasa-panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(132, 147, 150, 0.15);
+  box-shadow:
+    0 0 18px rgba(0, 240, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.command-shell {
+  position: relative;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(6, 11, 19, 0.94) 0%,
+      rgba(8, 12, 20, 0.78) 100%
+    ),
+    rgba(10, 15, 30, 0.72);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  box-shadow:
+    0 0 24px rgba(0, 240, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.command-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 240, 255, 0.09) 0,
+    rgba(0, 240, 255, 0) 30%
+  );
+  opacity: 0.7;
 }
 
 .tech-border {
@@ -65,10 +114,18 @@ body {
 
 /* Tech Panel - Angular container with glass effect (matches Sidebar) */
 .tech-panel {
-  background: var(--color-nasa-panel);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--color-nasa-border);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(195, 245, 255, 0.05) 0%,
+      rgba(195, 245, 255, 0) 100%
+    ),
+    var(--color-nasa-panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(132, 147, 150, 0.15);
+  box-shadow:
+    0 0 18px rgba(0, 240, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   clip-path: polygon(
     0 0,
     100% 0,
@@ -76,6 +133,118 @@ body {
     calc(100% - 12px) 100%,
     0 100%
   );
+}
+
+.tech-rail {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(10, 18, 28, 0.88) 0%,
+      rgba(8, 12, 20, 0.64) 100%
+    ),
+    rgba(8, 12, 20, 0.62);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  box-shadow:
+    0 0 18px rgba(0, 240, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.tech-corners {
+  position: relative;
+}
+
+.tech-corners::before,
+.tech-corners::after {
+  content: "";
+  position: absolute;
+  width: 0.9rem;
+  height: 0.9rem;
+  pointer-events: none;
+}
+
+.tech-corners::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid rgba(0, 240, 255, 0.45);
+  border-left: 2px solid rgba(0, 240, 255, 0.45);
+}
+
+.tech-corners::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid rgba(0, 240, 255, 0.45);
+  border-bottom: 2px solid rgba(0, 240, 255, 0.45);
+}
+
+.panel-scan {
+  position: relative;
+}
+
+.panel-scan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 240, 255, 0.035) 50%,
+    rgba(0, 240, 255, 0) 50%
+  );
+  background-size: 100% 4px;
+  mix-blend-mode: screen;
+  opacity: 0.25;
+}
+
+.rail-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(0, 240, 255, 0.2),
+    transparent
+  );
+}
+
+.status-block {
+  min-width: 7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.65rem 0.8rem;
+}
+
+.ghost-border {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 240, 255, 0.04),
+    0 0 18px rgba(0, 240, 255, 0.06);
+}
+
+.hud-scanline {
+  position: relative;
+}
+
+.hud-scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 240, 255, 0.03) 50.5%,
+    transparent 51%
+  );
+  background-size: 100% 4px;
+  opacity: 0.35;
+}
+
+.drawer-tab-label {
+  display: inline-flex;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
 }
 
 /* Tech Transition - Standard animation curve for panels/overlays
@@ -146,4 +315,15 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

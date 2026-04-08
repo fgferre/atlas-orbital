@@ -1,73 +1,320 @@
-import { useState, useRef, useEffect } from "react";
-import { useStore } from "../../store";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
-export const SearchBar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { searchBodies } from "../../lib/bodySearch";
+import { useStore } from "../../store";
+import {
+  SEARCH_QUICK_TARGETS,
+  type RightControlPanelId,
+} from "./controlPanelConfig";
+
+const getOptionId = (listboxId: string, bodyId: string) =>
+  `${listboxId}-option-${bodyId}`;
+
+interface SearchBarProps {
+  activePanel: RightControlPanelId | null;
+  setActivePanel: (panel: RightControlPanelId | null) => void;
+}
+
+export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const isOpen = activePanel === "search";
 
   const selectId = useStore((state) => state.selectId);
+  const deferredQuery = useDeferredValue(query);
+  const results = useMemo(
+    () => searchBodies(deferredQuery, SOLAR_SYSTEM_BODIES, isMobile ? 6 : 8),
+    [deferredQuery, isMobile]
+  );
 
-  // Filter bodies based on query
-  const filteredBodies = SOLAR_SYSTEM_BODIES.filter((body) =>
-    body.name.en.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 5); // Limit to 5 results
+  const quickTargets = useMemo(
+    () =>
+      SEARCH_QUICK_TARGETS.flatMap(({ id, label }) => {
+        const body = SOLAR_SYSTEM_BODIES.find(
+          (candidate) => candidate.id === id
+        );
+
+        return body ? [{ id, label }] : [];
+      }),
+    []
+  );
+
+  const closeSearch = (restoreFocus = false) => {
+    setActivePanel(null);
+    setQuery("");
+    setActiveIndex(-1);
+
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => buttonRef.current?.focus());
+    }
+  };
+
+  const openSearch = () => {
+    setActivePanel("search");
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
 
   const handleSelect = (id: string) => {
     selectId(id);
-    setQuery("");
-    setIsOpen(false);
+    closeSearch();
   };
 
-  // Close when clicking outside
+  useDialogFocus({
+    isOpen: isOpen && isMobile,
+    containerRef: panelRef,
+    initialFocusRef: inputRef,
+    onClose: () => closeSearch(true),
+  });
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       if (
+        isOpen &&
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
       ) {
-        setIsOpen(false);
+        closeSearch();
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  const resolvedActiveIndex =
+    activeIndex >= 0 && activeIndex < results.length
+      ? activeIndex
+      : results.length > 0
+        ? 0
+        : -1;
+  const activeDescendant =
+    resolvedActiveIndex >= 0 && results[resolvedActiveIndex]
+      ? getOptionId(listboxId, results[resolvedActiveIndex].body.id)
+      : undefined;
+  const hasQuery = deferredQuery.trim().length > 0;
+
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" && results.length > 0) {
+      event.preventDefault();
+      setActiveIndex((current) =>
+        current >= results.length - 1 ? 0 : current + 1
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp" && results.length > 0) {
+      event.preventDefault();
+      setActiveIndex((current) =>
+        current <= 0 ? results.length - 1 : current - 1
+      );
+      return;
+    }
+
+    if (
+      event.key === "Enter" &&
+      resolvedActiveIndex >= 0 &&
+      results[resolvedActiveIndex]
+    ) {
+      event.preventDefault();
+      handleSelect(results[resolvedActiveIndex].body.id);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+
+      if (query) {
+        setQuery("");
+        return;
+      }
+
+      closeSearch(true);
+    }
+  };
+
+  const panelClassName = isMobile
+    ? "fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[max(0.2rem,env(safe-area-inset-left))] right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50"
+    : "absolute right-0 top-1/2 z-50 -translate-y-1/2";
+
+  const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center gap-1.5 overflow-hidden px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+    isMobile
+      ? "h-[4.5rem] w-10 -translate-x-[0.5rem] rounded-r-[0.95rem] text-nasa-accent hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
+      : "h-[5rem] w-10 translate-x-[0.5rem] rounded-l-[0.95rem] text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
+  }`;
+
+  const mobileOpenHandleClassName =
+    "command-shell ghost-border relative z-[1] -ml-px flex h-[4.5rem] w-10 shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const desktopOpenTabClassName =
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const desktopPanelShellClassName =
+    "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
+
+  const panelBodyClassName = isMobile
+    ? "flex h-full min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4"
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] min-w-0 flex-col overflow-hidden p-3 sm:p-4";
+
+  const panelContent = (
+    <div
+      id="atlas-search-panel"
+      ref={panelRef}
+      role={isMobile ? "dialog" : undefined}
+      aria-modal={isMobile ? true : undefined}
+      aria-labelledby="atlas-search-title"
+      tabIndex={-1}
+      className={panelBodyClassName}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/8 pb-3">
+        <div className="min-w-0">
+          <div
+            id="atlas-search-title"
+            className="text-sm font-orbitron uppercase tracking-[0.18em] text-nasa-accent"
+          >
+            Search
+          </div>
+          <div className="mt-1 text-[10px] font-rajdhani uppercase tracking-[0.2em] text-white/45">
+            PT / EN registry
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => closeSearch(true)}
+          aria-label="Close search panel"
+          className="rounded border border-white/10 px-2 py-1 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/70 transition-colors hover:border-nasa-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+        >
+          Close
+        </button>
+      </div>
+
+      <label htmlFor="atlas-body-search" className="sr-only">
+        Search celestial bodies
+      </label>
+      <input
+        id="atlas-body-search"
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={isOpen}
+        aria-activedescendant={activeDescendant}
+        autoComplete="off"
+        spellCheck={false}
+        inputMode="search"
+        name="atlas_body_search"
+        placeholder="Search bodies, classes, or TNOs…"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={handleInputKeyDown}
+        className="h-12 w-full border border-white/10 bg-black/40 px-4 text-sm uppercase tracking-[0.16em] text-white transition-[border-color,box-shadow] placeholder:text-white/35 focus:border-nasa-accent focus:outline-none focus-visible:shadow-[0_0_0_1px_rgba(0,240,255,0.5)]"
+      />
+
+      <div
+        className="mt-3 min-h-0 flex-1"
+        id={listboxId}
+        role={hasQuery ? "listbox" : undefined}
+      >
+        {!hasQuery ? (
+          <div className="space-y-3">
+            <p className="text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/55">
+              Quick Jumps
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {quickTargets.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => handleSelect(id)}
+                  className="border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white transition-[border-color,color,background-color] hover:border-nasa-accent hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : results.length > 0 ? (
+          <div className="custom-scrollbar max-h-[min(20rem,45vh)] space-y-1 overflow-y-auto overscroll-contain pr-1">
+            {results.map((result, index) => {
+              const isActive = index === resolvedActiveIndex;
+              const optionId = getOptionId(listboxId, result.body.id);
+              const classificationLabel =
+                result.body.classification ?? result.body.type.toUpperCase();
+
+              return (
+                <button
+                  key={result.body.id}
+                  id={optionId}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => handleSelect(result.body.id)}
+                  className={`flex w-full items-start justify-between gap-3 border px-3 py-3 text-left transition-[border-color,color,background-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+                    isActive
+                      ? "border-nasa-accent/60 bg-nasa-accent/10 text-white"
+                      : "border-white/5 bg-white/[0.03] text-white/80 hover:border-white/20 hover:bg-white/[0.07]"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="font-orbitron text-[11px] uppercase tracking-[0.16em]">
+                      {result.body.name.en}
+                    </div>
+                    <div className="mt-1 text-[11px] text-white/55">
+                      {result.body.name.pt}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-right text-[10px] uppercase tracking-[0.16em] text-nasa-accent">
+                    {classificationLabel}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            aria-live="polite"
+            className="border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-center text-sm text-white/55"
+          >
+            No match for “{query}”. Try a Portuguese name, a type like TNO, or a
+            classification such as Gas Giant.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div
       ref={containerRef}
-      className="relative pointer-events-auto flex justify-end"
+      className="relative pointer-events-auto"
       data-tutorial-target="search"
     >
-      <div
-        className={`flex items-center tech-panel tech-transition ${isOpen ? "w-64" : "w-12 h-12"}`}
-      >
-        <AnimatePresence>
-          {isOpen && (
-            <motion.input
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "100%" }}
-              exit={{ opacity: 0, width: 0 }}
-              ref={inputRef}
-              type="text"
-              placeholder="Search..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full h-12 pl-4 pr-12 bg-transparent border-none text-sm text-white focus:outline-none font-rajdhani uppercase tracking-wider"
-            />
-          )}
-        </AnimatePresence>
-
+      {!isOpen && (
         <button
-          onClick={() => {
-            setIsOpen(!isOpen);
-            if (!isOpen) setTimeout(() => inputRef.current?.focus(), 100);
-          }}
-          className={`absolute right-0 w-12 h-12 flex items-center justify-center text-nasa-accent hover:text-white transition-colors z-10`}
+          ref={buttonRef}
+          type="button"
+          aria-label="Open search panel"
+          aria-expanded={false}
+          aria-controls="atlas-search-panel"
+          onClick={openSearch}
+          className={closedTabClassName}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -75,7 +322,8 @@ export const SearchBar = () => {
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="w-6 h-6"
+            className="h-4 w-4 shrink-0"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -83,36 +331,92 @@ export const SearchBar = () => {
               d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
             />
           </svg>
+          <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
+            Search
+          </span>
         </button>
-      </div>
+      )}
 
-      {/* Results Dropdown */}
       <AnimatePresence>
-        {isOpen && query.length > 0 && (
+        {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="absolute top-14 right-0 w-64 tech-panel overflow-hidden shadow-lg z-50"
+            className={panelClassName}
+            initial={{
+              opacity: 0,
+              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              scale: 0.98,
+            }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              scale: 0.98,
+            }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
           >
-            {filteredBodies.length > 0 ? (
-              filteredBodies.map((body) => (
+            {isMobile ? (
+              <div className="command-shell ghost-border tech-corners panel-scan flex h-full items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]">
+                {panelContent}
                 <button
-                  key={body.id}
-                  onClick={() => handleSelect(body.id)}
-                  className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex items-center justify-between group"
+                  ref={buttonRef}
+                  type="button"
+                  aria-label="Close search panel"
+                  aria-expanded={true}
+                  aria-controls="atlas-search-panel"
+                  onClick={() => closeSearch(true)}
+                  className={mobileOpenHandleClassName}
                 >
-                  <span className="text-sm font-rajdhani font-bold text-white group-hover:text-nasa-accent transition-colors">
-                    {body.name.en}
-                  </span>
-                  <span className="text-[10px] text-white/50 uppercase tracking-wider">
-                    {body.type}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                    />
+                  </svg>
+                  <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
+                    Search
                   </span>
                 </button>
-              ))
+              </div>
             ) : (
-              <div className="px-4 py-3 text-sm text-white/50 text-center font-rajdhani">
-                No results found
+              <div className="relative flex items-center">
+                <button
+                  ref={buttonRef}
+                  type="button"
+                  aria-label="Close search panel"
+                  aria-expanded={true}
+                  aria-controls="atlas-search-panel"
+                  onClick={() => closeSearch(true)}
+                  className={desktopOpenTabClassName}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                    />
+                  </svg>
+                  <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
+                    Search
+                  </span>
+                </button>
+                <div className={desktopPanelShellClassName}>{panelContent}</div>
               </div>
             )}
           </motion.div>

@@ -1,15 +1,35 @@
+import { useRef } from "react";
+
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useStore } from "../../store";
 
 export const CreditsModal = () => {
   const showCredits = useStore((state) => state.showCredits);
   const toggleCredits = useStore((state) => state.toggleCredits);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useDialogFocus({
+    isOpen: showCredits,
+    containerRef: dialogRef,
+    initialFocusRef: closeButtonRef,
+    onClose: toggleCredits,
+  });
 
   if (!showCredits) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in text-left">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 text-left backdrop-blur-sm animate-fade-in"
+      onClick={toggleCredits}
+    >
       <div
-        className="w-full max-w-2xl bg-black/90 border border-nasa-accent/30 rounded-lg shadow-[0_0_50px_rgba(0,240,255,0.1)] overflow-hidden flex flex-col max-h-[90vh]"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="credits-title"
+        tabIndex={-1}
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-nasa-accent/30 bg-black/90 shadow-[0_0_50px_rgba(0,240,255,0.1)] focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -18,13 +38,18 @@ export const CreditsModal = () => {
             <div className="text-xs text-nasa-accent font-orbitron tracking-[0.2em] mb-1">
               MISSION REPORT
             </div>
-            <h2 className="text-2xl text-white font-orbitron uppercase tracking-wider">
+            <h2
+              id="credits-title"
+              className="text-2xl text-white font-orbitron uppercase tracking-wider"
+            >
               Acknowledgments
             </h2>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={toggleCredits}
-            className="text-gray-400 hover:text-white transition-colors"
+            aria-label="Close mission report"
+            className="text-gray-400 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -32,6 +57,7 @@ export const CreditsModal = () => {
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -44,7 +70,7 @@ export const CreditsModal = () => {
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-8 custom-scrollbar">
+        <div className="custom-scrollbar space-y-8 overflow-y-auto overscroll-contain p-6">
           {/* Section: Project */}
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3 border-l-2 border-nasa-accent pl-2">
@@ -130,7 +156,10 @@ export const CreditsModal = () => {
             </h3>
             <div className="bg-white/5 p-4 rounded border border-white/5">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">🤖</span>
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 rounded-full bg-nasa-accent shadow-[0_0_12px_rgba(0,240,255,0.45)]"
+                ></span>
                 <span className="text-nasa-accent font-bold font-orbitron">
                   AI-Assisted Development
                 </span>
@@ -176,7 +205,7 @@ const CreditItem = ({
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-nasa-accent opacity-0 group-hover:opacity-100 transition-opacity"
+          className="text-nasa-accent opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -184,6 +213,7 @@ const CreditItem = ({
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"

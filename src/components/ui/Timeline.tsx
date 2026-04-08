@@ -1,16 +1,23 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
+import { AnimatePresence, motion } from "framer-motion";
+
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
 
-// Constants for time conversion
 const SEC_PER_DAY = 86400;
 
-// Helper to create step object
 const createStep = (valueInSeconds: number, label: string) => ({
   value: valueInSeconds,
   label,
 });
 
-// Defined time steps
 const TIME_STEPS = [
   createStep(3, "3 seconds/second"),
   createStep(5, "5 seconds/second"),
@@ -59,7 +66,7 @@ const TIME_STEPS = [
   createStep(3 * 365 * SEC_PER_DAY, "3 years/second"),
 ];
 
-const NORMAL_SPEED = 1; // 1 second per second
+const NORMAL_SPEED = 1;
 
 export const Timeline = () => {
   const datetime = useStore((state) => state.datetime);
@@ -69,103 +76,100 @@ export const Timeline = () => {
   const setSpeed = useStore((state) => state.setSpeed);
   const isLiveMode = useStore((state) => state.isLiveMode);
   const setLiveMode = useStore((state) => state.setLiveMode);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  const isCompact = useMediaQuery("(max-width: 1365px)");
+
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const requestRef = useRef<number | undefined>(undefined);
   const previousTimeRef = useRef<number | undefined>(undefined);
 
-  // Calculate current step index based on speed
   const currentStepIndex = useMemo(() => {
     const absSpeed = Math.abs(speed);
-    if (absSpeed < TIME_STEPS[0].value) return -1; // Less than min step (e.g. normal speed)
+    if (absSpeed < TIME_STEPS[0].value) {
+      return -1;
+    }
 
-    // Find the closest step
     let closestIndex = 0;
     let minDiff = Math.abs(absSpeed - TIME_STEPS[0].value);
 
-    for (let i = 1; i < TIME_STEPS.length; i++) {
-      const diff = Math.abs(absSpeed - TIME_STEPS[i].value);
+    for (let index = 1; index < TIME_STEPS.length; index += 1) {
+      const diff = Math.abs(absSpeed - TIME_STEPS[index].value);
       if (diff < minDiff) {
         minDiff = diff;
-        closestIndex = i;
+        closestIndex = index;
       }
     }
+
     return closestIndex;
   }, [speed]);
 
-  // Derived state for slider
-  // We map:
-  // 0 -> Normal Speed (1 sec/sec)
-  // 1 to N -> Forward steps
-  // -1 to -N -> Backward steps
   const sliderValue = useMemo(() => {
-    if (Math.abs(speed - NORMAL_SPEED) < 1e-10) return 0; // Normal speed
-    if (Math.abs(speed + NORMAL_SPEED) < 1e-10) return 0; // Negative normal speed (treat as 0 for simplicity or handle separately?)
-    // Actually user wants back/fwd. Let's say 0 is normal.
-    // Positive steps: 1 to 45
-    // Negative steps: -1 to -45
+    if (Math.abs(speed - NORMAL_SPEED) < 1e-10) {
+      return 0;
+    }
 
-    if (currentStepIndex === -1) return 0; // Fallback for normal-ish speeds
+    if (Math.abs(speed + NORMAL_SPEED) < 1e-10) {
+      return 0;
+    }
+
+    if (currentStepIndex === -1) {
+      return 0;
+    }
 
     return speed > 0 ? currentStepIndex + 1 : -(currentStepIndex + 1);
-  }, [speed, currentStepIndex]);
+  }, [currentStepIndex, speed]);
 
-  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
     setLiveMode(false);
-    const val = parseInt(e.target.value);
-    if (val === 0) {
+    const value = Number.parseInt(event.target.value, 10);
+
+    if (value === 0) {
       setSpeed(NORMAL_SPEED);
-    } else {
-      const index = Math.abs(val) - 1;
-      const step = TIME_STEPS[index];
-      setSpeed(val > 0 ? step.value : -step.value);
+      return;
     }
+
+    const index = Math.abs(value) - 1;
+    const step = TIME_STEPS[index];
+    setSpeed(value > 0 ? step.value : -step.value);
   };
 
   const handleForward = () => {
     setLiveMode(false);
     if (speed < 0) {
-      // If going backward, reduce speed magnitude or go to normal
       if (currentStepIndex === 0) {
         setSpeed(NORMAL_SPEED);
       } else if (currentStepIndex > 0) {
-        // Reduce backward speed
-        const newIndex = currentStepIndex - 1;
-        setSpeed(-TIME_STEPS[newIndex].value);
+        setSpeed(-TIME_STEPS[currentStepIndex - 1].value);
       } else {
-        // Was at normal or weird speed, go to first step forward
         setSpeed(TIME_STEPS[0].value);
       }
-    } else {
-      // Going forward
-      if (Math.abs(speed - NORMAL_SPEED) < 1e-10 || currentStepIndex === -1) {
-        setSpeed(TIME_STEPS[0].value);
-      } else if (currentStepIndex < TIME_STEPS.length - 1) {
-        setSpeed(TIME_STEPS[currentStepIndex + 1].value);
-      }
+      return;
+    }
+
+    if (Math.abs(speed - NORMAL_SPEED) < 1e-10 || currentStepIndex === -1) {
+      setSpeed(TIME_STEPS[0].value);
+    } else if (currentStepIndex < TIME_STEPS.length - 1) {
+      setSpeed(TIME_STEPS[currentStepIndex + 1].value);
     }
   };
 
   const handleRewind = () => {
     setLiveMode(false);
     if (speed > 0) {
-      // If going forward, reduce speed or go to normal
       if (currentStepIndex === 0) {
-        setSpeed(NORMAL_SPEED); // Or maybe negative normal? Let's stick to positive normal as "stop/reset" point
+        setSpeed(NORMAL_SPEED);
       } else if (currentStepIndex > 0) {
-        const newIndex = currentStepIndex - 1;
-        setSpeed(TIME_STEPS[newIndex].value);
+        setSpeed(TIME_STEPS[currentStepIndex - 1].value);
       } else {
-        // Was at normal, go to first step backward
         setSpeed(-TIME_STEPS[0].value);
       }
-    } else {
-      // Going backward
-      if (Math.abs(speed - NORMAL_SPEED) < 1e-10 || currentStepIndex === -1) {
-        // Check if it was normal speed
-        setSpeed(-TIME_STEPS[0].value);
-      } else if (currentStepIndex < TIME_STEPS.length - 1) {
-        setSpeed(-TIME_STEPS[currentStepIndex + 1].value);
-      }
+      return;
+    }
+
+    if (Math.abs(speed - NORMAL_SPEED) < 1e-10 || currentStepIndex === -1) {
+      setSpeed(-TIME_STEPS[0].value);
+    } else if (currentStepIndex < TIME_STEPS.length - 1) {
+      setSpeed(-TIME_STEPS[currentStepIndex + 1].value);
     }
   };
 
@@ -173,6 +177,17 @@ export const Timeline = () => {
     setLiveMode(false);
     setSpeed(NORMAL_SPEED);
     setIsPlaying(true);
+  };
+
+  const handleLiveMode = () => {
+    setLiveMode(true);
+    setSpeed(NORMAL_SPEED);
+    setIsPlaying(true);
+  };
+
+  const togglePlayback = () => {
+    setLiveMode(false);
+    setIsPlaying(!isPlaying);
   };
 
   useEffect(() => {
@@ -185,11 +200,14 @@ export const Timeline = () => {
           useStore
             .getState()
             .setDatetime(
-              (prev) =>
-                new Date(prev.getTime() + useStore.getState().speed * deltaTime)
+              (previous) =>
+                new Date(
+                  previous.getTime() + useStore.getState().speed * deltaTime
+                )
             );
         }
       }
+
       previousTimeRef.current = time;
       requestRef.current = requestAnimationFrame(animate);
     };
@@ -203,184 +221,322 @@ export const Timeline = () => {
   }, []);
 
   const currentLabel = useMemo(() => {
-    if (Math.abs(speed - NORMAL_SPEED) < 1e-10) return "1 second/second";
-    if (speed === 0) return "PAUSED";
+    if (Math.abs(speed - NORMAL_SPEED) < 1e-10) {
+      return "1 second/second";
+    }
+
+    if (speed === 0) {
+      return "Paused";
+    }
+
     if (currentStepIndex !== -1) {
       return TIME_STEPS[currentStepIndex].label;
     }
-    return "Custom Speed";
-  }, [speed, currentStepIndex]);
 
-  const handleLiveMode = () => {
-    setLiveMode(true);
-    setSpeed(NORMAL_SPEED);
-    setIsPlaying(true);
-  };
+    return "Custom Speed";
+  }, [currentStepIndex, speed]);
+
+  const formattedTime = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(datetime),
+    [datetime]
+  );
+
+  const formattedDate = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+        .format(datetime)
+        .toUpperCase(),
+    [datetime]
+  );
+
+  const rateSummary = useMemo(() => {
+    if (isLiveMode) {
+      return "Realtime sync";
+    }
+
+    if (speed === 0) {
+      return "Paused";
+    }
+
+    return `${speed < 0 ? "-" : ""}${currentLabel}`;
+  }, [currentLabel, isLiveMode, speed]);
+
+  const collapsedWidthClass = isMobile
+    ? "w-[min(calc(100vw-1rem),18rem)]"
+    : "w-[15.5rem]";
+  const expandedWidthClass = isMobile
+    ? "w-[calc(100vw-1rem)]"
+    : isCompact
+      ? "w-[min(calc(100vw-2rem),31rem)]"
+      : "w-[min(calc(100vw-2rem),36rem)]";
+  const shellWidthClass = isCollapsed
+    ? collapsedWidthClass
+    : expandedWidthClass;
+  const shellPaddingClass = isCollapsed ? "px-2.5 py-2" : "px-3 py-3 sm:px-4";
+  const shellTransition = {
+    layout: {
+      duration: 0.34,
+      ease: [0.16, 1, 0.3, 1],
+    },
+  } as const;
 
   return (
     <div
-      className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center z-30 pointer-events-auto tech-transition"
+      className="pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2"
       data-tutorial-target="timeline"
     >
-      {/* Collapse Toggle */}
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="mb-2 text-nasa-accent hover:text-white transition-colors"
+      <motion.section
+        layout
+        transition={shellTransition}
+        style={{ transformOrigin: "bottom center" }}
+        className={`command-shell tech-corners ghost-border flex flex-col overflow-hidden ${shellWidthClass} ${shellPaddingClass}`}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className={`h-6 w-6 transition-transform duration-500 ${isCollapsed ? "rotate-180" : ""}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePlayback}
+            aria-label={isPlaying ? "Pause timeline" : "Play timeline"}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center border transition-[border-color,background-color,color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+              isPlaying
+                ? "border-nasa-accent bg-nasa-accent/10 text-nasa-accent"
+                : "border-nasa-alert bg-nasa-alert/10 text-nasa-alert"
+            }`}
+          >
+            {isPlaying ? (
+              <div className="flex gap-1" aria-hidden="true">
+                <div className="h-3.5 w-1.5 rounded-sm bg-current"></div>
+                <div className="h-3.5 w-1.5 rounded-sm bg-current"></div>
+              </div>
+            ) : (
+              <div
+                aria-hidden="true"
+                className="ml-0.5 h-0 w-0 border-b-[6px] border-l-[11px] border-t-[6px] border-b-transparent border-l-current border-t-transparent"
+              ></div>
+            )}
+          </button>
 
-      <div
-        className={`tech-panel px-8 py-4 flex flex-col items-center gap-4 tech-transition overflow-hidden ${
-          isCollapsed ? "w-0 h-0 opacity-0 p-0" : "w-auto h-auto opacity-100"
-        }`}
-      >
-        {/* Decorative HUD Elements */}
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-nasa-accent/50"></div>
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-1 bg-nasa-accent/30"></div>
-
-        <div className="flex items-center gap-8 w-full justify-between">
-          {/* Date & Time Display */}
-          <div className="flex flex-col items-end w-48">
-            <span className="text-xl font-orbitron text-white tracking-widest tabular-nums">
-              {datetime.toLocaleTimeString(undefined, { hour12: false })}
-            </span>
-            <span className="text-[10px] text-nasa-dim uppercase tracking-[0.2em] font-rajdhani">
-              {datetime
-                .toLocaleDateString(undefined, {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
-                .toUpperCase()}
-            </span>
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center gap-4">
-            {/* Rewind */}
-            <button
-              onClick={handleRewind}
-              className="text-nasa-dim hover:text-nasa-accent transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M11 19l-9-7 9-7v14zM20 19l-9-7 9-7v14z" />
-              </svg>
-            </button>
-
-            {/* Play/Pause */}
-            <button
-              onClick={() => {
-                setLiveMode(false);
-                setIsPlaying(!isPlaying);
-              }}
-              className={`w-14 h-14 border-2 flex items-center justify-center transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
-                isPlaying
-                  ? "border-nasa-accent bg-nasa-accent/10 shadow-[0_0_15px_rgba(0,240,255,0.3)]"
-                  : "border-nasa-alert bg-nasa-alert/10 shadow-[0_0_15px_rgba(255,157,0,0.3)]"
-              }`}
-            >
-              {isPlaying ? (
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-5 bg-nasa-accent rounded-sm"></div>
-                  <div className="w-1.5 h-5 bg-nasa-accent rounded-sm"></div>
-                </div>
-              ) : (
-                <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[14px] border-l-nasa-alert border-b-[8px] border-b-transparent ml-1"></div>
-              )}
-            </button>
-
-            {/* Forward */}
-            <button
-              onClick={handleForward}
-              className="text-nasa-dim hover:text-nasa-accent transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M13 19l9-7-9-7v14zM4 19l9-7-9-7v14z" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Speed Display */}
-          <div className="flex flex-col items-start w-48">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-orbitron text-white tracking-widest tabular-nums">
-                {speed < 0 ? "-" : ""}
-                {currentLabel}
-              </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[8px] font-orbitron uppercase tracking-[0.18em] text-white/35">
+              {isLiveMode ? "Live sync" : "Simulation time"}
             </div>
-            <span className="text-[10px] text-nasa-dim uppercase tracking-[0.2em] font-rajdhani">
-              RATE
-            </span>
-          </div>
-        </div>
-
-        {/* Slider and Normal Button */}
-        <div className="flex items-center gap-4 w-full px-4">
-          <div className="flex gap-2">
-            <button
-              onClick={handleLiveMode}
-              className={`text-[10px] font-orbitron border px-2 py-1 transition-colors whitespace-nowrap flex items-center gap-2 ${
-                isLiveMode
-                  ? "text-green-400 border-green-400/50 bg-green-400/10"
-                  : "text-nasa-accent border-nasa-accent/50 hover:bg-nasa-accent/20"
+            <div
+              className={`truncate font-orbitron tabular-nums uppercase tracking-[0.14em] text-white transition-[font-size] duration-300 ${
+                isCollapsed ? "text-[10px]" : "text-[12px]"
               }`}
             >
-              {isLiveMode && (
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+              {formattedTime}
+            </div>
+            <AnimatePresence initial={false}>
+              {!isCollapsed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  className="mt-0.5 text-[9px] font-rajdhani uppercase tracking-[0.18em] text-nasa-dim"
+                >
+                  {formattedDate}
+                </motion.div>
               )}
-              LIVE MODE
-            </button>
-            <button
-              onClick={handleNormalTime}
-              className="text-[10px] font-orbitron text-nasa-accent border border-nasa-accent/50 px-2 py-1 hover:bg-nasa-accent/20 transition-colors whitespace-nowrap"
-            >
-              NORMAL RATE
-            </button>
+            </AnimatePresence>
           </div>
-          <input
-            type="range"
-            min={-TIME_STEPS.length}
-            max={TIME_STEPS.length}
-            step={1}
-            value={sliderValue}
-            onChange={handleSliderChange}
-            className="w-full h-1 bg-nasa-dim/30 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-nasa-accent [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(0,240,255,0.8)]"
-          />
-        </div>
-      </div>
 
-      {/* Time Display when collapsed */}
-      {isCollapsed && (
-        <div className="tech-panel px-4 py-2 mt-2 animate-fade-in">
-          <span className="text-sm font-orbitron text-nasa-accent tracking-widest">
-            {datetime.toLocaleDateString().toUpperCase()}
-          </span>
+          <button
+            type="button"
+            onClick={handleLiveMode}
+            aria-pressed={isLiveMode}
+            className={`border px-2 py-2 text-[8px] font-orbitron uppercase tracking-[0.16em] transition-[border-color,color,background-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+              isLiveMode
+                ? "border-green-400/50 bg-green-400/10 text-green-300"
+                : "border-white/10 text-white/70 hover:border-nasa-accent/40 hover:text-white"
+            }`}
+          >
+            LIVE MODE
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((current) => !current)}
+            aria-expanded={!isCollapsed}
+            aria-controls="atlas-timeline-panel"
+            aria-label={isCollapsed ? "Expand timeline" : "Collapse timeline"}
+            className="flex h-9 w-9 shrink-0 items-center justify-center border border-white/10 bg-white/[0.03] text-nasa-accent transition-[border-color,color,background-color] hover:border-nasa-accent/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-4 w-4 transition-transform duration-300 ${
+                isCollapsed ? "rotate-180" : ""
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
         </div>
-      )}
+
+        <AnimatePresence initial={false}>
+          {!isCollapsed && (
+            <motion.div
+              id="atlas-timeline-panel"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-3 space-y-3 border-t border-white/8 pt-3"
+            >
+              {isMobile ? (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="w-[10.5rem] shrink-0 border border-white/8 bg-white/[0.04] px-2 py-1 text-center text-[9px] font-orbitron tabular-nums uppercase tracking-[0.16em] text-nasa-accent">
+                      {rateSummary}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleNormalTime}
+                      className="border border-nasa-accent/50 px-2.5 py-2 text-[9px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[border-color,color,background-color] hover:bg-nasa-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+                    >
+                      NORMAL RATE
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2">
+                    <TimelineIconButton
+                      label="Rewind simulation rate"
+                      onClick={handleRewind}
+                    >
+                      <path d="M11 19l-9-7 9-7v14zM20 19l-9-7 9-7v14z" />
+                    </TimelineIconButton>
+
+                    <TimelineIconButton
+                      label="Advance simulation rate"
+                      onClick={handleForward}
+                    >
+                      <path d="M13 19l9-7-9-7v14zM4 19l9-7-9-7v14z" />
+                    </TimelineIconButton>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[9px] font-rajdhani uppercase tracking-[0.18em] text-white/45">
+                      <span>Reverse</span>
+                      <span>Normal</span>
+                      <span>Forward</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={-TIME_STEPS.length}
+                      max={TIME_STEPS.length}
+                      step={1}
+                      value={sliderValue}
+                      aria-label="Simulation rate"
+                      onChange={handleSliderChange}
+                      className="h-1.5 w-full cursor-pointer appearance-none bg-nasa-dim/25 accent-nasa-accent touch-manipulation"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-[auto_auto_auto_minmax(0,1fr)] items-center gap-2.5">
+                  <div className="w-[10.5rem] shrink-0 border border-white/8 bg-white/[0.04] px-2 py-1 text-center text-[9px] font-orbitron tabular-nums uppercase tracking-[0.16em] text-nasa-accent">
+                    {rateSummary}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleNormalTime}
+                    className="w-[7.5rem] shrink-0 border border-nasa-accent/50 px-2.5 py-2 text-[9px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[border-color,color,background-color] hover:bg-nasa-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+                  >
+                    NORMAL RATE
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <TimelineIconButton
+                      label="Rewind simulation rate"
+                      onClick={handleRewind}
+                      compact
+                    >
+                      <path d="M11 19l-9-7 9-7v14zM20 19l-9-7 9-7v14z" />
+                    </TimelineIconButton>
+
+                    <TimelineIconButton
+                      label="Advance simulation rate"
+                      onClick={handleForward}
+                      compact
+                    >
+                      <path d="M13 19l9-7-9-7v14zM4 19l9-7-9-7v14z" />
+                    </TimelineIconButton>
+                  </div>
+
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex items-center justify-between text-[8px] font-rajdhani uppercase tracking-[0.18em] text-white/45">
+                      <span>Reverse</span>
+                      <span>Normal</span>
+                      <span>Forward</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={-TIME_STEPS.length}
+                      max={TIME_STEPS.length}
+                      step={1}
+                      value={sliderValue}
+                      aria-label="Simulation rate"
+                      onChange={handleSliderChange}
+                      className="h-1.5 w-full cursor-pointer appearance-none bg-nasa-dim/25 accent-nasa-accent touch-manipulation"
+                    />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.section>
     </div>
   );
 };
+
+const TimelineIconButton = ({
+  label,
+  onClick,
+  compact = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  compact?: boolean;
+  children: ReactNode;
+}) => (
+  <button
+    type="button"
+    aria-label={label}
+    onClick={onClick}
+    className={`flex items-center justify-center rounded border border-white/10 text-nasa-dim transition-colors hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+      compact ? "h-9 w-9" : "h-10 w-10"
+    }`}
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={compact ? "h-4 w-4" : "h-5 w-5"}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  </button>
+);

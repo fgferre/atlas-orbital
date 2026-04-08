@@ -1,7 +1,9 @@
+import { useMemo } from "react";
+
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM, AU_TO_3D_UNITS } from "../../lib/astrophysics";
-import { useMemo } from "react";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 const VISUAL_FIDELITY_LABELS = {
   measured: "Measured Asset",
@@ -11,7 +13,10 @@ const VISUAL_FIDELITY_LABELS = {
 } as const;
 
 export const Sidebar = () => {
-  const { selectedId, setSelectedId, datetime } = useStore();
+  const selectedId = useStore((state) => state.selectedId);
+  const setSelectedId = useStore((state) => state.setSelectedId);
+  const datetime = useStore((state) => state.datetime);
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
 
   // Real-time Calculations
@@ -69,18 +74,33 @@ export const Sidebar = () => {
   // Even if no body is selected, we render the container but translate it off-screen
   // This allows for smooth CSS transitions
   const isVisible = !!b;
+  const parentBody =
+    b?.parentId && SOLAR_SYSTEM_BODIES.find((body) => body.id === b.parentId);
+  const panelClassName = isMobile
+    ? `fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] h-[min(58dvh,34rem)] w-auto ${
+        isVisible
+          ? "translate-y-0 opacity-100 pointer-events-auto"
+          : "translate-y-[110%] opacity-0 pointer-events-none"
+      }`
+    : `absolute left-4 top-20 w-[min(22rem,calc(100vw-2rem))] xl:w-[min(24rem,calc(100vw-2rem))] ${
+        isVisible
+          ? "translate-x-0 opacity-100 pointer-events-auto"
+          : "-translate-x-[120%] opacity-0 pointer-events-none"
+      }`;
 
   return (
     <div
-      className={`absolute top-20 left-4 w-80 glass-panel flex flex-col z-30 transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) pointer-events-auto ${
-        isVisible ? "translate-x-0" : "-translate-x-[120%]"
-      }`}
+      className={`${isMobile ? "command-shell panel-scan tech-corners ghost-border" : "glass-panel"} z-30 flex flex-col overflow-hidden transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] ${panelClassName}`}
       data-tutorial-target="info-panel"
-      style={{
-        maxHeight: "calc(100vh - 160px)",
-        clipPath:
-          "polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)",
-      }}
+      style={
+        isMobile
+          ? undefined
+          : {
+              maxHeight: "calc(100vh - 120px)",
+              clipPath:
+                "polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)",
+            }
+      }
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Tech Border Decoration */}
@@ -89,13 +109,15 @@ export const Sidebar = () => {
       {/* Close Button */}
       <button
         onClick={() => setSelectedId(null)}
-        className="absolute top-3 right-3 text-nasa-dim hover:text-nasa-accent transition-colors z-10"
+        aria-label="Close selected body panel"
+        className="absolute right-3 top-3 z-10 rounded border border-white/10 p-1.5 text-nasa-dim transition-colors hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-5 w-5"
           viewBox="0 0 20 20"
           fill="currentColor"
+          aria-hidden="true"
         >
           <path
             fillRule="evenodd"
@@ -108,29 +130,56 @@ export const Sidebar = () => {
       {b && (
         <div className="flex flex-col h-full min-h-0">
           {/* Header Section (Fixed) */}
-          <div className="p-5 pb-3 shrink-0">
-            <div className="text-[10px] text-nasa-accent uppercase tracking-[0.2em] mb-1 font-rajdhani font-bold">
-              Target Locked
-            </div>
-            <h1 className="text-2xl font-orbitron text-white mb-1 tracking-wide uppercase">
-              {b.name.en}
-            </h1>
+          <div className="shrink-0 border-b border-white/10 p-5 pb-4">
+            <div className="min-w-0">
+              <div className="mb-1 text-[10px] font-rajdhani font-bold uppercase tracking-[0.2em] text-nasa-accent">
+                Selected Body
+              </div>
+              <h1 className="mb-1 text-2xl font-orbitron uppercase tracking-wide text-white">
+                {b.name.en}
+              </h1>
+              {b.name.pt !== b.name.en && (
+                <div className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+                  {b.name.pt}
+                </div>
+              )}
 
-            <div className="flex items-center gap-2">
-              <span
-                className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]`}
-                style={{ background: b.color }}
-              ></span>
-              <span className="text-nasa-dim text-[10px] font-rajdhani uppercase tracking-wider">
-                {b.classification || b.type} Class
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]`}
+                  style={{ background: b.color }}
+                ></span>
+                <span className="text-[10px] font-rajdhani uppercase tracking-wider text-nasa-dim">
+                  {b.classification || b.type}
+                </span>
+                <span className="text-[10px] font-rajdhani uppercase tracking-wider text-white/35">
+                  {b.id.toUpperCase()}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <HeaderChip label={b.type.toUpperCase()} />
+              {parentBody && (
+                <HeaderChip label={`ORBITING ${parentBody.name.en}`} />
+              )}
+              {b.group && (
+                <HeaderChip label={`${b.group.toUpperCase()} SYSTEM`} />
+              )}
             </div>
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-5 pt-0 custom-scrollbar space-y-4">
+          <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
             {/* Description */}
-            <p>{b.description || b.info}</p>
+            <div className="space-y-2">
+              <h2 className="text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
+                Quick Context
+              </h2>
+              <p className="text-sm leading-relaxed text-gray-300">
+                {b.description || b.info}
+              </p>
+            </div>
 
             {b.visualProvenance && (
               <div>
@@ -165,7 +214,7 @@ export const Sidebar = () => {
                               href={source.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] text-nasa-accent hover:text-white transition-colors underline underline-offset-2"
+                              className="text-[10px] text-nasa-accent underline underline-offset-2 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
                             >
                               {source.label}
                             </a>
@@ -261,9 +310,12 @@ export const Sidebar = () => {
                   {b.records.map((rec, i) => (
                     <div
                       key={i}
-                      className="bg-yellow-500/10 p-2 rounded border border-yellow-500/20 flex gap-2 items-start"
+                      className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 p-2"
                     >
-                      <span className="text-yellow-500 text-xs">🏆</span>
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]"
+                      ></span>
                       <p className="text-xs text-gray-300 font-rajdhani">
                         {rec}
                       </p>
@@ -368,6 +420,12 @@ export const Sidebar = () => {
     </div>
   );
 };
+
+const HeaderChip = ({ label }: { label: string }) => (
+  <span className="border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/70">
+    {label}
+  </span>
+);
 
 const StatBox = ({
   label,
