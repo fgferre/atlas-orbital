@@ -15,6 +15,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { searchBodies } from "../../lib/bodySearch";
 import { useStore } from "../../store";
 import {
+  RIGHT_CONTROL_TRIGGER_SELECTOR,
   SEARCH_QUICK_TARGETS,
   type RightControlPanelId,
 } from "./controlPanelConfig";
@@ -25,9 +26,14 @@ const getOptionId = (listboxId: string, bodyId: string) =>
 interface SearchBarProps {
   activePanel: RightControlPanelId | null;
   setActivePanel: (panel: RightControlPanelId | null) => void;
+  onPanelExitComplete?: () => void;
 }
 
-export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
+export const SearchBar = ({
+  activePanel,
+  setActivePanel,
+  onPanelExitComplete,
+}: SearchBarProps) => {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +75,6 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
 
   const openSearch = () => {
     setActivePanel("search");
-    window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const handleSelect = (id: string) => {
@@ -87,6 +92,13 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       if (
+        event.target instanceof Element &&
+        event.target.closest(RIGHT_CONTROL_TRIGGER_SELECTOR)
+      ) {
+        return;
+      }
+
+      if (
         isOpen &&
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
@@ -97,6 +109,18 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      window.requestAnimationFrame(() =>
+        inputRef.current?.focus({ preventScroll: true })
+      );
+      return;
+    }
+
+    setQuery("");
+    setActiveIndex(-1);
   }, [isOpen]);
 
   const resolvedActiveIndex =
@@ -166,6 +190,7 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
     "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
+  const triggerSlotClassName = isMobile ? "h-[4.5rem] w-10" : "h-[5rem] w-10";
 
   const panelBodyClassName = isMobile
     ? "flex h-full min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4"
@@ -306,10 +331,13 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
       className="relative pointer-events-auto"
       data-tutorial-target="search"
     >
-      {!isOpen && (
+      {isOpen ? (
+        <div aria-hidden="true" className={triggerSlotClassName}></div>
+      ) : (
         <button
           ref={buttonRef}
           type="button"
+          data-right-control-trigger="search"
           aria-label="Open search panel"
           aria-expanded={false}
           aria-controls="atlas-search-panel"
@@ -337,7 +365,14 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
         </button>
       )}
 
-      <AnimatePresence>
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          if (!isOpen) {
+            onPanelExitComplete?.();
+          }
+        }}
+      >
         {isOpen && (
           <motion.div
             className={panelClassName}
@@ -360,6 +395,7 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
                 <button
                   ref={buttonRef}
                   type="button"
+                  data-right-control-trigger="search"
                   aria-label="Close search panel"
                   aria-expanded={true}
                   aria-controls="atlas-search-panel"
@@ -391,6 +427,7 @@ export const SearchBar = ({ activePanel, setActivePanel }: SearchBarProps) => {
                 <button
                   ref={buttonRef}
                   type="button"
+                  data-right-control-trigger="search"
                   aria-label="Close search panel"
                   aria-expanded={true}
                   aria-controls="atlas-search-panel"

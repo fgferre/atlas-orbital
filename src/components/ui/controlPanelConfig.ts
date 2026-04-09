@@ -3,6 +3,11 @@ import type { StarfieldSource } from "../../lib/starfield";
 
 export type RightControlPanelId = "search" | "scene" | "overlay" | "project";
 
+export interface RightControlPanelState {
+  activePanel: RightControlPanelId | null;
+  queuedPanel: RightControlPanelId | null;
+}
+
 export type VisibilityCategory =
   | "planets"
   | "moons"
@@ -20,6 +25,59 @@ export const RIGHT_CONTROL_BUTTONS = [
   id: RightControlPanelId;
   label: string;
 }>;
+
+export const RIGHT_CONTROL_TRIGGER_SELECTOR = "[data-right-control-trigger]";
+
+export const resolveRightControlPanelRequest = (
+  state: RightControlPanelState,
+  requestedPanel: RightControlPanelId | null
+): RightControlPanelState => {
+  if (requestedPanel === null) {
+    return {
+      activePanel: null,
+      queuedPanel: null,
+    };
+  }
+
+  if (state.activePanel === null) {
+    if (state.queuedPanel) {
+      return {
+        activePanel: null,
+        queuedPanel: requestedPanel,
+      };
+    }
+
+    return {
+      activePanel: requestedPanel,
+      queuedPanel: null,
+    };
+  }
+
+  if (state.activePanel === requestedPanel) {
+    return {
+      activePanel: null,
+      queuedPanel: null,
+    };
+  }
+
+  return {
+    activePanel: null,
+    queuedPanel: requestedPanel,
+  };
+};
+
+export const resolveRightControlPanelExit = (
+  state: RightControlPanelState
+): RightControlPanelState => {
+  if (!state.queuedPanel || state.activePanel) {
+    return state;
+  }
+
+  return {
+    activePanel: state.queuedPanel,
+    queuedPanel: null,
+  };
+};
 
 export const SEARCH_QUICK_TARGETS = [
   { id: "sun", label: "Sun" },

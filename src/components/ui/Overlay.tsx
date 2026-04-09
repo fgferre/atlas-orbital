@@ -6,13 +6,28 @@ import { LayersPanel } from "./LayersPanel";
 import { Timeline } from "./Timeline";
 import { TopBar } from "./TopBar";
 import { SearchBar } from "./SearchBar";
-import type { RightControlPanelId } from "./controlPanelConfig";
+import {
+  resolveRightControlPanelExit,
+  resolveRightControlPanelRequest,
+  type RightControlPanelId,
+  type RightControlPanelState,
+} from "./controlPanelConfig";
 
 export const Overlay = () => {
-  const [activePanel, setActivePanel] = useState<RightControlPanelId | null>(
-    null
-  );
+  const [panelState, setPanelState] = useState<RightControlPanelState>({
+    activePanel: null,
+    queuedPanel: null,
+  });
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const activePanel = panelState.activePanel;
+
+  const requestPanel = (panel: RightControlPanelId | null) => {
+    setPanelState((current) => resolveRightControlPanelRequest(current, panel));
+  };
+
+  const handlePanelExitComplete = () => {
+    setPanelState((current) => resolveRightControlPanelExit(current));
+  };
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -38,11 +53,13 @@ export const Overlay = () => {
         >
           <SearchBar
             activePanel={activePanel}
-            setActivePanel={setActivePanel}
+            setActivePanel={requestPanel}
+            onPanelExitComplete={handlePanelExitComplete}
           />
           <LayersPanel
             activePanel={activePanel}
-            setActivePanel={setActivePanel}
+            setActivePanel={requestPanel}
+            onPanelExitComplete={handlePanelExitComplete}
           />
         </div>
       </div>

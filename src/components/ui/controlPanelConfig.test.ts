@@ -4,10 +4,13 @@ import {
   OVERLAY_FILTER_OPTIONS,
   OVERLAY_GUIDE_OPTIONS,
   RIGHT_CONTROL_BUTTONS,
+  RIGHT_CONTROL_TRIGGER_SELECTOR,
   SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
   SEARCH_QUICK_TARGETS,
+  resolveRightControlPanelExit,
+  resolveRightControlPanelRequest,
 } from "./controlPanelConfig";
 
 describe("controlPanelConfig", () => {
@@ -69,5 +72,51 @@ describe("controlPanelConfig", () => {
       "Ecliptic Grid",
       "Prograde Vector",
     ]);
+  });
+
+  it("queues panel swaps instead of replacing them abruptly", () => {
+    expect(
+      resolveRightControlPanelRequest(
+        { activePanel: "scene", queuedPanel: null },
+        "overlay"
+      )
+    ).toEqual({
+      activePanel: null,
+      queuedPanel: "overlay",
+    });
+    expect(
+      resolveRightControlPanelRequest(
+        { activePanel: null, queuedPanel: "overlay" },
+        "project"
+      )
+    ).toEqual({
+      activePanel: null,
+      queuedPanel: "project",
+    });
+  });
+
+  it("opens queued panels only after the previous exit completes", () => {
+    expect(
+      resolveRightControlPanelExit({
+        activePanel: null,
+        queuedPanel: "search",
+      })
+    ).toEqual({
+      activePanel: "search",
+      queuedPanel: null,
+    });
+    expect(
+      resolveRightControlPanelExit({
+        activePanel: "overlay",
+        queuedPanel: "project",
+      })
+    ).toEqual({
+      activePanel: "overlay",
+      queuedPanel: "project",
+    });
+  });
+
+  it("keeps a shared selector for all right-side panel triggers", () => {
+    expect(RIGHT_CONTROL_TRIGGER_SELECTOR).toBe("[data-right-control-trigger]");
   });
 });

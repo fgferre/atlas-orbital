@@ -8,6 +8,7 @@ import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
 import {
   OVERLAY_FILTER_OPTIONS,
+  RIGHT_CONTROL_TRIGGER_SELECTOR,
   RIGHT_CONTROL_BUTTONS,
   SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
@@ -18,6 +19,7 @@ import {
 interface LayersPanelProps {
   activePanel: RightControlPanelId | null;
   setActivePanel: (panel: RightControlPanelId | null) => void;
+  onPanelExitComplete?: () => void;
 }
 
 const PANEL_COPY = {
@@ -38,6 +40,7 @@ const PANEL_COPY = {
 export const LayersPanel = ({
   activePanel,
   setActivePanel,
+  onPanelExitComplete,
 }: LayersPanelProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -108,6 +111,13 @@ export const LayersPanel = ({
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(RIGHT_CONTROL_TRIGGER_SELECTOR)
+      ) {
+        return;
+      }
+
       if (
         openPanel &&
         containerRef.current &&
@@ -407,6 +417,7 @@ export const LayersPanel = ({
             <button
               key={button.id}
               type="button"
+              data-right-control-trigger={button.id}
               onClick={() => setActivePanel(isOpen ? null : button.id)}
               aria-expanded={isOpen}
               aria-controls={isOpen ? `atlas-${button.id}-panel` : undefined}
@@ -427,9 +438,17 @@ export const LayersPanel = ({
         })}
       </div>
 
-      <AnimatePresence>
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          if (!openPanel) {
+            onPanelExitComplete?.();
+          }
+        }}
+      >
         {openPanel && openPanelCopy && (
           <motion.div
+            key={openPanel}
             className={panelClassName}
             style={openPanelOffsetStyle}
             initial={{
@@ -454,6 +473,7 @@ export const LayersPanel = ({
                 {openPanelButton && (
                   <button
                     type="button"
+                    data-right-control-trigger={openPanelButton.id}
                     onClick={() => setActivePanel(null)}
                     aria-label={`Close ${openPanelCopy.title.toLowerCase()} panel`}
                     aria-expanded={true}
