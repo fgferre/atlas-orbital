@@ -50,6 +50,10 @@ import { SmartSunLight } from "./SmartSunLight";
 
 import { useControls, Leva, folder, button } from "leva";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import {
+  ORBIT_MOUSE_BUTTONS,
+  calculateAdaptiveZoomSpeed,
+} from "../../lib/camera";
 
 interface BloomController {
   intensity: number;
@@ -299,22 +303,14 @@ const DynamicZoom = ({
 }: {
   controlsRef: RefObject<OrbitControlsImpl | null>;
 }) => {
-  const { camera } = useThree();
-
   useFrame(() => {
-    if (!controlsRef.current) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
 
-    // Get distance from origin (where solar system is centered)
-    const distance = camera.position.length();
-
-    // Logarithmic zoom speed: increases as you get farther
-    // At 1000 units (roughly Saturn): zoomSpeed ~2
-    // At 1,000,000 units: zoomSpeed ~6
-    // At 1,000,000,000 units: zoomSpeed ~10
-    const logDistance = Math.log10(Math.max(distance, 100));
-    const zoomSpeed = Math.max(1, logDistance - 1);
-
-    controlsRef.current.zoomSpeed = zoomSpeed;
+    controls.zoomSpeed = calculateAdaptiveZoomSpeed(
+      controls.getDistance(),
+      controls.minDistance
+    );
   });
 
   return null;
@@ -743,6 +739,7 @@ export const Scene = () => {
           maxDistance={1e12} // Large distance for proper zoom
           minDistance={10} // Increased to prevent near-plane clipping/jitter
           zoomSpeed={2.0}
+          mouseButtons={ORBIT_MOUSE_BUTTONS}
           makeDefault
         />
         <DynamicZoom controlsRef={controlsRef} />

@@ -5,7 +5,13 @@ import * as THREE from "three";
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { KM_TO_3D_UNITS, AstroPhysics } from "../../lib/astrophysics";
-import { PrivilegedPosition, CameraTransition } from "../../lib/camera";
+import {
+  PrivilegedPosition,
+  CameraTransition,
+  createFocusTrackingState,
+  resetFocusTrackingState,
+  resolveFocusTrackingFrame,
+} from "../../lib/camera";
 
 export const CameraController = () => {
   const { camera, scene } = useThree();
@@ -28,11 +34,16 @@ export const CameraController = () => {
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
   const prevFocusRef = useRef<string | null>(null);
   const prevScaleModeRef = useRef<string | null>(null);
+  const focusTrackingRef = useRef(createFocusTrackingState());
 
   useEffect(() => {
     cameraRef.current = camera as THREE.PerspectiveCamera;
     controlsRef.current = controls;
   }, [camera, controls]);
+
+  useEffect(() => {
+    resetFocusTrackingState(focusTrackingRef.current);
+  }, [focusId]);
 
   const getBodyRadius = useCallback(
     (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
@@ -172,6 +183,7 @@ export const CameraController = () => {
       flyingRef.current.cameraTargetPos.copy(newCamPos);
       flyingRef.current.isFlying = true;
       controlsInstance.target.copy(targetPos);
+      resetFocusTrackingState(focusTrackingRef.current, targetPos);
     };
 
     if (isModeSwitch) {
@@ -225,7 +237,12 @@ export const CameraController = () => {
   useFrame(() => {
     const cameraInstance = cameraRef.current;
     const controlsInstance = controlsRef.current;
-    if (!focusId || !cameraInstance || !controlsInstance) return;
+    if (!cameraInstance || !controlsInstance) return;
+
+    if (!focusId) {
+      resetFocusTrackingState(focusTrackingRef.current);
+      return;
+    }
 
     const targetMesh = scene.getObjectByName(focusId);
     if (!targetMesh) return;
@@ -234,7 +251,12 @@ export const CameraController = () => {
     targetMesh.getWorldPosition(worldPos);
 
     const prevTarget = controlsInstance.target.clone();
-    controlsInstance.target.copy(worldPos);
+    const { nextTarget, cameraDelta } = resolveFocusTrackingFrame({
+      currentTarget: prevTarget,
+      focusWorldPos: worldPos,
+      state: focusTrackingRef.current,
+    });
+    controlsInstance.target.copy(nextTarget);
 
     if (flyingRef.current.isFlying) {
       const newPos = transitionRef.current.update();
@@ -248,8 +270,7 @@ export const CameraController = () => {
       return;
     }
 
-    const deltaMove = new THREE.Vector3().subVectors(worldPos, prevTarget);
-    cameraInstance.position.add(deltaMove);
+    cameraInstance.position.add(cameraDelta);
   });
 
   return null;

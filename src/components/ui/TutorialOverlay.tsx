@@ -29,7 +29,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     content: (
       <ul className="space-y-1">
         <li>• Left Click + Drag to Rotate</li>
-        <li>• Right Click + Drag to Pan</li>
+        <li>• Right Click or Middle Click + Drag to Move the View</li>
         <li>• Scroll to Zoom In/Out</li>
       </ul>
     ),
