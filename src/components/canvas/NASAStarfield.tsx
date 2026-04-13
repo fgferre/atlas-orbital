@@ -1,11 +1,11 @@
 /**
  * NASA Starfield Component
  *
- * EXACT implementation matching NASA Eyes on the Solar System.
- * Renders stars using physics-based shaders with camera-following position.
+ * Implementation inspired by NASA Eyes on the Solar System.
+ * Renders stars using the parsed NASA Eyes catalog and matching shader conventions.
  *
- * Key Features (matching NASA):
- * - Camera-following: starfield position updates to camera position each frame
+ * Key Features:
+ * - Stable world-space rendering: the starfield remains fixed in scene space
  * - Viewport-adaptive sizing: particleSize scales with viewport for consistent look
  * - absMag packed in color.a for efficiency
  * - Physics-based brightness via nasaStarShaders.ts
@@ -41,7 +41,6 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     source: "nasa",
     loadCatalog: loadNASAStarCatalog,
     getCachedCatalog: getCachedNASAStarCatalog,
-    errorMessage: "Failed to load NASA Eyes catalog",
   });
 
   // Build geometry from loaded stars
@@ -55,11 +54,11 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     const starColors = new Float32Array(count * 4);
 
     // NASA positions are in km! (confirmed by testing Canopus: 95.87 parsecs)
-    // Tycho-2 positions are in parsecs
+    // The legacy tycho2 dataset is stored in parsecs
     // 1 parsec = 3.086e13 km
     const KM_TO_PARSEC = 1 / 3.086e13;
 
-    // After converting to parsecs, apply same scale as Tycho-2
+    // After converting to parsecs, apply the same scale as the legacy tycho2 dataset
     // 1 parsec = 206,265,000 units
     const DISTANCE_SCALE = 206265000.0;
 
@@ -69,7 +68,7 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     for (let i = 0; i < count; i++) {
       const star = stars[i];
 
-      // Position: convert km → parsecs → scaled units (matches Tycho-2)
+      // Position: convert km → parsecs → scaled units (matches the legacy tycho2 dataset)
       positions[i * 3] = star.position.x * KM_TO_UNITS;
       positions[i * 3 + 1] = star.position.y * KM_TO_UNITS;
       positions[i * 3 + 2] = star.position.z * KM_TO_UNITS;

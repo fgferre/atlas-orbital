@@ -209,7 +209,7 @@ export const LayersPanel = ({
           >
             {showStarfield
               ? starfieldStatusMessage
-              : "Background stars hidden. Re-enable Starfield to compare Tycho-2 and NASA Eyes."}
+              : `Background stars hidden. Re-enable Starfield to compare ${STARFIELD_SOURCE_LABELS.tycho2} and ${STARFIELD_SOURCE_LABELS.nasa}.`}
           </div>
         </div>
 

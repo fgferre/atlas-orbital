@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
-import type { StarfieldSource } from "../../lib/starfield";
+import {
+  getStarfieldLoadErrorMessage,
+  type StarfieldSource,
+} from "../../lib/starfield";
 import { useStore } from "../../store";
 
 interface UseStarfieldCatalogOptions<T> {
   source: StarfieldSource;
   loadCatalog: () => Promise<T>;
   getCachedCatalog: () => T | null;
-  errorMessage: string;
 }
 
 export const useStarfieldCatalog = <T>({
   source,
   loadCatalog,
   getCachedCatalog,
-  errorMessage,
 }: UseStarfieldCatalogOptions<T>) => {
   const setStarfieldProviderState = useStore(
     (state) => state.setStarfieldProviderState
@@ -48,20 +49,14 @@ export const useStarfieldCatalog = <T>({
         setCatalog(null);
         setStarfieldProviderState(source, {
           status: "error",
-          error: error instanceof Error ? error.message : errorMessage,
+          error: getStarfieldLoadErrorMessage(source, error),
         });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    errorMessage,
-    getCachedCatalog,
-    loadCatalog,
-    setStarfieldProviderState,
-    source,
-  ]);
+  }, [getCachedCatalog, loadCatalog, setStarfieldProviderState, source]);
 
   return catalog;
 };

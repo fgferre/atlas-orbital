@@ -11,14 +11,59 @@ export type { NASAStar } from "../utils/nasaStarParser";
 export type StarfieldSource = "tycho2" | "nasa";
 export type StarfieldLoadStatus = "idle" | "loading" | "ready" | "error";
 
+export interface StarfieldSourceMetadata {
+  label: string;
+  creditsTitle: string;
+  creditsDescription: string;
+  creditsLink?: string;
+  loadErrorMessage: string;
+}
+
 export interface StarfieldProviderState {
   status: StarfieldLoadStatus;
   error: string | null;
 }
 
+export const STARFIELD_SOURCE_METADATA: Record<
+  StarfieldSource,
+  StarfieldSourceMetadata
+> = {
+  tycho2: {
+    label: "HYG v4.2",
+    creditsTitle: "HYG v4.2 processed catalog",
+    creditsDescription:
+      "Processed HYG v4.2 (Hipparcos/Yale/Gliese) star data with 117,931 runtime stars, shipped in the app's legacy tycho2 binary asset.",
+    loadErrorMessage: "Failed to load HYG v4.2 catalog",
+  },
+  nasa: {
+    label: "NASA Eyes",
+    creditsTitle: "NASA Eyes on the Solar System",
+    creditsDescription:
+      "Alternate starfield mode backed by the NASA Eyes asset split in public/data/nasa-stars, also used as a visual comparison reference.",
+    creditsLink: "https://eyes.nasa.gov/",
+    loadErrorMessage: "Failed to load NASA Eyes catalog",
+  },
+};
+
 export const STARFIELD_SOURCE_LABELS: Record<StarfieldSource, string> = {
-  tycho2: "Tycho-2",
-  nasa: "NASA Eyes",
+  tycho2: STARFIELD_SOURCE_METADATA.tycho2.label,
+  nasa: STARFIELD_SOURCE_METADATA.nasa.label,
+};
+
+export const getStarfieldLoadErrorMessage = (
+  source: StarfieldSource,
+  error: unknown
+) => {
+  const fallback = STARFIELD_SOURCE_METADATA[source].loadErrorMessage;
+  if (!(error instanceof Error) || !error.message) {
+    return fallback;
+  }
+
+  if (source === "tycho2") {
+    return error.message.replaceAll("Tycho-2", STARFIELD_SOURCE_LABELS.tycho2);
+  }
+
+  return error.message;
 };
 
 const NASA_STAR_FILES = [

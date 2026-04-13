@@ -30,7 +30,7 @@ const vertexShader = `
     gl_Position = projectionMatrix * viewPosition;
 
     // Simple magnitude-based brightness
-    // Tycho-2 mag range: roughly -1.5 (Sirius) to +12 (faint)
+    // The processed HYG dataset spans roughly -1.5 (Sirius) to +12 (faint)
     // Map to 0-1: brighter = lower mag
     float brightness = (8.0 - mag) / 12.0;
     brightness = clamp(brightness, 0.1, 1.0);
@@ -51,7 +51,7 @@ const fragmentShader = `
   varying vec4 fColor;
 
   void main() {
-    // NASA's exact glow formula
+    // Soft glow tuned to the NASA-inspired visual treatment
     float distanceFromEdge = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5, 0.5)), 0.0, 1.0);
     float a = pow(distanceFromEdge, 5.0);
     
@@ -69,7 +69,6 @@ export const Starfield = () => {
     source: "tycho2",
     loadCatalog: loadTycho2Catalog,
     getCachedCatalog: getCachedTycho2Catalog,
-    errorMessage: "Failed to load Tycho-2 catalog",
   });
 
   // Process data once

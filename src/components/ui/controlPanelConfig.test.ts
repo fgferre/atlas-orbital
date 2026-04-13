@@ -37,7 +37,7 @@ describe("controlPanelConfig", () => {
 
   it("keeps both starfield sources and scale modes visible", () => {
     expect(SCENE_SOURCE_OPTIONS.map((option) => option.label)).toEqual([
-      "Tycho-2",
+      "HYG v4.2",
       "NASA Eyes",
     ]);
     expect(SCENE_SCALE_OPTIONS.map((option) => option.label)).toEqual([

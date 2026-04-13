@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { STARFIELD_SOURCE_METADATA } from "../../lib/starfield";
 import { useStore } from "../../store";
 
 export const CreditsModal = () => {
@@ -91,18 +92,17 @@ export const CreditsModal = () => {
               </h3>
               <ul className="space-y-3">
                 <CreditItem
-                  title="NASA Eyes on the Solar System"
-                  description="Primary source for orbital parameters and celestial body formatting."
-                  link="https://eyes.nasa.gov/"
+                  title={STARFIELD_SOURCE_METADATA.nasa.creditsTitle}
+                  description={STARFIELD_SOURCE_METADATA.nasa.creditsDescription}
+                  link={STARFIELD_SOURCE_METADATA.nasa.creditsLink}
                 />
                 <CreditItem
-                  title="Tycho-2 Star Catalog"
-                  description="Astrometric data for the 2.5 million brightest stars."
-                  link="https://www.cosmos.esa.int/web/hipparcos/tycho-2"
+                  title={STARFIELD_SOURCE_METADATA.tycho2.creditsTitle}
+                  description={STARFIELD_SOURCE_METADATA.tycho2.creditsDescription}
                 />
                 <CreditItem
-                  title="NASA JPL Horizons"
-                  description="Solar System Dynamics and ephemeris computation."
+                  title="NASA JPL Horizons (reference checks)"
+                  description="Used as an external cross-check reference. The runtime itself propagates simplified J2000 keplerian elements from repo-local data."
                 />
               </ul>
             </div>

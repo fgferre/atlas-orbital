@@ -1,6 +1,9 @@
 import type { QualityMode } from "../../lib/qualityProfile";
+import {
+  STARFIELD_SOURCE_LABELS,
+  type StarfieldSource,
+} from "../../lib/starfield";
 import type { SunRenderMode } from "../../lib/sunRenderMode";
-import type { StarfieldSource } from "../../lib/starfield";
 
 export type RightControlPanelId = "search" | "scene" | "overlay" | "project";
 
@@ -90,8 +93,8 @@ export const SEARCH_QUICK_TARGETS = [
 ] as const;
 
 export const SCENE_SOURCE_OPTIONS = [
-  { id: "tycho2", label: "Tycho-2" },
-  { id: "nasa", label: "NASA Eyes" },
+  { id: "tycho2", label: STARFIELD_SOURCE_LABELS.tycho2 },
+  { id: "nasa", label: STARFIELD_SOURCE_LABELS.nasa },
 ] as const satisfies ReadonlyArray<{ id: StarfieldSource; label: string }>;
 
 export const SCENE_SCALE_OPTIONS = [

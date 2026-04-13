@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../../store";
 import { motion, AnimatePresence } from "framer-motion";
+import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { TutorialHighlight } from "./TutorialHighlight";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 
@@ -17,8 +18,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: "Welcome to Atlas Orbital",
     content: (
       <p>
-        A scientifically accurate 3D journey through our solar system. Explore
-        planets, moons, and stars in high fidelity.
+        A data-informed 3D journey through our solar system. Explore planets,
+        moons, and stars in high fidelity.
       </p>
     ),
     target: null,
@@ -79,7 +80,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         </p>
         <ul className="space-y-1">
           <li>
-            • Scene keeps Starfield, Tycho-2, NASA Eyes, scale, and quality
+            • Scene keeps Starfield, {STARFIELD_SOURCE_LABELS.tycho2},{" "}
+            {STARFIELD_SOURCE_LABELS.nasa}, scale, and quality
           </li>
           <li>• Overlay keeps Icons, Labels, Orbits, and category filters</li>
           <li>
@@ -118,7 +120,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         <li>• Press Ctrl+Shift+D for Debug Mode</li>
         <li>• Press Ctrl+Shift+T to Replay Tutorial</li>
         <li>
-          • Switch Starfield Source between Tycho-2 and NASA Eyes catalogs
+          • Switch Starfield Source between {STARFIELD_SOURCE_LABELS.tycho2} and{" "}
+          {STARFIELD_SOURCE_LABELS.nasa} catalogs
         </li>
       </ul>
     ),

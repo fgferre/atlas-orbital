@@ -1,8 +1,8 @@
 # 🌌 **Atlas Orbital: Uma Jornada Científica pelo Sistema Solar**
 
-## **Bem-vindo ao simulador mais preciso e visualmente impressionante do Sistema Solar que você pode acessar direto do seu navegador**
+## **Bem-vindo a uma visualização 3D de alta fidelidade do Sistema Solar direto no navegador**
 
-Prepare-se para explorar o cosmos como nunca antes. **Atlas Orbital** não é apenas mais uma visualização bonita do espaço — é uma recriação cientificamente rigorosa do nosso Sistema Solar, baseada em dados reais da NASA e missões espaciais, renderizada com tecnologia de ponta que só os jogos AAA e simuladores profissionais usam.
+Prepare-se para explorar o cosmos como nunca antes. **Atlas Orbital** não é apenas mais uma visualização bonita do espaço — é uma experiência educacional de alta fidelidade do nosso Sistema Solar, baseada em dados astronômicos documentados e referências de missões espaciais, renderizada com tecnologia web moderna.
 
 ---
 
@@ -10,11 +10,11 @@ Prepare-se para explorar o cosmos como nunca antes. **Atlas Orbital** não é ap
 
 ### **Mecânica Orbital Autêntica**
 
-Cada planeta, lua e asteroide se move **exatamente** como no universo real. Não estamos falando de animações pré-programadas — o Atlas Orbital calcula as posições em tempo real usando as **equações de Kepler**, o mesmo sistema que a NASA usa para planejar missões espaciais.
+Cada planeta, lua e asteroide segue um modelo orbital inspirado no universo real. Não estamos falando de animações pré-programadas — o Atlas Orbital calcula posições em tempo real usando as **equações de Kepler**, uma aproximação clássica adequada para visualização didática.
 
 **O que isso significa?**
 
-- Se você avançar o tempo para daqui a 10 anos, os planetas estarão **exatamente** onde estarão na realidade
+- Se você avançar o tempo, os planetas seguem trajetórias coerentes com o modelo orbital adotado pelo projeto
 - Usamos o método **Newton-Raphson** (5 iterações) para resolver equações orbitais com precisão matemática
 - Todos os 7 elementos orbitais são calculados: semi-eixo maior, excentricidade, inclinação, longitude do nó ascendente, argumento do periélio, anomalia média e movimento médio
 - Ressonâncias orbitais reais são preservadas (como a famosa ressonância 1:2:4 entre Io, Europa e Ganimedes — as luas de Júpiter que "dançam" em sincronia)
@@ -179,7 +179,7 @@ Efeitos cinematográficos em tempo real:
 - **Bloom**: objetos brilhantes (como o Sol) emitem luz que "vaza" naturalmente
 - **Tone Mapping**: adaptação dinâmica de brilho, como nossos olhos fazem
 - **Ajuste de saturação e contraste** para cores vibrantes mas realistas
-- Tudo rodando a **60 FPS** no navegador
+- Tudo calibrado para rodar de forma fluida no navegador, com perfis de qualidade ajustáveis
 
 ### **Renderização Fisicamente Baseada (PBR)**
 
@@ -302,10 +302,10 @@ O desafio mais difícil em simulações espaciais: como mostrar algo de **1 metr
 
 O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
-✅ **Rigor Científico** (dados da NASA, física real, precisão matemática)
+✅ **Rigor Científico** (dados astronômicos documentados, física orbital simplificada, precisão matemática compatível com o modelo)
 ✅ **Beleza Visual** (texturas 8K, shaders customizados, renderização PBR)
 ✅ **Acessibilidade** (roda no navegador, sem instalação, interface intuitiva)
-✅ **Performance** (60 FPS, otimizações de GPU, carregamento eficiente)
+✅ **Performance** (renderização WebGL otimizada, carregamento eficiente, perfis de qualidade)
 
 ---
 
@@ -313,8 +313,8 @@ O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
 ### **Rigor Científico:**
 
-- Mecânica orbital Kepleriana com precisão de efemérides completa
-- Constantes físicas e propriedades de bancos de dados da NASA
+- Mecânica orbital Kepleriana com elementos simplificados do projeto
+- Constantes físicas e propriedades documentadas no repositório
 - Tratamento adequado de ressonâncias orbitais e dinâmica de marés
 - 117.931 estrelas reais do catálogo HYG (Hipparcos/Yale/Gliese)
 
@@ -356,10 +356,10 @@ O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
 **Sem instalação. Sem cadastro. Apenas pura exploração científica.**
 
-Navegue pelo Sistema Solar com a mesma precisão que a NASA usa. Veja a Terra de uma perspectiva que só astronautas conhecem. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e suas 5 luas. Avance o tempo e veja os planetas dançarem em suas órbitas milenares. Contemple 117 mil estrelas reais posicionadas exatamente onde estão no universo.
+Navegue pelo Sistema Solar com um modelo orbital didático inspirado em dados reais. Veja a Terra de uma perspectiva rara. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e suas 5 luas. Avance o tempo e veja os planetas dançarem em suas órbitas simuladas. Contemple 117 mil estrelas reais posicionadas a partir do catálogo HYG processado para o app.
 
 **Atlas Orbital: O Cosmos ao alcance de um clique.**
 
 ---
 
-_Baseado em dados de: NASA JPL, ESA, Catálogo HYG v4.2 (Hipparcos/Yale/Gliese), missões Parker Solar Probe, Perseverance, New Horizons, Voyager, Cassini-Huygens, Galileo, MESSENGER, e dados astronômicos verificados da época J2000._
+_Baseado em referências e ativos de: NASA Eyes, NASA Science/JPL/USGS, ESA, Catálogo HYG v4.2 (Hipparcos/Yale/Gliese), missões Parker Solar Probe, Perseverance, New Horizons, Voyager, Cassini-Huygens, Galileo e MESSENGER, além de dados astronômicos documentados no repositório._
