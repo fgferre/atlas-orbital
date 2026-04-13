@@ -1,6 +1,7 @@
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { useMemo } from "react";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
 import { Planet } from "./Planet";
 import { useStore } from "../../store";
 
@@ -13,6 +14,7 @@ interface SolarSystemProps {
   earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
+  sunRenderMode: ResolvedSunRenderMode;
 }
 
 export const SolarSystem = ({
@@ -24,6 +26,7 @@ export const SolarSystem = ({
   earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
+  sunRenderMode,
 }: SolarSystemProps) => {
   const visibility = useStore((state) => state.visibility);
 
@@ -71,6 +74,7 @@ export const SolarSystem = ({
           earthRotationOffset={earthRotationOffset}
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}
+          sunRenderMode={sunRenderMode}
         >
           {renderBody(body.id)}
         </Planet>

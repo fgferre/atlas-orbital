@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const APP_URL = "http://127.0.0.1:4174/atlas-orbital/";
+const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:4174/atlas-orbital/";
 
 const dismissTutorial = async (page) => {
   await page.addInitScript(() => {
@@ -9,10 +9,32 @@ const dismissTutorial = async (page) => {
 };
 
 const openDrawer = async (trigger, panel) => {
+  if ((await panel.count()) === 1) {
+    return;
+  }
+
   await trigger.dispatchEvent("click");
   await trigger.page().waitForTimeout(150);
   await expect.poll(async () => await panel.count()).toBe(1);
 };
+
+const overlayCanvasHasRenderedPixels = async (page, index = 1) =>
+  page.evaluate((canvasIndex) => {
+    const canvases = Array.from(document.querySelectorAll("canvas"));
+    const canvas = canvases[canvasIndex];
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      return { exists: false, rendered: false };
+    }
+
+    const blank = document.createElement("canvas");
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+
+    return {
+      exists: true,
+      rendered: canvas.toDataURL() !== blank.toDataURL(),
+    };
+  }, index);
 
 test.describe("Phase 4 overlay regression", () => {
   test.describe.configure({ timeout: 120_000 });
@@ -177,5 +199,40 @@ test.describe("Phase 4 overlay regression", () => {
     const sceneDialogText = (await page.locator("body").textContent()) ?? "";
     expect(sceneDialogText).toContain("NASA Eyes");
     expect(sceneDialogText).toContain("Close");
+  });
+
+  test("procedural sun renders a non-empty overlay canvas", async ({
+    page,
+  }) => {
+    const settingsRail = page.locator('[data-tutorial-target="settings"]');
+    const sceneTrigger = settingsRail.getByRole("button", {
+      name: "Scene",
+      exact: true,
+    });
+    const proceduralButton = page.getByRole("button", {
+      name: "Procedural",
+      exact: true,
+    });
+
+    await dismissTutorial(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
+
+    await expect(sceneTrigger).toBeVisible();
+    if (!(await proceduralButton.isVisible())) {
+      await sceneTrigger.click();
+    }
+    await expect(proceduralButton).toBeVisible();
+    await proceduralButton.click();
+
+    await expect
+      .poll(async () => (await page.locator("canvas").count()) >= 2)
+      .toBe(true);
+
+    await expect
+      .poll(async () => await overlayCanvasHasRenderedPixels(page), {
+        timeout: 20_000,
+      })
+      .toEqual({ exists: true, rendered: true });
   });
 });

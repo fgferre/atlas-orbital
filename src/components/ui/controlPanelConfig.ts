@@ -1,4 +1,5 @@
 import type { QualityMode } from "../../lib/qualityProfile";
+import type { SunRenderMode } from "../../lib/sunRenderMode";
 import type { StarfieldSource } from "../../lib/starfield";
 
 export type RightControlPanelId = "search" | "scene" | "overlay" | "project";
@@ -105,6 +106,12 @@ export const SCENE_QUALITY_OPTIONS = [
   { id: "balanced", label: "Balanced" },
   { id: "constrained", label: "Saver" },
 ] as const satisfies ReadonlyArray<{ id: QualityMode; label: string }>;
+
+export const SCENE_SUN_RENDER_OPTIONS = [
+  { id: "auto", label: "Auto" },
+  { id: "procedural", label: "Procedural" },
+  { id: "texture", label: "Texture" },
+] as const satisfies ReadonlyArray<{ id: SunRenderMode; label: string }>;
 
 export const OVERLAY_FILTER_OPTIONS = [
   { id: "planets", label: "Planets" },

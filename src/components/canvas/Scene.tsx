@@ -33,6 +33,7 @@ import {
   setDeferredTextureBudget,
 } from "../../lib/deferredTextureCache";
 import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
+import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
@@ -40,6 +41,8 @@ import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { EclipticGrid } from "./EclipticGrid";
+import { ProceduralSun3D } from "./ProceduralSun3D";
+import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
 
@@ -320,11 +323,17 @@ const DynamicZoom = ({
 export const Scene = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
   const qualityMode = useStore((state) => state.qualityMode);
+  const sunRenderMode = useStore((state) => state.sunRenderMode);
   const visualPreset = useStore((state) => state.visualPreset); // Get current preset
   const debugMode = useStore((state) => state.debugMode);
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
+  const scaleMode = useStore((state) => state.scaleMode);
   const qualityProfile = useQualityProfile(qualityMode);
+  const resolvedSunRenderMode = useMemo(
+    () => resolveSunRenderMode(sunRenderMode, qualityProfile.name),
+    [qualityProfile.name, sunRenderMode]
+  );
   const [rendererAntialias] = useState(() => qualityProfile.antialias);
   const canvasDpr = useMemo(
     () => [1, qualityProfile.dprMax] as [number, number],
@@ -343,6 +352,21 @@ export const Scene = () => {
     }),
     []
   );
+  const sunBody = useMemo(
+    () => SOLAR_SYSTEM_BODIES.find((body) => body.id === "sun") ?? null,
+    []
+  );
+  const sunVisualRadiusWorld = useMemo(() => {
+    if (!sunBody) {
+      return 0;
+    }
+
+    return resolveVisualRadiusWorld({
+      radiusKm: sunBody.radiusKm,
+      scaleMode,
+      shapeScale: sunBody.shapeScale,
+    });
+  }, [scaleMode, sunBody]);
   const glConfig = useMemo(
     () => ({
       // The WebGL antialias flag is fixed at context creation time.
@@ -617,7 +641,6 @@ export const Scene = () => {
   const sunLightRef = useRef<THREE.PointLight | null>(null);
   const smartSunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
-
   const debugValues = {
     ambientIntensity,
     sunIntensity,
@@ -700,8 +723,15 @@ export const Scene = () => {
             earthRotationOffset={earthRotationOffset}
             nightLightIntensity={nightLightIntensity}
             qualityProfileName={qualityProfile.name}
+            sunRenderMode={resolvedSunRenderMode}
           />
         </Suspense>
+        {resolvedSunRenderMode === "procedural" && (
+          <ProceduralSun3D
+            qualityProfileName={qualityProfile.name}
+            sunVisualRadiusWorld={sunVisualRadiusWorld}
+          />
+        )}
         <OverlayPositionTracker />
         <CameraController />
         <InitialCameraAnimation />

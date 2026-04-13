@@ -59,6 +59,10 @@ describe("store phase 4 regression guards", () => {
     useStore.getState().toggleStarfieldImplementation();
     expect(useStore.getState().starfieldSource).toBe("tycho2");
 
+    useStore.getState().setSunRenderMode("procedural");
+    expect(useStore.getState().sunRenderMode).toBe("procedural");
+    expect(localStorageMock.getItem("sunRenderMode")).toBe("procedural");
+
     expect(useStore.getState().visibility.comets).toBe(true);
     useStore.getState().toggleVisibility("comets");
     expect(useStore.getState().visibility.comets).toBe(false);

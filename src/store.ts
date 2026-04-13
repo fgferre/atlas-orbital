@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { QualityMode } from "./lib/qualityProfile";
+import type { SunRenderMode } from "./lib/sunRenderMode";
 import type { StarfieldProviderState, StarfieldSource } from "./lib/starfield";
 
 interface AppState {
@@ -21,6 +22,7 @@ interface AppState {
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   qualityMode: QualityMode;
+  sunRenderMode: SunRenderMode;
   visualPreset: VisualPresetType;
   autoPresetEnabled: boolean;
   focusHistory: string[];
@@ -68,6 +70,7 @@ interface AppState {
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setQualityMode: (mode: QualityMode) => void;
+  setSunRenderMode: (mode: SunRenderMode) => void;
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
@@ -96,6 +99,12 @@ interface AppState {
 }
 
 const QUALITY_MODE_STORAGE_KEY = "qualityMode";
+const SUN_RENDER_MODE_STORAGE_KEY = "sunRenderMode";
+
+const canUseLocalStorage = () =>
+  typeof localStorage !== "undefined" &&
+  typeof localStorage.getItem === "function" &&
+  typeof localStorage.setItem === "function";
 
 const getInitialQualityMode = (): QualityMode => {
   if (typeof window === "undefined" || !window.localStorage) {
@@ -109,6 +118,23 @@ const getInitialQualityMode = (): QualityMode => {
     storedValue === "high" ||
     storedValue === "balanced" ||
     storedValue === "constrained"
+  ) {
+    return storedValue;
+  }
+
+  return "auto";
+};
+
+const getInitialSunRenderMode = (): SunRenderMode => {
+  if (!canUseLocalStorage()) {
+    return "auto";
+  }
+
+  const storedValue = localStorage.getItem(SUN_RENDER_MODE_STORAGE_KEY);
+  if (
+    storedValue === "auto" ||
+    storedValue === "texture" ||
+    storedValue === "procedural"
   ) {
     return storedValue;
   }
@@ -130,6 +156,7 @@ export const useStore = create<AppState>((set) => ({
   showProgradeVector: true,
   scaleMode: "didactic",
   qualityMode: getInitialQualityMode(),
+  sunRenderMode: getInitialSunRenderMode(),
   visualPreset: "DEEP_SPACE",
   autoPresetEnabled: true,
   focusHistory: [],
@@ -263,6 +290,15 @@ export const useStore = create<AppState>((set) => ({
 
     set((state) =>
       state.qualityMode === qualityMode ? state : { qualityMode }
+    );
+  },
+  setSunRenderMode: (sunRenderMode) => {
+    if (canUseLocalStorage()) {
+      localStorage.setItem(SUN_RENDER_MODE_STORAGE_KEY, sunRenderMode);
+    }
+
+    set((state) =>
+      state.sunRenderMode === sunRenderMode ? state : { sunRenderMode }
     );
   },
   setVisualPreset: (visualPreset) => set({ visualPreset }),

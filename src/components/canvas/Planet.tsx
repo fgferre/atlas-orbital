@@ -37,6 +37,7 @@ import {
   atmosphereFragmentShader,
 } from "./shaders/atmosphereShader";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
 
 import {
   planetShadowVertexPatch,
@@ -350,6 +351,7 @@ interface PlanetProps {
   earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
+  sunRenderMode: ResolvedSunRenderMode;
 }
 
 const PlanetVisual = ({
@@ -362,6 +364,7 @@ const PlanetVisual = ({
   earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
+  sunRenderMode,
   assetPriority,
   baseTextureSalience,
 }: {
@@ -374,6 +377,7 @@ const PlanetVisual = ({
   earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
+  sunRenderMode: ResolvedSunRenderMode;
   assetPriority: number;
   baseTextureSalience: number;
 }) => {
@@ -385,12 +389,16 @@ const PlanetVisual = ({
   const [screenSalience, setScreenSalience] = useState(baseTextureSalience);
   const screenSalienceRef = useRef(baseTextureSalience);
   const directSurfaceMapEnabled =
-    Boolean(body.textures?.map) && shouldRenderDirectSurfaceMap(body);
+    Boolean(body.textures?.map) &&
+    shouldRenderDirectSurfaceMap(body) &&
+    !(body.id === "sun" && sunRenderMode === "procedural");
   const mapSalience = Math.max(baseTextureSalience, screenSalience);
   const shouldPinMap =
     assetPriority <= 1 || body.id === "sun" || focusId === body.id;
   const shouldLoadMap =
-    body.id === "sun" || assetPriority <= 2 || mapSalience >= 0.35;
+    body.id === "sun"
+      ? sunRenderMode !== "procedural"
+      : assetPriority <= 2 || mapSalience >= 0.35;
   const shouldLoadSecondary =
     assetPriority <= 1 || focusId === body.id || mapSalience >= 0.78;
 
@@ -607,8 +615,20 @@ const PlanetVisual = ({
   const planetMaterial = useMemo(() => {
     // Use MeshBasicMaterial for stars (Sun) so they are not affected by lights/shadows
     if (body.type === "star") {
+      const baseColor = new THREE.Color(body.color).multiplyScalar(sunEmissive);
+
+      if (sunRenderMode === "procedural") {
+        return new THREE.MeshBasicMaterial({
+          color: baseColor,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          toneMapped: false,
+        });
+      }
+
       const starParams: THREE.MeshBasicMaterialParameters = {
-        color: new THREE.Color(body.color).multiplyScalar(sunEmissive),
+        color: baseColor,
         toneMapped: false, // Allow HDR values for Bloom
       };
 
@@ -777,6 +797,7 @@ const PlanetVisual = ({
     body.ringSystem,
     roughness,
     metalness,
+    sunRenderMode,
     sunEmissive,
     nightLightIntensity,
     surfaceFillLight,
@@ -923,7 +944,7 @@ const PlanetVisual = ({
 
         // Update Planet Material shader uniforms
         // Planet is direct child of rotationRef, so use rotationRef matrix
-        if (planetMaterial.userData.shader) {
+        if (planetMaterial?.userData.shader) {
           const meshWorldMatrix = rotationRef.current.matrixWorld;
           const inverseMatrix = new THREE.Matrix4()
             .copy(meshWorldMatrix)
@@ -976,13 +997,16 @@ const PlanetVisual = ({
         {/* Rotation Group */}
         <group ref={rotationRef}>
           {/* 1. Base Planet Sphere */}
-          <mesh
-            castShadow={body.type !== "star"}
-            receiveShadow={body.type !== "star"}
-          >
-            <sphereGeometry args={[1, 64, 64]} />
-            <primitive object={planetMaterial} attach="material" />
-          </mesh>
+          {planetMaterial ? (
+            <mesh
+              castShadow={body.type !== "star"}
+              receiveShadow={body.type !== "star"}
+              raycast={THREE.Mesh.prototype.raycast}
+            >
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive object={planetMaterial} attach="material" />
+            </mesh>
+          ) : null}
 
           {/* 2. Cloud Layer (Visual - Additive) */}
           {cloudMaterial && (
@@ -1043,6 +1067,7 @@ const PlanetVisualWrapper = (props: {
   earthRotationOffset: number; // Added this prop
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
+  sunRenderMode: ResolvedSunRenderMode;
   assetPriority: number;
   baseTextureSalience: number;
 }) => {
@@ -1137,6 +1162,7 @@ export const Planet = ({
   earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
+  sunRenderMode,
 }: PlanetProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<Line2 | null>(null);
@@ -1533,6 +1559,7 @@ export const Planet = ({
           earthRotationOffset={earthRotationOffset} // Passed down
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}
+          sunRenderMode={sunRenderMode}
           assetPriority={assetPriority}
           baseTextureSalience={baseTextureSalience}
         />
