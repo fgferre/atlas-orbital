@@ -2,11 +2,7 @@ import { useRef, useMemo, Suspense, useEffect, useState } from "react";
 import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
-import {
-  type CelestialBody,
-  AstroPhysics,
-  KM_TO_3D_UNITS,
-} from "../../lib/astrophysics";
+import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
@@ -27,8 +23,6 @@ const BODIES_BY_ID = new Map(SOLAR_SYSTEM_BODIES.map((b) => [b.id, b]));
 const PARENT_BY_ID = Object.fromEntries(
   SOLAR_SYSTEM_BODIES.map((body) => [body.id, body.parentId ?? null])
 );
-const SYSTEM_MULTIPLIERS =
-  AstroPhysics.calculateSystemMultipliers(SOLAR_SYSTEM_BODIES);
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
@@ -211,10 +205,20 @@ const SunScreenFlare = ({
       (2 * distToCamera * Math.tan(fovVertRad / 2)) /
       Math.max(1, state.size.height);
 
-    const radiusWorld =
-      scaleMode === "didactic"
-        ? AstroPhysics.calculateDidacticRadius(radiusKm)
-        : radiusKm * KM_TO_3D_UNITS;
+    const radiusWorld = AstroPhysics.resolveSemanticBodyRadius({
+      body: {
+        id: "sun-screen-flare",
+        type: "star",
+        name: { en: "Sun Screen Flare", pt: "Sun Screen Flare" },
+        radiusKm,
+        color,
+        orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
+        rotationPeriodHours: 0,
+        axialTilt: 0,
+        info: "",
+      },
+      scaleMode,
+    });
 
     const radiusPx = radiusWorld / Math.max(1e-9, worldPerPixelAtSun);
 
@@ -887,14 +891,11 @@ const PlanetVisual = ({
     if (!groupRef.current) return;
 
     // 1. Scaling
-    let s = 1;
-    if (scaleMode === "didactic") {
-      s = AstroPhysics.calculateDidacticRadius(body.radiusKm);
-    } else {
-      s = body.radiusKm * KM_TO_3D_UNITS;
-    }
-    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
-    groupRef.current.scale.set(s * sx, s * sy, s * sz);
+    const semanticRadius = AstroPhysics.resolveSemanticBodyRadius({
+      body,
+      scaleMode,
+    });
+    groupRef.current.scale.set(semanticRadius, semanticRadius, semanticRadius);
 
     if (camera instanceof THREE.PerspectiveCamera) {
       const worldPos = new THREE.Vector3();
@@ -903,8 +904,7 @@ const PlanetVisual = ({
       const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
       const worldPerPixel =
         (2 * distance * Math.tan(fovVertRad / 2)) / Math.max(1, size.height);
-      const visualRadius = s * Math.max(sx, sy, sz);
-      const radiusPx = visualRadius / Math.max(worldPerPixel, 1e-6);
+      const radiusPx = semanticRadius / Math.max(worldPerPixel, 1e-6);
 
       let nextScreenSalience = 0.12;
       if (radiusPx >= 140) nextScreenSalience = 1;
@@ -950,15 +950,17 @@ const PlanetVisual = ({
             .copy(meshWorldMatrix)
             .invert();
           const sunLocalPos = sunWorldPos.clone().applyMatrix4(inverseMatrix);
+          const parallelSunLocalPos =
+            AstroPhysics.resolveParallelLightReferencePoint(sunLocalPos);
 
           planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            sunLocalPos
+            parallelSunLocalPos
           );
 
           // Update Cloud Material (if exists)
           if (cloudMaterial && cloudMaterial.userData.shader) {
             cloudMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-              sunLocalPos
+              parallelSunLocalPos
             );
           }
         }
@@ -972,9 +974,11 @@ const PlanetVisual = ({
           const sunLocalPosRing = sunWorldPos
             .clone()
             .applyMatrix4(inverseRingMatrix);
+          const parallelSunLocalPosRing =
+            AstroPhysics.resolveParallelLightReferencePoint(sunLocalPosRing);
 
           ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            sunLocalPosRing
+            parallelSunLocalPosRing
           );
         }
       }
@@ -1087,14 +1091,11 @@ const PlanetVisualWrapper = (props: {
 
   useFrame(() => {
     if (!meshRef.current) return;
-    let s = 1;
-    if (scaleMode === "didactic") {
-      s = AstroPhysics.calculateDidacticRadius(props.body.radiusKm);
-    } else {
-      s = props.body.radiusKm * KM_TO_3D_UNITS;
-    }
-    const [sx, sy, sz] = props.body.shapeScale ?? [1, 1, 1];
-    meshRef.current.scale.set(s * sx, s * sy, s * sz);
+    const semanticRadius = AstroPhysics.resolveSemanticBodyRadius({
+      body: props.body,
+      scaleMode,
+    });
+    meshRef.current.scale.set(semanticRadius, semanticRadius, semanticRadius);
   });
 
   const fallback = (
@@ -1239,8 +1240,13 @@ export const Planet = ({
 
     const focusBody = BODIES_BY_ID.get(focusId);
     if (!focusBody) return 1;
+    const isSolarOverviewBody =
+      focusId === "sun" &&
+      !body.parentId &&
+      (body.type === "planet" || (body.type === "dwarf" && body.orbit.a <= 40));
 
     // 1) Emphasize direct context: children and siblings.
+    if (isSolarOverviewBody) return 0.55;
     if (body.parentId === focusId) return 0.55;
     if (focusBody.parentId && body.parentId === focusBody.parentId) return 0.25;
 
@@ -1271,7 +1277,12 @@ export const Planet = ({
 
     const focusBody = BODIES_BY_ID.get(focusId);
     if (!focusBody) return 1;
+    const isSolarOverviewBody =
+      focusId === "sun" &&
+      !body.parentId &&
+      (body.type === "planet" || (body.type === "dwarf" && body.orbit.a <= 40));
 
+    if (isSolarOverviewBody) return 1;
     if (body.parentId === focusId) return 1;
     if (focusBody.parentId && body.parentId === focusBody.parentId) return 1;
     if (focusAncestorIds.has(body.id)) return 1;
@@ -1288,6 +1299,11 @@ export const Planet = ({
     return 0.14;
   }, [assetPriority, body.id]);
 
+  const parentBody = useMemo(
+    () => (body.parentId ? (BODIES_BY_ID.get(body.parentId) ?? null) : null),
+    [body.parentId]
+  );
+
   // Orbit points with adaptive resolution
   const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
@@ -1299,16 +1315,11 @@ export const Planet = ({
       orbitProfile: qualityProfileName,
     });
 
-    // Get system multiplier for this body (default to 1)
-    const multiplier = body.parentId
-      ? SYSTEM_MULTIPLIERS[body.parentId] || 1
-      : 1;
     const cacheKey = getOrbitCacheKey({
       bodyId: body.id,
       focusId,
       orbitProfile: qualityProfileName,
       scaleMode,
-      multiplier,
     });
 
     const cachedPoints = ORBIT_POINTS_CACHE.get(cacheKey);
@@ -1316,12 +1327,12 @@ export const Planet = ({
       return cachedPoints;
     }
 
-    const pts = AstroPhysics.getRelativeOrbitPoints(
-      body.orbit,
+    const pts = AstroPhysics.getDisplayOrbitPoints({
+      body,
+      parentBody,
       segments,
       scaleMode,
-      multiplier
-    );
+    });
 
     ORBIT_POINTS_CACHE.set(cacheKey, pts);
     return pts;
@@ -1329,6 +1340,7 @@ export const Planet = ({
     body,
     declutterOrbits,
     orbitSalience,
+    parentBody,
     focusId,
     qualityProfileName,
     scaleMode,
@@ -1340,16 +1352,12 @@ export const Planet = ({
     const { datetime } = useStore.getState();
 
     // 1. Update Group Position (Orbital motion)
-    const multiplier = body.parentId
-      ? SYSTEM_MULTIPLIERS[body.parentId] || 1
-      : 1;
-
-    const pos = AstroPhysics.calculateLocalPosition(
-      body.orbit,
-      datetime,
+    const pos = AstroPhysics.resolveDisplayLocalPosition({
+      body,
+      parentBody,
+      date: datetime,
       scaleMode,
-      multiplier
-    );
+    });
     groupRef.current.position.copy(pos);
 
     // 2. Adaptive fade for ALL bodies based on camera distance (both modes)
@@ -1364,7 +1372,10 @@ export const Planet = ({
 
       if (scaleMode === "didactic") {
         // In didactic mode, use algorithmic sizes
-        planetSize = AstroPhysics.calculateDidacticRadius(body.radiusKm);
+        planetSize = AstroPhysics.resolveSemanticBodyRadius({
+          body,
+          scaleMode: "didactic",
+        });
 
         if (body.type === "star") {
           sizeMultiplier = 15;
@@ -1375,7 +1386,10 @@ export const Planet = ({
         }
       } else {
         // In realistic mode, use actual scale with logarithmic multipliers
-        planetSize = body.radiusKm * KM_TO_3D_UNITS;
+        planetSize = AstroPhysics.resolveSemanticBodyRadius({
+          body,
+          scaleMode: "realistic",
+        });
         // Increased from max(100, 500/log) to max(200, 800/log) for much earlier fade
         sizeMultiplier = Math.max(
           200,
@@ -1426,19 +1440,25 @@ export const Planet = ({
         const dtMs = dtDays * 86400000;
 
         const later = new Date(datetime.getTime() + dtMs);
-        const posLater = AstroPhysics.calculateLocalPosition(
-          body.orbit,
-          later,
+        const posLater = AstroPhysics.resolveDisplayLocalPosition({
+          body,
+          parentBody,
+          date: later,
           scaleMode,
-          multiplier
-        );
+        });
 
         const velDir = posLater.sub(pos).normalize();
 
         const radius =
           scaleMode === "didactic"
-            ? AstroPhysics.calculateDidacticRadius(body.radiusKm)
-            : body.radiusKm * KM_TO_3D_UNITS;
+            ? AstroPhysics.resolveSemanticBodyRadius({
+                body,
+                scaleMode: "didactic",
+              })
+            : AstroPhysics.resolveSemanticBodyRadius({
+                body,
+                scaleMode: "realistic",
+              });
 
         // Make the indicator stable across scale modes using screen-space sizing.
         const cam = camera as THREE.PerspectiveCamera;

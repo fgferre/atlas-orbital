@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { AstroPhysics } from "../../lib/astrophysics";
+import { PrivilegedPosition } from "../../lib/camera";
 import { useStore } from "../../store";
 
 const INTRO_DURATION_MS = 12000;
@@ -10,9 +13,10 @@ const INTRO_START_POSITION = new THREE.Vector3(
   999990981402,
   4245931557
 );
-const INTRO_END_POSITION = new THREE.Vector3(0, 1746, 7);
+const INTRO_END_DIRECTION = new THREE.Vector3(0, 1746, 7).normalize();
 const INTRO_TARGET = new THREE.Vector3(0, 0, 0);
 const INTRO_DELAY_MS = 100;
+const FALLBACK_INTRO_END_DISTANCE = 1746;
 
 /**
  * InitialCameraAnimation - Cinematic intro animation
@@ -30,6 +34,7 @@ export const InitialCameraAnimation = () => {
   const setHasPlayed = useStore((s) => s.setHasPlayedIntroAnimation);
   const isLoaderHidden = useStore((s) => s.isLoaderHidden);
   const setIsIntroAnimating = useStore((s) => s.setIsIntroAnimating);
+  const scaleMode = useStore((s) => s.scaleMode);
 
   const cameraRef = useRef(camera);
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
@@ -37,7 +42,9 @@ export const InitialCameraAnimation = () => {
     isRunning: false,
     startTime: 0,
     startPos: INTRO_START_POSITION.clone(),
-    endPos: INTRO_END_POSITION.clone(),
+    endPos: INTRO_END_DIRECTION.clone().multiplyScalar(
+      FALLBACK_INTRO_END_DISTANCE
+    ),
   });
 
   useEffect(() => {
@@ -74,6 +81,32 @@ export const InitialCameraAnimation = () => {
     [logLerp]
   );
 
+  const resolveIntroEndPosition = useCallback(() => {
+    const perspectiveCamera = cameraRef.current as THREE.PerspectiveCamera;
+    const sunBody =
+      SOLAR_SYSTEM_BODIES.find((body) => body.id === "sun") ?? null;
+
+    if (!(perspectiveCamera instanceof THREE.PerspectiveCamera) || !sunBody) {
+      return INTRO_END_DIRECTION.clone().multiplyScalar(
+        FALLBACK_INTRO_END_DISTANCE
+      );
+    }
+
+    const focusExtent = AstroPhysics.resolveFocusExtent({
+      body: sunBody,
+      bodies: SOLAR_SYSTEM_BODIES,
+      date: useStore.getState().datetime,
+      scaleMode,
+    });
+    const idealDistance = PrivilegedPosition.calculateIdealDistance(
+      focusExtent,
+      perspectiveCamera,
+      1.15
+    );
+
+    return INTRO_END_DIRECTION.clone().multiplyScalar(idealDistance);
+  }, [scaleMode]);
+
   const syncControlsToSun = useCallback(() => {
     const controlsInstance = controlsRef.current;
     if (!controlsInstance) return;
@@ -103,7 +136,7 @@ export const InitialCameraAnimation = () => {
     }
 
     animationRef.current.startPos.copy(INTRO_START_POSITION);
-    animationRef.current.endPos.copy(INTRO_END_POSITION);
+    animationRef.current.endPos.copy(resolveIntroEndPosition());
 
     cameraRef.current.position.copy(INTRO_START_POSITION);
     syncControlsToSun();
@@ -115,7 +148,13 @@ export const InitialCameraAnimation = () => {
     }, INTRO_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [hasPlayed, isLoaderHidden, setIsIntroAnimating, syncControlsToSun]);
+  }, [
+    hasPlayed,
+    isLoaderHidden,
+    resolveIntroEndPosition,
+    setIsIntroAnimating,
+    syncControlsToSun,
+  ]);
 
   useEffect(() => {
     if (!controls) return;

@@ -1,12 +1,31 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
+import type { ScaleMode } from "../../lib/astrophysics";
 import { useStore } from "../../store";
+import { resolveEclipticGridTickDefinitions } from "./eclipticGridHelpers";
+
+type GridUniform<T> = { value: T };
 
 type GridShaderMaterial = THREE.ShaderMaterial & {
-  uniforms: THREE.ShaderMaterial["uniforms"] & {
-    uOpacity: { value: number };
+  uniforms: {
+    uOpacity: GridUniform<number>;
+    uMinorColor: GridUniform<THREE.Color>;
+    uMajorColor: GridUniform<THREE.Color>;
+    uAxisColor: GridUniform<THREE.Color>;
+    uMinorSpacing: GridUniform<number>;
+    uMajorSpacing: GridUniform<number>;
+    uMinorWidthPx: GridUniform<number>;
+    uMajorWidthPx: GridUniform<number>;
+    uAxisWidthPx: GridUniform<number>;
+    uTickWidthPx: GridUniform<number>;
+    uTickSize: GridUniform<number>;
+    uTickCount: GridUniform<number>;
+    uTicks: GridUniform<Float32Array>;
+    uGridMode: GridUniform<number>;
+    uFadeStart: GridUniform<number>;
+    uFadeEnd: GridUniform<number>;
   };
 };
 
@@ -23,17 +42,31 @@ interface GridObjects {
 
 const noopRaycast: THREE.Object3D["raycast"] = () => null;
 
-const createGridObjects = (): GridObjects => {
-  const group = new THREE.Group();
+const updateGridLabelPresentation = (
+  label: GridLabel,
+  heightWorld: number,
+  opacity: number,
+  visible: boolean
+) => {
+  const { sprite, aspect } = label;
+  sprite.scale.set(heightWorld * aspect, heightWorld, 1);
+  const spriteMaterial = sprite.material as THREE.SpriteMaterial;
+  spriteMaterial.opacity = opacity;
+  sprite.visible = visible;
+};
 
-  // 1 AU = 1000 units. Cover ~40 AU.
-  const size = 40000;
-  const ticksAU = [1, 2, 5, 10, 20, 30, 40];
-  const tickSize = 250;
+const createGridObjects = (scaleMode: ScaleMode): GridObjects => {
+  const group = new THREE.Group();
+  const tickDefinitions = resolveEclipticGridTickDefinitions(scaleMode);
   const tickDistances = new Float32Array(8);
-  for (let i = 0; i < Math.min(8, ticksAU.length); i++) {
-    tickDistances[i] = ticksAU[i] * 1000;
+
+  for (let i = 0; i < tickDefinitions.length; i++) {
+    tickDistances[i] = tickDefinitions[i].distance;
   }
+
+  const size = 40000;
+  const tickSize = 250;
+  const isDidactic = scaleMode === "didactic";
 
   const gridPlaneGeometry = new THREE.PlaneGeometry(size, size, 1, 1);
   const gridMinorColor = new THREE.Color(0x1b6b75).convertSRGBToLinear();
@@ -59,8 +92,9 @@ const createGridObjects = (): GridObjects => {
       uAxisWidthPx: { value: 2.4 },
       uTickWidthPx: { value: 2.0 },
       uTickSize: { value: tickSize },
-      uTickCount: { value: ticksAU.length },
+      uTickCount: { value: tickDefinitions.length },
       uTicks: { value: tickDistances },
+      uGridMode: { value: isDidactic ? 1 : 0 },
       uFadeStart: { value: size * 0.33 },
       uFadeEnd: { value: size * 0.5 },
     },
@@ -86,6 +120,7 @@ const createGridObjects = (): GridObjects => {
       uniform float uTickSize;
       uniform int uTickCount;
       uniform float uTicks[8];
+      uniform float uGridMode;
       uniform float uFadeStart;
       uniform float uFadeEnd;
       varying vec3 vWorldPos;
@@ -111,14 +146,17 @@ const createGridObjects = (): GridObjects => {
       void main() {
         vec2 coord = vWorldPos.xz;
         float dist = length(coord);
-
         float radial = 1.0 - smoothstep(uFadeStart, uFadeEnd, dist);
-        float minor = gridLine(coord, uMinorSpacing, uMinorWidthPx);
-        float major = gridLine(coord, uMajorSpacing, uMajorWidthPx);
+
+        float minor = 0.0;
+        float major = 0.0;
+        if (uGridMode < 0.5) {
+          minor = gridLine(coord, uMinorSpacing, uMinorWidthPx);
+          major = gridLine(coord, uMajorSpacing, uMajorWidthPx);
+        }
 
         float minorStrength = 0.28;
         float majorStrength = 0.58;
-
         float axisX = line1D(coord.x, uAxisWidthPx);
         float axisZ = line1D(coord.y, uAxisWidthPx);
         float axis = max(axisX, axisZ);
@@ -139,14 +177,8 @@ const createGridObjects = (): GridObjects => {
         float axisStrength = 0.95;
         float tickStrength = 0.8;
 
-        vec3 baseColor =
-          uMinorColor * (minor * minorStrength) +
-          uMajorColor * (major * majorStrength);
-
-        vec3 color =
-          baseColor +
-          uAxisColor * (axis * axisStrength) +
-          uAxisColor * (tick * tickStrength);
+        vec3 baseColor = uMinorColor * (minor * minorStrength) + uMajorColor * (major * majorStrength);
+        vec3 color = baseColor + uAxisColor * (axis * axisStrength) + uAxisColor * (tick * tickStrength);
 
         float baseAlpha = minor * minorStrength + major * majorStrength;
         float alpha = (baseAlpha + axis * axisStrength + tick * tickStrength) * radial * uOpacity;
@@ -227,23 +259,17 @@ const createGridObjects = (): GridObjects => {
   };
 
   const labels: GridLabel[] = [];
-  for (const au of ticksAU) {
-    const d = au * 1000;
-
+  for (const { au, distance } of tickDefinitions) {
     const labelX = makeLabel(`${au} AU`);
     if (labelX) {
-      labelX.sprite.position
-        .copy(new THREE.Vector3(d, 0, 0))
-        .add(new THREE.Vector3(0, 0, tickSize * 1.2));
+      labelX.sprite.position.set(distance, 0, tickSize * 1.2);
       group.add(labelX.sprite);
       labels.push(labelX);
     }
 
     const labelZ = makeLabel(`${au} AU`);
     if (labelZ) {
-      labelZ.sprite.position
-        .copy(new THREE.Vector3(0, 0, d))
-        .add(new THREE.Vector3(tickSize * 1.2, 0, 0));
+      labelZ.sprite.position.set(tickSize * 1.2, 0, distance);
       group.add(labelZ.sprite);
       labels.push(labelZ);
     }
@@ -258,12 +284,16 @@ const createGridObjects = (): GridObjects => {
 
 export const EclipticGrid = () => {
   const { camera } = useThree();
+  const scaleMode = useStore((state) => state.scaleMode);
   const visualPreset = useStore((state) => state.visualPreset);
   const guideIntensity = VISUAL_PRESETS[visualPreset]?.guideIntensity ?? 1;
   const tmp = useMemo(() => new THREE.Vector3(), []);
-  const gridObjects = useMemo(() => createGridObjects(), []);
+  const gridObjects = useMemo(() => createGridObjects(scaleMode), [scaleMode]);
   const materialRef = useRef<GridShaderMaterial>(gridObjects.material);
-  const labelsRef = useRef<GridLabel[]>(gridObjects.labels);
+
+  useEffect(() => {
+    materialRef.current = gridObjects.material;
+  }, [gridObjects.material]);
 
   useFrame((state) => {
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
@@ -285,10 +315,10 @@ export const EclipticGrid = () => {
     const hideForClutter =
       opacityBase < 0.045 || (planeDist < 700 && dist < 3500);
 
-    for (const { sprite, aspect } of labelsRef.current) {
+    for (const label of gridObjects.labels) {
       const heightPx = 15;
       const distanceToLabel = camera.position.distanceTo(
-        sprite.getWorldPosition(tmp)
+        label.sprite.getWorldPosition(tmp)
       );
       const worldPerPixel =
         (2 * distanceToLabel * Math.tan(fovVertRad / 2)) /
@@ -298,10 +328,12 @@ export const EclipticGrid = () => {
         35,
         800
       );
-
-      sprite.scale.set(heightWorld * aspect, heightWorld, 1);
-      (sprite.material as THREE.SpriteMaterial).opacity = opacityBase * 1.1;
-      sprite.visible = !hideForClutter;
+      updateGridLabelPresentation(
+        label,
+        heightWorld,
+        opacityBase * 1.1,
+        !hideForClutter
+      );
     }
   });
 

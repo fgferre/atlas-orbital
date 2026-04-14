@@ -3,6 +3,38 @@ import * as THREE from "three";
 export const AU_IN_KM = 149597870.7;
 export const AU_TO_3D_UNITS = 1000;
 export const KM_TO_3D_UNITS = AU_TO_3D_UNITS / AU_IN_KM;
+const J2000_EPOCH = new Date("2000-01-01T12:00:00Z");
+
+type NumericAnchor = readonly [number, number];
+
+const DIDACTIC_RADIUS_ANCHORS = [
+  [1, 0.8],
+  [10, 0.95],
+  [100, 1.35],
+  [500, 2.25],
+  [1000, 3.1],
+  [2000, 4.2],
+  [3000, 5.2],
+  [6000, 7.6],
+  [12000, 9.6],
+  [25000, 13.8],
+  [60000, 18.5],
+  [700000, 60],
+] as const satisfies readonly NumericAnchor[];
+
+const DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS = [
+  [0.39, 220],
+  [0.72, 340],
+  [1.0, 440],
+  [1.52, 560],
+  [2.77, 740],
+  [5.2, 960],
+  [9.58, 1200],
+  [19.2, 1500],
+  [30.05, 1760],
+  [39.48, 1920],
+  [80, 2350],
+] as const satisfies readonly NumericAnchor[];
 
 export type BodyType =
   | "star"
@@ -22,6 +54,9 @@ export interface OrbitParams {
   M0: number; // Mean Anomaly at Epoch (deg)
   n: number; // Mean Motion (deg/day)
 }
+
+export type ScaleMode = "didactic" | "realistic";
+export type DidacticOrbitClass = "heliocentric" | "subsystem";
 
 export type VisualFidelity =
   | "measured"
@@ -105,7 +140,94 @@ export interface CelestialBody {
   visualProvenance?: VisualProvenance;
 }
 
+export interface DisplayPositionContext {
+  body: CelestialBody;
+  parentBody?: CelestialBody | null;
+  orbitParams?: OrbitParams;
+  date: Date;
+  scaleMode?: ScaleMode;
+}
+
+export interface SemanticBodyRadiusContext {
+  body: CelestialBody;
+  scaleMode?: ScaleMode;
+}
+
+export interface FocusExtentContext {
+  body: CelestialBody;
+  bodies: CelestialBody[];
+  date: Date;
+  scaleMode?: ScaleMode;
+}
+
+export interface ShadowExtentContext extends FocusExtentContext {}
+
 export class AstroPhysics {
+  private static interpolateHermite(
+    value: number,
+    startInput: number,
+    endInput: number,
+    startOutput: number,
+    endOutput: number,
+    startSlope: number,
+    endSlope: number
+  ): number {
+    if (endInput <= startInput) {
+      return endOutput;
+    }
+
+    const t = THREE.MathUtils.clamp(
+      (value - startInput) / (endInput - startInput),
+      0,
+      1
+    );
+    const h = endInput - startInput;
+    const h00 = 2 * t * t * t - 3 * t * t + 1;
+    const h10 = t * t * t - 2 * t * t + t;
+    const h01 = -2 * t * t * t + 3 * t * t;
+    const h11 = t * t * t - t * t;
+
+    return (
+      h00 * startOutput +
+      h10 * h * startSlope +
+      h01 * endOutput +
+      h11 * h * endSlope
+    );
+  }
+
+  private static interpolateLogAnchors(
+    value: number,
+    anchors: readonly NumericAnchor[]
+  ): number {
+    if (!Number.isFinite(value) || value <= 0) {
+      return 0;
+    }
+
+    const [firstInput, firstOutput] = anchors[0];
+    if (value <= firstInput) {
+      return THREE.MathUtils.mapLinear(value, 0, firstInput, 0, firstOutput);
+    }
+
+    for (let index = 1; index < anchors.length; index++) {
+      const [leftInput, leftOutput] = anchors[index - 1];
+      const [rightInput, rightOutput] = anchors[index];
+
+      if (value <= rightInput) {
+        const t =
+          (Math.log10(value) - Math.log10(leftInput)) /
+          (Math.log10(rightInput) - Math.log10(leftInput));
+        return THREE.MathUtils.lerp(leftOutput, rightOutput, t);
+      }
+    }
+
+    const [leftInput, leftOutput] = anchors[anchors.length - 2];
+    const [rightInput, rightOutput] = anchors[anchors.length - 1];
+    const t =
+      (Math.log10(value) - Math.log10(leftInput)) /
+      (Math.log10(rightInput) - Math.log10(leftInput));
+    return THREE.MathUtils.lerp(leftOutput, rightOutput, t);
+  }
+
   static parseScientificValue(value?: string): number {
     if (!value) return Number.NaN;
 
@@ -138,14 +260,11 @@ export class AstroPhysics {
     return Number.parseFloat(numeric[0]);
   }
 
-  static calculateLocalPosition(
+  static calculatePhysicalLocalPositionAU(
     orbitParams: OrbitParams,
-    date: Date,
-    scaleMode: "didactic" | "realistic" = "realistic",
-    systemMultiplier: number = 1
+    date: Date
   ): THREE.Vector3 {
-    const J2000 = new Date("2000-01-01T12:00:00Z").getTime();
-    const d = (date.getTime() - J2000) / 86400000;
+    const d = (date.getTime() - J2000_EPOCH.getTime()) / 86400000;
     const { a, e, i, O, w, M0, n } = orbitParams;
     const M = (M0 + n * d) % 360;
     const rad = Math.PI / 180;
@@ -169,136 +288,359 @@ export class AstroPhysics {
     const z = P * (sinw * sini) + Q * (cosw * sini);
     // Standard position in AU
 
-    const posAU = new THREE.Vector3(x, z, -y);
+    return new THREE.Vector3(x, z, -y);
+  }
+
+  static mapDidacticHeliocentricDistance(distanceAU: number): number {
+    if (!Number.isFinite(distanceAU) || distanceAU <= 0) {
+      return 0;
+    }
+
+    const [firstDistanceAU, firstVisualDistance] =
+      DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS[0];
+    if (distanceAU <= firstDistanceAU) {
+      const [secondDistanceAU, secondVisualDistance] =
+        DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS[1];
+      const outgoingSlopeAtFirstAnchor =
+        (secondVisualDistance - firstVisualDistance) /
+        (Math.log10(secondDistanceAU) - Math.log10(firstDistanceAU)) /
+        (firstDistanceAU * Math.LN10);
+
+      return this.interpolateHermite(
+        distanceAU,
+        0,
+        firstDistanceAU,
+        0,
+        firstVisualDistance,
+        firstVisualDistance / firstDistanceAU,
+        outgoingSlopeAtFirstAnchor
+      );
+    }
+
+    const mapped = this.interpolateLogAnchors(
+      distanceAU,
+      DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS
+    );
+    return Math.min(mapped, 3200);
+  }
+
+  static resolveParallelLightReferencePoint(
+    localSunPosition: THREE.Vector3,
+    referenceDistance: number = 1e6
+  ): THREE.Vector3 {
+    if (localSunPosition.lengthSq() <= 1e-12) {
+      return new THREE.Vector3(0, 0, referenceDistance);
+    }
+
+    return localSunPosition
+      .clone()
+      .normalize()
+      .multiplyScalar(referenceDistance);
+  }
+
+  static resolveOrbitDistanceBoundsAU(orbitParams: OrbitParams): {
+    minAU: number;
+    maxAU: number;
+  } {
+    const semiMajorAxis = Math.max(orbitParams.a, 0);
+    const eccentricity = THREE.MathUtils.clamp(orbitParams.e, 0, 0.999999);
+    const periapsisAU = semiMajorAxis * (1 - eccentricity);
+    const apoapsisAU = semiMajorAxis * (1 + eccentricity);
+
+    return {
+      minAU: Math.min(periapsisAU, apoapsisAU),
+      maxAU: Math.max(periapsisAU, apoapsisAU),
+    };
+  }
+
+  static calculateLocalPosition(
+    orbitParams: OrbitParams,
+    date: Date,
+    scaleMode: ScaleMode = "realistic"
+  ): THREE.Vector3 {
+    const posAU = this.calculatePhysicalLocalPositionAU(orbitParams, date);
 
     if (scaleMode === "didactic") {
-      // Orrery Mode Scaling
-      // Formula: r_visual = A * r_physical^B
-      const distanceAU = posAU.length();
+      const visualDistance = this.mapDidacticHeliocentricDistance(
+        posAU.length()
+      );
 
-      // Avoid scaling 0 or very small distances
-      if (distanceAU < 0.0001) return new THREE.Vector3(0, 0, 0);
-
-      const exponent = 0.45;
-      const scaleFactor = 300;
-
-      let visualDistance = scaleFactor * Math.pow(distanceAU, exponent);
-
-      // SYSTEM-WIDE RESCALING
-      // Apply the multiplier calculated to preserve orbital ratios
-      if (systemMultiplier > 1) {
-        visualDistance *= systemMultiplier;
+      if (visualDistance <= 0 || posAU.lengthSq() <= 0) {
+        return new THREE.Vector3(0, 0, 0);
       }
 
-      // Normalize direction and apply new magnitude
       return posAU.normalize().multiplyScalar(visualDistance);
     }
 
-    // Realistic Mode: Linear scaling
     return posAU.multiplyScalar(AU_TO_3D_UNITS);
   }
 
-  // Algorithmic Radius Calculation
   static calculateDidacticRadius(radiusKm: number): number {
-    // Power Law: 0.3 * Radius^0.38
-    // Sun (700k) -> ~50
-    // Earth (6k) -> ~8
-    // Moon (1.7k) -> ~5
-    const val = 0.3 * Math.pow(radiusKm, 0.38);
-    return Math.max(1.5, val);
+    return this.interpolateLogAnchors(radiusKm, DIDACTIC_RADIUS_ANCHORS);
   }
 
-  // Calculate multipliers for each planetary system to ensure moons don't collide
-  // while preserving their relative orbital ratios (resonances).
-  static calculateSystemMultipliers(
-    bodies: CelestialBody[]
-  ): Record<string, number> {
-    const multipliers: Record<string, number> = {};
-    const systems: Record<string, CelestialBody[]> = {};
+  static classifyDidacticOrbit(
+    body: CelestialBody,
+    parentBody?: CelestialBody | null
+  ): DidacticOrbitClass {
+    if (!body.parentId) {
+      return "heliocentric";
+    }
 
-    // Group moons by parent
-    bodies.forEach((body) => {
-      if (body.parentId) {
-        if (!systems[body.parentId]) systems[body.parentId] = [];
-        systems[body.parentId].push(body);
-      }
-    });
+    if (body.parentId === "sun" || parentBody?.type === "star") {
+      return "heliocentric";
+    }
 
-    // Process each system
-    Object.keys(systems).forEach((parentId) => {
-      const parent = bodies.find((b) => b.id === parentId);
-      if (!parent) return;
-
-      const parentRadiusVis = this.calculateDidacticRadius(parent.radiusKm);
-      let maxMultiplier = 1;
-
-      // Ring System Logic
-      let ringOuterVis = 0;
-      let ringOuterPhys = 0;
-      if (parent.ringSystem) {
-        ringOuterVis = parentRadiusVis * parent.ringSystem.outerRadius;
-        // Physical outer radius in AU (approximate for check)
-        ringOuterPhys =
-          (parent.radiusKm * parent.ringSystem.outerRadius) / AU_IN_KM;
-      }
-
-      // Check each moon in the system
-      systems[parentId].forEach((moon) => {
-        // Calculate algorithmic distance (without multiplier)
-        const distAU = moon.orbit.a;
-        if (distAU < 0.000001) return;
-
-        const algoDist = 300 * Math.pow(distAU, 0.45);
-        const moonRadiusVis = this.calculateDidacticRadius(moon.radiusKm);
-
-        // Determine if moon is physically outside rings
-        const isOutsideRings = ringOuterPhys > 0 && distAU > ringOuterPhys;
-
-        // Required safe distance
-        let safeDist = 0;
-
-        if (isOutsideRings) {
-          // If outside rings, must clear the rings + padding
-          safeDist = ringOuterVis + moonRadiusVis + 2;
-        } else {
-          // If inside rings (or no rings), just clear the planet
-          // (Inner moons like Pan might be inside rings, we let them be)
-          safeDist = parentRadiusVis + moonRadiusVis + 2;
-        }
-
-        if (algoDist < safeDist) {
-          const requiredMult = safeDist / algoDist;
-          if (requiredMult > maxMultiplier) {
-            maxMultiplier = requiredMult;
-          }
-        }
-      });
-
-      if (maxMultiplier > 1) {
-        multipliers[parentId] = maxMultiplier;
-      }
-    });
-
-    return multipliers;
+    return "subsystem";
   }
 
-  // Default segments set to 1024 for sufficiently smooth orbits at typical zoom levels. Individual bodies may override this in Planet.tsx.
-  static getRelativeOrbitPoints(
-    orbitParams: OrbitParams,
+  static resolveSemanticBodyRadius({
+    body,
+    scaleMode = "realistic",
+  }: SemanticBodyRadiusContext): number {
+    const baseRadius =
+      scaleMode === "didactic"
+        ? this.calculateDidacticRadius(body.radiusKm)
+        : body.radiusKm * KM_TO_3D_UNITS;
+
+    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
+    const shapeMultiplier = Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz));
+    return baseRadius * shapeMultiplier;
+  }
+
+  static resolveRingOuterRadius(
+    body: CelestialBody,
+    scaleMode: ScaleMode = "realistic"
+  ): number {
+    if (!body.ringSystem) {
+      return 0;
+    }
+
+    return (
+      this.resolveSemanticBodyRadius({ body, scaleMode }) *
+      body.ringSystem.outerRadius
+    );
+  }
+
+  private static mapDidacticSubsystemDistance(
+    distanceAU: number,
+    parentBody: CelestialBody,
+    body: CelestialBody
+  ): number {
+    const parentSemanticRadius = this.resolveSemanticBodyRadius({
+      body: parentBody,
+      scaleMode: "didactic",
+    });
+    const childSemanticRadius = this.resolveSemanticBodyRadius({
+      body,
+      scaleMode: "didactic",
+    });
+
+    const physicalParentRadii =
+      (distanceAU * AU_IN_KM) / Math.max(parentBody.radiusKm, 1e-9);
+    const localParentRadii = THREE.MathUtils.clamp(
+      2.2 + 0.95 * Math.pow(physicalParentRadii, 0.55),
+      3,
+      15
+    );
+
+    let displayDistance = localParentRadii * parentSemanticRadius;
+    let minimumDistance = parentSemanticRadius + childSemanticRadius + 2;
+
+    if (parentBody.ringSystem) {
+      const ringOuterPhysicalAU =
+        (parentBody.radiusKm * parentBody.ringSystem.outerRadius) / AU_IN_KM;
+
+      if (distanceAU > ringOuterPhysicalAU) {
+        minimumDistance = Math.max(
+          minimumDistance,
+          this.resolveRingOuterRadius(parentBody, "didactic") +
+            childSemanticRadius +
+            2
+        );
+      }
+    }
+
+    return Math.max(displayDistance, minimumDistance);
+  }
+
+  static resolveDisplayOrbitDistanceBounds({
+    body,
+    parentBody = null,
+    orbitParams = body.orbit,
+    scaleMode = "realistic",
+  }: Omit<DisplayPositionContext, "date">): { min: number; max: number } {
+    if (body.type === "star" || orbitParams.a === 0) {
+      return { min: 0, max: 0 };
+    }
+
+    const { minAU, maxAU } = this.resolveOrbitDistanceBoundsAU(orbitParams);
+
+    if (scaleMode === "realistic") {
+      return {
+        min: minAU * AU_TO_3D_UNITS,
+        max: maxAU * AU_TO_3D_UNITS,
+      };
+    }
+
+    const orbitClass = this.classifyDidacticOrbit(body, parentBody);
+
+    if (orbitClass === "heliocentric" || !parentBody) {
+      return {
+        min: this.mapDidacticHeliocentricDistance(minAU),
+        max: this.mapDidacticHeliocentricDistance(maxAU),
+      };
+    }
+
+    return {
+      min: this.mapDidacticSubsystemDistance(minAU, parentBody, body),
+      max: this.mapDidacticSubsystemDistance(maxAU, parentBody, body),
+    };
+  }
+
+  static resolveDisplayLocalPosition({
+    body,
+    parentBody = null,
+    orbitParams = body.orbit,
+    date,
+    scaleMode = "realistic",
+  }: DisplayPositionContext): THREE.Vector3 {
+    if (scaleMode === "realistic") {
+      return this.calculateLocalPosition(orbitParams, date, "realistic");
+    }
+
+    if (body.type === "star" || orbitParams.a === 0) {
+      return new THREE.Vector3(0, 0, 0);
+    }
+
+    const posAU = this.calculatePhysicalLocalPositionAU(orbitParams, date);
+    const distanceAU = posAU.length();
+
+    if (distanceAU <= 0 || posAU.lengthSq() <= 0) {
+      return new THREE.Vector3(0, 0, 0);
+    }
+
+    const direction = posAU.clone().normalize();
+    const orbitClass = this.classifyDidacticOrbit(body, parentBody);
+
+    if (orbitClass === "heliocentric" || !parentBody) {
+      return direction.multiplyScalar(
+        this.mapDidacticHeliocentricDistance(distanceAU)
+      );
+    }
+
+    return direction.multiplyScalar(
+      this.mapDidacticSubsystemDistance(distanceAU, parentBody, body)
+    );
+  }
+
+  static getDisplayOrbitPoints({
+    body,
+    parentBody = null,
     segments = 1024,
-    scaleMode: "didactic" | "realistic" = "realistic",
-    systemMultiplier: number = 1
-  ): THREE.Vector3[] {
+    scaleMode = "realistic",
+  }: {
+    body: CelestialBody;
+    parentBody?: CelestialBody | null;
+    segments?: number;
+    scaleMode?: ScaleMode;
+  }): THREE.Vector3[] {
     const pts: THREE.Vector3[] = [];
-    const dummy = new Date("2000-01-01");
-    const period = 360 / (orbitParams.n || 0.001);
+    const period = 360 / (body.orbit.n || 0.001);
     for (let j = 0; j <= segments; j++) {
-      const t = new Date(dummy.getTime() + (j / segments) * period * 86400000);
+      const t = new Date(
+        J2000_EPOCH.getTime() + (j / segments) * period * 86400000
+      );
       pts.push(
-        this.calculateLocalPosition(orbitParams, t, scaleMode, systemMultiplier)
+        this.resolveDisplayLocalPosition({
+          body,
+          parentBody,
+          date: t,
+          scaleMode,
+        })
       );
     }
     return pts;
+  }
+
+  static resolveFocusExtent({
+    body,
+    bodies,
+    date: _date,
+    scaleMode = "realistic",
+  }: FocusExtentContext): number {
+    const semanticBodyRadius = this.resolveSemanticBodyRadius({
+      body,
+      scaleMode,
+    });
+    const ringOuterRadius = this.resolveRingOuterRadius(body, scaleMode);
+    let extent = Math.max(semanticBodyRadius, ringOuterRadius);
+
+    if (scaleMode !== "didactic") {
+      return extent;
+    }
+
+    const directChildren = bodies.filter((candidate) => {
+      if (body.id === "sun") {
+        if (candidate.id === "sun") {
+          return false;
+        }
+
+        return (
+          !candidate.parentId &&
+          (candidate.type === "planet" ||
+            (candidate.type === "dwarf" && candidate.orbit.a <= 40))
+        );
+      }
+
+      return candidate.parentId === body.id;
+    });
+
+    for (const child of directChildren) {
+      const childDisplayDistance = this.resolveDisplayOrbitDistanceBounds({
+        body: child,
+        parentBody: body,
+        scaleMode: "didactic",
+      }).max;
+      const childSemanticRadius = this.resolveSemanticBodyRadius({
+        body: child,
+        scaleMode: "didactic",
+      });
+      extent = Math.max(extent, childDisplayDistance + childSemanticRadius);
+    }
+
+    return extent;
+  }
+
+  static resolveShadowExtent({
+    body,
+    bodies,
+    date,
+    scaleMode = "realistic",
+  }: ShadowExtentContext): number {
+    const semanticBodyRadius = this.resolveSemanticBodyRadius({
+      body,
+      scaleMode,
+    });
+    const ringOuterRadius = this.resolveRingOuterRadius(body, scaleMode);
+    const baseExtent = Math.max(semanticBodyRadius, ringOuterRadius);
+
+    if (scaleMode !== "didactic") {
+      return baseExtent;
+    }
+
+    const cameraExtent = this.resolveFocusExtent({
+      body,
+      bodies,
+      date,
+      scaleMode,
+    });
+    const cappedContextExtent = Math.max(
+      baseExtent,
+      Math.min(cameraExtent, baseExtent * 3)
+    );
+
+    return cappedContextExtent;
   }
 
   // Physics Helpers

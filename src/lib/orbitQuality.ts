@@ -10,7 +10,6 @@ export interface OrbitSegmentsArgs {
 
 export interface OrbitCacheKeyArgs extends OrbitSegmentsArgs {
   scaleMode: OrbitScaleMode;
-  multiplier: number;
 }
 
 export interface OrbitAncestryNode {
@@ -42,10 +41,9 @@ export function getOrbitCacheKey({
   focusId,
   orbitProfile,
   scaleMode,
-  multiplier,
 }: OrbitCacheKeyArgs): string {
   const segments = getOrbitSegments({ bodyId, focusId, orbitProfile });
-  return [bodyId, scaleMode, segments, multiplier.toFixed(6)].join(":");
+  return [bodyId, scaleMode, segments].join(":");
 }
 
 export function getOrbitAncestryIds(

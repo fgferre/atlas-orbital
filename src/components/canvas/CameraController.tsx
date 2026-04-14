@@ -4,7 +4,7 @@ import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
-import { KM_TO_3D_UNITS, AstroPhysics } from "../../lib/astrophysics";
+import { AstroPhysics } from "../../lib/astrophysics";
 import {
   PrivilegedPosition,
   CameraTransition,
@@ -47,14 +47,7 @@ export const CameraController = () => {
 
   const getBodyRadius = useCallback(
     (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
-      const baseRadius =
-        scaleMode === "didactic"
-          ? AstroPhysics.calculateDidacticRadius(body.radiusKm)
-          : body.radiusKm * KM_TO_3D_UNITS;
-
-      const shapeMultiplier = Math.max(...(body.shapeScale ?? [1, 1, 1]));
-      const modelScale = body.model?.scale ?? 1;
-      return baseRadius * shapeMultiplier * modelScale;
+      return AstroPhysics.resolveSemanticBodyRadius({ body, scaleMode });
     },
     [scaleMode]
   );
@@ -80,14 +73,16 @@ export const CameraController = () => {
     []
   );
 
-  const getEffectiveBoundingSphere = useCallback(
+  const getFocusExtent = useCallback(
     (body: (typeof SOLAR_SYSTEM_BODIES)[0]) => {
-      const baseRadius = getBodyRadius(body);
-      return body.ringSystem
-        ? baseRadius * body.ringSystem.outerRadius
-        : baseRadius;
+      return AstroPhysics.resolveFocusExtent({
+        body,
+        bodies: SOLAR_SYSTEM_BODIES,
+        date: useStore.getState().datetime,
+        scaleMode,
+      });
     },
-    [getBodyRadius]
+    [scaleMode]
   );
 
   useEffect(() => {
@@ -114,7 +109,7 @@ export const CameraController = () => {
       const targetPos = new THREE.Vector3();
       targetMesh.getWorldPosition(targetPos);
 
-      const targetRadius = getEffectiveBoundingSphere(bodyData);
+      const targetRadius = getFocusExtent(bodyData);
       const idealDist = PrivilegedPosition.calculateIdealDistance(
         targetRadius,
         cameraInstance,
@@ -196,7 +191,7 @@ export const CameraController = () => {
     setupCamera();
   }, [
     focusId,
-    getEffectiveBoundingSphere,
+    getFocusExtent,
     getFocusMargin,
     isIntroAnimating,
     scaleMode,

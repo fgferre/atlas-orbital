@@ -2,7 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { AstroPhysics, KM_TO_3D_UNITS } from "../../lib/astrophysics";
+import { AstroPhysics } from "../../lib/astrophysics";
 
 export interface SunScreenState {
   visible: boolean;
@@ -66,19 +66,21 @@ export const resolveVisualRadiusWorld = ({
   scaleMode: "didactic" | "realistic";
   shapeScale?: [number, number, number];
 }) => {
-  const baseRadius =
-    scaleMode === "didactic"
-      ? AstroPhysics.calculateDidacticRadius(radiusKm)
-      : radiusKm * KM_TO_3D_UNITS;
-
-  return (
-    baseRadius *
-    Math.max(
-      Math.abs(shapeScale[0]),
-      Math.abs(shapeScale[1]),
-      Math.abs(shapeScale[2])
-    )
-  );
+  return AstroPhysics.resolveSemanticBodyRadius({
+    body: {
+      id: "projection-target",
+      type: "star",
+      name: { en: "Projection Target", pt: "Projection Target" },
+      radiusKm,
+      color: "#ffffff",
+      orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
+      rotationPeriodHours: 0,
+      axialTilt: 0,
+      info: "",
+      shapeScale,
+    },
+    scaleMode,
+  });
 };
 
 export const isWithinScreenMargin = (

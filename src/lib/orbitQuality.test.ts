@@ -52,16 +52,15 @@ describe("getOrbitSegments", () => {
 });
 
 describe("getOrbitCacheKey", () => {
-  it("includes the body, scale mode, segments, and multiplier", () => {
+  it("includes the body, scale mode, and resolved segment count", () => {
     expect(
       getOrbitCacheKey({
         bodyId: "moon",
         focusId: "earth",
         orbitProfile: "balanced",
         scaleMode: "realistic",
-        multiplier: 1.25,
       })
-    ).toBe("moon:realistic:2048:1.250000");
+    ).toBe("moon:realistic:2048");
   });
 
   it("keeps focused orbits on a distinct key via their higher segment count", () => {
@@ -70,14 +69,12 @@ describe("getOrbitCacheKey", () => {
       focusId: "earth",
       orbitProfile: "constrained",
       scaleMode: "didactic",
-      multiplier: 1,
     });
     const nonFocused = getOrbitCacheKey({
       bodyId: "earth",
       focusId: "sun",
       orbitProfile: "constrained",
       scaleMode: "didactic",
-      multiplier: 1,
     });
 
     expect(focused).not.toBe(nonFocused);

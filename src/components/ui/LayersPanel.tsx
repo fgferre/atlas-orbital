@@ -229,6 +229,10 @@ export const LayersPanel = ({
               />
             ))}
           </div>
+          <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-white/55">
+            <div>{`Didactic: Compressed distances and exaggerated sizes for whole-system reading.`}</div>
+            <div>{`Realistic: Physical scale to preserve spatial emptiness.`}</div>
+          </div>
         </div>
 
         <div>

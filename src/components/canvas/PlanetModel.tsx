@@ -4,11 +4,7 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import {
-  type CelestialBody,
-  KM_TO_3D_UNITS,
-  AstroPhysics,
-} from "../../lib/astrophysics";
+import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
@@ -265,12 +261,7 @@ export const PlanetModel = ({
     if (!groupRef.current) return;
 
     // Scaling
-    let s = 1;
-    if (scaleMode === "didactic") {
-      s = AstroPhysics.calculateDidacticRadius(body.radiusKm);
-    } else {
-      s = body.radiusKm * KM_TO_3D_UNITS;
-    }
+    let s = AstroPhysics.resolveSemanticBodyRadius({ body, scaleMode });
 
     // Apply custom model scale adjustment if provided
     if (body.model?.scale) {
