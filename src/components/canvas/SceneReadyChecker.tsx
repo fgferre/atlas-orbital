@@ -15,7 +15,7 @@ export const SceneReadyChecker = () => {
     if (hasMarkedReady.current) return;
     if (!criticalAssetsReady) return;
 
-    if (!canMarkSceneReady(criticalAssetsReady, frameCount.current, 2)) {
+    if (!canMarkSceneReady(criticalAssetsReady, frameCount.current)) {
       frameCount.current += 1;
     } else {
       hasMarkedReady.current = true;

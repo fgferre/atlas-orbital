@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canMarkSceneReady, isCriticalStarfieldReady } from "./sceneReadiness";
+import {
+  canMarkSceneReady,
+  isCriticalStarfieldReady,
+  SCENE_READY_REQUIRED_FRAMES,
+} from "./sceneReadiness";
 
 describe("sceneReadiness", () => {
   it("treats hidden starfield as ready", () => {
@@ -15,7 +19,9 @@ describe("sceneReadiness", () => {
 
   it("marks the scene ready only after critical assets and enough frames", () => {
     expect(canMarkSceneReady(false, 8)).toBe(false);
-    expect(canMarkSceneReady(true, 1)).toBe(false);
-    expect(canMarkSceneReady(true, 2)).toBe(true);
+    expect(canMarkSceneReady(true, SCENE_READY_REQUIRED_FRAMES - 1)).toBe(
+      false
+    );
+    expect(canMarkSceneReady(true, SCENE_READY_REQUIRED_FRAMES)).toBe(true);
   });
 });
