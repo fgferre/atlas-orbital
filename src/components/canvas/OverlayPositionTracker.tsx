@@ -25,6 +25,36 @@ interface OverlayItem {
   showIcon: boolean;
 }
 
+interface ScreenBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const intersects = (box: ScreenBox, others: ScreenBox[]) => {
+  for (const other of others) {
+    if (
+      box.x < other.x + other.w &&
+      box.x + box.w > other.x &&
+      box.y < other.y + other.h &&
+      box.y + box.h > other.y
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const fitsWithinBounds = (
+  box: ScreenBox,
+  bounds: { left: number; top: number; right: number; bottom: number }
+) =>
+  box.x >= bounds.left &&
+  box.y >= bounds.top &&
+  box.x + box.w <= bounds.right &&
+  box.y + box.h <= bounds.bottom;
+
 // This component runs INSIDE the Canvas and calculates overlay positions
 // Runs with LOWER priority (after planets update) to avoid lag
 export const OverlayPositionTracker = () => {
@@ -38,7 +68,14 @@ export const OverlayPositionTracker = () => {
   // Priority: 10 means this runs AFTER normal updates
   useFrame((state) => {
     const { width, height } = state.size;
-    const { focusId, visibility, showLabels, showIcons } = useStore.getState();
+    const { focusId, visibility, showLabels, showIcons, viewportFraming } =
+      useStore.getState();
+    const overlayBounds = {
+      left: viewportFraming.overlayRect.left,
+      top: viewportFraming.overlayRect.top,
+      right: viewportFraming.overlayRect.right,
+      bottom: viewportFraming.overlayRect.bottom,
+    };
 
     // 1. Calculate Screen Positions for ALL bodies
     const candidates: OverlayCandidate[] = [];
@@ -111,28 +148,10 @@ export const OverlayPositionTracker = () => {
     });
 
     // 3. Collision Detection
-    const placedIcons: { x: number; y: number; w: number; h: number }[] = [];
-    const placedLabels: { x: number; y: number; w: number; h: number }[] = [];
+    const placedIcons: ScreenBox[] = [];
+    const placedLabels: ScreenBox[] = [];
 
     const finalOverlays: OverlayItem[] = [];
-
-    // Helper: Check intersection
-    const intersects = (
-      box: { x: number; y: number; w: number; h: number },
-      others: { x: number; y: number; w: number; h: number }[]
-    ) => {
-      for (const other of others) {
-        if (
-          box.x < other.x + other.w &&
-          box.x + box.w > other.x &&
-          box.y < other.y + other.h &&
-          box.y + box.h > other.y
-        ) {
-          return true;
-        }
-      }
-      return false;
-    };
 
     candidates.forEach((c) => {
       // Define Bounding Boxes
@@ -144,14 +163,13 @@ export const OverlayPositionTracker = () => {
       const labelWidth = Math.min(120, Math.max(60, c.name.length * 8)); // Dynamic width based on name
       const labelBox = { x: c.x + 12, y: c.y - 10, w: labelWidth, h: 20 };
 
-      let showIcon = true;
-      let showLabel = true;
+      const iconFitsBounds = fitsWithinBounds(iconBox, overlayBounds);
+      const labelFitsBounds = fitsWithinBounds(labelBox, overlayBounds);
+      let showIcon = iconFitsBounds;
+      let showLabel = iconFitsBounds && labelFitsBounds;
 
-      // Always show focused object
-      if (c.id === focusId) {
-        showIcon = true;
-        showLabel = true;
-      } else {
+      // Focused object skips collision arbitration but still respects reserved UI bounds.
+      if (c.id !== focusId && showIcon) {
         // Check Icon Collision (vs other Icons)
         // We only hide icons if they overlap other icons.
         // User said: "hide just labels, then we hide the body itself"
@@ -164,6 +182,7 @@ export const OverlayPositionTracker = () => {
           // Icon is safe. Now check Label.
           // Check Label vs other Labels AND other Icons (don't draw text over icons)
           if (
+            !labelFitsBounds ||
             intersects(labelBox, placedLabels) ||
             intersects(labelBox, placedIcons)
           ) {

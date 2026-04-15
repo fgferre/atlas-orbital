@@ -14,13 +14,14 @@ import {
 } from "../../lib/camera";
 
 export const CameraController = () => {
-  const { camera, scene } = useThree();
+  const { camera, scene, size } = useThree();
   const controls = useThree(
     (state) => state.controls
   ) as OrbitControlsImpl | null;
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
   const isIntroAnimating = useStore((state) => state.isIntroAnimating);
+  const viewportFraming = useStore((state) => state.viewportFraming);
 
   const flyingRef = useRef({
     isFlying: false,
@@ -34,6 +35,19 @@ export const CameraController = () => {
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
   const prevFocusRef = useRef<string | null>(null);
   const prevScaleModeRef = useRef<string | null>(null);
+  const cameraFramingSignature = [
+    viewportFraming.fitInsets.left,
+    viewportFraming.fitInsets.right,
+    viewportFraming.fitInsets.top,
+    viewportFraming.fitInsets.bottom,
+    Math.round(viewportFraming.compositionOffsetXPx),
+    Math.round(viewportFraming.compositionOffsetYPx),
+  ].join(":");
+  const prevCameraFramingSignatureRef = useRef<string>(cameraFramingSignature);
+  const prevViewportSizeRef = useRef({
+    width: size.width,
+    height: size.height,
+  });
   const focusTrackingRef = useRef(createFocusTrackingState());
 
   useEffect(() => {
@@ -95,12 +109,19 @@ export const CameraController = () => {
     const bodyData = SOLAR_SYSTEM_BODIES.find((body) => body.id === focusId);
     if (!bodyData) return;
 
-    const isModeSwitch =
-      prevFocusRef.current === focusId &&
-      prevScaleModeRef.current !== scaleMode;
+    const isSameFocus = prevFocusRef.current === focusId;
+    const isModeSwitch = isSameFocus && prevScaleModeRef.current !== scaleMode;
+    const isLayoutReframe =
+      isSameFocus &&
+      prevScaleModeRef.current === scaleMode &&
+      (prevCameraFramingSignatureRef.current !== cameraFramingSignature ||
+        prevViewportSizeRef.current.width !== size.width ||
+        prevViewportSizeRef.current.height !== size.height);
 
     prevFocusRef.current = focusId;
     prevScaleModeRef.current = scaleMode;
+    prevCameraFramingSignatureRef.current = cameraFramingSignature;
+    prevViewportSizeRef.current = { width: size.width, height: size.height };
 
     const setupCamera = () => {
       const targetMesh = scene.getObjectByName(focusId);
@@ -110,9 +131,12 @@ export const CameraController = () => {
       targetMesh.getWorldPosition(targetPos);
 
       const targetRadius = getFocusExtent(bodyData);
-      const idealDist = PrivilegedPosition.calculateIdealDistance(
+      const idealDist = PrivilegedPosition.calculateViewportAwareDistance(
         targetRadius,
         cameraInstance,
+        size.width,
+        size.height,
+        viewportFraming.usableRect,
         getFocusMargin(bodyData)
       );
 
@@ -153,17 +177,39 @@ export const CameraController = () => {
         );
       }
 
-      const duration = isModeSwitch
-        ? 800
-        : Math.min(
-            1500 +
-              Math.min(
-                cameraInstance.position.distanceTo(newCamPos) / 1000,
-                2.5
-              ) *
-                1000,
-            4000
-          );
+      const composedCamPos = PrivilegedPosition.applyViewportComposition({
+        targetPos,
+        cameraPos: newCamPos,
+        camera: cameraInstance,
+        viewportWidth: size.width,
+        viewportHeight: size.height,
+        compositionOffsetXPx: viewportFraming.compositionOffsetXPx,
+        compositionOffsetYPx: viewportFraming.compositionOffsetYPx,
+        targetUpVector: cameraInstance.up,
+      });
+
+      const { isOccluded: isComposedOccluded } =
+        PrivilegedPosition.checkOcclusion(composedCamPos, targetPos, scene, [
+          focusId,
+        ]);
+
+      if (!isComposedOccluded) {
+        newCamPos = composedCamPos;
+      }
+
+      const duration = isLayoutReframe
+        ? 520
+        : isModeSwitch
+          ? 800
+          : Math.min(
+              1500 +
+                Math.min(
+                  cameraInstance.position.distanceTo(newCamPos) / 1000,
+                  2.5
+                ) *
+                  1000,
+              4000
+            );
 
       transitionRef.current.start(
         cameraInstance.position.clone(),
@@ -191,11 +237,14 @@ export const CameraController = () => {
     setupCamera();
   }, [
     focusId,
+    cameraFramingSignature,
     getFocusExtent,
     getFocusMargin,
     isIntroAnimating,
     scaleMode,
     scene,
+    size.height,
+    size.width,
   ]);
 
   useEffect(() => {

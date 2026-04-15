@@ -292,6 +292,7 @@ export const Timeline = () => {
 
   return (
     <div
+      data-ui-framing="timeline"
       className="pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2"
       data-tutorial-target="timeline"
     >

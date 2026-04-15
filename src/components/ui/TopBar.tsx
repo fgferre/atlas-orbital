@@ -31,7 +31,10 @@ export const TopBar = () => {
   }, [focusBack, focusHome]);
 
   return (
-    <div className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-30">
+    <div
+      data-ui-framing="top-bar"
+      className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-30"
+    >
       <div className="command-shell tech-corners ghost-border pointer-events-auto flex items-center gap-2 px-2.5 py-2 sm:px-3">
         <div className="flex min-w-[9rem] items-center gap-2 border border-white/8 bg-black/15 px-2.5 py-2 sm:min-w-[10rem]">
           <div className="flex h-6 w-6 items-center justify-center border border-nasa-accent/35 bg-nasa-accent/10 shadow-[0_0_12px_rgba(0,240,255,0.12)]">

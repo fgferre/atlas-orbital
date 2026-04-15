@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { ViewportRect } from "./effectiveViewport";
 
 /**
  * PrivilegedPosition - Calculates optimal camera observation positions
@@ -65,6 +66,10 @@ export class PrivilegedPosition {
     camera: THREE.PerspectiveCamera,
     margin: number = 1.2
   ): number {
+    if (radius <= 0) {
+      return 0;
+    }
+
     const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
     const distVertical = radius / Math.sin(fovVertRad / 2);
 
@@ -74,6 +79,106 @@ export class PrivilegedPosition {
 
     // Use larger to ensure object fits in both dimensions
     return Math.max(distVertical, distHorizontal) * margin;
+  }
+
+  static calculateViewportAwareDistance(
+    radius: number,
+    camera: THREE.PerspectiveCamera,
+    viewportWidth: number,
+    viewportHeight: number,
+    usableRect: Pick<ViewportRect, "width" | "height"> | undefined,
+    margin: number = 1.2
+  ): number {
+    const usableWidth = Math.max(1, usableRect?.width ?? viewportWidth);
+    const usableHeight = Math.max(1, usableRect?.height ?? viewportHeight);
+    const widthRatio = THREE.MathUtils.clamp(
+      usableWidth / Math.max(1, viewportWidth),
+      1e-3,
+      1
+    );
+    const heightRatio = THREE.MathUtils.clamp(
+      usableHeight / Math.max(1, viewportHeight),
+      1e-3,
+      1
+    );
+
+    if (radius <= 0) {
+      return 0;
+    }
+
+    const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
+    const effectiveVertHalfAngle = Math.atan(
+      Math.tan(fovVertRad / 2) * heightRatio
+    );
+    const distVertical = radius / Math.sin(effectiveVertHalfAngle);
+
+    const fovHorizRad = 2 * Math.atan(Math.tan(fovVertRad / 2) * camera.aspect);
+    const effectiveHorizHalfAngle = Math.atan(
+      Math.tan(fovHorizRad / 2) * widthRatio
+    );
+    const distHorizontal = radius / Math.sin(effectiveHorizHalfAngle);
+
+    return Math.max(distVertical, distHorizontal) * margin;
+  }
+
+  static applyViewportComposition({
+    targetPos,
+    cameraPos,
+    camera,
+    viewportWidth,
+    viewportHeight,
+    compositionOffsetXPx = 0,
+    compositionOffsetYPx = 0,
+    targetUpVector,
+  }: {
+    targetPos: THREE.Vector3;
+    cameraPos: THREE.Vector3;
+    camera: THREE.PerspectiveCamera;
+    viewportWidth: number;
+    viewportHeight: number;
+    compositionOffsetXPx?: number;
+    compositionOffsetYPx?: number;
+    targetUpVector?: THREE.Vector3;
+  }): THREE.Vector3 {
+    if (
+      Math.abs(compositionOffsetXPx) < 0.5 &&
+      Math.abs(compositionOffsetYPx) < 0.5
+    ) {
+      return cameraPos;
+    }
+
+    const distance = cameraPos.distanceTo(targetPos);
+    if (distance <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
+      return cameraPos;
+    }
+
+    const viewDir = targetPos.clone().sub(cameraPos).normalize();
+    const nominalUp =
+      targetUpVector?.clone().normalize() || this.ECLIPTIC_UP.clone();
+    let right = new THREE.Vector3().crossVectors(viewDir, nominalUp);
+
+    if (right.lengthSq() < 1e-8) {
+      right = new THREE.Vector3().crossVectors(viewDir, this.ECLIPTIC_UP);
+    }
+
+    if (right.lengthSq() < 1e-8) {
+      return cameraPos;
+    }
+
+    right.normalize();
+    const up = new THREE.Vector3().crossVectors(right, viewDir).normalize();
+
+    const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
+    const fovHorizRad = 2 * Math.atan(Math.tan(fovVertRad / 2) * camera.aspect);
+    const worldPerPixelX =
+      (2 * distance * Math.tan(fovHorizRad / 2)) / Math.max(1, viewportWidth);
+    const worldPerPixelY =
+      (2 * distance * Math.tan(fovVertRad / 2)) / Math.max(1, viewportHeight);
+
+    return cameraPos
+      .clone()
+      .addScaledVector(right, -compositionOffsetXPx * worldPerPixelX)
+      .addScaledVector(up, compositionOffsetYPx * worldPerPixelY);
   }
 
   /**

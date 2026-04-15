@@ -90,6 +90,7 @@ export const Sidebar = () => {
 
   return (
     <div
+      data-ui-framing="sidebar"
       className={`${isMobile ? "command-shell panel-scan tech-corners ghost-border" : "glass-panel"} z-30 flex flex-col overflow-hidden transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] ${panelClassName}`}
       data-tutorial-target="info-panel"
       style={

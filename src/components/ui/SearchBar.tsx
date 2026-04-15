@@ -328,6 +328,7 @@ export const SearchBar = ({
   return (
     <div
       ref={containerRef}
+      data-ui-framing="search-rail"
       className="relative pointer-events-auto"
       data-tutorial-target="search"
     >

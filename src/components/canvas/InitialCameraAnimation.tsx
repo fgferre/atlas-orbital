@@ -25,7 +25,7 @@ const FALLBACK_INTRO_END_DISTANCE = 1746;
  * Uses LOGARITHMIC interpolation for smooth animation across extreme scale differences
  */
 export const InitialCameraAnimation = () => {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const controls = useThree(
     (state) => state.controls
   ) as OrbitControlsImpl | null;
@@ -35,6 +35,7 @@ export const InitialCameraAnimation = () => {
   const isLoaderHidden = useStore((s) => s.isLoaderHidden);
   const setIsIntroAnimating = useStore((s) => s.setIsIntroAnimating);
   const scaleMode = useStore((s) => s.scaleMode);
+  const viewportFraming = useStore((s) => s.viewportFraming);
 
   const cameraRef = useRef(camera);
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
@@ -98,14 +99,34 @@ export const InitialCameraAnimation = () => {
       date: useStore.getState().datetime,
       scaleMode,
     });
-    const idealDistance = PrivilegedPosition.calculateIdealDistance(
+    const idealDistance = PrivilegedPosition.calculateViewportAwareDistance(
       focusExtent,
       perspectiveCamera,
+      size.width,
+      size.height,
+      viewportFraming.usableRect,
       1.15
     );
 
-    return INTRO_END_DIRECTION.clone().multiplyScalar(idealDistance);
-  }, [scaleMode]);
+    return PrivilegedPosition.applyViewportComposition({
+      targetPos: INTRO_TARGET,
+      cameraPos: INTRO_END_DIRECTION.clone().multiplyScalar(idealDistance),
+      camera: perspectiveCamera,
+      viewportWidth: size.width,
+      viewportHeight: size.height,
+      compositionOffsetXPx: viewportFraming.compositionOffsetXPx,
+      compositionOffsetYPx: viewportFraming.compositionOffsetYPx,
+      targetUpVector: perspectiveCamera.up,
+    });
+  }, [
+    scaleMode,
+    size.height,
+    size.width,
+    viewportFraming.compositionOffsetXPx,
+    viewportFraming.compositionOffsetYPx,
+    viewportFraming.usableRect.height,
+    viewportFraming.usableRect.width,
+  ]);
 
   const syncControlsToSun = useCallback(() => {
     const controlsInstance = controlsRef.current;

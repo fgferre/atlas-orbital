@@ -6,6 +6,7 @@ import { LayersPanel } from "./LayersPanel";
 import { Timeline } from "./Timeline";
 import { TopBar } from "./TopBar";
 import { SearchBar } from "./SearchBar";
+import { ViewportFramingTracker } from "./ViewportFramingTracker";
 import {
   resolveRightControlPanelExit,
   resolveRightControlPanelRequest,
@@ -68,6 +69,7 @@ export const Overlay = () => {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"
       ></div>
+      <ViewportFramingTracker activePanel={activePanel} />
     </div>
   );
 };

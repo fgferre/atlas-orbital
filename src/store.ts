@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import type { VisualPresetType } from "./config/visualPresets";
+import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import type { QualityMode } from "./lib/qualityProfile";
 import type { SunRenderMode } from "./lib/sunRenderMode";
 import type { StarfieldProviderState, StarfieldSource } from "./lib/starfield";
+import { createDefaultViewportFramingState } from "./lib/camera/effectiveViewport";
 
 interface AppState {
   datetime: Date;
@@ -35,6 +37,7 @@ interface AppState {
     showLabel: boolean;
     showIcon: boolean;
   }>;
+  viewportFraming: ViewportFramingState;
   visibility: {
     planets: boolean;
     dwarfs: boolean;
@@ -62,6 +65,7 @@ interface AppState {
   selectId: (id: string | null) => void;
   setFocusId: (id: string | null) => void;
   setOverlayItems: (items: AppState["overlayItems"]) => void;
+  setViewportFraming: (next: ViewportFramingState) => void;
   toggleLabels: () => void;
   toggleIcons: () => void;
   toggleOrbits: () => void;
@@ -161,6 +165,10 @@ export const useStore = create<AppState>((set) => ({
   autoPresetEnabled: true,
   focusHistory: [],
   overlayItems: [],
+  viewportFraming:
+    typeof window !== "undefined"
+      ? createDefaultViewportFramingState(window.innerWidth, window.innerHeight)
+      : createDefaultViewportFramingState(),
   showStarfield: true,
   starfieldSource: "tycho2",
   starfieldProviderStates: {
@@ -220,6 +228,14 @@ export const useStore = create<AppState>((set) => ({
     }),
   setFocusId: (focusId) => set({ focusId }),
   setOverlayItems: (overlayItems) => set({ overlayItems }),
+  setViewportFraming: (viewportFraming) =>
+    set((state) =>
+      state.viewportFraming.signature === viewportFraming.signature &&
+      state.viewportFraming.viewportWidth === viewportFraming.viewportWidth &&
+      state.viewportFraming.viewportHeight === viewportFraming.viewportHeight
+        ? state
+        : { viewportFraming }
+    ),
   toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
   toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
   toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),

@@ -429,6 +429,7 @@ export const LayersPanel = ({
   return (
     <div
       ref={containerRef}
+      data-ui-framing="settings-rail"
       className="relative pointer-events-auto"
       data-tutorial-target="settings"
     >
