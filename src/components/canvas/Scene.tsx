@@ -52,6 +52,7 @@ import { useControls, Leva, folder, button } from "leva";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   ORBIT_MOUSE_BUTTONS,
+  accumulateWheelZoomSteps,
   calculateAdaptiveZoomSpeed,
 } from "../../lib/camera";
 
@@ -312,6 +313,62 @@ const DynamicZoom = ({
       controls.minDistance
     );
   });
+
+  return null;
+};
+
+const NormalizedWheelZoom = ({
+  controlsRef,
+}: {
+  controlsRef: RefObject<OrbitControlsImpl | null>;
+}) => {
+  const { gl } = useThree();
+  const pendingWheelStepsRef = useRef(0);
+
+  useEffect(() => {
+    const element = gl.domElement;
+
+    const handleWheelCapture = (event: WheelEvent) => {
+      const controls = controlsRef.current;
+      if (!controls || !controls.enabled || !controls.enableZoom) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const { stepCount, pendingSteps } = accumulateWheelZoomSteps({
+        pendingSteps: pendingWheelStepsRef.current,
+        deltaY: event.deltaY,
+        deltaMode: event.deltaMode,
+      });
+      pendingWheelStepsRef.current = pendingSteps;
+
+      if (stepCount === 0) return;
+
+      controls.dispatchEvent({ type: "start", target: controls });
+
+      for (let stepIndex = 0; stepIndex < Math.abs(stepCount); stepIndex++) {
+        const zoomScale = controls.getZoomScale();
+
+        if (stepCount > 0) {
+          controls.dollyOut(zoomScale);
+        } else {
+          controls.dollyIn(zoomScale);
+        }
+      }
+
+      controls.update();
+      controls.dispatchEvent({ type: "end", target: controls });
+    };
+
+    element.addEventListener("wheel", handleWheelCapture, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheelCapture, true);
+    };
+  }, [controlsRef, gl.domElement]);
 
   return null;
 };
@@ -743,6 +800,7 @@ export const Scene = () => {
           makeDefault
         />
         <DynamicZoom controlsRef={controlsRef} />
+        <NormalizedWheelZoom controlsRef={controlsRef} />
 
         <PostProcessingEffects
           bloomRef={bloomRef}

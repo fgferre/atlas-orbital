@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { AstroPhysics } from "../astrophysics";
 import {
+  accumulateWheelZoomSteps,
   ORBIT_MOUSE_BUTTONS,
   calculateAdaptiveZoomSpeed,
   createFocusTrackingState,
+  normalizeWheelDeltaToSteps,
   resolveFocusTrackingFrame,
 } from "./controls";
+
+const getBody = (id: string) => {
+  const body = SOLAR_SYSTEM_BODIES.find((candidate) => candidate.id === id);
+
+  if (!body) {
+    throw new Error(`Unknown body: ${id}`);
+  }
+
+  return body;
+};
 
 describe("camera controls calibration", () => {
   it("keeps adaptive zoom precise near the target and bounded in deep space", () => {
@@ -25,6 +39,64 @@ describe("camera controls calibration", () => {
 
     expect(closeToLargeBody).toBeLessThan(0.6);
     expect(farFromLargeBody).toBeGreaterThan(closeToLargeBody);
+  });
+
+  it("keeps realistic wheel calibration aligned with didactic for small focused bodies", () => {
+    const earth = getBody("earth");
+    const overviewDistance = 100;
+    const realisticMinDistance =
+      AstroPhysics.resolveSemanticBodyRadius({
+        body: earth,
+        scaleMode: "realistic",
+      }) * 1.1;
+    const didacticMinDistance =
+      AstroPhysics.resolveSemanticBodyRadius({
+        body: earth,
+        scaleMode: "didactic",
+      }) * 1.1;
+
+    const realisticSpeed = calculateAdaptiveZoomSpeed(
+      overviewDistance,
+      realisticMinDistance
+    );
+    const didacticSpeed = calculateAdaptiveZoomSpeed(
+      overviewDistance,
+      didacticMinDistance
+    );
+
+    expect(realisticMinDistance).toBeLessThan(1);
+    expect(didacticMinDistance).toBeGreaterThan(1);
+    expect(realisticSpeed).toBeLessThan(1);
+    expect(Math.abs(realisticSpeed - didacticSpeed)).toBeLessThan(0.1);
+  });
+
+  it("normalizes wheel delta magnitude into logical zoom steps", () => {
+    expect(normalizeWheelDeltaToSteps(100, 0)).toBe(1);
+    expect(normalizeWheelDeltaToSteps(3, 1)).toBe(1);
+    expect(normalizeWheelDeltaToSteps(-100, 0)).toBe(-1);
+  });
+
+  it("accumulates fragmented high-resolution wheel events without changing zoom math", () => {
+    const firstFragment = accumulateWheelZoomSteps({
+      pendingSteps: 0,
+      deltaY: 40,
+      deltaMode: 0,
+    });
+    const secondFragment = accumulateWheelZoomSteps({
+      pendingSteps: firstFragment.pendingSteps,
+      deltaY: 35,
+      deltaMode: 0,
+    });
+    const completedStep = accumulateWheelZoomSteps({
+      pendingSteps: secondFragment.pendingSteps,
+      deltaY: 25,
+      deltaMode: 0,
+    });
+
+    expect(firstFragment.stepCount).toBe(0);
+    expect(secondFragment.stepCount).toBe(0);
+    expect(completedStep.stepCount).toBe(1);
+    expect(completedStep.pendingSteps).toBe(0);
   });
 
   it("maps both right and middle drag to view translation while preserving left rotate", () => {
