@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-17T18:25:55.517Z",
-  "totalFixtures": 53,
+  "generatedAt": "2026-04-17T21:28:09.149Z",
+  "totalFixtures": 85,
   "bodies": [
     "ariel",
     "callisto",
@@ -32,21 +32,41 @@
     "vesta"
   ],
   "dates": [
-    "2020-01-01T00:00:00Z",
-    "1890-01-01T00:00:00Z",
-    "2020-07-01T00:00:00Z",
-    "2021-01-01T00:00:00Z"
+    "2025-01-01T00:00:00Z",
+    "2025-07-01T00:00:00Z",
+    "2026-01-01T00:00:00Z",
+    "1890-01-01T00:00:00Z"
   ],
   "fixtures": [
     {
       "bodyId": "ariel",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "ariel-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "ariel-2025-01-01.json"
+    },
+    {
+      "bodyId": "ariel",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "ariel-2025-07-01.json"
+    },
+    {
+      "bodyId": "ariel",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "ariel-2026-01-01.json"
     },
     {
       "bodyId": "callisto",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "callisto-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "callisto-2025-01-01.json"
+    },
+    {
+      "bodyId": "callisto",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "callisto-2025-07-01.json"
+    },
+    {
+      "bodyId": "callisto",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "callisto-2026-01-01.json"
     },
     {
       "bodyId": "ceres",
@@ -55,253 +75,393 @@
     },
     {
       "bodyId": "ceres",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "ceres-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "ceres-2025-01-01.json"
     },
     {
       "bodyId": "ceres",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "ceres-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "ceres-2025-07-01.json"
     },
     {
       "bodyId": "ceres",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "ceres-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "ceres-2026-01-01.json"
     },
     {
       "bodyId": "deimos",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "deimos-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "deimos-2025-01-01.json"
+    },
+    {
+      "bodyId": "deimos",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "deimos-2025-07-01.json"
+    },
+    {
+      "bodyId": "deimos",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "deimos-2026-01-01.json"
     },
     {
       "bodyId": "dione",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "dione-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "dione-2025-01-01.json"
+    },
+    {
+      "bodyId": "dione",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "dione-2025-07-01.json"
+    },
+    {
+      "bodyId": "dione",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "dione-2026-01-01.json"
     },
     {
       "bodyId": "earth",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "earth-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "earth-2025-01-01.json"
     },
     {
       "bodyId": "earth",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "earth-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "earth-2025-07-01.json"
     },
     {
       "bodyId": "earth",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "earth-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "earth-2026-01-01.json"
     },
     {
       "bodyId": "enceladus",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "enceladus-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "enceladus-2025-01-01.json"
+    },
+    {
+      "bodyId": "enceladus",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "enceladus-2025-07-01.json"
+    },
+    {
+      "bodyId": "enceladus",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "enceladus-2026-01-01.json"
     },
     {
       "bodyId": "europa",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "europa-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "europa-2025-01-01.json"
+    },
+    {
+      "bodyId": "europa",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "europa-2025-07-01.json"
+    },
+    {
+      "bodyId": "europa",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "europa-2026-01-01.json"
     },
     {
       "bodyId": "ganymede",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "ganymede-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "ganymede-2025-01-01.json"
+    },
+    {
+      "bodyId": "ganymede",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "ganymede-2025-07-01.json"
+    },
+    {
+      "bodyId": "ganymede",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "ganymede-2026-01-01.json"
     },
     {
       "bodyId": "iapetus",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "iapetus-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "iapetus-2025-01-01.json"
+    },
+    {
+      "bodyId": "iapetus",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "iapetus-2025-07-01.json"
+    },
+    {
+      "bodyId": "iapetus",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "iapetus-2026-01-01.json"
     },
     {
       "bodyId": "io",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "io-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "io-2025-01-01.json"
     },
     {
       "bodyId": "io",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "io-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "io-2025-07-01.json"
     },
     {
       "bodyId": "io",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "io-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "io-2026-01-01.json"
     },
     {
       "bodyId": "mars",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "mars-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "mars-2025-01-01.json"
     },
     {
       "bodyId": "mars",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "mars-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "mars-2025-07-01.json"
     },
     {
       "bodyId": "mars",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "mars-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "mars-2026-01-01.json"
     },
     {
       "bodyId": "mercury",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "mercury-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "mercury-2025-01-01.json"
     },
     {
       "bodyId": "mercury",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "mercury-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "mercury-2025-07-01.json"
     },
     {
       "bodyId": "mercury",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "mercury-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "mercury-2026-01-01.json"
     },
     {
       "bodyId": "mimas",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "mimas-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "mimas-2025-01-01.json"
+    },
+    {
+      "bodyId": "mimas",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "mimas-2025-07-01.json"
+    },
+    {
+      "bodyId": "mimas",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "mimas-2026-01-01.json"
     },
     {
       "bodyId": "miranda",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "miranda-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "miranda-2025-01-01.json"
+    },
+    {
+      "bodyId": "miranda",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "miranda-2025-07-01.json"
+    },
+    {
+      "bodyId": "miranda",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "miranda-2026-01-01.json"
     },
     {
       "bodyId": "moon",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "moon-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "moon-2025-01-01.json"
     },
     {
       "bodyId": "moon",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "moon-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "moon-2025-07-01.json"
     },
     {
       "bodyId": "moon",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "moon-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "moon-2026-01-01.json"
     },
     {
       "bodyId": "neptune",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "neptune-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "neptune-2025-01-01.json"
     },
     {
       "bodyId": "neptune",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "neptune-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "neptune-2025-07-01.json"
     },
     {
       "bodyId": "neptune",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "neptune-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "neptune-2026-01-01.json"
     },
     {
       "bodyId": "oberon",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "oberon-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "oberon-2025-01-01.json"
     },
     {
       "bodyId": "oberon",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "oberon-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "oberon-2025-07-01.json"
     },
     {
       "bodyId": "oberon",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "oberon-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "oberon-2026-01-01.json"
     },
     {
       "bodyId": "pallas",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "pallas-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "pallas-2025-01-01.json"
+    },
+    {
+      "bodyId": "pallas",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "pallas-2025-07-01.json"
+    },
+    {
+      "bodyId": "pallas",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "pallas-2026-01-01.json"
     },
     {
       "bodyId": "phobos",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "phobos-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "phobos-2025-01-01.json"
+    },
+    {
+      "bodyId": "phobos",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "phobos-2025-07-01.json"
+    },
+    {
+      "bodyId": "phobos",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "phobos-2026-01-01.json"
     },
     {
       "bodyId": "pluto",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "pluto-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "pluto-2025-01-01.json"
     },
     {
       "bodyId": "pluto",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "pluto-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "pluto-2025-07-01.json"
     },
     {
       "bodyId": "pluto",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "pluto-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "pluto-2026-01-01.json"
     },
     {
       "bodyId": "rhea",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "rhea-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "rhea-2025-01-01.json"
+    },
+    {
+      "bodyId": "rhea",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "rhea-2025-07-01.json"
+    },
+    {
+      "bodyId": "rhea",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "rhea-2026-01-01.json"
     },
     {
       "bodyId": "tethys",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "tethys-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "tethys-2025-01-01.json"
+    },
+    {
+      "bodyId": "tethys",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "tethys-2025-07-01.json"
+    },
+    {
+      "bodyId": "tethys",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "tethys-2026-01-01.json"
     },
     {
       "bodyId": "titan",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "titan-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "titan-2025-01-01.json"
     },
     {
       "bodyId": "titan",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "titan-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "titan-2025-07-01.json"
     },
     {
       "bodyId": "titan",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "titan-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "titan-2026-01-01.json"
     },
     {
       "bodyId": "titania",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "titania-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "titania-2025-01-01.json"
+    },
+    {
+      "bodyId": "titania",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "titania-2025-07-01.json"
+    },
+    {
+      "bodyId": "titania",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "titania-2026-01-01.json"
     },
     {
       "bodyId": "triton",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "triton-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "triton-2025-01-01.json"
     },
     {
       "bodyId": "triton",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "triton-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "triton-2025-07-01.json"
     },
     {
       "bodyId": "triton",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "triton-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "triton-2026-01-01.json"
     },
     {
       "bodyId": "umbriel",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "umbriel-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "umbriel-2025-01-01.json"
+    },
+    {
+      "bodyId": "umbriel",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "umbriel-2025-07-01.json"
+    },
+    {
+      "bodyId": "umbriel",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "umbriel-2026-01-01.json"
     },
     {
       "bodyId": "vesta",
-      "date": "2020-01-01T00:00:00Z",
-      "file": "vesta-2020-01-01.json"
+      "date": "2025-01-01T00:00:00Z",
+      "file": "vesta-2025-01-01.json"
     },
     {
       "bodyId": "vesta",
-      "date": "2020-07-01T00:00:00Z",
-      "file": "vesta-2020-07-01.json"
+      "date": "2025-07-01T00:00:00Z",
+      "file": "vesta-2025-07-01.json"
     },
     {
       "bodyId": "vesta",
-      "date": "2021-01-01T00:00:00Z",
-      "file": "vesta-2021-01-01.json"
+      "date": "2026-01-01T00:00:00Z",
+      "file": "vesta-2026-01-01.json"
     }
   ]
 }

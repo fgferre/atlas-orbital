@@ -1,0 +1,24 @@
+{
+  "bodyId": "deimos",
+  "horizonsCommand": "402",
+  "name": "Deimos",
+  "date": "2025-01-01T00:00:00Z",
+  "center": "500@499",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": 0.0001380514066914421,
+    "y": 0.00004652052369817009,
+    "z": -0.00005803963657569648,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": -0.0001921532588520789,
+    "y": 0.000743395435185898,
+    "z": 0.0001393588134805042,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-04-17T21:22:53.834Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27402%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40499%27&START_TIME=%272025-01-01T00%3A00%3A00Z%27&STOP_TIME=%272025-01-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

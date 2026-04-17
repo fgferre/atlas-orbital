@@ -1,0 +1,24 @@
+{
+  "bodyId": "triton",
+  "horizonsCommand": "801",
+  "name": "Triton",
+  "date": "2026-01-01T00:00:00Z",
+  "center": "500@899",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": -0.001901386999502486,
+    "y": -0.0001989923165998294,
+    "z": 0.001403159483996529,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": 0.0007213674876271653,
+    "y": 0.002071569795896185,
+    "z": 0.001271330531000321,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-04-17T21:24:16.274Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27801%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40899%27&START_TIME=%272026-01-01T00%3A00%3A00Z%27&STOP_TIME=%272026-01-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

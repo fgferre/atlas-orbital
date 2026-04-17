@@ -41,31 +41,31 @@ const MU_PARENT = {
 // Body → parent mapping. Pairs must match `satellites.ts` / `asteroids.ts`.
 const BODIES = {
   // Martian satellites
-  phobos: { parent: "mars", epoch: "2020-01-01" },
-  deimos: { parent: "mars", epoch: "2020-01-01" },
+  phobos: { parent: "mars", epoch: "2025-01-01" },
+  deimos: { parent: "mars", epoch: "2025-01-01" },
   // Galilean moons
-  io: { parent: "jupiter", epoch: "2020-01-01" },
-  europa: { parent: "jupiter", epoch: "2020-01-01" },
-  ganymede: { parent: "jupiter", epoch: "2020-01-01" },
-  callisto: { parent: "jupiter", epoch: "2020-01-01" },
+  io: { parent: "jupiter", epoch: "2025-01-01" },
+  europa: { parent: "jupiter", epoch: "2025-01-01" },
+  ganymede: { parent: "jupiter", epoch: "2025-01-01" },
+  callisto: { parent: "jupiter", epoch: "2025-01-01" },
   // Major Saturnian satellites
-  mimas: { parent: "saturn", epoch: "2020-01-01" },
-  enceladus: { parent: "saturn", epoch: "2020-01-01" },
-  tethys: { parent: "saturn", epoch: "2020-01-01" },
-  dione: { parent: "saturn", epoch: "2020-01-01" },
-  rhea: { parent: "saturn", epoch: "2020-01-01" },
-  titan: { parent: "saturn", epoch: "2020-01-01" },
-  iapetus: { parent: "saturn", epoch: "2020-01-01" },
+  mimas: { parent: "saturn", epoch: "2025-01-01" },
+  enceladus: { parent: "saturn", epoch: "2025-01-01" },
+  tethys: { parent: "saturn", epoch: "2025-01-01" },
+  dione: { parent: "saturn", epoch: "2025-01-01" },
+  rhea: { parent: "saturn", epoch: "2025-01-01" },
+  titan: { parent: "saturn", epoch: "2025-01-01" },
+  iapetus: { parent: "saturn", epoch: "2025-01-01" },
   // Major Uranian satellites
-  miranda: { parent: "uranus", epoch: "2020-01-01" },
-  ariel: { parent: "uranus", epoch: "2020-01-01" },
-  umbriel: { parent: "uranus", epoch: "2020-01-01" },
-  titania: { parent: "uranus", epoch: "2020-01-01" },
-  oberon: { parent: "uranus", epoch: "2020-01-01" },
+  miranda: { parent: "uranus", epoch: "2025-01-01" },
+  ariel: { parent: "uranus", epoch: "2025-01-01" },
+  umbriel: { parent: "uranus", epoch: "2025-01-01" },
+  titania: { parent: "uranus", epoch: "2025-01-01" },
+  oberon: { parent: "uranus", epoch: "2025-01-01" },
   // Asteroids
-  ceres: { parent: "sun", epoch: "2020-01-01" },
-  pallas: { parent: "sun", epoch: "2020-01-01" },
-  vesta: { parent: "sun", epoch: "2020-01-01" },
+  ceres: { parent: "sun", epoch: "2025-01-01" },
+  pallas: { parent: "sun", epoch: "2025-01-01" },
+  vesta: { parent: "sun", epoch: "2025-01-01" },
 };
 
 // --- Vector helpers ----------------------------------------------------------

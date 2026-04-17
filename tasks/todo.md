@@ -23,11 +23,18 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 
 ### Phase 3 tail (follow-on, lower priority)
 
-- [ ] Add 2020-07-01 and 2021-01-01 fixtures for the 12 satellites and
-      Pallas so they get multi-epoch coverage on par with the original 12.
-- [ ] Consider 2025-01-01 fixtures as "primary" epoch so short-period
-      moons (Io, Phobos, Mimas) stay within Phase-4 tolerance at
-      present-day simulation dates.
+- [x] Shift the analytical element epoch from 2020-01-01 to 2025-01-01
+      so short-period moons (Io, Phobos, Mimas) stay within Phase-4
+      tolerance at present-day simulation dates. Multi-epoch regression
+      dates moved to 2025-01-01 / 2025-07-01 / 2026-01-01 to match.
+      Obsolete 2020-_ / 2021-_ fixtures removed.
+- [ ] Expand `MULTI_EPOCH_BODIES` in `regression.test.ts` from the
+      current 12 representatives to all 28 analytical bodies, with
+      per-body drift envelopes in `MULTI_EPOCH_OVERRIDES` sized by
+      observed behaviour. The 2025-07-01 and 2026-01-01 fixtures for
+      all 28 bodies are already on disk.
+- [ ] Schedule an epoch refresh cadence (every 3–5 years) so drift never
+      exceeds 1° at present-day simulation dates.
 
 ### HYG Starfield — in-place replacement of the legacy tycho2 preset
 
@@ -89,7 +96,7 @@ Design decisions locked for HYG (approved by user, 2026-04-17):
       historical context or rewrite.
 - [ ] Clarify the Playwright acceptance gate in `PLAN.md` — the current
       command fails with `ERR_CONNECTION_REFUSED` unless `npm run
-    preview:test` is running first. Either document the two-step flow
+  preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
 ## Review — 2026-04-17 session

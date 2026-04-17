@@ -70,7 +70,7 @@ const REPRESENTATIVE_BODIES = [
   "deimos",
   "pallas",
 ] as const;
-const PREFERRED_BASELINE_DATE = "2020-01-01T00:00:00Z";
+const PREFERRED_BASELINE_DATE = "2025-01-01T00:00:00Z";
 
 /** Original 12 bodies that have fixtures at all three epochs. */
 const MULTI_EPOCH_BODIES = [
@@ -88,11 +88,16 @@ const MULTI_EPOCH_BODIES = [
   "triton",
 ] as const;
 
-/** Three epochs for multi-epoch drift checks (Priority B). */
+/**
+ * Three epochs for multi-epoch drift checks. Pinned to the same reference
+ * epoch used by the analytical element blocks (2025-01-01), plus a
+ * half-year and a full-year into the future so we watch the drift
+ * envelope grow in the direction users will most often scrub.
+ */
 const MULTI_EPOCH_DATES = [
-  "2020-01-01T00:00:00Z",
-  "2020-07-01T00:00:00Z",
-  "2021-01-01T00:00:00Z",
+  "2025-01-01T00:00:00Z",
+  "2025-07-01T00:00:00Z",
+  "2026-01-01T00:00:00Z",
 ] as const;
 
 /**

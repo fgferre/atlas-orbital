@@ -1,7 +1,7 @@
 /**
  * Asteroid provider (Ceres, Pallas, Vesta).
  *
- * Uses heliocentric J2000 ecliptic osculating elements at epoch 2020-01-01
+ * Uses heliocentric J2000 ecliptic osculating elements at epoch 2025-01-01
  * and propagates them with a two-body Kepler step. The 1900-2050 validity
  * window is enforced by the engine, not by this module — outside the window
  * the engine routes to the Kepler fallback.
@@ -10,7 +10,7 @@
  * against the corresponding Horizons fixture on disk, identical pipeline
  * as `satellites.ts`.
  *
- * Accuracy at the 2020-01-01 reference epoch: sub-arcsecond match to the
+ * Accuracy at the 2025-01-01 reference epoch: sub-arcsecond match to the
  * fixture. Multi-year drift is dominated by unmodeled planetary
  * perturbations (two-body propagation only); both Ceres and Vesta stay
  * well within the Phase-4 0.5° budget across ±1 year. Pallas has the
@@ -25,9 +25,9 @@ import { elementsToCartesian, ecliptic2ThreeJs, mod2Pi } from "./coordUtils";
 const D2R = Math.PI / 180;
 const K2 = 0.01720209895 ** 2; // heliocentric gravitational parameter, AU^3/day^2
 const MU_SUN = 1.0 * K2;
-// 2020-01-01T00:00:00Z UT expressed in TDB Julian Date (see satellites.ts
+// 2025-01-01T00:00:00Z UT expressed in TDB Julian Date (see satellites.ts
 // for the rationale; keeps the epoch aligned with the engine's jdTDB input).
-const EPOCH_2020_JD = 2458849.500861648;
+const EPOCH_2025_JD = 2460676.5008931975;
 
 interface HeliocentricOsculating {
   /** Reference epoch as Julian Date. */
@@ -41,36 +41,36 @@ interface HeliocentricOsculating {
 }
 
 /**
- * Heliocentric J2000 ecliptic osculating elements, all at epoch 2020-01-01.
+ * Heliocentric J2000 ecliptic osculating elements, all at epoch 2025-01-01.
  * Emitted by `scripts/derive-elements-from-fixtures.js`.
  */
 const ASTEROIDS: Record<string, HeliocentricOsculating> = {
   ceres: {
-    epochJD: EPOCH_2020_JD,
-    aAU: 2.769289284,
-    e: 0.076875,
-    iDeg: 10.591278,
-    OmegaDeg: 80.30119,
-    omegaDeg: 73.808967,
-    M0Deg: 130.31614,
+    epochJD: EPOCH_2025_JD,
+    aAU: 2.766360231,
+    e: 0.079279,
+    iDeg: 10.587933,
+    OmegaDeg: 80.254308,
+    omegaDeg: 73.262383,
+    M0Deg: 162.150254,
   },
   pallas: {
-    epochJD: EPOCH_2020_JD,
-    aAU: 2.773200573,
-    e: 0.230183,
-    iDeg: 34.830715,
-    OmegaDeg: 173.0577,
-    omegaDeg: 310.133778,
-    M0Deg: 112.795738,
+    epochJD: EPOCH_2025_JD,
+    aAU: 2.770234763,
+    e: 0.2305,
+    iDeg: 34.922344,
+    OmegaDeg: 172.901824,
+    omegaDeg: 310.894699,
+    M0Deg: 142.309832,
   },
   vesta: {
-    epochJD: EPOCH_2020_JD,
-    aAU: 2.361908656,
-    e: 0.088573,
-    iDeg: 7.141815,
-    OmegaDeg: 103.809289,
-    omegaDeg: 150.835776,
-    M0Deg: 163.37562,
+    epochJD: EPOCH_2025_JD,
+    aAU: 2.361078966,
+    e: 0.090021,
+    iDeg: 7.143939,
+    OmegaDeg: 103.703637,
+    omegaDeg: 151.639146,
+    M0Deg: 298.710084,
   },
 };
 

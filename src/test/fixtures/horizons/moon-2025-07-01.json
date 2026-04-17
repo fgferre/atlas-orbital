@@ -1,0 +1,24 @@
+{
+  "bodyId": "moon",
+  "horizonsCommand": "301",
+  "name": "Moon",
+  "date": "2025-07-01T00:00:00Z",
+  "center": "500@399",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": -0.002586760954537159,
+    "y": 0.0005135361591149317,
+    "z": 0.000007869818089962807,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": -0.0001419055918162472,
+    "y": -0.0005533825750737994,
+    "z": -0.00005039895025180886,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-04-17T21:22:46.043Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27301%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40399%27&START_TIME=%272025-07-01T00%3A00%3A00Z%27&STOP_TIME=%272025-07-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}
