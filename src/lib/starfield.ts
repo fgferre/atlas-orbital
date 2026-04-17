@@ -143,21 +143,31 @@ const DEFAULT_HYG_TIER: HygTier = "full";
 
 /**
  * Map the resolved device quality profile to the HYG tier file the
- * browser should fetch. The tier sizes were chosen so each profile stays
- * inside a sensible payload budget:
- *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / slow network)
- *   balanced    → medium (~160 KB,  ~10 000 stars — naked-eye sky)
- *   high        → high   (~790 KB,  ~50 000 stars — amateur binocular)
- *   ultra       → full   (~1.7 MB, ~109 000 stars — every surviving HYG row)
+ * browser should fetch. The mapping is biased toward visual density —
+ * the legacy tycho2 renderer always loaded ~118 000 stars, so capping
+ * "balanced" at 10 000 made the sky look dramatically thinner than
+ * users expected. The revised mapping keeps the constrained tier for
+ * genuinely slow networks and raises every other profile toward the
+ * full catalogue:
+ *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / 3G)
+ *   balanced    → high   (~810 KB,   ~50 000 stars — full naked-eye +
+ *                         binocular sky, fits comfortably in a single
+ *                         HTTP response on any broadband link)
+ *   high        → full   (~1.77 MB, ~109 000 stars — every surviving
+ *                         HYG row; same payload as the legacy tycho2)
+ *   ultra       → full   (~1.77 MB, ~109 000 stars — ceiling)
+ * The `medium` tier binary is still produced by the offline pipeline
+ * and remains addressable for anyone overriding the default at runtime
+ * (see the Fase-2 density override if/when it ships).
  */
 export function hygTierForQuality(name: ResolvedQualityName): HygTier {
   switch (name) {
     case "constrained":
       return "low";
     case "balanced":
-      return "medium";
-    case "high":
       return "high";
+    case "high":
+      return "full";
     case "ultra":
       return "full";
   }

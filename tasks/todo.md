@@ -8,6 +8,59 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 
 ## Active
 
+### HYG v4.2 density restoration — 2026-04-17 session (done)
+
+User reports the new HYG preset looks dramatically less dense than the
+legacy tycho2 sky. Diagnosis confirmed two compound causes:
+
+1. **Tier selection starves the render.** `hygTierForQuality()` maps
+   `balanced → medium` (10 k stars) whereas tycho2 always loaded the
+   full ~118 k catalog. Default `auto` mode resolves to `balanced` on
+   any device with score ∈ [−1, 1] — i.e. most 2026 dev machines.
+2. **Pogson shader collapses faint stars to sub-pixel.** Clamp floors
+   `baseSize >= 1.5 px`, `alpha >= 0.08` at mag 6.5 kill the faint
+   half of the catalog (mag ≥ 6). Old shader's linear `mix(3.0, 40.0, …)`
+   - alpha floor 0.1 kept every star visibly solid.
+
+- [x] Write plan to tasks/todo.md (L8 / CLAUDE.md literal).
+- [x] **Fase 1 — shader floor + tier redistribution.**
+  - [x] Raise clamps in `src/components/canvas/Starfield.tsx`:
+        `baseSize` floor 1.5 → 2.5 px; `vBrightness` floor 0.08 → 0.20.
+        Pogson curve intact at the bright end (mag ≤ 2 still scales
+        up to 60 px).
+  - [x] Redistribute `hygTierForQuality()` in `src/lib/starfield.ts`:
+        `balanced → high` (50 k / 810 KB gzip) and `high → full`
+        (109 k / 1.77 MB). `constrained → low` and `ultra → full`
+        unchanged.
+  - [x] Tier-table comment block rewritten with new payload sizes and
+        rationale (density bias over bandwidth on broadband).
+  - [x] `didacticBias = −0.9` re-checked under new Pogson curve — the
+        1.51× size multiplier it produces matches the legacy 1.5×
+        target, so no adjustment needed.
+- [x] **Fase 1 — verification.**
+  - [x] `npm run lint` clean.
+  - [x] `npm run test:run` green — 287/287 across 30 files.
+  - [x] Browser verify: fresh preview served `hyg-v1-full.bin.gz`
+        (1.77 MB, ~109 400 stars) on page load, confirming the tier
+        fix; rendered sky showed clearly dense faint-star field with
+        visible B-V colour variation. NASA preset still loads the
+        legacy asset for side-by-side visual sanity.
+- [x] **Fase 2 — custom density override** — **not shipped**.
+      Existing Quality control already exposes the full tier via
+      `ultra`, and Phase 1 restored density for every non-constrained
+      profile. Adding a separate "Starfield density" dropdown would
+      duplicate that knob and widen the Settings surface without a
+      user complaint to justify it (AGENTS.md #16: rationalization,
+      simplest way to achieve the goal). If a real need surfaces
+      later — e.g. a user with a mid-tier laptop preferring lower
+      density for readability — the one-dropdown design outlined in
+      the original plan remains valid and cheap to add on top.
+- [x] Update review + lessons (below; `tasks/lessons.md` L11).
+
+Deliberately **not** in scope (AGENTS.md #3 — smallest diff):
+offline binary rebuild, proper-motion math, B-V curve, tilt, hover
+picker, NASA renderer.
+
 ### Phase 3 — Horizons validation expansion (done)
 
 - [x] `scripts/generate-horizons-fixtures.js` generalized (multi-body,
@@ -82,6 +135,54 @@ All five sub-phases shipped:
       command fails with `ERR_CONNECTION_REFUSED` unless `npm run
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
+
+## Review — HYG density restoration (2026-04-17 continuation)
+
+Follow-up after the density complaint. Phase 1 shipped two surgical
+changes; Phase 2 was consciously skipped.
+
+- **`src/components/canvas/Starfield.tsx`** — shader vertex stage
+  floors raised: `baseSize` clamp `1.5 → 2.5 px`, `vBrightness`
+  clamp `0.08 → 0.20`. Expanded the adjacent comment block to
+  explain the physical motivation (atmospheric PSF, glare, pupil
+  adaptation) so a future reader does not "optimise" the floors back
+  down. Pogson curve unchanged at the bright end.
+- **`src/lib/starfield.ts`** — `hygTierForQuality()` remapped:
+  `balanced → high` (was `medium`), `high → full` (was `high`).
+  `constrained → low` and `ultra → full` unchanged. Comment header
+  rewritten so the mapping's rationale (density bias over bandwidth
+  on modern broadband) is visible at the call site.
+
+Phase 2 (a per-subsystem "Starfield density" dropdown in the Settings
+panel, mirroring AAA per-subsystem controls) was evaluated and
+dropped: the existing Quality control already exposes the full tier
+via `ultra`, so the new dropdown would duplicate that knob. Keeping
+the Settings surface small is a more honest fix than adding a second
+density control with a different label.
+
+Verification:
+
+- `npm run lint` clean.
+- `npm run test:run` 287/287 green across 30 test files.
+- Fresh preview instance confirmed `hyg-v1-full.bin.gz` (1.77 MB,
+  ~109 400 stars) served on page load — i.e. the tier remap is live
+  — and the rendered sky shows faint stars visibly resolved with
+  B-V colour variation.
+
+Note (AGENTS.md #8, honest limits): a genuinely constrained device
+still gets the 500-star low tier with no in-app override. That is
+intentional — the low tier exists for phones and 3G links that
+cannot carry the full 1.77 MB payload — but a user with a mid-tier
+laptop who prefers lower density for readability has no UI knob to
+request it short of flipping Quality to `constrained`, which also
+downgrades shadows and shader passes they may want to keep. If that
+becomes a real request, the Phase 2 dropdown design stays on file.
+
+Lessons: `tasks/lessons.md` L11 — Vite HMR state accumulates across
+in-session edits; the Claude preview can look "stuck at 8%" when
+the actual problem is a client-side `BOOT_STAGE` that never advances
+because eight vite WebSocket clients are now fighting over the same
+R3F canvas. Fix: `preview_stop` → `preview_start` flushes it.
 
 ## Review — 2026-04-17 session
 

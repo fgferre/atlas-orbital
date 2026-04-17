@@ -169,3 +169,23 @@ tolerances silently.
 
 **Code marker:** `MULTI_EPOCH_OVERRIDES` in `regression.test.ts` with
 physical-reason comments.
+
+### L11. Claude Preview HMR state accumulates across in-session edits
+
+**Context:** During HYG density verification I edited two files in
+quick succession and then asked for a screenshot of the running
+preview. `preview_screenshot` timed out at 30 s. The logs showed the
+client stuck at `BOOT_STAGE: BOOT` 8 % with the canvas frozen at the
+default `300×150`. Console revealed **eight** accumulated vite
+WebSocket clients competing for the same R3F canvas — HMR had
+re-mounted the app on each edit but not torn down the previous
+handlers, so subsequent frames could never advance past boot.
+
+**Rule:** When the preview misbehaves after a burst of in-session
+edits — stuck boot stage, frozen canvas, screenshot timeouts,
+multiple WebSocket clients in the logs — treat it as an HMR cascade,
+not an app bug. `preview_stop` followed by `preview_start` gives a
+clean state; the app itself was fine. Do not spend time bisecting
+runtime code when the logs already named the failure mode.
+
+**Code marker:** no code change. Operational only.
