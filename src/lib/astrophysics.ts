@@ -148,6 +148,13 @@ export interface DisplayPositionContext {
   scaleMode?: ScaleMode;
 }
 
+export interface PhysicalToDisplayPositionContext {
+  body: CelestialBody;
+  parentBody?: CelestialBody | null;
+  positionAU: THREE.Vector3;
+  scaleMode?: ScaleMode;
+}
+
 export interface SemanticBodyRadiusContext {
   body: CelestialBody;
   scaleMode?: ScaleMode;
@@ -160,7 +167,7 @@ export interface FocusExtentContext {
   scaleMode?: ScaleMode;
 }
 
-export interface ShadowExtentContext extends FocusExtentContext {}
+export type ShadowExtentContext = FocusExtentContext;
 
 export class AstroPhysics {
   private static interpolateHermite(
@@ -260,6 +267,10 @@ export class AstroPhysics {
     return Number.parseFloat(numeric[0]);
   }
 
+  /**
+   * Calculate position using Keplerian elements
+   * @deprecated Use orbitalEngine.calculatePosition() instead. This method is kept for backward compatibility.
+   */
   static calculatePhysicalLocalPositionAU(
     orbitParams: OrbitParams,
     date: Date
@@ -444,7 +455,7 @@ export class AstroPhysics {
       15
     );
 
-    let displayDistance = localParentRadii * parentSemanticRadius;
+    const displayDistance = localParentRadii * parentSemanticRadius;
     let minimumDistance = parentSemanticRadius + childSemanticRadius + 2;
 
     if (parentBody.ringSystem) {
@@ -514,13 +525,34 @@ export class AstroPhysics {
     }
 
     const posAU = this.calculatePhysicalLocalPositionAU(orbitParams, date);
-    const distanceAU = posAU.length();
+    return this.mapPhysicalPositionToDisplay({
+      body,
+      parentBody,
+      positionAU: posAU,
+      scaleMode,
+    });
+  }
 
-    if (distanceAU <= 0 || posAU.lengthSq() <= 0) {
+  static mapPhysicalPositionToDisplay({
+    body,
+    parentBody = null,
+    positionAU,
+    scaleMode = "realistic",
+  }: PhysicalToDisplayPositionContext): THREE.Vector3 {
+    if (scaleMode === "realistic") {
+      return positionAU.clone().multiplyScalar(AU_TO_3D_UNITS);
+    }
+
+    if (body.type === "star" || positionAU.lengthSq() <= 0) {
       return new THREE.Vector3(0, 0, 0);
     }
 
-    const direction = posAU.clone().normalize();
+    const distanceAU = positionAU.length();
+    if (distanceAU <= 0) {
+      return new THREE.Vector3(0, 0, 0);
+    }
+
+    const direction = positionAU.clone().normalize();
     const orbitClass = this.classifyDidacticOrbit(body, parentBody);
 
     if (orbitClass === "heliocentric" || !parentBody) {
@@ -566,7 +598,6 @@ export class AstroPhysics {
   static resolveFocusExtent({
     body,
     bodies,
-    date: _date,
     scaleMode = "realistic",
   }: FocusExtentContext): number {
     const semanticBodyRadius = this.resolveSemanticBodyRadius({

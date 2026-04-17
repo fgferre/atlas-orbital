@@ -3,6 +3,10 @@ import { createPortal, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
+import {
+  resolveOrbitalDisplayPosition,
+  getOrbitalDisplayOrbitPoints,
+} from "../../lib/orbital";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
@@ -24,6 +28,7 @@ const PARENT_BY_ID = Object.fromEntries(
   SOLAR_SYSTEM_BODIES.map((body) => [body.id, body.parentId ?? null])
 );
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
+const MAX_ORBIT_CACHE_ENTRIES = 256;
 
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
@@ -50,6 +55,22 @@ type OrbitLineMaterial = THREE.Material & {
     opacity?: { value: number };
   };
 };
+
+function getOrbitDateBucket(body: CelestialBody, date: Date): string {
+  const meanMotion = Math.abs(body.orbit.n ?? 0);
+  if (!Number.isFinite(meanMotion) || meanMotion <= 0) {
+    return "static";
+  }
+
+  const orbitalPeriodDays = 360 / meanMotion;
+  const bucketDays = THREE.MathUtils.clamp(
+    orbitalPeriodDays / 360,
+    body.type === "moon" ? 1 / 24 : 0.5,
+    30
+  );
+
+  return `${Math.floor(date.getTime() / (bucketDays * 86400000))}`;
+}
 
 function createRadialGradientTexture(size: number) {
   if (typeof document === "undefined") return null;
@@ -1197,6 +1218,7 @@ export const Planet = ({
   const focusId = useStore((state) => state.focusId);
   const showProgradeVector = useStore((state) => state.showProgradeVector);
   const visualPreset = useStore((state) => state.visualPreset);
+  const datetime = useStore((state) => state.datetime);
   const vectorIntensity = VISUAL_PRESETS[visualPreset]?.vectorIntensity ?? 1;
 
   const progradeColors = useMemo(() => {
@@ -1259,6 +1281,7 @@ export const Planet = ({
     return 0.02;
   }, [
     body.id,
+    body.orbit.a,
     body.parentId,
     body.type,
     declutterOrbits,
@@ -1289,7 +1312,14 @@ export const Planet = ({
     if (body.type === "planet" || body.type === "dwarf") return 2;
 
     return 3;
-  }, [body.id, body.parentId, body.type, focusAncestorIds, focusId]);
+  }, [
+    body.id,
+    body.orbit.a,
+    body.parentId,
+    body.type,
+    focusAncestorIds,
+    focusId,
+  ]);
 
   const baseTextureSalience = useMemo(() => {
     if (body.id === "sun") return 1;
@@ -1302,6 +1332,10 @@ export const Planet = ({
   const parentBody = useMemo(
     () => (body.parentId ? (BODIES_BY_ID.get(body.parentId) ?? null) : null),
     [body.parentId]
+  );
+  const orbitDateBucket = useMemo(
+    () => getOrbitDateBucket(body, datetime),
+    [body, datetime]
   );
 
   // Orbit points with adaptive resolution
@@ -1320,6 +1354,7 @@ export const Planet = ({
       focusId,
       orbitProfile: qualityProfileName,
       scaleMode,
+      dateBucket: orbitDateBucket,
     });
 
     const cachedPoints = ORBIT_POINTS_CACHE.get(cacheKey);
@@ -1327,19 +1362,25 @@ export const Planet = ({
       return cachedPoints;
     }
 
-    const pts = AstroPhysics.getDisplayOrbitPoints({
+    const pts = getOrbitalDisplayOrbitPoints({
       body,
       parentBody,
+      date: datetime,
       segments,
       scaleMode,
     });
 
+    if (ORBIT_POINTS_CACHE.size >= MAX_ORBIT_CACHE_ENTRIES) {
+      ORBIT_POINTS_CACHE.clear();
+    }
     ORBIT_POINTS_CACHE.set(cacheKey, pts);
     return pts;
   }, [
     body,
     declutterOrbits,
+    datetime,
     orbitSalience,
+    orbitDateBucket,
     parentBody,
     focusId,
     qualityProfileName,
@@ -1349,10 +1390,9 @@ export const Planet = ({
   useFrame((state) => {
     const { camera, size } = state;
     if (!groupRef.current) return;
-    const { datetime } = useStore.getState();
 
     // 1. Update Group Position (Orbital motion)
-    const pos = AstroPhysics.resolveDisplayLocalPosition({
+    const pos = resolveOrbitalDisplayPosition({
       body,
       parentBody,
       date: datetime,
@@ -1440,7 +1480,7 @@ export const Planet = ({
         const dtMs = dtDays * 86400000;
 
         const later = new Date(datetime.getTime() + dtMs);
-        const posLater = AstroPhysics.resolveDisplayLocalPosition({
+        const posLater = resolveOrbitalDisplayPosition({
           body,
           parentBody,
           date: later,

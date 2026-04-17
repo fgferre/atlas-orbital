@@ -13,6 +13,8 @@ dist-ssr
 coverage
 *.local
 output
+test-results/
+playwright-report/
 
 # Editor directories and files
 .vscode/*
@@ -27,3 +29,9 @@ output
 
 # Legacy/reference files (not needed in version control)
 _legacy/
+
+# External harness/tooling workspaces kept outside Atlas scope
+oh-my-openagent-dual-oracle/
+.sisyphus/
+.opencode/
+src/hooks/dual-oracle-loop/

@@ -93,16 +93,25 @@ export const CreditsModal = () => {
               <ul className="space-y-3">
                 <CreditItem
                   title={STARFIELD_SOURCE_METADATA.nasa.creditsTitle}
-                  description={STARFIELD_SOURCE_METADATA.nasa.creditsDescription}
+                  description={
+                    STARFIELD_SOURCE_METADATA.nasa.creditsDescription
+                  }
                   link={STARFIELD_SOURCE_METADATA.nasa.creditsLink}
                 />
                 <CreditItem
                   title={STARFIELD_SOURCE_METADATA.tycho2.creditsTitle}
-                  description={STARFIELD_SOURCE_METADATA.tycho2.creditsDescription}
+                  description={
+                    STARFIELD_SOURCE_METADATA.tycho2.creditsDescription
+                  }
                 />
                 <CreditItem
-                  title="NASA JPL Horizons (reference checks)"
-                  description="Used as an external cross-check reference. The runtime itself propagates simplified J2000 keplerian elements from repo-local data."
+                  title="NASA JPL Horizons"
+                  description="Reference ephemeris for validation and fixture generation. Provides high-precision positions for comparison testing."
+                  link="https://ssd.jpl.nasa.gov/horizons/"
+                />
+                <CreditItem
+                  title="Orbital Calculation"
+                  description="Current runtime uses Keplerian orbital elements. Horizons fixtures are used for regression validation, while VSOP2013, TOP2013, ELP2000, MARSSAT, L1, TASS17, GUST86, and EPHASTER remain planned and are not active in the web app yet."
                 />
               </ul>
             </div>

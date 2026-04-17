@@ -63,6 +63,18 @@ describe("getOrbitCacheKey", () => {
     ).toBe("moon:realistic:2048");
   });
 
+  it("appends the orbit date bucket when supplied", () => {
+    expect(
+      getOrbitCacheKey({
+        bodyId: "moon",
+        focusId: "earth",
+        orbitProfile: "balanced",
+        scaleMode: "realistic",
+        dateBucket: "2458849",
+      })
+    ).toBe("moon:realistic:2048:2458849");
+  });
+
   it("keeps focused orbits on a distinct key via their higher segment count", () => {
     const focused = getOrbitCacheKey({
       bodyId: "earth",

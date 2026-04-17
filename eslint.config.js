@@ -6,7 +6,16 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  globalIgnores([
+    "dist",
+    "coverage",
+    "test-results/**",
+    "playwright-report/**",
+    "oh-my-openagent-dual-oracle/**",
+    ".sisyphus/**",
+    ".opencode/**",
+    "src/hooks/dual-oracle-loop/**",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

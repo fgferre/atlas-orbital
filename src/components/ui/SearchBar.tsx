@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useId,
@@ -63,24 +64,30 @@ export const SearchBar = ({
     []
   );
 
-  const closeSearch = (restoreFocus = false) => {
-    setActivePanel(null);
-    setQuery("");
-    setActiveIndex(-1);
+  const closeSearch = useCallback(
+    (restoreFocus = false) => {
+      setActivePanel(null);
+      setQuery("");
+      setActiveIndex(-1);
 
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => buttonRef.current?.focus());
-    }
-  };
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => buttonRef.current?.focus());
+      }
+    },
+    [setActivePanel]
+  );
 
-  const openSearch = () => {
+  const openSearch = useCallback(() => {
     setActivePanel("search");
-  };
+  }, [setActivePanel]);
 
-  const handleSelect = (id: string) => {
-    selectId(id);
-    closeSearch();
-  };
+  const handleSelect = useCallback(
+    (id: string) => {
+      selectId(id);
+      closeSearch();
+    },
+    [closeSearch, selectId]
+  );
 
   useDialogFocus({
     isOpen: isOpen && isMobile,
@@ -109,7 +116,7 @@ export const SearchBar = ({
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isOpen]);
+  }, [closeSearch, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -119,8 +126,12 @@ export const SearchBar = ({
       return;
     }
 
-    setQuery("");
-    setActiveIndex(-1);
+    const resetFrame = window.requestAnimationFrame(() => {
+      setQuery("");
+      setActiveIndex(-1);
+    });
+
+    return () => window.cancelAnimationFrame(resetFrame);
   }, [isOpen]);
 
   const resolvedActiveIndex =

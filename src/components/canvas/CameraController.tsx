@@ -245,6 +245,9 @@ export const CameraController = () => {
     scene,
     size.height,
     size.width,
+    viewportFraming.compositionOffsetXPx,
+    viewportFraming.compositionOffsetYPx,
+    viewportFraming.usableRect,
   ]);
 
   useEffect(() => {

@@ -124,8 +124,7 @@ export const InitialCameraAnimation = () => {
     size.width,
     viewportFraming.compositionOffsetXPx,
     viewportFraming.compositionOffsetYPx,
-    viewportFraming.usableRect.height,
-    viewportFraming.usableRect.width,
+    viewportFraming.usableRect,
   ]);
 
   const syncControlsToSun = useCallback(() => {

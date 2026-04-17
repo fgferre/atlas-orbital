@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
-import { resolveSmartSunLightFrame } from "./SmartSunLight";
+import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
 
 describe("resolveSmartSunLightFrame", () => {
   it("keeps the directional light aligned with the solar direction", () => {

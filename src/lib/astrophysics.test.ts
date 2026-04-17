@@ -130,6 +130,37 @@ describe("AstroPhysics didactic geometry", () => {
     }
   });
 
+  it("keeps the didactic transform stable when starting from a physical orbital position", () => {
+    const cases = [
+      ["earth", "sun"],
+      ["moon", "earth"],
+      ["io", "jupiter"],
+    ] as const;
+
+    for (const [childId, parentId] of cases) {
+      const child = getBody(childId);
+      const parent = getBody(parentId);
+      const physicalPosition = AstroPhysics.calculatePhysicalLocalPositionAU(
+        child.orbit,
+        TEST_DATE
+      );
+      const mapped = AstroPhysics.mapPhysicalPositionToDisplay({
+        body: child,
+        parentBody: parent,
+        positionAU: physicalPosition,
+        scaleMode: "didactic",
+      });
+      const legacy = AstroPhysics.resolveDisplayLocalPosition({
+        body: child,
+        parentBody: parent,
+        date: TEST_DATE,
+        scaleMode: "didactic",
+      });
+
+      expect(mapped.distanceTo(legacy)).toBeLessThan(1e-9);
+    }
+  });
+
   it("keeps heliocentric didactic anchors strictly increasing", () => {
     const anchors = [
       0.39, 0.72, 1.0, 1.52, 2.77, 5.2, 9.58, 19.2, 30.05, 39.48,

@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-04-17T13:33:04.965Z",
+  "totalFixtures": 12,
+  "bodies": [
+    "mercury",
+    "earth",
+    "mars",
+    "moon",
+    "neptune",
+    "pluto",
+    "io",
+    "titan",
+    "oberon",
+    "ceres",
+    "vesta",
+    "triton"
+  ],
+  "dates": ["2020-01-01T00:00:00Z"],
+  "fixtures": [
+    {
+      "bodyId": "mercury",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "mercury-2020-01-01.json"
+    },
+    {
+      "bodyId": "earth",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "earth-2020-01-01.json"
+    },
+    {
+      "bodyId": "mars",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "mars-2020-01-01.json"
+    },
+    {
+      "bodyId": "moon",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "moon-2020-01-01.json"
+    },
+    {
+      "bodyId": "neptune",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "neptune-2020-01-01.json"
+    },
+    {
+      "bodyId": "pluto",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "pluto-2020-01-01.json"
+    },
+    {
+      "bodyId": "io",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "io-2020-01-01.json"
+    },
+    {
+      "bodyId": "titan",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "titan-2020-01-01.json"
+    },
+    {
+      "bodyId": "oberon",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "oberon-2020-01-01.json"
+    },
+    {
+      "bodyId": "ceres",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "ceres-2020-01-01.json"
+    },
+    {
+      "bodyId": "vesta",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "vesta-2020-01-01.json"
+    },
+    {
+      "bodyId": "triton",
+      "date": "2020-01-01T00:00:00Z",
+      "file": "triton-2020-01-01.json"
+    }
+  ]
+}

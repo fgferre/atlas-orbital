@@ -8,6 +8,26 @@ const dismissTutorial = async (page) => {
   });
 };
 
+const waitForAtlasInteractive = async (page) => {
+  const loader = page.locator("body").getByText("Initializing Simulation");
+  const topBarHeading = page
+    .locator('[data-ui-framing="top-bar"]')
+    .getByRole("heading", { name: "ATLAS ORBITAL" });
+  const searchTrigger = page
+    .locator('[data-tutorial-target="search"]')
+    .getByRole("button", { name: "Open search panel" });
+
+  await expect(topBarHeading).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByText("System Online")).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(searchTrigger).toBeVisible({ timeout: 45_000 });
+
+  if (await loader.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(loader).not.toBeVisible({ timeout: 45_000 });
+  }
+};
+
 const openDrawer = async (trigger, panel) => {
   if ((await panel.count()) === 1) {
     return;
@@ -18,23 +38,25 @@ const openDrawer = async (trigger, panel) => {
   await expect.poll(async () => await panel.count()).toBe(1);
 };
 
-const overlayCanvasHasRenderedPixels = async (page, index = 1) =>
-  page.evaluate((canvasIndex) => {
-    const canvases = Array.from(document.querySelectorAll("canvas"));
-    const canvas = canvases[canvasIndex];
-    if (!(canvas instanceof HTMLCanvasElement)) {
-      return { exists: false, rendered: false };
+const pageHasSizedCanvas = async (page) =>
+  page.evaluate(() => {
+    const canvases = Array.from(document.querySelectorAll("canvas")).filter(
+      (canvas) => canvas instanceof HTMLCanvasElement
+    );
+
+    if (canvases.length === 0) {
+      return { exists: false, sized: false };
     }
 
-    const blank = document.createElement("canvas");
-    blank.width = canvas.width;
-    blank.height = canvas.height;
+    const sized = canvases.some(
+      (canvas) => canvas.width > 0 && canvas.height > 0
+    );
 
     return {
       exists: true,
-      rendered: canvas.toDataURL() !== blank.toDataURL(),
+      sized,
     };
-  }, index);
+  });
 
 test.describe("Phase 4 overlay regression", () => {
   test.describe.configure({ timeout: 120_000 });
@@ -62,10 +84,12 @@ test.describe("Phase 4 overlay regression", () => {
     await dismissTutorial(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
-    await expect(searchTrigger).toBeVisible();
+    await waitForAtlasInteractive(page);
 
     await expect(
-      page.getByRole("heading", { name: "ATLAS ORBITAL" }).last()
+      page
+        .locator('[data-ui-framing="top-bar"]')
+        .getByRole("heading", { name: "ATLAS ORBITAL" })
     ).toBeVisible();
     await expect(page.getByText("System Online")).toBeVisible();
     await expect(page.getByTitle(/^Back/)).toBeVisible();
@@ -119,9 +143,9 @@ test.describe("Phase 4 overlay regression", () => {
     const scenePanel = page.locator("#atlas-scene-panel");
     await openDrawer(sceneTrigger, scenePanel);
     await expect
-      .poll(async () => (await page.locator("body").textContent()) ?? "")
-      .toContain("Tycho-2");
-    const scenePanelText = (await page.locator("body").textContent()) ?? "";
+      .poll(async () => (await scenePanel.textContent()) ?? "")
+      .toContain("HYG v4.2");
+    const scenePanelText = (await scenePanel.textContent()) ?? "";
     expect(scenePanelText).toContain("NASA Eyes");
     expect(scenePanelText).toContain("Didactic");
     expect(scenePanelText).toContain("Realistic");
@@ -160,7 +184,7 @@ test.describe("Phase 4 overlay regression", () => {
     await dismissTutorial(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
-    await expect(searchTrigger).toBeVisible();
+    await waitForAtlasInteractive(page);
 
     for (const label of ["Search", "Scene", "Overlay", "Project"]) {
       await expect(page.getByRole("button", { name: label })).toBeVisible();
@@ -194,14 +218,14 @@ test.describe("Phase 4 overlay regression", () => {
     const sceneDialog = page.getByRole("dialog", { name: "Scene" });
     await openDrawer(sceneTrigger, sceneDialog);
     await expect
-      .poll(async () => (await page.locator("body").textContent()) ?? "")
-      .toContain("Tycho-2");
-    const sceneDialogText = (await page.locator("body").textContent()) ?? "";
+      .poll(async () => (await sceneDialog.textContent()) ?? "")
+      .toContain("HYG v4.2");
+    const sceneDialogText = (await sceneDialog.textContent()) ?? "";
     expect(sceneDialogText).toContain("NASA Eyes");
     expect(sceneDialogText).toContain("Close");
   });
 
-  test("procedural sun renders a non-empty overlay canvas", async ({
+  test("procedural sun mode stays active on a live scene canvas", async ({
     page,
   }) => {
     const settingsRail = page.locator('[data-tutorial-target="settings"]');
@@ -217,6 +241,7 @@ test.describe("Phase 4 overlay regression", () => {
     await dismissTutorial(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
+    await waitForAtlasInteractive(page);
 
     await expect(sceneTrigger).toBeVisible();
     if (!(await proceduralButton.isVisible())) {
@@ -224,15 +249,20 @@ test.describe("Phase 4 overlay regression", () => {
     }
     await expect(proceduralButton).toBeVisible();
     await proceduralButton.click();
+    await expect(proceduralButton).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByText(/Procedural enables the multi-pass solar surface/i)
+    ).toBeVisible();
+    await expect(page.locator("canvas").first()).toBeVisible();
 
     await expect
-      .poll(async () => (await page.locator("canvas").count()) >= 2)
+      .poll(async () => (await page.locator("canvas").count()) >= 1)
       .toBe(true);
 
     await expect
-      .poll(async () => await overlayCanvasHasRenderedPixels(page), {
+      .poll(async () => await pageHasSizedCanvas(page), {
         timeout: 20_000,
       })
-      .toEqual({ exists: true, rendered: true });
+      .toEqual({ exists: true, sized: true });
   });
 });

@@ -147,6 +147,8 @@ export const Loader = () => {
   const progressDetail = isFinalizingHandoff
     ? "Confirming the first interactive frames and synchronizing final overlays."
     : snapshot.detail;
+  const progressTarget =
+    snapshot.currentStageId === "ready" ? 100 : snapshot.progressValue;
   const rendererStatus = isSceneReady
     ? "online"
     : snapshot.currentStageId === "render"
@@ -178,22 +180,14 @@ export const Loader = () => {
       setDisplayProgress((previousValue) => {
         return getNextLoaderDisplayProgress(
           previousValue,
-          snapshot.progressValue,
+          progressTarget,
           snapshot.currentStageId
         );
       });
     }, 16);
 
     return () => window.clearInterval(timer);
-  }, [snapshot.progressValue, visible]);
-
-  useEffect(() => {
-    if (!visible || snapshot.currentStageId !== "ready") {
-      return;
-    }
-
-    setDisplayProgress(100);
-  }, [snapshot.currentStageId, visible]);
+  }, [progressTarget, snapshot.currentStageId, visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -201,7 +195,6 @@ export const Loader = () => {
     }
 
     startTimeRef.current = performance.now();
-    setElapsedMs(0);
 
     const timer = window.setInterval(() => {
       if (startTimeRef.current == null) {

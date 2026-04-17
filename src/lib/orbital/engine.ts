@@ -1,0 +1,367 @@
+/**
+ * Orbital Engine
+ *
+ * Central engine for calculating orbital positions with:
+ * - Provider selection based on body metadata
+ * - Position caching per tick
+ * - Fallback chain management
+ * - Provenance tracking
+ */
+
+import * as THREE from "three";
+import type {
+  OrbitalProvider,
+  OrbitalCalculationContext,
+  OrbitalPositionResult,
+  PositionCacheEntry,
+  OrbitalEngineConfig,
+  BodyOrbitalMetadata,
+  OsculatingElements,
+} from "./types";
+import { DEFAULT_ENGINE_CONFIG } from "./types";
+import { dateToTDB } from "./time";
+import { getOrbitalMetadata, isWithinValidityRange } from "./registry";
+import { keplerProvider, registerKeplerBody } from "./keplerProvider";
+import { analyticalProvider } from "./analyticalProvider";
+
+/**
+ * Cache key for position cache
+ */
+function getCacheKey(bodyId: string, jdTDB: number): string {
+  // Round to ~1 second precision for cache efficiency
+  const roundedJD = Math.round(jdTDB * 100000) / 100000;
+  return `${bodyId}@${roundedJD.toFixed(5)}`;
+}
+
+/**
+ * Orbital Engine
+ *
+ * Manages orbital position calculations with caching and provider selection.
+ */
+export class OrbitalEngine {
+  private providers: Map<string, OrbitalProvider> = new Map();
+  private positionCache: Map<string, PositionCacheEntry> = new Map();
+  private config: OrbitalEngineConfig;
+
+  constructor(config: Partial<OrbitalEngineConfig> = {}) {
+    this.config = { ...DEFAULT_ENGINE_CONFIG, ...config };
+
+    // Register default providers
+    this.registerProvider(keplerProvider);
+    this.registerProvider(analyticalProvider);
+  }
+
+  /**
+   * Register an orbital provider
+   */
+  registerProvider(provider: OrbitalProvider): void {
+    this.providers.set(provider.id, provider);
+  }
+
+  /**
+   * Get a registered provider
+   */
+  getProvider(id: string): OrbitalProvider | undefined {
+    return this.providers.get(id);
+  }
+
+  /**
+   * Register Keplerian elements for a body
+   */
+  registerBodyElements(
+    bodyId: string,
+    elements: {
+      a: number;
+      e: number;
+      i: number;
+      O: number;
+      w: number;
+      M0: number;
+      n: number;
+    }
+  ): void {
+    registerKeplerBody(bodyId, elements);
+  }
+
+  /**
+   * Select the best provider for a body
+   */
+  private selectProvider(
+    bodyId: string,
+    date: Date
+  ): { provider: OrbitalProvider; isFallback: boolean } | null {
+    const metadata = getOrbitalMetadata(bodyId);
+
+    // If no metadata, try Kepler provider directly
+    if (!metadata) {
+      if (keplerProvider.canCalculate(bodyId)) {
+        return { provider: keplerProvider, isFallback: true };
+      }
+      return null;
+    }
+
+    // Check if primary model is within validity range
+    const inValidityRange = isWithinValidityRange(bodyId, date);
+
+    if (inValidityRange && metadata.primaryProvider !== "kepler") {
+      // Try primary provider (analytical ephemeris)
+      const primary = this.providers.get(metadata.primaryProvider);
+      if (primary && primary.canCalculate(bodyId)) {
+        return { provider: primary, isFallback: false };
+      }
+    }
+
+    // Fall back to Kepler provider
+    if (keplerProvider.canCalculate(bodyId)) {
+      if (this.config.logFallbacks && metadata.primaryModel !== "Kepler") {
+        console.warn(
+          `[OrbitalEngine] Using Kepler fallback for ${bodyId} ` +
+            `(outside ${metadata.primaryModel} validity range)`
+        );
+      }
+      return { provider: keplerProvider, isFallback: true };
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate orbital position for a body
+   */
+  calculatePosition(
+    bodyId: string,
+    date: Date,
+    parentId?: string
+  ): OrbitalPositionResult {
+    // Special case: Sun is the center of the system
+    if (bodyId === "sun") {
+      return {
+        position: new THREE.Vector3(0, 0, 0),
+        distanceAU: 0,
+        provenance: "Solar System Barycenter",
+        model: "Kepler",
+        isFallback: false,
+        jdTDB: dateToTDB(date),
+      };
+    }
+
+    const jdTDB = dateToTDB(date);
+
+    // Check cache
+    if (this.config.enableCache) {
+      const cacheKey = getCacheKey(bodyId, jdTDB);
+      const cached = this.positionCache.get(cacheKey);
+
+      if (cached) {
+        const age = Date.now() - cached.timestamp;
+        if (age < this.config.cacheTtlMs) {
+          return cached.result;
+        }
+      }
+    }
+
+    // Select provider
+    const selection = this.selectProvider(bodyId, date);
+    if (!selection) {
+      throw new Error(`No orbital provider available for body: ${bodyId}`);
+    }
+
+    const { provider, isFallback } = selection;
+
+    // Build context
+    const context: OrbitalCalculationContext = {
+      bodyId,
+      parentId,
+      date,
+      jdTDB,
+    };
+
+    // Calculate position
+    const result = provider.calculatePosition(context);
+
+    // Update fallback flag (preserve provider's value if already true)
+    result.isFallback = result.isFallback || isFallback;
+
+    // Cache result
+    if (this.config.enableCache) {
+      const cacheKey = getCacheKey(bodyId, jdTDB);
+      this.positionCache.set(cacheKey, {
+        result,
+        jdTDB,
+        timestamp: Date.now(),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculate positions for multiple bodies at once
+   */
+  calculatePositions(
+    bodies: Array<{ bodyId: string; parentId?: string }>,
+    date: Date
+  ): Map<string, OrbitalPositionResult> {
+    const results = new Map<string, OrbitalPositionResult>();
+
+    for (const { bodyId, parentId } of bodies) {
+      try {
+        const result = this.calculatePosition(bodyId, date, parentId);
+        results.set(bodyId, result);
+      } catch (error) {
+        console.error(
+          `[OrbitalEngine] Failed to calculate position for ${bodyId}:`,
+          error
+        );
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get osculating elements for a body
+   */
+  getOsculatingElements(bodyId: string, date: Date): OsculatingElements | null {
+    const metadata = getOrbitalMetadata(bodyId);
+
+    // Try to get from analytical provider first
+    if (metadata?.primaryProvider && metadata.primaryProvider !== "kepler") {
+      const provider = this.providers.get(metadata.primaryProvider);
+      if (provider?.getOsculatingElements) {
+        const elements = provider.getOsculatingElements(bodyId, date);
+        if (elements) return elements;
+      }
+    }
+
+    // Fall back to Kepler provider
+    return keplerProvider.getOsculatingElements(bodyId, date);
+  }
+
+  /**
+   * Get orbital metadata for a body
+   */
+  getBodyMetadata(bodyId: string): BodyOrbitalMetadata | null {
+    return getOrbitalMetadata(bodyId);
+  }
+
+  /**
+   * Get provenance information for a body
+   */
+  getProvenance(
+    bodyId: string,
+    date?: Date
+  ): {
+    model: string;
+    provider: string;
+    isFallback: boolean;
+    plannedModel?: string;
+    validityNote?: string;
+  } {
+    const checkDate = date || new Date();
+    const metadata = getOrbitalMetadata(bodyId);
+
+    if (bodyId === "sun") {
+      return {
+        model: "Solar System Barycenter",
+        provider: "barycenter",
+        isFallback: false,
+      };
+    }
+
+    if (!metadata) {
+      return {
+        model: "Kepler",
+        provider: "kepler",
+        isFallback: true,
+      };
+    }
+
+    const inValidityRange = isWithinValidityRange(bodyId, checkDate);
+    const result = this.calculatePosition(bodyId, checkDate);
+    const isFallback = result.isFallback;
+    const plannedModel =
+      metadata.primaryModel !== "Kepler" ? metadata.primaryModel : undefined;
+
+    return {
+      model: isFallback ? "Kepler" : result.model,
+      provider: isFallback ? "kepler" : metadata.primaryProvider,
+      isFallback,
+      plannedModel: isFallback ? plannedModel : undefined,
+      validityNote:
+        metadata.validityRange && plannedModel && !inValidityRange
+          ? `Valid ${metadata.validityRange.startYear}-${metadata.validityRange.endYear}`
+          : undefined,
+    };
+  }
+
+  /**
+   * Clear the position cache
+   */
+  clearCache(): void {
+    this.positionCache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): {
+    size: number;
+    entries: Array<{ key: string; age: number }>;
+  } {
+    const now = Date.now();
+    const entries = Array.from(this.positionCache.entries()).map(
+      ([key, entry]) => ({
+        key,
+        age: now - entry.timestamp,
+      })
+    );
+
+    return {
+      size: this.positionCache.size,
+      entries,
+    };
+  }
+
+  /**
+   * Pre-calculate positions for a set of bodies
+   * Useful for warming up the cache
+   */
+  preCalculate(bodyIds: string[], dates: Date[]): void {
+    for (const date of dates) {
+      for (const bodyId of bodyIds) {
+        try {
+          this.calculatePosition(bodyId, date);
+        } catch {
+          // Ignore errors during pre-calculation
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Singleton instance of the orbital engine
+ */
+export const orbitalEngine = new OrbitalEngine();
+
+/**
+ * Convenience function to calculate position
+ */
+export function calculateOrbitalPosition(
+  bodyId: string,
+  date: Date,
+  parentId?: string
+): OrbitalPositionResult {
+  return orbitalEngine.calculatePosition(bodyId, date, parentId);
+}
+
+/**
+ * Convenience function to get provenance
+ */
+export function getOrbitalProvenance(
+  bodyId: string,
+  date?: Date
+): ReturnType<OrbitalEngine["getProvenance"]> {
+  return orbitalEngine.getProvenance(bodyId, date);
+}

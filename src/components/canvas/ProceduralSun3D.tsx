@@ -493,6 +493,25 @@ export const ProceduralSun3D = ({
       }),
     [lightDirWorld, profile.lowRes]
   );
+  const perlinResourcesRef = useRef(perlinResources);
+  const sunMaterialRef = useRef(sunMaterial);
+  const glowMaterialRef = useRef(glowMaterial);
+  const raysMaterialRef = useRef(raysMaterial);
+  const flaresMaterialRef = useRef(flaresMaterial);
+
+  useEffect(() => {
+    perlinResourcesRef.current = perlinResources;
+    sunMaterialRef.current = sunMaterial;
+    glowMaterialRef.current = glowMaterial;
+    raysMaterialRef.current = raysMaterial;
+    flaresMaterialRef.current = flaresMaterial;
+  }, [
+    flaresMaterial,
+    glowMaterial,
+    perlinResources,
+    raysMaterial,
+    sunMaterial,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -526,6 +545,11 @@ export const ProceduralSun3D = ({
 
     const group = groupRef.current;
     if (!group) return;
+    const perlinResources = perlinResourcesRef.current;
+    const sunMaterial = sunMaterialRef.current;
+    const glowMaterial = glowMaterialRef.current;
+    const raysMaterial = raysMaterialRef.current;
+    const flaresMaterial = flaresMaterialRef.current;
 
     // Scale the group so normalized geometry (radius=1.5) maps to world size
     const scale = sunVisualRadiusWorld / SPHERE_RADIUS;

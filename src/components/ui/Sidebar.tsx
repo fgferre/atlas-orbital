@@ -2,8 +2,12 @@ import { useMemo } from "react";
 
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
-import { AstroPhysics, AU_IN_KM, AU_TO_3D_UNITS } from "../../lib/astrophysics";
+import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import {
+  useOrbitalCalculation,
+  useOrbitalProvenance,
+} from "../../hooks/useOrbitalEngine";
 
 const VISUAL_FIDELITY_LABELS = {
   measured: "Measured Asset",
@@ -15,42 +19,35 @@ const VISUAL_FIDELITY_LABELS = {
 export const Sidebar = () => {
   const selectedId = useStore((state) => state.selectedId);
   const setSelectedId = useStore((state) => state.setSelectedId);
-  const datetime = useStore((state) => state.datetime);
   const isMobile = useMediaQuery("(max-width: 767px)");
   const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
+  const orbitalCalculation = useOrbitalCalculation(
+    selectedId ?? "sun",
+    b?.parentId
+  );
 
   // Real-time Calculations
   const stats = useMemo(() => {
-    if (!b) return null;
+    if (!b || !orbitalCalculation) return null;
 
-    // 1. Distance (Relative to parent)
-    // calculateLocalPosition returns scaled 3D units. Divide by AU_TO_3D_UNITS to get AU.
-    const pos3D = AstroPhysics.calculateLocalPosition(
-      b.orbit,
-      datetime,
-      "realistic"
-    );
-    const distAU = pos3D.length() / AU_TO_3D_UNITS;
+    const distAU = orbitalCalculation.distanceAU;
     const distKm = distAU * AU_IN_KM;
 
-    // 2. Velocity
     let parentMass = 1.989e30; // Default Sun
     if (b.parentId) {
       const parent = SOLAR_SYSTEM_BODIES.find((p) => p.id === b.parentId);
       if (parent) parentMass = AstroPhysics.parseScientificValue(parent.mass);
     }
-    const velocity = AstroPhysics.calculateOrbitalVelocity(
-      b.orbit,
-      distAU,
-      parentMass
-    );
 
-    // 3. Escape Velocity
+    const velocity = orbitalCalculation.velocity
+      ? (orbitalCalculation.velocity.length() * AU_IN_KM) / 86400
+      : AstroPhysics.calculateOrbitalVelocity(b.orbit, distAU, parentMass);
+
     const myMass = AstroPhysics.parseScientificValue(b.mass);
     const escape = AstroPhysics.calculateEscapeVelocity(myMass, b.radiusKm);
 
     return { distAU, distKm, velocity, escape };
-  }, [b, datetime]);
+  }, [b, orbitalCalculation]);
 
   // Comparators
   const getEarthComparison = (
@@ -367,6 +364,9 @@ export const Sidebar = () => {
               </div>
             </div>
 
+            {/* Orbital Model */}
+            <OrbitalProvenanceDisplay bodyId={b.id} />
+
             {/* Atmosphere */}
             {b.atmosphere && b.atmosphere !== "Not detected" && (
               <div>
@@ -427,6 +427,50 @@ const HeaderChip = ({ label }: { label: string }) => (
     {label}
   </span>
 );
+
+const OrbitalProvenanceDisplay = ({ bodyId }: { bodyId: string }) => {
+  const provenance = useOrbitalProvenance(bodyId);
+
+  return (
+    <div>
+      <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+        Orbit Model
+      </h3>
+      <div className="bg-black/20 p-2 rounded border border-white/5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-gray-400 font-rajdhani">
+            Current Method
+          </span>
+          <span className="text-xs text-nasa-accent font-mono">
+            {provenance.isFallback ? "Kepler" : provenance.model}
+          </span>
+        </div>
+        {provenance.isFallback && (
+          <div className="mt-1.5 flex items-start gap-1.5">
+            <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">
+              Fallback
+            </span>
+            <span className="text-[9px] text-amber-400/70 font-rajdhani">
+              {provenance.plannedModel
+                ? `${provenance.plannedModel} planned`
+                : "Analytical provider planned"}
+            </span>
+          </div>
+        )}
+        <div className="mt-1.5 text-[9px] text-gray-500 font-rajdhani">
+          {provenance.isFallback
+            ? `Using Keplerian elements for the live calculation.${provenance.plannedModel ? ` ${provenance.plannedModel} remains planned and is not active yet.` : ""}`
+            : `Using ${provenance.model} for the live orbital calculation.`}
+        </div>
+        {provenance.validityNote && (
+          <div className="mt-1 text-[9px] text-gray-500 font-rajdhani">
+            {provenance.validityNote}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const StatBox = ({
   label,
