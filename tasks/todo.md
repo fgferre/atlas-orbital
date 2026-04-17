@@ -144,6 +144,81 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — graduated faint-star lift (2026-04-17)
+
+Second Codex review, after the user reported the corrected sky felt
+"a bit less dense". Codex's core diagnostic was right: any density
+change between `fae8a7a` and `60cb1fa` in ultra can only come from
+the shader (both commits map ultra → full → 109 400 stars). The
+pre-fix `1.5 px / 0.08 α` floor is honest Pogson but visually
+conservative; the `fae8a7a` hard floor at `2.5 px / 0.20 α` fixed
+density by flattening the catalogue's ordering, which was worse.
+
+Where I agreed with Codex:
+
+- Drop the "50 k saturates perceived density" comment — user feedback
+  contradicts it, and the real reason `high → high` stays is LOD
+  ladder preservation, not a density claim. Rewrote the comment.
+- Use a graduated lift in a narrow magnitude window rather than a
+  hard global floor.
+- Keep bright end pure Pogson (untouched).
+
+Where I pushed back:
+
+- **Per-profile shader uniforms** (Codex recommendation 3) — overkill.
+  A single smoothstep window naturally scales across profiles: in
+  balanced/high (tier max mag ~8.3) the lift fully covers the tail
+  it has; in ultra (max mag ~20.5) the same window gives the
+  naked-eye-to-binocular band presence while the telescopic tail
+  (mag > 12) fades back to the raw floor and stays ghostly.
+- **Core/halo split** (recommendation 6) — adds a second draw call
+  or overdraw for a ~10 % perceptual gain over a good transfer
+  curve. Park for a future "AAA mode" if and when density still
+  feels short after this curve lands.
+
+Shipped this round:
+
+- **`src/components/canvas/Starfield.tsx`** — replace the 60cb1fa
+  bare-Pogson + `1.5 / 0.08` floor with a smoothstep-window lift
+  centred on shader mag ≈ 7.5. Size gets up to +1 px in the window,
+  alpha up to +0.12. Window opens at mag 6, peaks at mag 7.5, fades
+  back out by mag 12. Comment block rewritten to lay out _why not a
+  flat floor_.
+- **`src/lib/starfield.ts`** — header comment rewritten to drop the
+  "50 k saturates perceived density" hypothesis (noted as wrong by
+  Codex and by user feedback) and to name the real driver of
+  perceived density (the shader transfer curve). Tier mapping
+  unchanged.
+
+Verified curve ordering by hand (key points, realistic mode):
+
+| realmag | size px (60cb1fa) | size px (new) | Δ                    |
+| ------- | ----------------- | ------------- | -------------------- |
+| 5       | 4.99              | 4.99          | 0 (bright untouched) |
+| 6       | 3.15              | 3.15          | 0 (window not open)  |
+| 6.5     | 2.50              | 2.76          | +0.26                |
+| 7.5     | 1.58 → 1.5 floor  | 2.58          | +1.00 (peak)         |
+| 8.3     | 1.09 → 1.5 floor  | 2.09          | +0.59                |
+| 10      | 0.40 → 1.5 floor  | 1.5           | 0 (fade kicking in)  |
+| 12+     | sub-pixel → 1.5   | 1.5           | 0 (telescopic ghost) |
+
+Monotonic across the whole range — no flattened buckets. The faint
+naked-eye band (6.5–8.3) goes from "on the floor" to "clearly
+visible with gradient", which is the density the user felt missing.
+In `ultra` the full-tier population above mag 12 stays at the raw
+`1.5 / 0.08` floor, so the catalogue does not turn into haze.
+
+Verification: lint clean, 293/293 tests green (no regressions). The
+browser preview is still pinned by L11 (iframe hosts a 0 × 0
+viewport that blocks R3F canvas sizing); side-by-side screenshot
+comparison in ultra will need to happen outside the Claude preview
+MCP. User-facing visual acceptance remains open until the user or a
+headed Playwright run confirms the lift looks right.
+
+Lesson L13 (tasks/lessons.md): "global hard floors hide magnitude
+ordering; graduated smoothstep windows are the right tool for
+perceptual lifts inside a physics-informed transfer curve."
+
 ## Review — Codex follow-up on density fix (2026-04-17)
 
 Independent Codex review of commit `fae8a7a` flagged three issues, all

@@ -144,21 +144,25 @@ const DEFAULT_HYG_TIER: HygTier = "full";
 /**
  * Map the resolved device quality profile to the HYG tier file the
  * browser should fetch. The legacy tycho2 renderer always loaded
- * ~118 000 stars, so the previous balanced → medium (10 000) mapping
- * made the sky look dramatically thinner than users expected — the
- * primary cause of the density complaint. Balanced now fetches the
- * high tier, which keeps the sky visibly dense while preserving the
- * high → high, ultra → full ladder so "ultra" still earns its extra
- * payload over "high":
+ * ~118 000 stars, and the pre-fix `balanced → medium` (10 000)
+ * mapping made the sky look dramatically thinner than users expected
+ * — the primary cause of the density complaint. The current mapping:
  *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / 3G)
  *   balanced    → high   (~810 KB,   ~50 000 stars — mixed hardware;
  *                         recovers tycho2-era density on any broadband
  *                         link without forcing the 109 k decode cost)
- *   high        → high   (~810 KB,   ~50 000 stars — same visual
- *                         budget as balanced since 50 k already
- *                         saturates perceived density)
- *   ultra       → full   (~1.77 MB, ~109 000 stars — opt-in ceiling;
- *                         every surviving HYG row)
+ *   high        → high   (~810 KB,   ~50 000 stars — keeps a distinct
+ *                         LOD step between balanced and ultra so
+ *                         flipping Quality to Ultra still earns real
+ *                         extra density, not identical rendering)
+ *   ultra       → full   (~1.77 MB, ~109 400 stars — opt-in ceiling;
+ *                         every surviving HYG row after the offline
+ *                         filter removes the Sun / invalid rows /
+ *                         distance-sentinel entries)
+ * Perceived density is driven mostly by the shader transfer curve
+ * (see Starfield.tsx), not the raw tier count above ~50k — pairing
+ * the tier remap with a graduated faint-star lift is what restores
+ * the tycho2 visual feel.
  * The `medium` tier binary is still produced by the offline pipeline
  * and remains addressable for anyone overriding the default at runtime.
  */

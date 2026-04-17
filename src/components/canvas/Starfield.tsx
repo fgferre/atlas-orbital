@@ -91,18 +91,35 @@ const vertexShader = /* glsl */ `
 
     // Pogson-style size: flux ratio relative to the naked-eye limit
     // (mag 6.5). Each 5 magnitudes brighter = 100× flux = ~2.5× apparent
-    // area on screen. We take the square root of the flux so the rendered
-    // glow area, not the diameter, scales with brightness — this matches
-    // how stars visibly pile up around the bright end of the sky. The
-    // 1.5 px / 0.08 floors preserve magnitude ordering across the full
-    // tier (which reaches ~mag 20): promoting the tail of the catalogue
-    // higher would collapse most of the sky to a uniform haze.
+    // area on screen. Square-root the flux so rendered glow *area*, not
+    // diameter, scales with brightness — this matches how stars visibly
+    // pile up around the bright end of the sky.
+    //
+    // A bare Pogson curve with a 1.5 px / 0.08 α floor is fotometrically
+    // honest but visually conservative: stars at mag ≥ 7 collapse onto
+    // the floor as sparse sub-pixel-ish dots, and the naked-eye-to-
+    // binocular band (the mass of balanced/high tiers) loses presence.
+    // Adding a *hard* floor (e.g. 2.5 px / 0.20 α globally) fixes that
+    // by flattening magnitude ordering across most of the catalogue,
+    // which is worse — mag 12 survey stars end up at the same size as
+    // mag 7 binocular stars, and the full tier turns into a haze.
+    //
+    // Instead we add a graduated smoothstep "lift" concentrated on the
+    // naked-eye→binocular window (≈ mag 6→9 in shader space), fading
+    // back to zero by mag ~12 so the telescopic tail of the full tier
+    // stays ghostly. Bright stars (mag < 6) are untouched;
+    // faint-mid stars get up to +1 px / +0.12 α; very faint stars go
+    // back to the raw floor. This preserves ordering end-to-end while
+    // adding real presence where the eye expects it.
     float fluxRatio = pow(10.0, (6.5 - mag) * 0.4); // = 2.512^(6.5-mag)
     float sqrtFlux = sqrt(fluxRatio);
-    float baseSize = clamp(sqrtFlux * 2.5, 1.5, 60.0);
+    float faintLift = smoothstep(6.0, 7.5, mag) *
+                      (1.0 - smoothstep(9.5, 12.0, mag));
+
+    float baseSize = clamp(sqrtFlux * 2.5 + faintLift * 1.0, 1.5, 60.0);
     gl_PointSize = baseSize * particleSize * pixelRatio;
 
-    vBrightness = clamp(sqrtFlux * 0.08, 0.08, 1.0);
+    vBrightness = clamp(sqrtFlux * 0.08 + faintLift * 0.12, 0.08, 1.0);
     vColor = bvToRGB(ci);
   }
 `;

@@ -216,3 +216,28 @@ same diff as the real fix.
 `src/lib/starfield.ts`; Pogson clamps in
 `src/components/canvas/Starfield.tsx`. `starfield.test.ts` now
 pins the tier mapping so a silent re-shuffle fails CI.
+
+### L13. Global hard floors hide magnitude ordering; use graduated smoothstep windows
+
+**Context:** Twice in the same session the temptation came up to
+"lift the faint tail" by raising the Pogson clamps (`1.5 px → 2.5 px`,
+`0.08 α → 0.20 α`). Both times a reviewer caught it: a hard floor
+applied to the whole catalogue turns the tail into a uniform plate —
+stars at `mag 7` and `mag 20` render at identical size and alpha,
+which destroys magnitude ordering. In a 109 400-star `full` tier
+where > 90 % of rows sit at `mag ≥ 6.5`, the floor becomes the entire
+rendered sky and the result is an additive haze, not a starfield.
+
+**Rule:** When a physics-informed transfer curve needs perceptual
+correction, the correction should be **graduated and windowed**, not
+a global clamp. Build it as a `smoothstep(edge0, peak) * (1 -
+smoothstep(fade0, fade1))` kernel over the magnitude axis, added on
+top of the raw curve. The window must fade back to zero before the
+deep tail so telescopic stars stay ghostly. Verify the full curve is
+monotonic at half a dozen sample magnitudes on paper before shipping
+— ordering is cheap to check and easy to lose.
+
+**Code marker:** `faintLift` in the Starfield vertex shader
+(`src/components/canvas/Starfield.tsx`) — window 6 → 7.5 peak, fade
+9.5 → 12, adding up to +1 px / +0.12 α; clamped back into the raw
+`1.5 px / 0.08 α` Pogson floor outside the window.
