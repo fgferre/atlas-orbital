@@ -123,7 +123,7 @@ const TOLERANCES: Record<
   // ELP/MPP02-trunc Moon
   moon: { maxAngularErrorDeg: 0.2, maxDistanceErrorRatio: 0.005 },
   // All *MeanElements satellites and all AsteroidOsculating bodies are now
-  // fixture-derived from Horizons at 2020-01-01 (see
+  // fixture-derived from Horizons at 2025-01-01 (see
   // scripts/derive-elements-from-fixtures.js and satellites.ts /
   // asteroids.ts). They match the fixture to sub-arcsecond at epoch, so we
   // hold them to the Phase-4 tight targets: < 0.5 deg angular, < 1%
@@ -171,7 +171,7 @@ const KEPLER_COARSE_TOLERANCES = {
 const MULTI_EPOCH_OVERRIDES: Partial<
   Record<string, { maxAngularErrorDeg: number; maxDistanceErrorRatio: number }>
 > = {
-  // Observed drifts from epoch 2020-01-01 (two-body Kepler propagation, no
+  // Observed drifts from epoch 2025-01-01 (two-body Kepler propagation, no
   // resonance / J2 / tidal modelling). The engine is honest about this:
   // fixture-derived elements are locally excellent but secular effects
   // accumulate with orbital period × elapsed time.

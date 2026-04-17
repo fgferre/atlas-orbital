@@ -20,21 +20,23 @@ and label each result with the model that actually ran.
 | TOP2013        | `VSOP87D` (outer planets) + `Pluto-Meeus` | Pluto uses Meeus Ch. 37 series                |
 | ELP2000        | `ELP-MPP02-trunc` via `astronomia/elp`    | DE-fitted truncated MPP02                     |
 | MARSSAT        | `MartianSatMeanElements`                  | J2000 ecliptic osculating elements            |
-| L1             | `GalileanMeanElements`                    | All 4 moons Horizons-derived at 2020-01       |
-| TASS17         | `SaturnianMeanElements`                   | All 7 major moons Horizons-derived at 2020-01 |
-| GUST86         | `UranianMeanElements`                     | All 5 major moons Horizons-derived at 2020-01 |
-| EPHASTER       | `AsteroidOsculating`                      | All 3 asteroids Horizons-derived at 2020-01   |
+| L1             | `GalileanMeanElements`                    | All 4 moons Horizons-derived at 2025-01       |
+| TASS17         | `SaturnianMeanElements`                   | All 7 major moons Horizons-derived at 2025-01 |
+| GUST86         | `UranianMeanElements`                     | All 5 major moons Horizons-derived at 2025-01 |
+| EPHASTER       | `AsteroidOsculating`                      | All 3 asteroids Horizons-derived at 2025-01   |
 
-Shipped today:
+Shipped:
 
 - `src/lib/orbital/analyticalProvider.ts` is no longer a stub; it dispatches
   per body to real providers in `src/lib/orbital/analytical/`.
-- Full regression suite (`src/lib/orbital/regression.test.ts`) green at Phase 4
-  tolerances against a 4-epoch Horizons fixture set (2020-01-01,
-  2020-07-01, 2021-01-01, and 1890-01-01 for asteroid window coverage).
+- Regression suite (`src/lib/orbital/regression.test.ts`) green at Phase 4
+  tolerances against the canonical Horizons fixture set:
+  2025-01-01 / 2025-07-01 / 2026-01-01, plus a 1890-01-01 Ceres point to
+  cover the asteroid-window fallback. Matches
+  `scripts/generate-horizons-fixtures.js > DEFAULT_TEST_DATES`.
 - `npm run build`, `npm run lint`, `npm run test:run` all green.
 - UI (Sidebar, `CreditsModal`) and `src/lib/orbital/README.md` aligned to the
-  shipped labels.
+  shipped labels and epoch.
 
 Still open: multi-epoch fixtures (Phase 3), long-term drift validation, and
 the deferred realism work (Phase 5).

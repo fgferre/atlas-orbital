@@ -13,11 +13,11 @@ static bundle (no network, no ephemeris files at runtime).
   - **VSOP87D** (via `astronomia`) for Mercury through Neptune.
   - **Meeus Ch. 37 Pluto series** (via `astronomia/pluto`) for Pluto.
   - **ELP/MPP02 (truncated)** (via `astronomia/elp`) for the Moon.
-  - **JPL SSD mean elements** reduced to J2000 ecliptic osculating elements
-    for the Galilean, Saturnian, Uranian, and Martian satellites.
-  - **Osculating Keplerian elements** at epoch 2020-01-01, derived from
-    Horizons state vectors via `scripts/derive-elements-from-fixtures.js`,
-    for Ceres, Pallas, and Vesta.
+  - **Horizons-derived J2000 ecliptic osculating elements** at epoch
+    2025-01-01, produced by `scripts/derive-elements-from-fixtures.js`,
+    for the Galilean, Saturnian, Uranian, and Martian satellites
+    **plus** Ceres, Pallas, and Vesta. Propagated with a two-body
+    Kepler step; no secular perturbations modelled.
 - `keplerProvider.ts` remains the transparent fallback for any body without a
   published analytical theory. It is also used for all minor bodies whose
   orbits are defined by user-supplied or registry-sourced elements.
@@ -48,7 +48,8 @@ static bundle (no network, no ephemeris files at runtime).
 
 ## Gaps Still Open
 
-- Fixtures currently cover a single epoch (2020-01-01). Extending coverage to
+- Fixtures cover the baseline epoch 2025-01-01 plus 2025-07-01 and 2026-01-01
+  for the 12 representative bodies. Extending coverage to
   a multi-decade fixture sweep is tracked in `PLAN.md` and is the next step
   for validating long-term drift of the truncated theories.
 - Natural-satellite accuracy relies on mean elements (scope-equivalent to

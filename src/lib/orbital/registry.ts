@@ -143,14 +143,14 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   deimos: {
     primaryModel: "MartianSatMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
   // === GALILEAN MOONS (mean elements, J2000 ecliptic) ===
@@ -159,28 +159,28 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   europa: {
     primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   ganymede: {
     primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   callisto: {
     primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
   // === MAJOR SATURN SATELLITES (mean elements, J2000 ecliptic) ===
@@ -189,49 +189,49 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   enceladus: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   tethys: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   dione: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   rhea: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   titan: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   iapetus: {
     primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
   // === MAJOR URANUS SATELLITES (mean elements, J2000 ecliptic) ===
@@ -240,35 +240,35 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   ariel: {
     primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   umbriel: {
     primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   titania: {
     primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   oberon: {
     primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
   // === MAIN BELT ASTEROIDS (Osculating, 1900-2050 window) ===
@@ -278,7 +278,7 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     fallbackProvider: "kepler",
     validityRange: VALIDITY_RANGES.asteroid,
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   pallas: {
     primaryModel: "AsteroidOsculating",
@@ -286,7 +286,7 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     fallbackProvider: "kepler",
     validityRange: VALIDITY_RANGES.asteroid,
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   vesta: {
     primaryModel: "AsteroidOsculating",
@@ -294,7 +294,7 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     fallbackProvider: "kepler",
     validityRange: VALIDITY_RANGES.asteroid,
     notes:
-      "Horizons-derived osculating elements at 2020-01-01, two-body Kepler propagation",
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
   // === FALLBACK BODIES (Kepler only) ===

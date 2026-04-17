@@ -11,7 +11,7 @@
  * frame so no body-equatorial rotation is needed at runtime. Every entry
  * below was produced by `scripts/derive-elements-from-fixtures.js`, which
  * inverts the Horizons state vector (r, v) stored in
- * `src/test/fixtures/horizons/<body>-2020-01-01.json` through the standard
+ * `src/test/fixtures/horizons/<body>-2025-01-01.json` through the standard
  * two-body RV→COE algorithm using μ_parent from `MU_PARENT`. The pipeline
  * is deterministic and reproducible: rerunning the script against the same
  * fixture always yields the same values.
@@ -21,7 +21,7 @@
  *
  * Accuracy:
  *   - All bodies match their Horizons fixture within sub-degree at the
- *     reference epoch 2020-01-01 (two-body Kepler; no secular perturbations
+ *     reference epoch 2025-01-01 (two-body Kepler; no secular perturbations
  *     like J2 / resonance / tidal drag are modelled).
  *   - Short-period moons (Io, Phobos, Deimos, Mimas, Miranda) lose tens of
  *     degrees of mean-anomaly phase per year of propagation. They stay
