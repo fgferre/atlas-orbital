@@ -93,7 +93,7 @@ export const SEARCH_QUICK_TARGETS = [
 ] as const;
 
 export const SCENE_SOURCE_OPTIONS = [
-  { id: "tycho2", label: STARFIELD_SOURCE_LABELS.tycho2 },
+  { id: "hyg", label: STARFIELD_SOURCE_LABELS.hyg },
   { id: "nasa", label: STARFIELD_SOURCE_LABELS.nasa },
 ] as const satisfies ReadonlyArray<{ id: StarfieldSource; label: string }>;
 

@@ -80,7 +80,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         </p>
         <ul className="space-y-1">
           <li>
-            • Scene keeps Starfield, {STARFIELD_SOURCE_LABELS.tycho2},{" "}
+            • Scene keeps Starfield, {STARFIELD_SOURCE_LABELS.hyg},{" "}
             {STARFIELD_SOURCE_LABELS.nasa}, scale, and quality
           </li>
           <li>• Overlay keeps Icons, Labels, Orbits, and category filters</li>
@@ -120,7 +120,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         <li>• Press Ctrl+Shift+D for Debug Mode</li>
         <li>• Press Ctrl+Shift+T to Replay Tutorial</li>
         <li>
-          • Switch Starfield Source between {STARFIELD_SOURCE_LABELS.tycho2} and{" "}
+          • Switch Starfield Source between {STARFIELD_SOURCE_LABELS.hyg} and{" "}
           {STARFIELD_SOURCE_LABELS.nasa} catalogs
         </li>
       </ul>

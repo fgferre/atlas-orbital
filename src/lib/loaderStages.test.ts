@@ -8,7 +8,7 @@ describe("resolveLoaderSnapshot", () => {
       active: false,
       isSceneReady: false,
       showStarfield: true,
-      starfieldSource: "tycho2",
+      starfieldSource: "hyg",
       starfieldStatus: "idle",
     });
 
@@ -24,7 +24,7 @@ describe("resolveLoaderSnapshot", () => {
       active: true,
       isSceneReady: false,
       showStarfield: true,
-      starfieldSource: "tycho2",
+      starfieldSource: "hyg",
       starfieldStatus: "loading",
     });
 
@@ -61,7 +61,7 @@ describe("resolveLoaderSnapshot", () => {
       active: false,
       isSceneReady: true,
       showStarfield: false,
-      starfieldSource: "tycho2",
+      starfieldSource: "hyg",
       starfieldStatus: "idle",
     });
 

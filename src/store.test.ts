@@ -32,7 +32,7 @@ const resetStore = () => {
       overlayItems: [...initialState.overlayItems],
       visibility: { ...initialState.visibility },
       starfieldProviderStates: {
-        tycho2: { ...initialState.starfieldProviderStates.tycho2 },
+        hyg: { ...initialState.starfieldProviderStates.hyg },
         nasa: { ...initialState.starfieldProviderStates.nasa },
       },
     },
@@ -57,7 +57,7 @@ describe("store phase 4 regression guards", () => {
     expect(useStore.getState().starfieldSource).toBe("nasa");
 
     useStore.getState().toggleStarfieldImplementation();
-    expect(useStore.getState().starfieldSource).toBe("tycho2");
+    expect(useStore.getState().starfieldSource).toBe("hyg");
 
     useStore.getState().setSunRenderMode("procedural");
     expect(useStore.getState().sunRenderMode).toBe("procedural");

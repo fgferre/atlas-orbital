@@ -1,14 +1,19 @@
-import tycho2CatalogBinaryUrl from "../data/tycho2-processed.bin?url";
-import tycho2CatalogBinaryGzipUrl from "../data/tycho2-processed.bin.gz?url";
+import { parseHygBinaryBuffer, type HygCatalogData } from "../utils/hygBinary";
 import { parseNASAStarFile, type NASAStar } from "../utils/nasaStarParser";
-import {
-  parseTycho2BinaryBuffer,
-  type Tycho2CatalogData,
-} from "../utils/tycho2Binary";
 
 export type { NASAStar } from "../utils/nasaStarParser";
+export type { HygCatalogData } from "../utils/hygBinary";
 
-export type StarfieldSource = "tycho2" | "nasa";
+/**
+ * Available starfield providers.
+ *
+ * - `hyg`: the primary preset, backed by the Astronexus HYG v4.2 database
+ *   delivered as the binary assets under `public/data/hyg-stars/`. Carries
+ *   real B-V colour, per-magnitude size and proper motion.
+ * - `nasa`: the NASA "Eyes on the Solar System" asset family, kept around
+ *   as a visual comparison reference.
+ */
+export type StarfieldSource = "hyg" | "nasa";
 export type StarfieldLoadStatus = "idle" | "loading" | "ready" | "error";
 
 export interface StarfieldSourceMetadata {
@@ -28,11 +33,12 @@ export const STARFIELD_SOURCE_METADATA: Record<
   StarfieldSource,
   StarfieldSourceMetadata
 > = {
-  tycho2: {
+  hyg: {
     label: "HYG v4.2",
-    creditsTitle: "HYG v4.2 processed catalog",
+    creditsTitle: "HYG v4.2 stellar database",
     creditsDescription:
-      "Processed HYG v4.2 (Hipparcos/Yale/Gliese) star data with 117,931 runtime stars, shipped in the app's legacy tycho2 binary asset.",
+      "Astronexus HYG v4.2: 109,400 runtime stars with real B-V colour index, per-magnitude size, and annual proper motion from pmra/pmdec. Delivered as device-tier binaries under public/data/hyg-stars/.",
+    creditsLink: "https://www.astronexus.com/hyg",
     loadErrorMessage: "Failed to load HYG v4.2 catalog",
   },
   nasa: {
@@ -46,7 +52,7 @@ export const STARFIELD_SOURCE_METADATA: Record<
 };
 
 export const STARFIELD_SOURCE_LABELS: Record<StarfieldSource, string> = {
-  tycho2: STARFIELD_SOURCE_METADATA.tycho2.label,
+  hyg: STARFIELD_SOURCE_METADATA.hyg.label,
   nasa: STARFIELD_SOURCE_METADATA.nasa.label,
 };
 
@@ -58,13 +64,10 @@ export const getStarfieldLoadErrorMessage = (
   if (!(error instanceof Error) || !error.message) {
     return fallback;
   }
-
-  if (source === "tycho2") {
-    return error.message.replaceAll("Tycho-2", STARFIELD_SOURCE_LABELS.tycho2);
-  }
-
   return error.message;
 };
+
+// --- NASA catalog loading (unchanged from the NASA Eyes binary family) -----
 
 const NASA_STAR_FILES = [
   "galaxies.0.bin",
@@ -79,71 +82,8 @@ const NASA_STAR_FILES = [
 const getNASAStarFilePath = (filename: string) =>
   `${import.meta.env.BASE_URL || "/"}data/nasa-stars/${filename}`;
 
-let tycho2CatalogCache: Tycho2CatalogData | null = null;
-let tycho2CatalogPromise: Promise<Tycho2CatalogData> | null = null;
-
 let nasaStarCatalogCache: NASAStar[] | null = null;
 let nasaStarCatalogPromise: Promise<NASAStar[]> | null = null;
-
-const supportsGzipDecompression = () =>
-  typeof DecompressionStream !== "undefined";
-
-async function fetchTycho2BinaryAsset(): Promise<ArrayBuffer> {
-  if (supportsGzipDecompression()) {
-    try {
-      const compressedResponse = await fetch(tycho2CatalogBinaryGzipUrl);
-      if (!compressedResponse.ok || !compressedResponse.body) {
-        throw new Error(
-          `Failed to load compressed Tycho-2 catalog (${compressedResponse.status})`
-        );
-      }
-
-      if (compressedResponse.headers.get("content-encoding") === "gzip") {
-        return await compressedResponse.arrayBuffer();
-      }
-
-      const decompressedStream = compressedResponse.body.pipeThrough(
-        new DecompressionStream("gzip")
-      );
-
-      return await new Response(decompressedStream).arrayBuffer();
-    } catch (error) {
-      console.warn("Falling back to uncompressed Tycho-2 catalog:", error);
-    }
-  }
-
-  const binaryResponse = await fetch(tycho2CatalogBinaryUrl);
-  if (!binaryResponse.ok) {
-    throw new Error(
-      `Failed to load Tycho-2 catalog (${binaryResponse.status})`
-    );
-  }
-
-  return binaryResponse.arrayBuffer();
-}
-
-export const getCachedTycho2Catalog = () => tycho2CatalogCache;
-
-export const loadTycho2Catalog = async (): Promise<Tycho2CatalogData> => {
-  if (tycho2CatalogCache) {
-    return tycho2CatalogCache;
-  }
-
-  if (!tycho2CatalogPromise) {
-    tycho2CatalogPromise = fetchTycho2BinaryAsset()
-      .then((buffer) => {
-        const catalog = parseTycho2BinaryBuffer(buffer);
-        tycho2CatalogCache = catalog;
-        return catalog;
-      })
-      .catch((error: unknown) => {
-        tycho2CatalogPromise = null;
-        throw error;
-      });
-  }
-
-  return tycho2CatalogPromise;
-};
 
 export const getCachedNASAStarCatalog = () => nasaStarCatalogCache;
 
@@ -186,4 +126,87 @@ export const loadNASAStarCatalog = async (): Promise<NASAStar[]> => {
   }
 
   return nasaStarCatalogPromise;
+};
+
+// --- HYG catalog loading (new pipeline) -------------------------------------
+//
+// The HYG binary ships under `public/data/hyg-stars/` in four LOD tiers. For
+// HYG-B we always fetch the `full` tier; HYG-C will wire tier selection into
+// the device quality profile. The runtime transparently decompresses the
+// gzipped payload via `DecompressionStream` and falls back to the raw `.bin`
+// when the stream API is missing (rare, only very old browsers).
+
+export type HygTier = "low" | "medium" | "high" | "full";
+
+const DEFAULT_HYG_TIER: HygTier = "full";
+
+const getHygTierPath = (tier: HygTier, compressed: boolean) => {
+  const base = import.meta.env.BASE_URL || "/";
+  const suffix = compressed ? ".gz" : "";
+  return `${base}data/hyg-stars/hyg-v1-${tier}.bin${suffix}`;
+};
+
+const supportsGzipDecompression = () =>
+  typeof DecompressionStream !== "undefined";
+
+async function fetchHygBinaryAsset(tier: HygTier): Promise<ArrayBuffer> {
+  if (supportsGzipDecompression()) {
+    try {
+      const response = await fetch(getHygTierPath(tier, true));
+      if (!response.ok || !response.body) {
+        throw new Error(
+          `Failed to load compressed HYG ${tier} catalog (${response.status})`
+        );
+      }
+
+      // If the server already decompressed the body (Content-Encoding: gzip)
+      // then the ArrayBuffer is the raw binary directly.
+      if (response.headers.get("content-encoding") === "gzip") {
+        return await response.arrayBuffer();
+      }
+
+      const decompressedStream = response.body.pipeThrough(
+        new DecompressionStream("gzip")
+      );
+      return await new Response(decompressedStream).arrayBuffer();
+    } catch (error) {
+      console.warn("Falling back to uncompressed HYG catalog:", error);
+    }
+  }
+
+  const response = await fetch(getHygTierPath(tier, false));
+  if (!response.ok) {
+    throw new Error(`Failed to load HYG ${tier} catalog (${response.status})`);
+  }
+  return response.arrayBuffer();
+}
+
+const hygCatalogCache = new Map<HygTier, HygCatalogData>();
+const hygCatalogPromise = new Map<HygTier, Promise<HygCatalogData>>();
+
+export const getCachedHygCatalog = (tier: HygTier = DEFAULT_HYG_TIER) =>
+  hygCatalogCache.get(tier) ?? null;
+
+export const loadHygCatalog = async (
+  tier: HygTier = DEFAULT_HYG_TIER
+): Promise<HygCatalogData> => {
+  const cached = hygCatalogCache.get(tier);
+  if (cached) return cached;
+
+  const inflight = hygCatalogPromise.get(tier);
+  if (inflight) return inflight;
+
+  const promise = fetchHygBinaryAsset(tier)
+    .then((buffer) => {
+      const catalog = parseHygBinaryBuffer(buffer);
+      hygCatalogCache.set(tier, catalog);
+      return catalog;
+    })
+    .catch((error: unknown) => {
+      hygCatalogPromise.delete(tier);
+      throw error;
+    });
+
+  hygCatalogPromise.set(tier, promise);
+  return promise;
 };

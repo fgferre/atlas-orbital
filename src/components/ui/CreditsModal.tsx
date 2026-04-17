@@ -99,10 +99,9 @@ export const CreditsModal = () => {
                   link={STARFIELD_SOURCE_METADATA.nasa.creditsLink}
                 />
                 <CreditItem
-                  title={STARFIELD_SOURCE_METADATA.tycho2.creditsTitle}
-                  description={
-                    STARFIELD_SOURCE_METADATA.tycho2.creditsDescription
-                  }
+                  title={STARFIELD_SOURCE_METADATA.hyg.creditsTitle}
+                  description={STARFIELD_SOURCE_METADATA.hyg.creditsDescription}
+                  link={STARFIELD_SOURCE_METADATA.hyg.creditsLink}
                 />
                 <CreditItem
                   title="NASA JPL Horizons"

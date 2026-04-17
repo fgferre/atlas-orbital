@@ -170,9 +170,9 @@ export const useStore = create<AppState>((set) => ({
       ? createDefaultViewportFramingState(window.innerWidth, window.innerHeight)
       : createDefaultViewportFramingState(),
   showStarfield: true,
-  starfieldSource: "tycho2",
+  starfieldSource: "hyg",
   starfieldProviderStates: {
-    tycho2: { status: "idle", error: null },
+    hyg: { status: "idle", error: null },
     nasa: { status: "idle", error: null },
   },
   showCredits: false,
@@ -275,7 +275,7 @@ export const useStore = create<AppState>((set) => ({
     }),
   toggleStarfieldImplementation: () =>
     set((state) => ({
-      starfieldSource: state.starfieldSource === "nasa" ? "tycho2" : "nasa",
+      starfieldSource: state.starfieldSource === "nasa" ? "hyg" : "nasa",
     })),
   toggleCredits: () => set((state) => ({ showCredits: !state.showCredits })),
   focusHome: () =>

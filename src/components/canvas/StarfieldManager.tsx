@@ -11,4 +11,6 @@ export const StarfieldManager = () => {
   }
 
   return starfieldSource === "nasa" ? <NASAStarfield /> : <Starfield />;
+  // `hyg` falls through to the HYG-backed <Starfield />; future presets
+  // (if they appear) should add their own cases explicitly.
 };
