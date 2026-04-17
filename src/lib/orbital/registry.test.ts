@@ -15,7 +15,7 @@ describe("Orbital Registry", () => {
     it("should return metadata for registered bodies", () => {
       const mercury = getOrbitalMetadata("mercury");
       expect(mercury).not.toBeNull();
-      expect(mercury?.primaryModel).toBe("VSOP2013");
+      expect(mercury?.primaryModel).toBe("VSOP87D");
       expect(mercury?.primaryProvider).toBe("ephem");
       expect(mercury?.fallbackProvider).toBe("kepler");
     });
@@ -33,14 +33,14 @@ describe("Orbital Registry", () => {
   });
 
   describe("hasAnalyticalEphemeris", () => {
-    it("should return true for VSOP2013 bodies", () => {
+    it("should return true for VSOP87D inner planets", () => {
       expect(hasAnalyticalEphemeris("mercury")).toBe(true);
       expect(hasAnalyticalEphemeris("venus")).toBe(true);
       expect(hasAnalyticalEphemeris("earth")).toBe(true);
       expect(hasAnalyticalEphemeris("mars")).toBe(true);
     });
 
-    it("should return true for TOP2013 bodies", () => {
+    it("should return true for VSOP87D outer planets and Pluto", () => {
       expect(hasAnalyticalEphemeris("jupiter")).toBe(true);
       expect(hasAnalyticalEphemeris("saturn")).toBe(true);
       expect(hasAnalyticalEphemeris("uranus")).toBe(true);
@@ -48,7 +48,7 @@ describe("Orbital Registry", () => {
       expect(hasAnalyticalEphemeris("pluto")).toBe(true);
     });
 
-    it("should return true for ELP2000 (Moon)", () => {
+    it("should return true for ELP/MPP02 (Moon)", () => {
       expect(hasAnalyticalEphemeris("moon")).toBe(true);
     });
 
@@ -64,38 +64,38 @@ describe("Orbital Registry", () => {
   });
 
   describe("getBodiesByModel", () => {
-    it("should return all VSOP2013 bodies", () => {
-      const vsopBodies = getBodiesByModel("VSOP2013");
+    it("should return all VSOP87D bodies (inner + outer planets)", () => {
+      const vsopBodies = getBodiesByModel("VSOP87D");
       expect(vsopBodies).toContain("mercury");
       expect(vsopBodies).toContain("venus");
       expect(vsopBodies).toContain("earth");
       expect(vsopBodies).toContain("mars");
+      expect(vsopBodies).toContain("jupiter");
+      expect(vsopBodies).toContain("saturn");
+      expect(vsopBodies).toContain("uranus");
+      expect(vsopBodies).toContain("neptune");
     });
 
-    it("should return all TOP2013 bodies", () => {
-      const topBodies = getBodiesByModel("TOP2013");
-      expect(topBodies).toContain("jupiter");
-      expect(topBodies).toContain("saturn");
-      expect(topBodies).toContain("uranus");
-      expect(topBodies).toContain("neptune");
-      expect(topBodies).toContain("pluto");
+    it("should isolate Pluto on its own Meeus branch", () => {
+      const plutoBodies = getBodiesByModel("Pluto-Meeus");
+      expect(plutoBodies).toEqual(["pluto"]);
     });
 
-    it("should return empty array for models with no bodies", () => {
-      const empty = getBodiesByModel("VSOP2013" as AnalyticalModel);
+    it("should return an array (possibly empty) for unsupported model labels", () => {
+      const empty = getBodiesByModel("Kepler" as AnalyticalModel);
       expect(Array.isArray(empty)).toBe(true);
     });
   });
 
   describe("isWithinValidityRange", () => {
-    it("should return true for dates within EPHASTER range (1900-2050)", () => {
+    it("should return true for dates within asteroid range (1900-2050)", () => {
       const testDate = new Date("2020-06-15");
       expect(isWithinValidityRange("ceres", testDate)).toBe(true);
       expect(isWithinValidityRange("pallas", testDate)).toBe(true);
       expect(isWithinValidityRange("vesta", testDate)).toBe(true);
     });
 
-    it("should return false for dates outside EPHASTER range", () => {
+    it("should return false for dates outside the asteroid validity range", () => {
       const before1900 = new Date("1850-01-01");
       const after2050 = new Date("2100-01-01");
 

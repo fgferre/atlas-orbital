@@ -10,11 +10,11 @@
  * // Calculate position
  * const result = orbitalEngine.calculatePosition("mars", new Date());
  * console.log(result.position); // THREE.Vector3 in AU
- * console.log(result.provenance); // "VSOP2013" or "Kepler fallback"
+ * console.log(result.provenance); // "VSOP87D" or "Kepler fallback"
  *
  * // Get provenance info
  * const prov = getOrbitalProvenance("ceres");
- * console.log(prov.model); // "EPHASTER" (with validity check)
+ * console.log(prov.model); // "AsteroidOsculating" (with validity check)
  * ```
  */
 

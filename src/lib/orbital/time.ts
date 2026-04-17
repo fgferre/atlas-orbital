@@ -11,7 +11,7 @@
  * References:
  * - IERS Conventions 2010
  * - NASA JPL Horizons documentation
- * - VSOP2013 / ELP2000 time conventions
+ * - VSOP87 / ELP/MPP02 time conventions (both consume TDB)
  */
 
 // J2000.0 epoch: 2000-01-01 12:00 TT
@@ -214,8 +214,9 @@ export function julianYearsToDate(jy2000: number): Date {
 }
 
 /**
- * Get the time scale used by analytical ephemerides
- * Most modern ephemerides (VSOP2013, ELP2000-82b) use TDB internally
+ * Get the time scale used by analytical ephemerides.
+ * The live providers in this engine (VSOP87D, Pluto-Meeus, ELP/MPP02-trunc)
+ * all consume TDB internally.
  * @param date JavaScript Date
  * @returns Julian Date in TDB
  */

@@ -111,7 +111,8 @@ export const CreditsModal = () => {
                 />
                 <CreditItem
                   title="Orbital Calculation"
-                  description="Current runtime uses Keplerian orbital elements. Horizons fixtures are used for regression validation, while VSOP2013, TOP2013, ELP2000, MARSSAT, L1, TASS17, GUST86, and EPHASTER remain planned and are not active in the web app yet."
+                  description="Offline analytical ephemerides: VSOP87D for the eight major planets, Meeus Ch. 37 theory for Pluto, ELP/MPP02 (truncated) for the Moon, JPL SSD mean elements for the Galilean / Saturnian / Uranian / Martian satellites, and osculating elements for Ceres / Pallas / Vesta. Bodies without a published analytical theory fall back transparently to Keplerian propagation, and every result is labelled with the model that actually ran."
+                  link="https://github.com/commenthol/astronomia"
                 />
               </ul>
             </div>

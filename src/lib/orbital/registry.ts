@@ -1,20 +1,18 @@
 /**
  * Orbital Registry
  *
- * Maps celestial bodies to their respective analytical ephemeris models.
- * Based on the implementation plan, this defines which provider should be
- * used for each body in the solar system.
+ * Maps celestial bodies to the analytical provider that actually runs for them.
  *
- * Model Assignments (per plan):
- * - VSOP2013: Mercury, Venus, Earth, Mars
- * - TOP2013: Jupiter, Saturn, Uranus, Neptune, Pluto
- * - ELP2000-MPP02: Moon
- * - MARSSAT: Phobos, Deimos
- * - L1: Io, Europa, Ganymede, Callisto
- * - TASS17: Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus
- * - GUST86: Miranda, Ariel, Umbriel, Titania, Oberon
- * - EPHASTER: Ceres, Pallas, Vesta (1900-2050)
- * - Kepler Fallback: Triton, Charon, Hygiea, Haumea, Makemake, Eris, etc.
+ * Model labels are what really executes in the browser (Path A from PLAN.md):
+ * - VSOP87D: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune
+ * - Pluto-Meeus: Pluto (Meeus Ch. 37)
+ * - ELP-MPP02-trunc: Moon
+ * - MartianSatMeanElements: Phobos, Deimos
+ * - GalileanMeanElements: Io, Europa, Ganymede, Callisto
+ * - SaturnianMeanElements: Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus
+ * - UranianMeanElements: Miranda, Ariel, Umbriel, Titania, Oberon
+ * - AsteroidOsculating: Ceres, Pallas, Vesta (1900-2050 validity)
+ * - Kepler: all remaining bodies without a maintained analytical theory
  */
 
 import type {
@@ -27,25 +25,25 @@ import type {
  * Validity ranges for time-limited ephemerides
  */
 export const VALIDITY_RANGES: Record<string, ValidityRange> = {
-  ephaster: {
+  asteroid: {
     startYear: 1900,
     endYear: 2050,
-    note: "EPHASTER asteroid ephemerides valid 1900-2050",
+    note: "Asteroid osculating elements with secular drift are trusted 1900-2050",
   },
-  vsop2013: {
-    startYear: -4000,
-    endYear: 8000,
-    note: "VSOP2013 long-term planetary ephemeris",
+  vsop87: {
+    startYear: -2000,
+    endYear: 6000,
+    note: "VSOP87D truncated series, arcsecond-level 2000 BCE - 6000 CE",
   },
-  top2013: {
-    startYear: -4000,
-    endYear: 8000,
-    note: "TOP2013 long-term outer planet ephemeris",
+  plutoMeeus: {
+    startYear: 1885,
+    endYear: 2099,
+    note: "Meeus Ch. 37 Pluto theory valid 1885-2099",
   },
-  elp2000: {
-    startYear: -4000,
-    endYear: 8000,
-    note: "ELP2000-82b lunar ephemeris",
+  elpMpp02: {
+    startYear: -3000,
+    endYear: 3000,
+    note: "ELP/MPP02 truncated (few-arcsecond level over millennia)",
   },
 };
 
@@ -55,225 +53,227 @@ export const VALIDITY_RANGES: Record<string, ValidityRange> = {
 export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
   // === SUN (reference point) ===
   sun: {
-    primaryModel: "VSOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "Solar system barycenter reference",
+    notes: "Solar system origin reference",
   },
 
-  // === INNER PLANETS (VSOP2013) ===
+  // === INNER PLANETS (VSOP87D) ===
   mercury: {
-    primaryModel: "VSOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.vsop2013,
-    notes: "VSOP2013 for high precision 4000 BCE - 8000 CE",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   venus: {
-    primaryModel: "VSOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.vsop2013,
-    notes: "VSOP2013 for high precision 4000 BCE - 8000 CE",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   earth: {
-    primaryModel: "VSOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.vsop2013,
-    notes: "VSOP2013 for high precision 4000 BCE - 8000 CE",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   mars: {
-    primaryModel: "VSOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.vsop2013,
-    notes: "VSOP2013 for high precision 4000 BCE - 8000 CE",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
 
-  // === OUTER PLANETS (TOP2013) ===
+  // === OUTER PLANETS (VSOP87D) ===
   jupiter: {
-    primaryModel: "TOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.top2013,
-    notes: "TOP2013 optimized for outer planets",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   saturn: {
-    primaryModel: "TOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.top2013,
-    notes: "TOP2013 optimized for outer planets",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   uranus: {
-    primaryModel: "TOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.top2013,
-    notes: "TOP2013 optimized for outer planets",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
   neptune: {
-    primaryModel: "TOP2013",
+    primaryModel: "VSOP87D",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.top2013,
-    notes: "TOP2013 optimized for outer planets",
+    validityRange: VALIDITY_RANGES.vsop87,
+    notes: "VSOP87D truncated planetary theory",
   },
+
+  // === PLUTO (Meeus Ch. 37) ===
   pluto: {
-    primaryModel: "TOP2013",
+    primaryModel: "Pluto-Meeus",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.top2013,
-    notes: "TOP2013 includes Pluto with perturbations",
+    validityRange: VALIDITY_RANGES.plutoMeeus,
+    notes: "Meeus Ch. 37 Pluto theory (J/S/P periodic terms)",
   },
 
-  // === MOON (ELP2000-MPP02) ===
+  // === MOON (ELP/MPP02 truncated) ===
   moon: {
-    primaryModel: "ELP2000",
+    primaryModel: "ELP-MPP02-trunc",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.elp2000,
-    notes: "ELP2000-82b lunar theory with high precision",
+    validityRange: VALIDITY_RANGES.elpMpp02,
+    notes: "Truncated ELP/MPP02 lunar theory (arcsecond level)",
   },
 
-  // === MARTIAN SATELLITES (MARSSAT) ===
+  // === MARTIAN SATELLITES (mean elements, J2000 ecliptic) ===
   phobos: {
-    primaryModel: "MARSSAT",
+    primaryModel: "MartianSatMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "MARSSAT for Martian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   deimos: {
-    primaryModel: "MARSSAT",
+    primaryModel: "MartianSatMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "MARSSAT for Martian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
 
-  // === GALILEAN MOONS (L1) ===
+  // === GALILEAN MOONS (mean elements, J2000 ecliptic) ===
   io: {
-    primaryModel: "L1",
+    primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "L1 theory for Galilean satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   europa: {
-    primaryModel: "L1",
+    primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "L1 theory for Galilean satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   ganymede: {
-    primaryModel: "L1",
+    primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "L1 theory for Galilean satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   callisto: {
-    primaryModel: "L1",
+    primaryModel: "GalileanMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "L1 theory for Galilean satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
 
-  // === MAJOR SATURN SATELLITES (TASS17) ===
+  // === MAJOR SATURN SATELLITES (mean elements, J2000 ecliptic) ===
   mimas: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   enceladus: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   tethys: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   dione: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   rhea: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   titan: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   iapetus: {
-    primaryModel: "TASS17",
+    primaryModel: "SaturnianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "TASS17 for Saturnian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
 
-  // === MAJOR URANUS SATELLITES (GUST86) ===
+  // === MAJOR URANUS SATELLITES (mean elements, J2000 ecliptic) ===
   miranda: {
-    primaryModel: "GUST86",
+    primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "GUST86 for Uranian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   ariel: {
-    primaryModel: "GUST86",
+    primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "GUST86 for Uranian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   umbriel: {
-    primaryModel: "GUST86",
+    primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "GUST86 for Uranian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   titania: {
-    primaryModel: "GUST86",
+    primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "GUST86 for Uranian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
   oberon: {
-    primaryModel: "GUST86",
+    primaryModel: "UranianMeanElements",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "GUST86 for Uranian satellites",
+    notes: "JPL SSD mean elements, rotated offline to J2000 ecliptic",
   },
 
-  // === MAIN BELT ASTEROIDS (EPHASTER) ===
+  // === MAIN BELT ASTEROIDS (Osculating, 1900-2050 window) ===
   ceres: {
-    primaryModel: "EPHASTER",
+    primaryModel: "AsteroidOsculating",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.ephaster,
-    notes: "EPHASTER asteroid ephemeris",
+    validityRange: VALIDITY_RANGES.asteroid,
+    notes: "Osculating elements at J2000 with secular drift",
   },
   pallas: {
-    primaryModel: "EPHASTER",
+    primaryModel: "AsteroidOsculating",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.ephaster,
-    notes: "EPHASTER asteroid ephemeris",
+    validityRange: VALIDITY_RANGES.asteroid,
+    notes: "Osculating elements at J2000 with secular drift",
   },
   vesta: {
-    primaryModel: "EPHASTER",
+    primaryModel: "AsteroidOsculating",
     primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    validityRange: VALIDITY_RANGES.ephaster,
-    notes: "EPHASTER asteroid ephemeris",
+    validityRange: VALIDITY_RANGES.asteroid,
+    notes: "Osculating elements at J2000 with secular drift",
   },
 
   // === FALLBACK BODIES (Kepler only) ===
@@ -281,19 +281,19 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
     primaryModel: "Kepler",
     primaryProvider: "kepler",
     fallbackProvider: "kepler",
-    notes: "Keplerian elements - no analytical theory available",
+    notes: "Keplerian elements - no maintained analytical theory available",
   },
   charon: {
     primaryModel: "Kepler",
     primaryProvider: "kepler",
     fallbackProvider: "kepler",
-    notes: "Keplerian elements - no analytical theory available",
+    notes: "Keplerian elements - no maintained analytical theory available",
   },
   hygiea: {
     primaryModel: "Kepler",
     primaryProvider: "kepler",
     fallbackProvider: "kepler",
-    notes: "Keplerian elements - no analytical theory available",
+    notes: "Keplerian elements - no maintained analytical theory available",
   },
   haumea: {
     primaryModel: "Kepler",
@@ -359,8 +359,6 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
 
 /**
  * Get orbital metadata for a body
- * @param bodyId Body identifier
- * @returns Metadata or null if not registered
  */
 export function getOrbitalMetadata(bodyId: string): BodyOrbitalMetadata | null {
   return ORBITAL_METADATA_REGISTRY[bodyId] ?? null;
@@ -368,8 +366,6 @@ export function getOrbitalMetadata(bodyId: string): BodyOrbitalMetadata | null {
 
 /**
  * Check if a body has analytical ephemeris support
- * @param bodyId Body identifier
- * @returns true if primary model is not Kepler
  */
 export function hasAnalyticalEphemeris(bodyId: string): boolean {
   const metadata = getOrbitalMetadata(bodyId);
@@ -377,9 +373,7 @@ export function hasAnalyticalEphemeris(bodyId: string): boolean {
 }
 
 /**
- * Get list of bodies supported by a specific model
- * @param model Analytical model type
- * @returns Array of body IDs
+ * Get list of bodies that use a specific analytical model
  */
 export function getBodiesByModel(model: AnalyticalModel): string[] {
   return Object.entries(ORBITAL_METADATA_REGISTRY)
@@ -389,9 +383,6 @@ export function getBodiesByModel(model: AnalyticalModel): string[] {
 
 /**
  * Check if a date is within the validity range for a body
- * @param bodyId Body identifier
- * @param date JavaScript Date
- * @returns true if within validity range or no range specified
  */
 export function isWithinValidityRange(bodyId: string, date: Date): boolean {
   const metadata = getOrbitalMetadata(bodyId);
@@ -406,7 +397,6 @@ export function isWithinValidityRange(bodyId: string, date: Date): boolean {
 
 /**
  * Get all registered body IDs
- * @returns Array of body identifiers
  */
 export function getAllRegisteredBodies(): string[] {
   return Object.keys(ORBITAL_METADATA_REGISTRY);
@@ -422,7 +412,7 @@ export const ANALYTICAL_EPHEMERIS_BODIES = Object.entries(
   .map(([bodyId]) => bodyId);
 
 /**
- * Bodies that are Kepler-only (no analytical theory)
+ * Bodies that are Kepler-only (no analytical theory wired up)
  */
 export const KEPLER_ONLY_BODIES = Object.entries(ORBITAL_METADATA_REGISTRY)
   .filter(([, metadata]) => metadata.primaryModel === "Kepler")

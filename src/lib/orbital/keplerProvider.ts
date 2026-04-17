@@ -16,6 +16,14 @@ import type {
   OsculatingElements,
 } from "./types";
 import { J2000_EPOCH } from "./time";
+import {
+  elementsToCartesian,
+  ecliptic2ThreeJs,
+  perifocalToEcliptic,
+  mod2Pi,
+} from "./analytical/coordUtils";
+
+const D2R = Math.PI / 180;
 
 /**
  * Keplerian orbital elements interface
@@ -31,64 +39,27 @@ interface KeplerianElements {
 }
 
 /**
- * Solve Kepler's equation using Newton-Raphson iteration
- * @param M Mean anomaly (radians)
- * @param e Eccentricity
- * @returns Eccentric anomaly (radians)
- */
-function solveKeplerEquation(M: number, e: number): number {
-  let E = M;
-  for (let k = 0; k < 5; k++) {
-    E = E - (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-  }
-  return E;
-}
-
-/**
- * Calculate position from Keplerian elements
- * @param elements Orbital elements
- * @param daysSinceJ2000 Days since J2000.0 epoch
- * @returns Position vector in AU (ecliptic J2000)
+ * Calculate position from Keplerian elements (mean-anomaly path).
+ *
+ * Delegates to the shared `elementsToCartesian` helper so the Kepler fallback
+ * and the analytical satellite / asteroid branches use one solver and one
+ * rotation.
  */
 function calculateKeplerianPosition(
   elements: KeplerianElements,
   daysSinceJ2000: number
 ): THREE.Vector3 {
   const { a, e, i, O, w, M0, n } = elements;
-
-  // Calculate mean anomaly
-  const M = (M0 + n * daysSinceJ2000) % 360;
-  const M_rad = M * (Math.PI / 180);
-
-  // Solve Kepler's equation
-  const E = solveKeplerEquation(M_rad, e);
-
-  // Calculate position in orbital plane
-  const P = a * (Math.cos(E) - e);
-  const Q = a * Math.sqrt(1 - e * e) * Math.sin(E);
-
-  // Rotation angles
-  const rad = Math.PI / 180;
-  const cosO = Math.cos(O * rad);
-  const sinO = Math.sin(O * rad);
-  const cosw = Math.cos(w * rad);
-  const sinw = Math.sin(w * rad);
-  const cosi = Math.cos(i * rad);
-  const sini = Math.sin(i * rad);
-
-  // Transform to ecliptic coordinates
-  // Standard astronomical convention
-  const x =
-    P * (cosw * cosO - sinw * sinO * cosi) -
-    Q * (sinw * cosO + cosw * sinO * cosi);
-  const y =
-    P * (cosw * sinO + sinw * cosO * cosi) +
-    Q * (cosw * cosO * cosi - sinw * sinO);
-  const z = P * (sinw * sini) + Q * (cosw * sini);
-
-  // Convert to Three.js coordinates (Y-up)
-  // TODO: Fix coordinate frame alignment - see issue below
-  return new THREE.Vector3(x, z, -y);
+  const Mdeg = (M0 + n * daysSinceJ2000) % 360;
+  const rEcl = elementsToCartesian({
+    aLinear: a,
+    e,
+    iRad: i * D2R,
+    OmegaRad: mod2Pi(O * D2R),
+    omegaRad: mod2Pi(w * D2R),
+    MRad: mod2Pi(Mdeg * D2R),
+  });
+  return ecliptic2ThreeJs(rEcl);
 }
 
 /**
@@ -132,38 +103,22 @@ function calculatePositionFromTrueAnomaly(
   w: number,
   nu: number
 ): THREE.Vector3 {
-  const nuRad = nu * (Math.PI / 180);
+  const nuRad = nu * D2R;
 
-  // Distance from focus (Sun/planet) at true anomaly
+  // Distance from focus (Sun/planet) at true anomaly:
   // r = a(1-e²) / (1+e·cos(ν))
   const r = (a * (1 - e * e)) / (1 + e * Math.cos(nuRad));
+  const xp = r * Math.cos(nuRad);
+  const yp = r * Math.sin(nuRad);
 
-  // Position in orbital plane (perifocal coordinates)
-  // x' = r·cos(ν), y' = r·sin(ν)
-  const xOrbital = r * Math.cos(nuRad);
-  const yOrbital = r * Math.sin(nuRad);
-
-  // Rotation angles
-  const rad = Math.PI / 180;
-  const cosO = Math.cos(O * rad);
-  const sinO = Math.sin(O * rad);
-  const cosw = Math.cos(w * rad);
-  const sinw = Math.sin(w * rad);
-  const cosi = Math.cos(i * rad);
-  const sini = Math.sin(i * rad);
-
-  // Transform to ecliptic coordinates
-  // Standard rotation from orbital plane to ecliptic frame
-  const x =
-    xOrbital * (cosw * cosO - sinw * sinO * cosi) -
-    yOrbital * (sinw * cosO + cosw * sinO * cosi);
-  const y =
-    xOrbital * (cosw * sinO + sinw * cosO * cosi) +
-    yOrbital * (cosw * cosO * cosi - sinw * sinO);
-  const z = xOrbital * (sinw * sini) + yOrbital * (cosw * sini);
-
-  // Convert to Three.js coordinates (Y-up)
-  return new THREE.Vector3(x, z, -y);
+  const rEcl = perifocalToEcliptic(
+    xp,
+    yp,
+    mod2Pi(O * D2R),
+    mod2Pi(w * D2R),
+    i * D2R
+  );
+  return ecliptic2ThreeJs(rEcl);
 }
 
 /**

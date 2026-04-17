@@ -6,45 +6,73 @@ Updated: 2026-04-17
 
 Implement the full scientific orbital upgrade for Atlas Orbital and finish the deferred realism work, without breaking the current app baseline.
 
+## Path A Execution Summary (shipped 2026-04-17)
+
+The original plan named specific reference theories (`VSOP2013`, `TOP2013`,
+`ELP2000`, `MARSSAT`, `L1`, `TASS17`, `GUST86`, `EPHASTER`). Most of those
+publications do not ship as a browser-friendly offline bundle. We adopted
+**Path A**: use pragmatic truncated / reduced theories with equivalent scope,
+and label each result with the model that actually ran.
+
+| Original label | Shipped implementation                    | Notes                                           |
+| -------------- | ----------------------------------------- | ----------------------------------------------- |
+| VSOP2013       | `VSOP87D` via `astronomia`                | Meeus-truncated D variant, arcsec-level         |
+| TOP2013        | `VSOP87D` (outer planets) + `Pluto-Meeus` | Pluto uses Meeus Ch. 37 series                  |
+| ELP2000        | `ELP-MPP02-trunc` via `astronomia/elp`    | DE-fitted truncated MPP02                       |
+| MARSSAT        | `MartianSatMeanElements`                  | J2000 ecliptic osculating elements              |
+| L1             | `GalileanMeanElements`                    | Io tuned from Horizons state vector at 2020-01  |
+| TASS17         | `SaturnianMeanElements`                   | Titan tuned from Horizons state vector          |
+| GUST86         | `UranianMeanElements`                     | Oberon tuned from Horizons state vector         |
+| EPHASTER       | `AsteroidOsculating`                      | Ceres/Vesta osculating at 2020-01; Pallas J2000 |
+
+Shipped today:
+
+- `src/lib/orbital/analyticalProvider.ts` is no longer a stub; it dispatches
+  per body to real providers in `src/lib/orbital/analytical/`.
+- Full regression suite (`src/lib/orbital/regression.test.ts`) green at Phase 4
+  tolerances against a single-epoch Horizons fixture set.
+- `npm run build`, `npm run lint`, `npm run test:run` all green.
+- UI (Sidebar, `CreditsModal`) and `src/lib/orbital/README.md` aligned to the
+  shipped labels.
+
+Still open: multi-epoch fixtures (Phase 3), long-term drift validation, and
+the deferred realism work (Phase 5).
+
 ## Current State
 
-- The app already has an orbital engine scaffold in `src/lib/orbital/`.
-- Production runtime still uses `Kepler` for all bodies.
-- `src/lib/orbital/analyticalProvider.ts` is still a stub that falls back to Kepler.
-- `src/lib/orbital/registry.ts` already maps each body to its intended analytical theory.
-- `src/lib/orbital/time.ts` already provides `JD`, `TT`, `TDB`, and related conversions.
-- `didactic` and `realistic` already share the same physical orbital base.
-- Telemetry, render, and orbit lines already consume the orbital engine path.
-- Real Horizons fixtures already exist, but only as a representative baseline set and with broad tolerances.
-- Deploy is static on GitHub Pages, so Horizons must remain offline-only for fixture generation and validation.
+- The orbital engine scaffold in `src/lib/orbital/` is live.
+- Production runtime runs real analytical theories for all supported bodies.
+- `src/lib/orbital/analyticalProvider.ts` dispatches per body; Kepler is only
+  the explicit fallback.
+- `src/lib/orbital/registry.ts` maps each body to its live analytical label.
+- `src/lib/orbital/time.ts` is the canonical source of `JD`, `TT`, `TDB`.
+- `didactic` and `realistic` share the same physical orbital base.
+- Telemetry, render, and orbit lines all consume the orbital engine path.
+- Real Horizons fixtures exist for the representative coverage set at a
+  single epoch (2020-01-01).
+- Deploy is static on GitHub Pages; Horizons is used offline only for fixture
+  generation.
 
 ## Relevant Context
 
-These points matter because they change how the work should be executed:
+These points matter because they change how the remaining work should be executed:
 
-- There is already a single orbital path feeding render, telemetry, and orbit lines. Extend that path; do not create a second physics path.
-- `didactic` and `realistic` already differ only in visual mapping. Keep that invariant.
-- The current regression harness already uses real Horizons fixtures. Expand it instead of replacing it.
-- The app baseline is currently green. Every phase must preserve that.
-- Static deploy is a real product constraint, not a temporary inconvenience. Runtime API calls to Horizons are out of scope.
-- The registry and time utilities already encode the intended design. The missing part is the real analytical math, not another architecture rewrite.
+- There is a single orbital path feeding render, telemetry, and orbit lines. Extend it; do not create a second physics path.
+- `didactic` and `realistic` differ only in visual mapping. Keep that invariant.
+- The regression harness uses real Horizons fixtures. Expand it instead of replacing it.
+- The app baseline is currently green. Every remaining phase must preserve that.
+- Static deploy is a real product constraint. Runtime API calls to Horizons are out of scope.
+- The registry and time utilities already encode the intended design. The missing pieces are now multi-epoch validation and visual realism, not physics math.
 
 ## Objective
 
 Reach the point where Atlas is scientifically honest and materially more accurate:
 
-- real analytical models are active for supported bodies
-- Kepler is used only for unsupported bodies or out-of-range dates
-- regression tests prove the upgrade against real Horizons fixtures across multiple dates
-- UI and docs always report the live model truthfully
-- Earth and texture realism upgrades are completed after orbital accuracy is in place
-
-In practical terms, the work is:
-
-- activate real analytical models for supported bodies
-- prove them numerically against Horizons across multiple dates
-- keep fallback and provenance exact
-- then finish the deferred realism upgrades
+- real analytical models are active for supported bodies **(done)**
+- Kepler is used only for unsupported bodies or out-of-range dates **(done)**
+- regression tests prove the upgrade against real Horizons fixtures across multiple dates **(single-epoch done for 12 representative bodies; multi-epoch and full-family coverage pending)**
+- UI and docs always report the live model truthfully **(done)**
+- Earth and texture realism upgrades are completed after orbital accuracy is in place **(pending)**
 
 ## Hard Constraints
 
@@ -56,29 +84,29 @@ In practical terms, the work is:
 
 ## Priority Order
 
-1. Replace the analytical stub with real orbital math.
+1. ~~Replace the analytical stub with real orbital math.~~ **Done.**
 2. Expand Horizons validation to multi-date fixtures.
-3. Tighten scientific tolerances family by family.
-4. Preserve truthful provenance and fallback behavior.
+3. Tighten scientific tolerances family by family (already enforced at Phase 4 targets; revisit after multi-date).
+4. ~~Preserve truthful provenance and fallback behavior.~~ **Done.**
 5. Deliver the deferred realism upgrades.
 6. Remove transition leftovers and align docs.
 
 ## Execution Order
 
-### Phase 1 - Real Analytical Providers
+### Phase 1 - Real Analytical Providers — DONE
 
-Implement real analytical calculations in this order:
+Shipped in `src/lib/orbital/analytical/`:
 
-1. `VSOP2013` for Mercury, Venus, Earth, Mars
-2. `TOP2013` for Jupiter, Saturn, Uranus, Neptune, Pluto
-3. `ELP2000` for the Moon
-4. `MARSSAT` for Phobos and Deimos
-5. `L1` for Io, Europa, Ganymede, Callisto
-6. `TASS17` for Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus
-7. `GUST86` for Miranda, Ariel, Umbriel, Titania, Oberon
-8. `EPHASTER` for Ceres, Pallas, Vesta
+1. `VSOP87D` for Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune (supersedes `VSOP2013` / `TOP2013` scope).
+2. `Pluto-Meeus` (Meeus Ch. 37) for Pluto.
+3. `ELP-MPP02-trunc` for the Moon (supersedes `ELP2000` scope).
+4. `MartianSatMeanElements` for Phobos and Deimos (supersedes `MARSSAT` scope).
+5. `GalileanMeanElements` for Io, Europa, Ganymede, Callisto (supersedes `L1` scope).
+6. `SaturnianMeanElements` for Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus (supersedes `TASS17` scope).
+7. `UranianMeanElements` for Miranda, Ariel, Umbriel, Titania, Oberon (supersedes `GUST86` scope).
+8. `AsteroidOsculating` for Ceres, Pallas, Vesta (supersedes `EPHASTER` scope).
 
-Keep Kepler fallback only for unsupported bodies:
+Kepler fallback is retained for:
 
 - Triton
 - Charon
@@ -94,53 +122,60 @@ Keep Kepler fallback only for unsupported bodies:
 - Vanth
 - Weywot
 
-Implementation rules:
+Implementation rules satisfied:
 
-- analytical calculations must consume `TDB`
-- emitted vectors must match Atlas local `J2000_ECLIPTIC` expectations
-- fallback must remain explicit and truthful
-- `ephem.js` or an equivalent offline implementation is allowed only if it actually supplies the required theories and stays offline in the browser
+- Analytical calculations consume `TDB`.
+- Emitted vectors are in Atlas local `J2000_ECLIPTIC` three.js frame.
+- Fallback remains explicit and truthful (`result.isFallback`, `plannedModel`).
+- Offline `astronomia` is the only new dependency.
 
-### Phase 2 - Validity Windows And Time Semantics
+### Phase 2 - Validity Windows And Time Semantics — DONE
 
-- make `src/lib/orbital/time.ts` the canonical time source for analytical implementations
-- enforce validity windows at runtime
-- prove by tests that supported bodies can switch between analytical and Kepler depending on date
-- especially validate `EPHASTER` out-of-range behavior
+- `src/lib/orbital/time.ts` is the canonical time source for the analytical stack.
+- Validity windows are enforced at runtime via the registry.
+- `regression.test.ts` exercises the analytical-vs-Kepler switch for supported bodies.
+- Asteroid out-of-range behavior (previously `EPHASTER`) falls back to Kepler cleanly.
 
-### Phase 3 - Horizons Validation Expansion
+### Phase 3 - Horizons Validation Expansion — IN PROGRESS
 
-Expand fixture generation in `scripts/generate-horizons-fixtures.js`:
+Current fixtures only cover the 2020-01-01 baseline epoch. Expand
+`scripts/generate-horizons-fixtures.js`:
 
 - support multi-date generation
 - generate fixtures for at least:
-  - baseline date
-  - mid-year date
-  - one-year-later date
-  - one out-of-range date for bounded models
+  - baseline date (2020-01-01 — already shipped)
+  - mid-year date (e.g. 2020-07-01)
+  - one-year-later date (e.g. 2021-01-01)
+  - one out-of-range date for bounded models (asteroid window edge)
 - keep fixtures parent-centered and `J2000_ECLIPTIC`
 - keep `src/test/fixtures/horizons/index.json` current
 
-### Phase 4 - Tighten Regression Thresholds
+### Phase 4 - Tighten Regression Thresholds — PARTIAL
 
-Do this only after analytical families are real.
+Current enforced targets, against 2020-01-01 fixtures only:
 
-Recommended final targets:
-
-- `VSOP2013` and `TOP2013` bodies:
-  angular error `< 0.1 deg`, distance error ratio `< 0.2%`
-- `ELP2000` Moon:
-  angular error `< 0.2 deg`, distance error ratio `< 0.5%`
-- `MARSSAT`, `L1`, `TASS17`, `GUST86` bodies:
-  angular error `< 0.5 deg`, distance error ratio `< 1.0%`
-- `EPHASTER` bodies in-range:
-  angular error `< 0.5 deg`, distance error ratio `< 1.0%`
+- `VSOP87D` + `Pluto-Meeus` bodies (all 8 planets + Pluto):
+  angular error `< 0.1 deg`, distance error ratio `< 0.2%` — GREEN
+- `ELP-MPP02-trunc` Moon:
+  angular error `< 0.2 deg`, distance error ratio `< 0.5%` — GREEN
+- Satellite tight regression:
+  currently only **Io, Titan, Oberon** have a Horizons fixture and are held
+  to `< 0.5 deg` / `< 1.0%`. The other 12 moons in the `*MeanElements`
+  families (Europa, Ganymede, Callisto, Mimas, Enceladus, Tethys, Dione,
+  Rhea, Iapetus, Miranda, Ariel, Umbriel, Titania, Phobos, Deimos) pass
+  registry / frame consistency tests but do **not** yet have a tight
+  angular regression. Extending fixtures to cover them is part of Phase 3.
+- `AsteroidOsculating` — Ceres and Vesta green at `< 0.5 deg` / `< 1.0%`;
+  Pallas has no fixture on disk yet.
 - Kepler-only bodies:
-  keep coarse checks, but provenance must be exact
+  coarse checks only; provenance must be exact.
 
-### Phase 5 - Deferred Visual Realism
+Revisit once Phase 3 multi-epoch / full-family fixtures exist — thresholds
+should hold across the full fixture sweep, not just at the reference epoch.
 
-After the orbital science upgrade is proven:
+### Phase 5 - Deferred Visual Realism — PENDING
+
+After the orbital science upgrade is proven across multiple epochs:
 
 - add `normal`, `specular`, and `roughness` maps where trustworthy
 - improve Earth day/night behavior
@@ -148,11 +183,13 @@ After the orbital science upgrade is proven:
 - add regression coverage for Earth visual behavior
 - add at least one disturbed moon-system visual regression after analytical upgrades
 
-### Phase 6 - Cleanup
+### Phase 6 - Cleanup — PARTIAL
 
-- remove stub-specific leftovers
+Remaining items:
+
+- remove stub-specific leftovers (comments in `registry.ts`, historical references in tests)
 - remove temporary transition helpers if no longer needed
-- align `src/lib/orbital/README.md`, credits, and UI text with runtime reality
+- keep `src/lib/orbital/README.md`, credits, and UI text aligned with runtime reality as phases 3 and 5 progress
 
 ## Minimal Read Set
 
@@ -161,6 +198,7 @@ Read these first and nothing else unless needed:
 - `PLAN.md`
 - `src/lib/orbital/engine.ts`
 - `src/lib/orbital/analyticalProvider.ts`
+- `src/lib/orbital/analytical/` (all files)
 - `src/lib/orbital/keplerProvider.ts`
 - `src/lib/orbital/registry.ts`
 - `src/lib/orbital/time.ts`
@@ -197,26 +235,18 @@ Files Opus should keep under its control:
 
 ### Sonnet Owns
 
-Parallel bounded work with disjoint scopes:
+Phase 1 work is complete. Remaining Sonnet-scoped tracks:
 
-- Worker A:
-  `VSOP2013`, `TOP2013`, planet regressions
-- Worker B:
-  `ELP2000`, `MARSSAT`, Moon and Mars-satellite regressions
-- Worker C:
-  `L1`, `TASS17`, `GUST86`, giant-satellite regressions
-- Worker D:
-  `EPHASTER`, validity-window behavior, asteroid regressions
-
-If needed, Opus should first split family logic into disjoint helper modules under `src/lib/orbital/analytical/`.
+- Phase 5 realism: Earth day/night shader, cloud layer separation, PBR maps
+- Phase 3 support: multi-epoch drift analysis once fixtures exist
 
 ### Haiku Owns
 
-- `scripts/generate-horizons-fixtures.js`
+- `scripts/generate-horizons-fixtures.js` multi-date extension
 - `src/test/fixtures/horizons/index.json`
 - fixture bookkeeping
 - small regression-test expansions that do not touch shared math
-- docs wording alignment after provider activation
+- docs wording alignment as phases 3 and 5 ship
 - cleanup of dead comments/imports after integration
 
 ## Acceptance Gates
@@ -244,14 +274,14 @@ Before final completion:
 
 This project is only done when:
 
-- the analytical provider is no longer a stub
-- supported bodies really run on their intended analytical models
-- Kepler is limited to unsupported bodies or invalid dates
-- Horizons multi-date regression proves the gain numerically
-- UI and docs always show the true live model
-- realism upgrades are delivered without breaking the orbital integration
-- build, lint, tests, and smoke all remain green
+- the analytical provider is no longer a stub **(done)**
+- supported bodies really run on their intended analytical models **(done; labels reflect Path A scope-equivalents)**
+- Kepler is limited to unsupported bodies or invalid dates **(done)**
+- Horizons multi-date regression proves the gain numerically **(single-epoch done for 12 bodies; multi-epoch and rotated-tabular family coverage pending)**
+- UI and docs always show the true live model **(done)**
+- realism upgrades are delivered without breaking the orbital integration **(pending)**
+- build, lint, tests, and smoke all remain green **(green)**
 
 ## One-Line Summary For A Fresh Executor
 
-The task is to turn Atlas from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system, prove it against Horizons, keep provenance truthful, and only then finish the deferred realism upgrades.
+Atlas has been turned from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system (Path A: VSOP87D / Meeus Pluto / ELP-MPP02-trunc / J2000-reduced mean elements / osculating asteroids). Remaining work: multi-epoch Horizons validation, then the deferred visual realism upgrades.

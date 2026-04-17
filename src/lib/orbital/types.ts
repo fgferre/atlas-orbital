@@ -7,17 +7,21 @@ import type * as THREE from "three";
  */
 
 /**
- * Orbital model types supported by analytical ephemerides
+ * Orbital model types supported by offline analytical ephemerides.
+ *
+ * Labels reflect what actually runs in the browser. Where a label differs
+ * from the original reference theory named in PLAN.md, the comment records
+ * the equivalence so provenance stays honest.
  */
 export type AnalyticalModel =
-  | "VSOP2013" // Mercury, Venus, Earth, Mars (planets)
-  | "TOP2013" // Jupiter, Saturn, Uranus, Neptune, Pluto (outer planets)
-  | "ELP2000" // Moon (Earth's satellite)
-  | "MARSSAT" // Phobos, Deimos (Mars satellites)
-  | "L1" // Io, Europa, Ganymede, Callisto (Galilean moons)
-  | "TASS17" // Major Saturn satellites
-  | "GUST86" // Major Uranus satellites
-  | "EPHASTER" // Ceres, Pallas, Vesta (asteroids, 1900-2050)
+  | "VSOP87D" // Meeus truncated planetary theory (Mercury through Neptune)
+  | "Pluto-Meeus" // Meeus Ch. 37 Pluto heliocentric series
+  | "ELP-MPP02-trunc" // Truncated ELP/MPP02 lunar theory
+  | "GalileanMeanElements" // Two-body propagation of J2000 ecliptic elements
+  | "SaturnianMeanElements" // Two-body propagation of J2000 ecliptic elements
+  | "UranianMeanElements" // Two-body propagation of J2000 ecliptic elements
+  | "MartianSatMeanElements" // Two-body propagation of J2000 ecliptic elements
+  | "AsteroidOsculating" // Two-body propagation of J2000 ecliptic osculating elements (1900–2050 window)
   | "Kepler"; // Fallback Keplerian solver
 
 /**
@@ -76,7 +80,7 @@ export interface OrbitalPositionResult {
   elements?: OsculatingElements;
   /** Distance from parent body in AU */
   distanceAU: number;
-  /** Provenance label (e.g., "VSOP2013", "Kepler fallback") */
+  /** Provenance label (e.g., "VSOP87D (Meeus truncated planetary theory)", "Kepler fallback") */
   provenance: string;
   /** Analytical model used */
   model: AnalyticalModel;
