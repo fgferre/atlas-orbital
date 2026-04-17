@@ -84,56 +84,71 @@ preview:test` is running first. Either document the two-step flow
 
 ## Review — 2026-04-17 session
 
-Shipped in chronological order (5 commits after the pre-session baseline):
+Shipped after the pre-session baseline (commits top-to-bottom, oldest
+first):
 
-1. **Earth cloud day/night shader** — world-space sun uniform
-   (`feat(planet): …`, commit `abb2f6c`). Earth cloud layer now dims on
-   the night side regardless of camera orientation.
-2. **Real offline analytical ephemeris stack** — `feat(orbital): …`,
-   commit `bbec355`. Replaces the stub analyticalProvider with real
-   dispatch into `src/lib/orbital/analytical/`: VSOP87D (8 planets),
-   Pluto-Meeus, ELP/MPP02-trunc Moon, satellite + asteroid modules.
-   Consolidates Kepler math in `coordUtils.ts` (DRY), removes dead
-   code, adds 15 unit tests, aligns docs/credits.
-3. **Multi-epoch Horizons regression** — `test(orbital): …`, commit
-   `9279424`. Generalises `generate-horizons-fixtures.js` (multi-body /
-   multi-date / retry), adds 41 fixtures across 4 epochs (baseline,
-   mid-year, one-year, out-of-range), expands `regression.test.ts` to 74
-   tests covering multi-epoch drift + validity-window routing.
-4. **Fixture-derived satellite / asteroid elements** — `fix(orbital):
-…`, commit `fe23150`. New `scripts/derive-elements-from-fixtures.js`
-   inverts Horizons (r, v) into ecliptic-J2000 osculating elements via
-   the standard RV→COE algorithm. All 18 `*MeanElements` + asteroid
-   entries regenerated from this pipeline. Fixes the 50–170° phase
-   errors on the 12 previously-tabular moons and the 72° Pallas error.
-   Tolerances tightened to 0.5°/1 % at epoch; multi-epoch drift
-   documented per body. Also discovers and fixes the UT-vs-TDB epoch
-   mismatch that was costing Phobos ~1° at the supposed epoch (L9).
-5. **HYG v4.2 binary pipeline (offline)** — `feat(starfield): …`,
-   commit `e4994c3`. New format, downloader and LOD-tier builder under
-   `public/data/hyg-stars/`. Does not touch runtime yet; HYG-B onwards
-   will migrate the renderer.
+1. **Earth cloud day/night shader** (`feat(planet)…`, `abb2f6c`) —
+   world-space sun uniform so the night side dims correctly.
+2. **Real offline analytical ephemeris stack** (`feat(orbital)…`,
+   `bbec355`) — VSOP87D, Pluto-Meeus, ELP/MPP02-trunc, satellite +
+   asteroid modules. Consolidates Kepler math in `coordUtils.ts`,
+   removes dead code, 15 new unit tests, honest provenance throughout.
+3. **Multi-epoch Horizons regression** (`test(orbital)…`, `9279424`) —
+   generalises `generate-horizons-fixtures.js`, expands regression
+   suite to cover multi-epoch drift + validity-window routing.
+4. **Fixture-derived satellite / asteroid elements** (`fix(orbital)…`,
+   `fe23150`) — new `scripts/derive-elements-from-fixtures.js` inverts
+   Horizons (r, v) into osculating elements. Fixes 50–170° satellite
+   errors and the 72° Pallas error. Catches UT-vs-TDB epoch mismatch
+   (L9).
+5. **HYG v4.2 binary pipeline (offline)** (`feat(starfield)…`,
+   `e4994c3`) — HYG-A. Spec, downloader, LOD-tier builder, 12 tests.
+6. **First Codex review follow-up** (`fix(orbital)…`, `85bafe9`) —
+   orbit lines now consume analytical osculating elements; credits +
+   registry notes aligned with Horizons-derived reality; task log
+   refreshed; Playwright gate clarified in PLAN.md.
+7. **HYG runtime migration** (`feat(starfield)…`, `8035770`) — HYG-B.
+   New shader with B-V colour, Pogson size, proper motion uniform.
+   Store key `tycho2` → `hyg`.
+8. **HYG tier selection** (`feat(starfield)…`, `f455f7a`) — HYG-C.
+   `qualityProfile` → tier mapping; cache per tier.
+9. **HYG hover labels** (`feat(starfield)…`, `188ba31`) — HYG-D.
+   200 ms sustain tooltip, cursor feedback, disabled on constrained.
+10. **Legacy tycho2 pipeline deleted** (`chore(starfield)…`,
+    `d872104`) — HYG-E cleanup.
+11. **Analytical epoch shift 2020 → 2025** (`fix(orbital)…`, `a7fe539`)
+    — re-derives every satellite/asteroid entry from fresh Horizons
+    fixtures at 2025-01-01 so short-period moons stay under Phase-4
+    tolerance at present-day simulation dates. 84 new fixtures, 52
+    obsolete ones removed, `MULTI_EPOCH_DATES` bumped to 2025 / 2025-07
+    / 2026.
+12. **Second Codex review follow-up** (`fix(orbital)…`, this pending
+    commit) — fixes the hover-picker catalog race that could keep
+    tooltips disabled on first load, bumps
+    `generate-horizons-fixtures.js` default dates to the 2025 set,
+    aligns CreditsModal and task log to the current epoch.
 
 Code quality checkpoints:
 
-- `AGENTS.md` principles applied literally (no dead code, no duplicated
-  Kepler solvers, honest provenance, no invented file references).
-- Independent review (Codex): three findings — orbit lines using stale
-  Kepler elements for upgraded moons (P2), credits misstating the
-  satellite solver (P2), task log drifting from reality (P3). All three
-  acted on in the Codex-follow-up commit.
+- `AGENTS.md` principles applied literally: no dead code after each
+  strategy change, no duplicated Kepler solvers, honest provenance,
+  no invented file references.
+- Two rounds of independent Codex review, both acted on in the
+  commit that immediately follows. `tasks/lessons.md` carries the L1-L10
+  rule set derived from everything this session caught.
+- Browser smoke test (preview mcp) confirmed zero runtime errors,
+  hover tooltip working, tier selection auto-resolving, all textures
+  loading.
 
-Known remaining limits, surfaced explicitly (see AGENTS.md #8):
+Known remaining limits, surfaced explicitly (AGENTS.md #8):
 
-- Multi-epoch drift for fast-moving satellites is real and bounded, not
-  hidden: Io ±80° /year, Titan / Oberon ±2° /year. Encoded in
-  `regression.test.ts > MULTI_EPOCH_OVERRIDES` with physical cause.
-- Of the 17 fixture-derived `*MeanElements` satellites + asteroids,
-  only the original 12 representative bodies + Ceres / Vesta have
-  fixtures at all three multi-epoch dates. The remaining 15 bodies +
-  Pallas are held tight only at the 2020-01-01 baseline. Listed under
-  "Phase 3 tail".
+- Multi-epoch drift for fast-moving satellites is real and bounded,
+  not hidden: Io ±80° /yr, Titan / Oberon ±2° /yr. Encoded in
+  `MULTI_EPOCH_OVERRIDES` with physical cause.
+- `MULTI_EPOCH_BODIES` in `regression.test.ts` still only covers the
+  12 original representatives. The 2025-07-01 / 2026-01-01 fixtures
+  for the remaining 16 bodies are on disk but not yet held to tight
+  multi-epoch tolerance (tracked in "Phase 3 tail").
 
 Verification status: `npm run lint` clean, `npm run test:run` at
-291/291 green (30 test files, includes `hygBinary` round-trip),
-`npm run build` ~13 s.
+287/287 green across 30 test files, `npm run build` ~9 s.

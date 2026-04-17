@@ -23,7 +23,7 @@
  *   listener entirely so there is zero CPU cost on weak devices).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
@@ -32,12 +32,14 @@ import {
   getCachedHygCatalog,
   getCachedHygNamesSidecar,
   hygTierForQuality,
+  loadHygCatalog,
   loadHygNamesSidecar,
   type HoveredStarInfo,
   type HygCatalogData,
   type HygNamedStar,
   type HygNamesSidecar,
 } from "../../lib/starfield";
+import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 const HOVER_PICK_THRESHOLD_PX = 12;
 const HOVER_SUSTAIN_MS = 200;
@@ -129,11 +131,26 @@ export const StarHoverPicker = () => {
     showStarfield &&
     qualityProfile.name !== "constrained";
 
-  // Lazy-load the names sidecar the first time the picker is actually
-  // enabled. Never loaded when the user never enables it — free cost.
-  // We derive the current value from the module-level cache on every
-  // render (cheap pointer lookup) so once any caller populates it we
-  // pick it up without a setState cascade in the effect.
+  // Subscribe to the same tier-bound catalog `<Starfield />` is rendering
+  // from. Going through `useStarfieldCatalog` (rather than peeking at the
+  // module cache directly) is what guarantees we re-run `buildPickCandidates`
+  // when the catalog finishes loading: without this subscription the hover
+  // picker could silently stay disabled if the sidecar happened to resolve
+  // before the tier binary did (caught by Codex review of 2026-04-17).
+  const loadCatalogForTier = useCallback(() => loadHygCatalog(tier), [tier]);
+  const getCachedCatalogForTier = useCallback(
+    () => getCachedHygCatalog(tier),
+    [tier]
+  );
+  const catalog = useStarfieldCatalog<HygCatalogData>({
+    source: "hyg",
+    loadCatalog: loadCatalogForTier,
+    getCachedCatalog: getCachedCatalogForTier,
+  });
+
+  // Lazy-load the names sidecar the first time the picker is enabled.
+  // Same render-derives-from-cache pattern as the catalog below so a
+  // parallel loader (hypothetical future one) populates us for free.
   const cachedSidecar = getCachedHygNamesSidecar();
   const [loadedSidecar, setLoadedSidecar] = useState<HygNamesSidecar | null>(
     null
@@ -158,15 +175,13 @@ export const StarHoverPicker = () => {
     };
   }, [enabled, sidecar]);
 
-  // Pre-compute the pick table whenever the tier-scoped catalog or the
-  // sidecar changes. `tier` changes when the user toggles quality mode;
-  // `sidecar` changes exactly once (null → loaded).
+  // Build the pick table whenever either half becomes available.
+  // Both `catalog` and `sidecar` are reactive, so whichever finishes
+  // last triggers the recompute — no race.
   const candidates = useMemo<PickCandidate[]>(() => {
-    if (!enabled || !sidecar) return [];
-    const catalog = getCachedHygCatalog(tier);
-    if (!catalog) return [];
+    if (!enabled || !sidecar || !catalog) return [];
     return buildPickCandidates(catalog, sidecar);
-  }, [enabled, tier, sidecar]);
+  }, [enabled, catalog, sidecar]);
 
   useEffect(() => {
     if (!enabled) {

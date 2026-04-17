@@ -75,7 +75,16 @@ const TARGET_BODIES = [
   { id: "vesta", command: "4;", center: "500@10", name: "Vesta" },
 ];
 
-const DEFAULT_TEST_DATES = ["2020-01-01T00:00:00Z"];
+// Canonical shipped regression set. Matches `MULTI_EPOCH_DATES` in
+// `src/lib/orbital/regression.test.ts` and the analytical element epoch in
+// `src/lib/orbital/analytical/satellites.ts`. Override with
+// `HORIZONS_DATES=...,...` env when capturing historical / experimental
+// points.
+const DEFAULT_TEST_DATES = [
+  "2025-01-01T00:00:00Z",
+  "2025-07-01T00:00:00Z",
+  "2026-01-01T00:00:00Z",
+];
 
 const TEST_DATES = (
   process.env.HORIZONS_DATES

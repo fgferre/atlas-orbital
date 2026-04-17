@@ -110,7 +110,7 @@ export const CreditsModal = () => {
                 />
                 <CreditItem
                   title="Orbital Calculation"
-                  description="Offline analytical ephemerides: VSOP87D for the eight major planets, Meeus Ch. 37 theory for Pluto, ELP/MPP02 (truncated) for the Moon, and Horizons-derived osculating elements at epoch 2020-01-01 for the Galilean, Saturnian, Uranian and Martian satellites plus Ceres / Pallas / Vesta — propagated with a two-body Kepler step. Bodies without an analytical branch fall back transparently to Keplerian propagation, and every result is labelled with the model that actually ran."
+                  description="Offline analytical ephemerides: VSOP87D for the eight major planets, Meeus Ch. 37 theory for Pluto, ELP/MPP02 (truncated) for the Moon, and Horizons-derived osculating elements at epoch 2025-01-01 for the Galilean, Saturnian, Uranian and Martian satellites plus Ceres / Pallas / Vesta — propagated with a two-body Kepler step. Bodies without an analytical branch fall back transparently to Keplerian propagation, and every result is labelled with the model that actually ran."
                   link="https://github.com/commenthol/astronomia"
                 />
               </ul>
