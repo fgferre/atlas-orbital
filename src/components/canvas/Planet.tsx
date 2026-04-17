@@ -561,8 +561,44 @@ const PlanetVisual = ({
 
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
-      shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
+      // Sun is always at world origin — pass as world-space uniform, no CPU transform needed.
+      shader.uniforms.uSunPositionWorld = { value: new THREE.Vector3(0, 0, 0) };
       shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
+
+      // Inject world-space varyings into vertex shader
+      shader.vertexShader = `
+        varying vec3 vCloudWorldPos;
+        varying vec3 vCloudWorldNormal;
+        ${shader.vertexShader}
+      `.replace(
+        "#include <begin_vertex>",
+        `
+        #include <begin_vertex>
+        vCloudWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        vCloudWorldNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
+        `
+      );
+
+      // Inject world-space declarations into fragment shader
+      shader.fragmentShader = `
+        uniform vec3 uSunPositionWorld;
+        varying vec3 vCloudWorldPos;
+        varying vec3 vCloudWorldNormal;
+        ${shader.fragmentShader}
+      `;
+
+      // Modulate cloud opacity/color based on world-space day/night
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        `
+        #include <color_fragment>
+        vec3 cloudLightDir = normalize(uSunPositionWorld - vCloudWorldPos);
+        float cloudIntensity = dot(vCloudWorldNormal, cloudLightDir);
+        float cloudNightFactor = 1.0 - smoothstep(-0.2, 0.2, cloudIntensity);
+        // Darken clouds on the night side
+        diffuseColor.rgb *= mix(1.0, 0.05, cloudNightFactor);
+        `
+      );
     };
 
     return mat;
@@ -684,21 +720,26 @@ const PlanetVisual = ({
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.tNight = { value: textureNight };
-        shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
+        // Sun is always at world origin in this scene — no CPU transform needed.
+        shader.uniforms.uSunPositionWorld = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
         shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
 
-        // Inject varyings in vertex shader
+        // Inject varyings in vertex shader — world-space position and normal
         shader.vertexShader = `
-          varying vec3 vPos;
-          varying vec3 vObjectNormal;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
           varying vec2 vUv;
           ${shader.vertexShader}
         `.replace(
           "#include <begin_vertex>",
           `
           #include <begin_vertex>
-          vPos = position;
-          vObjectNormal = normal;
+          // Transform to world space so lighting is frame-independent
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          // Use inverse-transpose of modelMatrix for correct normal transform
+          vWorldNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
           vUv = uv;
           `
         );
@@ -706,10 +747,10 @@ const PlanetVisual = ({
         // Inject day texture handling in fragment shader
         shader.fragmentShader = `
           uniform sampler2D tNight;
-          uniform vec3 uSunPosition;
+          uniform vec3 uSunPositionWorld;
           uniform float uNightLightIntensity;
-          varying vec3 vPos;
-          varying vec3 vObjectNormal;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
           varying vec2 vUv;
           ${shader.fragmentShader}
         `;
@@ -719,18 +760,18 @@ const PlanetVisual = ({
           "#include <emissivemap_fragment>",
           `
           #include <emissivemap_fragment>
-          
-          // Calculate lighting for day/night transition
-          vec3 lightDir = normalize(uSunPosition - vPos);
-          float intensity = dot(normalize(vObjectNormal), lightDir);
-          
-          // Night lights appear where intensity is low
+
+          // Compute lighting in world space — both vectors are now in the same frame.
+          // Sun is at world origin; direction from fragment to Sun:
+          vec3 lightDir = normalize(uSunPositionWorld - vWorldPos);
+          float intensity = dot(vWorldNormal, lightDir);
+
+          // Night lights appear where intensity is low (terminator transition)
           float nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity);
-          
+
           vec4 nightColor = texture2D(tNight, vUv);
-          
+
           // Add night lights to emissive
-          // Use uNightLightIntensity uniform for dynamic control
           totalEmissiveRadiance += nightColor.rgb * nightFactor * uNightLightIntensity;
           `
         );
@@ -959,49 +1000,31 @@ const PlanetVisual = ({
       }
 
       // Shader Uniforms (Analytical Shadows & Day/Night)
-      // Update sun position for shaders that need it (Earth day/night, ring shadows)
-      if (textureRing || (body.id === "earth" && textureNight)) {
+      // Earth day/night shader now uses world-space uniforms — no CPU transform needed.
+      // uSunPositionWorld stays at (0,0,0) (Sun is always at world origin) and never changes,
+      // so there is nothing to update each frame for Earth or clouds.
+
+      // Update Ring Material (Planet Shadow on Ring) - only for ringed planets
+      if (
+        textureRing &&
+        ringMaterial &&
+        ringMaterial.userData.shader &&
+        ringRef.current
+      ) {
         const sunWorldPos = new THREE.Vector3(0, 0, 0);
+        const ringWorldMatrix = ringRef.current.matrixWorld;
+        const inverseRingMatrix = new THREE.Matrix4()
+          .copy(ringWorldMatrix)
+          .invert();
+        const sunLocalPosRing = sunWorldPos
+          .clone()
+          .applyMatrix4(inverseRingMatrix);
+        const parallelSunLocalPosRing =
+          AstroPhysics.resolveParallelLightReferencePoint(sunLocalPosRing);
 
-        // Update Planet Material shader uniforms
-        // Planet is direct child of rotationRef, so use rotationRef matrix
-        if (planetMaterial?.userData.shader) {
-          const meshWorldMatrix = rotationRef.current.matrixWorld;
-          const inverseMatrix = new THREE.Matrix4()
-            .copy(meshWorldMatrix)
-            .invert();
-          const sunLocalPos = sunWorldPos.clone().applyMatrix4(inverseMatrix);
-          const parallelSunLocalPos =
-            AstroPhysics.resolveParallelLightReferencePoint(sunLocalPos);
-
-          planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            parallelSunLocalPos
-          );
-
-          // Update Cloud Material (if exists)
-          if (cloudMaterial && cloudMaterial.userData.shader) {
-            cloudMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-              parallelSunLocalPos
-            );
-          }
-        }
-
-        // B. Update Ring Material (Planet Shadow on Ring) - only for ringed planets
-        if (ringMaterial && ringMaterial.userData.shader && ringRef.current) {
-          const ringWorldMatrix = ringRef.current.matrixWorld;
-          const inverseRingMatrix = new THREE.Matrix4()
-            .copy(ringWorldMatrix)
-            .invert();
-          const sunLocalPosRing = sunWorldPos
-            .clone()
-            .applyMatrix4(inverseRingMatrix);
-          const parallelSunLocalPosRing =
-            AstroPhysics.resolveParallelLightReferencePoint(sunLocalPosRing);
-
-          ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
-            parallelSunLocalPosRing
-          );
-        }
+        ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
+          parallelSunLocalPosRing
+        );
       }
     }
   });
