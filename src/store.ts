@@ -3,7 +3,11 @@ import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import type { QualityMode } from "./lib/qualityProfile";
 import type { SunRenderMode } from "./lib/sunRenderMode";
-import type { StarfieldProviderState, StarfieldSource } from "./lib/starfield";
+import type {
+  HoveredStarInfo,
+  StarfieldProviderState,
+  StarfieldSource,
+} from "./lib/starfield";
 import { createDefaultViewportFramingState } from "./lib/camera/effectiveViewport";
 
 interface AppState {
@@ -17,6 +21,12 @@ interface AppState {
   showStarfield: boolean;
   starfieldSource: StarfieldSource;
   starfieldProviderStates: Record<StarfieldSource, StarfieldProviderState>;
+  /**
+   * Currently hovered HYG-named star, or null when the pointer is not
+   * lingering on one. Written by `useStarHover`, consumed by the
+   * `<StarHoverTooltip />` layer outside the Canvas.
+   */
+  hoveredStar: HoveredStarInfo | null;
   showCredits: boolean;
   showOrbits: boolean;
   declutterOrbits: boolean;
@@ -79,6 +89,7 @@ interface AppState {
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
   setStarfieldSource: (source: StarfieldSource) => void;
+  setHoveredStar: (next: HoveredStarInfo | null) => void;
   setStarfieldProviderState: (
     source: StarfieldSource,
     nextState: Partial<StarfieldProviderState>
@@ -175,6 +186,7 @@ export const useStore = create<AppState>((set) => ({
     hyg: { status: "idle", error: null },
     nasa: { status: "idle", error: null },
   },
+  hoveredStar: null,
   showCredits: false,
   visibility: {
     planets: true,
@@ -250,6 +262,10 @@ export const useStore = create<AppState>((set) => ({
   setStarfieldSource: (starfieldSource) =>
     set((state) =>
       state.starfieldSource === starfieldSource ? state : { starfieldSource }
+    ),
+  setHoveredStar: (hoveredStar) =>
+    set((state) =>
+      state.hoveredStar === hoveredStar ? state : { hoveredStar }
     ),
   setStarfieldProviderState: (source, nextState) =>
     set((state) => {

@@ -25,6 +25,12 @@ const CreditsModal = lazy(() =>
   }))
 );
 
+const StarHoverTooltip = lazy(() =>
+  import("./components/ui/StarHoverTooltip").then((module) => ({
+    default: module.StarHoverTooltip,
+  }))
+);
+
 const AssetStudyApp = lazy(() =>
   import("./components/ui/AssetStudyApp").then((module) => ({
     default: module.AssetStudyApp,
@@ -58,6 +64,9 @@ function App() {
       </Suspense>
       <Suspense fallback={null}>
         <CreditsModal />
+      </Suspense>
+      <Suspense fallback={null}>
+        <StarHoverTooltip />
       </Suspense>
     </div>
   );

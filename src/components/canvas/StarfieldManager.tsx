@@ -1,6 +1,7 @@
 import { useStore } from "../../store";
 import { NASAStarfield } from "./NASAStarfield";
 import { Starfield } from "./Starfield";
+import { StarHoverPicker } from "./StarHoverPicker";
 
 export const StarfieldManager = () => {
   const showStarfield = useStore((state) => state.showStarfield);
@@ -10,7 +11,15 @@ export const StarfieldManager = () => {
     return null;
   }
 
-  return starfieldSource === "nasa" ? <NASAStarfield /> : <Starfield />;
-  // `hyg` falls through to the HYG-backed <Starfield />; future presets
-  // (if they appear) should add their own cases explicitly.
+  // `hyg` is the default preset and gets hover-picker support. `nasa`
+  // remains the visual-comparison reference and stays as-is.
+  if (starfieldSource === "nasa") {
+    return <NASAStarfield />;
+  }
+  return (
+    <>
+      <Starfield />
+      <StarHoverPicker />
+    </>
+  );
 };

@@ -207,6 +207,75 @@ async function fetchHygBinaryAsset(tier: HygTier): Promise<ArrayBuffer> {
 const hygCatalogCache = new Map<HygTier, HygCatalogData>();
 const hygCatalogPromise = new Map<HygTier, Promise<HygCatalogData>>();
 
+/**
+ * A labelled star from `public/data/hyg-stars/hyg-v1.names.json`.
+ * `index` points into the tier's binary record array; tier files are a
+ * strict prefix of the next larger tier, so an entry that exists in the
+ * Low tier also sits at the same index in Medium / High / Full.
+ */
+export interface HygNamedStar {
+  index: number;
+  proper?: string;
+  bayer?: string;
+  flam?: string;
+  con?: string;
+  hip?: number;
+  mag: number;
+}
+
+export interface HygNamesSidecar {
+  version: number;
+  source: string;
+  entries: HygNamedStar[];
+}
+
+/**
+ * Runtime hover state — what the pointer currently resolves to, if anything.
+ * `screenX` / `screenY` are pixel coordinates inside the canvas; the
+ * tooltip uses them to position itself.
+ */
+export interface HoveredStarInfo {
+  entry: HygNamedStar;
+  distanceParsecs: number | null;
+  colorIndex: number;
+  screenX: number;
+  screenY: number;
+}
+
+let hygNamesSidecarCache: HygNamesSidecar | null = null;
+let hygNamesSidecarPromise: Promise<HygNamesSidecar> | null = null;
+
+export const getCachedHygNamesSidecar = () => hygNamesSidecarCache;
+
+/**
+ * Fetch the named-star sidecar. Kept as a separate file so users who never
+ * enable hover labels never pay the ~226 KB cost, and the binary catalog
+ * stays pure numeric data. Only fetched on first call; cached forever after.
+ */
+export const loadHygNamesSidecar = async (): Promise<HygNamesSidecar> => {
+  if (hygNamesSidecarCache) return hygNamesSidecarCache;
+  if (hygNamesSidecarPromise) return hygNamesSidecarPromise;
+
+  const base = import.meta.env.BASE_URL || "/";
+  hygNamesSidecarPromise = fetch(`${base}data/hyg-stars/hyg-v1.names.json`)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load HYG names sidecar (${response.status})`
+        );
+      }
+      const payload = (await response.json()) as HygNamesSidecar;
+      hygNamesSidecarCache = payload;
+      return payload;
+    })
+    .catch((error: unknown) => {
+      hygNamesSidecarPromise = null;
+      throw error;
+    });
+
+  return hygNamesSidecarPromise;
+};
+
 export const getCachedHygCatalog = (tier: HygTier = DEFAULT_HYG_TIER) =>
   hygCatalogCache.get(tier) ?? null;
 
