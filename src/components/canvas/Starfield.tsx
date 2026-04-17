@@ -93,21 +93,16 @@ const vertexShader = /* glsl */ `
     // (mag 6.5). Each 5 magnitudes brighter = 100× flux = ~2.5× apparent
     // area on screen. We take the square root of the flux so the rendered
     // glow area, not the diameter, scales with brightness — this matches
-    // how stars visibly pile up around the bright end of the sky.
-    //
-    // Floor: the bare Pogson curve crushes mag ≥ 6.5 stars to ~1 px with
-    // ~0.08 alpha, which a monitor cannot render faithfully. Real night
-    // skies reach the eye through atmospheric point-spread, glare, and
-    // pupil adaptation that a 1-px sprite does not reproduce. We set a
-    // per-star minimum of 2.5 px / 0.20 alpha so the faint half of the
-    // catalogue (most of its mass) stays visibly on the sky instead of
-    // dissolving into invisible sub-pixel ghosts.
+    // how stars visibly pile up around the bright end of the sky. The
+    // 1.5 px / 0.08 floors preserve magnitude ordering across the full
+    // tier (which reaches ~mag 20): promoting the tail of the catalogue
+    // higher would collapse most of the sky to a uniform haze.
     float fluxRatio = pow(10.0, (6.5 - mag) * 0.4); // = 2.512^(6.5-mag)
     float sqrtFlux = sqrt(fluxRatio);
-    float baseSize = clamp(sqrtFlux * 2.5, 2.5, 60.0);
+    float baseSize = clamp(sqrtFlux * 2.5, 1.5, 60.0);
     gl_PointSize = baseSize * particleSize * pixelRatio;
 
-    vBrightness = clamp(sqrtFlux * 0.20, 0.20, 1.0);
+    vBrightness = clamp(sqrtFlux * 0.08, 0.08, 1.0);
     vColor = bvToRGB(ci);
   }
 `;

@@ -189,3 +189,30 @@ clean state; the app itself was fine. Do not spend time bisecting
 runtime code when the logs already named the failure mode.
 
 **Code marker:** no code change. Operational only.
+
+### L12. Don't bundle two changes behind one "fix" — prove each addresses the reported cause
+
+**Context:** Commit `fae8a7a` rolled two changes under one message
+("restore HYG visual density"): a tier remap (`balanced → high`,
+`high → full`) and a shader floor raise (`1.5 px → 2.5 px`,
+`0.08 α → 0.20 α`). Codex review caught that the shader floor raise
+was orthogonal to the reported cause: the complaint path
+(`auto → balanced → medium` in default didactic mode) sees max
+shader-mag ≈ 5.7, which never hit either old floor. The raise then
+made things worse for the richer tiers — flattening ~80 % of `high`
+and ~90 % of `full` to the same dot/alpha. Had the two changes been
+separated, the second one would not have survived its own
+justification round.
+
+**Rule:** When a fix touches more than one call site or system,
+write down _per change_ which observable symptom it addresses and
+the quantitative evidence (thresholds, counts, ranges). If a change
+cannot defend itself as the direct cause of the reported bug, drop
+it or ship it separately with its own justification. "It couldn't
+hurt" is not a justification — it hides an overcorrection in the
+same diff as the real fix.
+
+**Code marker:** `hygTierForQuality()` in
+`src/lib/starfield.ts`; Pogson clamps in
+`src/components/canvas/Starfield.tsx`. `starfield.test.ts` now
+pins the tier mapping so a silent re-shuffle fails CI.

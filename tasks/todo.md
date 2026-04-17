@@ -136,6 +136,56 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — Codex follow-up on density fix (2026-04-17)
+
+Independent Codex review of commit `fae8a7a` flagged three issues, all
+confirmed correct after verifying the math and re-reading the paths:
+
+1. **Shader floor change did not address the reported cause.** The old
+   `1.5 px` floor activates at shader-mag ≥ 7.61; the old `0.08 α`
+   floor at shader-mag ≥ 6.5. The complaint came from
+   `auto → balanced → medium` (max real-mag 6.6) with default
+   scaleMode `didactic` applying a `−0.9` bias — so the shader saw
+   max mag ≈ 5.7, well below both floors. Zero stars in the reported
+   case hit either floor. The shader edit was orthogonal to the
+   user's complaint.
+2. **The new `2.5 px / 0.20 α` floor destroyed magnitude ordering.**
+   Floors now trigger at shader-mag ≥ 6.5, i.e. real-mag ≥ 7.4 in
+   didactic mode. For the `high` tier (to mag ~8.3) that flattens
+   ~80 % of stars to the same dot; for `full` (to mag ~20.5) it
+   flattens ~90 %. The observable effect: a uniform haze of
+   telescopic stars at the same visual weight as naked-eye stars.
+3. **Tier remap collapsed the LOD ladder.** With `high → full` and
+   `ultra → full`, the `ultra` profile no longer earns its extra
+   payload over `high`. Plus `balanced` (score ∈ [−1, 1]) is genuine
+   mixed hardware — 4 GB / 8-thread / 3G devices land there per
+   `qualityProfile.test.ts:43`. 5× more stars means 5× decode,
+   geometry build, and GPU upload, not just 5× network.
+
+Corrections shipped (commit pending):
+
+- **`src/components/canvas/Starfield.tsx`** — shader floors reverted
+  to `1.5 px / 0.08 α` so the Pogson curve preserves magnitude
+  ordering all the way out to mag 20. Comment block trimmed and
+  reframed to explain _why the floor stays low_ (fog avoidance) so
+  future maintainers do not walk back into the same trap.
+- **`src/lib/starfield.ts`** — partial revert: `balanced → high`
+  kept (this is the real fix for the complaint), `high → full`
+  reverted to `high → high` so `ultra → full` stays the opt-in
+  ceiling. Header comment rewritten accordingly.
+- **`src/lib/starfield.test.ts`** — four unit tests pin
+  `hygTierForQuality()` mapping (constrained→low, balanced→high,
+  high→high, ultra→full). Next time someone shuffles the mapping,
+  CI catches it without needing a human review round.
+
+Verification: `npm run lint` clean; `npm run test:run` 291/291 green
+(4 new, +0 regressions). Browser verify blocked by L11-style iframe
+with 0x0 viewport (R3F cannot mount a sized canvas under a headless
+preview); unit tests cover the decision logic directly.
+
+Lesson: `tasks/lessons.md` L12 — "don't bundle two changes as one
+fix; prove each addresses the reported cause independently".
+
 ## Review — HYG density restoration (2026-04-17 continuation)
 
 Follow-up after the density complaint. Phase 1 shipped two surgical

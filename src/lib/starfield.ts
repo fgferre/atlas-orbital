@@ -143,22 +143,24 @@ const DEFAULT_HYG_TIER: HygTier = "full";
 
 /**
  * Map the resolved device quality profile to the HYG tier file the
- * browser should fetch. The mapping is biased toward visual density —
- * the legacy tycho2 renderer always loaded ~118 000 stars, so capping
- * "balanced" at 10 000 made the sky look dramatically thinner than
- * users expected. The revised mapping keeps the constrained tier for
- * genuinely slow networks and raises every other profile toward the
- * full catalogue:
+ * browser should fetch. The legacy tycho2 renderer always loaded
+ * ~118 000 stars, so the previous balanced → medium (10 000) mapping
+ * made the sky look dramatically thinner than users expected — the
+ * primary cause of the density complaint. Balanced now fetches the
+ * high tier, which keeps the sky visibly dense while preserving the
+ * high → high, ultra → full ladder so "ultra" still earns its extra
+ * payload over "high":
  *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / 3G)
- *   balanced    → high   (~810 KB,   ~50 000 stars — full naked-eye +
- *                         binocular sky, fits comfortably in a single
- *                         HTTP response on any broadband link)
- *   high        → full   (~1.77 MB, ~109 000 stars — every surviving
- *                         HYG row; same payload as the legacy tycho2)
- *   ultra       → full   (~1.77 MB, ~109 000 stars — ceiling)
+ *   balanced    → high   (~810 KB,   ~50 000 stars — mixed hardware;
+ *                         recovers tycho2-era density on any broadband
+ *                         link without forcing the 109 k decode cost)
+ *   high        → high   (~810 KB,   ~50 000 stars — same visual
+ *                         budget as balanced since 50 k already
+ *                         saturates perceived density)
+ *   ultra       → full   (~1.77 MB, ~109 000 stars — opt-in ceiling;
+ *                         every surviving HYG row)
  * The `medium` tier binary is still produced by the offline pipeline
- * and remains addressable for anyone overriding the default at runtime
- * (see the Fase-2 density override if/when it ships).
+ * and remains addressable for anyone overriding the default at runtime.
  */
 export function hygTierForQuality(name: ResolvedQualityName): HygTier {
   switch (name) {
@@ -167,7 +169,7 @@ export function hygTierForQuality(name: ResolvedQualityName): HygTier {
     case "balanced":
       return "high";
     case "high":
-      return "full";
+      return "high";
     case "ultra":
       return "full";
   }

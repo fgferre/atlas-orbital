@@ -4,7 +4,26 @@ import {
   STARFIELD_SOURCE_LABELS,
   STARFIELD_SOURCE_METADATA,
   getStarfieldLoadErrorMessage,
+  hygTierForQuality,
 } from "./starfield";
+
+describe("hygTierForQuality", () => {
+  it("keeps the constrained profile on the smallest tier", () => {
+    expect(hygTierForQuality("constrained")).toBe("low");
+  });
+
+  it("lifts balanced from the sparse medium tier to high (density fix)", () => {
+    expect(hygTierForQuality("balanced")).toBe("high");
+  });
+
+  it("leaves the high profile on the high tier so ultra stays above it", () => {
+    expect(hygTierForQuality("high")).toBe("high");
+  });
+
+  it("reserves the full catalogue for ultra", () => {
+    expect(hygTierForQuality("ultra")).toBe("full");
+  });
+});
 
 describe("starfield metadata", () => {
   it("advertises the HYG v4.2 preset with the real data source", () => {
