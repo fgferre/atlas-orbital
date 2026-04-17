@@ -36,10 +36,10 @@
  * the same per-star indexing: a star named in the Low-tier sidecar retains
  * the same index in Medium / High / Full tiers (which are strict supersets).
  *
- * The compact per-star layout keeps the full-catalog file below the size of
- * the legacy `tycho2-processed.bin` while adding real proper motion and a
- * GPU-ready colour channel. Positions are pre-computed in the HYG CSV so
- * no runtime spherical-to-cartesian conversion is needed.
+ * The compact per-star layout keeps the full-catalog file comfortably
+ * under 2 MB raw while carrying real proper motion and a GPU-ready colour
+ * channel. Positions are pre-computed in the HYG CSV so no runtime
+ * spherical-to-cartesian conversion is needed.
  */
 
 export const HYG_MAGIC = "HYG1";
