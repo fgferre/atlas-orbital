@@ -38,8 +38,8 @@ Shipped:
 - UI (Sidebar, `CreditsModal`) and `src/lib/orbital/README.md` aligned to the
   shipped labels and epoch.
 
-Still open: multi-epoch fixtures (Phase 3), long-term drift validation, and
-the deferred realism work (Phase 5).
+Still open: multi-epoch fixtures (Phase 3) and long-term drift validation.
+Phase 5 (deferred realism) landed in-session — see the Phase 5 entry below.
 
 ## Current State
 
@@ -186,15 +186,20 @@ Drift envelopes are documented in `regression.test.ts >
 MULTI_EPOCH_OVERRIDES` and in `satellites.ts` JSDoc with the physical
 cause (see `tasks/lessons.md` L10).
 
-### Phase 5 - Deferred Visual Realism — PENDING
+### Phase 5 - Deferred Visual Realism — SHIPPED (see tasks/todo.md)
 
-After the orbital science upgrade is proven across multiple epochs:
+Completed tracks:
 
-- add `normal`, `specular`, and `roughness` maps where trustworthy
-- improve Earth day/night behavior
-- separate Earth cloud rotation from surface rotation
-- add regression coverage for Earth visual behavior
-- add at least one disturbed moon-system visual regression after analytical upgrades
+- Earth day/night shader fix (`abb2f6c`).
+- Earth cloud / surface rotation split (`2862f7d`).
+- Earth PBR maps (normal + roughness) via SSS bake pipeline
+  (`05ebaf7`) + Ceres fictional retirement in the same commit.
+- Targeted vitest coverage for PBR channel resolution + Earth body
+  wiring (`aef03b8`). Moon-system Playwright visual regression was
+  scoped out — rationale in `tasks/todo.md` Phase 5 entry.
+
+Per-body PBR bakes beyond Earth are deferred to Phase 7 pending
+per-body source research.
 
 ### Phase 6 - Cleanup — PARTIAL
 
@@ -250,7 +255,6 @@ Files Opus should keep under its control:
 
 Phase 1 work is complete. Remaining Sonnet-scoped tracks:
 
-- Phase 5 realism: Earth day/night shader, cloud layer separation, PBR maps
 - Phase 3 support: multi-epoch drift analysis once fixtures exist
 
 ### Haiku Owns

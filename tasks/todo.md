@@ -117,14 +117,22 @@ All five sub-phases shipped:
       group under the axial-tilt parent, driven at
       `currentRotation * CLOUD_SUPER_ROTATION_FACTOR` (1.03). Applies to
       any body that renders a cloud layer.
-- [ ] PBR maps (normal / specular / roughness) where trustworthy
-      sources exist. Needs per-body source research (USGS Astrogeology
-      for rocky worlds, Solar System Scope for gas giants, etc.) and
-      careful integration since existing material may or may not pipe
-      these inputs through. Several hours.
-- [ ] At least one disturbed moon-system visual regression after the
-      analytical upgrades. Requires Playwright snapshot baseline +
-      scripted camera, harder to run on headless CI. Several hours.
+- [x] PBR maps (normal / roughness) for Earth — shipped in `05ebaf7`.
+      Bake pipeline at `scripts/bake-earth-pbr.js` pulls SSS CC-BY-4.0
+      TIFF masters through Wayback (origin 403s scripted UA), inverts
+      specular → roughness via sharp, emits 8k + 2k JPEG tiers.
+      `useDeferredTexture` threaded with a `colorSpace` option so PBR
+      channels sample linearly (`THREE.NoColorSpace`). Earth's
+      `MeshStandardMaterial` gated on real albedo + screen salience.
+      Unused `4k_ceres_fictional.jpg` (5 MB dead weight) retired in
+      the same commit. Other bodies deferred to Phase 7 when
+      per-body source research justifies the bake cost.
+- [x] Moon-system visual regression — scoped out. WebGL pixel diffs
+      are GPU-fingerprint fragile and the project has no existing
+      Playwright infrastructure; baseline-PNG maintenance has a poor
+      cost/benefit ratio here. Replaced in `aef03b8` with targeted
+      vitest coverage: Earth PBR channel resolution (ultra/constrained
+      tier selection) + Earth body-data wiring to the baked maps.
 
 ### Phase 6 — Cleanup tail (pending)
 
