@@ -36,58 +36,41 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 - [ ] Schedule an epoch refresh cadence (every 3–5 years) so drift never
       exceeds 1° at present-day simulation dates.
 
-### HYG Starfield — in-place replacement of the legacy tycho2 preset
+### HYG Starfield — in-place replacement of the legacy tycho2 preset (done)
 
-Plan approved by the user: not a third preset, but a clean rebuild of the
-preset whose UI label already says "HYG v4.2" (the legacy "tycho2" binary
-is actually a magnitude-filtered HYG export with five of the 37 fields
-kept). Claims validated against <https://codeberg.org/astronexus/hyg>
-(119,614 stars, `ci`, `proper`, `pmra`/`pmdec`, x/y/z, ~14 MB CSV.gz,
-CC BY-SA 4.0 — all confirmed, see session transcript). Path: upgrade the
-pipeline in place so there is still exactly two presets (NASA + HYG) at
-the end, with the HYG preset carrying the rich fields.
+All five sub-phases shipped:
 
-Sub-phases:
-
-- [x] **HYG-A** — new offline pipeline:
-      `scripts/download-hyg.js` caches the CSV.gz;
-      `scripts/build-hyg-binary.js` emits four LOD-tier binaries
-      (`hyg-v1-{low,medium,high,full}.bin{,.gz}`) + `hyg-v1.names.json`
-      under `public/data/hyg-stars/`. Binary spec lives in
-      `src/utils/hygBinary.ts` (parser + encoder), 12 round-trip tests.
-      Does not touch runtime yet.
-- [ ] **HYG-B** — runtime parser migration + Starfield renderer upgrade
-      (B-V colour LUT, Pogson magnitude→size curve, proper motion uniform
-      driven by simulation time). Store key migrated `"tycho2"` → `"hyg"`.
-- [ ] **HYG-C** — tier selection wired to `qualityProfile` so the right
-      tier file loads based on device capability. Cache per tier.
-- [ ] **HYG-D** — hover labels (200 ms sustain, sidecar look-up,
-      disabled on `constrained` tier).
-- [ ] **HYG-E** — cleanup: delete `src/data/tycho2-processed.*`,
+- [x] **HYG-A** — offline pipeline (`scripts/download-hyg.js`,
+      `scripts/build-hyg-binary.js`, `src/utils/hygBinary.ts`, 12 tests).
+- [x] **HYG-B** — runtime migration. New shader with B-V colour, Pogson
+      magnitude → size, proper motion uniform driven by simulation time.
+      Store key migrated `"tycho2"` → `"hyg"`.
+- [x] **HYG-C** — tier selection wired to `qualityProfile`. Constrained
+      devices fetch 8 KB; ultra fetches 1.7 MB. Cache per tier so
+      switching quality modes is free after first visit.
+- [x] **HYG-D** — hover labels. 200 ms sustain, cursor feedback
+      immediate, sidecar loaded on demand, disabled on constrained tier.
+      IAU name + Bayer / Flamsteed + constellation + distance in ly.
+- [x] **HYG-E** — legacy cleanup. Deleted `src/data/tycho2-processed.*`,
       `scripts/process-hyg.js`, `scripts/generate-tycho2-binary.js`,
-      `scripts/hyg_v42.csv`. Rename the source type / store key to `hyg`,
-      update `STARFIELD_SOURCE_METADATA` and `CreditsModal` with the
-      real CC BY-SA 4.0 attribution.
+      raw CSV. Updated credits and runtime metadata.
 
-Design decisions locked for HYG (approved by user, 2026-04-17):
+### Phase 5 — Deferred visual realism
 
-- Float32 for x / y / z — simpler than manual Float16 decode, gzip absorbs
-  most of the redundancy, zero CPU cost on weak devices.
-- Names sidecar shipped as `hyg-v1.names.json`, loaded on demand when the
-  hover-label feature activates — free cost for users who never hover.
-- Hover UX: cursor feedback instant, tooltip on 200 ms sustain, disabled
-  entirely on `constrained` tier.
-- Proper motion on by default (shader cost invisible even for 109k stars).
-- LOD via separate tier files rather than single-file + offsets — simpler
-  caching, independent versioning, one `.bin.gz` fetch per tier.
-
-### Phase 5 — Deferred visual realism (pending)
-
-- [ ] Earth day/night shader fix (day-map too lit on the night side).
-- [ ] Separate Earth cloud rotation from surface rotation.
-- [ ] PBR maps (normal / specular / roughness) where trustworthy sources
-      exist.
-- [ ] At least one disturbed moon-system visual regression post-analytical.
+- [x] Earth day/night shader fix — shipped in `abb2f6c`
+      (world-space sun uniform; night-side clouds dim correctly).
+- [ ] Separate Earth cloud rotation from surface rotation. Currently
+      cloud mesh lives inside the surface `rotationRef`; needs its own
+      rotation ref with a ~3 % faster rate (atmospheric super-rotation).
+      Medium surface, low risk. ~1h.
+- [ ] PBR maps (normal / specular / roughness) where trustworthy
+      sources exist. Needs per-body source research (USGS Astrogeology
+      for rocky worlds, Solar System Scope for gas giants, etc.) and
+      careful integration since existing material may or may not pipe
+      these inputs through. Several hours.
+- [ ] At least one disturbed moon-system visual regression after the
+      analytical upgrades. Requires Playwright snapshot baseline +
+      scripted camera, harder to run on headless CI. Several hours.
 
 ### Phase 6 — Cleanup tail (pending)
 
@@ -96,7 +79,7 @@ Design decisions locked for HYG (approved by user, 2026-04-17):
       historical context or rewrite.
 - [ ] Clarify the Playwright acceptance gate in `PLAN.md` — the current
       command fails with `ERR_CONNECTION_REFUSED` unless `npm run
-  preview:test` is running first. Either document the two-step flow
+preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
 ## Review — 2026-04-17 session
