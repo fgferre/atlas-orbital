@@ -49,6 +49,10 @@ const PROGRADE_ARROW_BASE_WIDTH = 0.68;
 const PROGRADE_ARROW_BASE_LENGTH = 1.0;
 const PROGRADE_ARROW_BASE_DEPTH = 0.06;
 
+// Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
+// 3% faster than the solid body. Applied to any body that renders a cloud layer.
+const CLOUD_SUPER_ROTATION_FACTOR = 1.03;
+
 type OrbitLineMaterial = THREE.Material & {
   opacity: number;
   uniforms?: {
@@ -408,6 +412,7 @@ const PlanetVisual = ({
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
+  const cloudRotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -997,6 +1002,10 @@ const PlanetVisual = ({
           rotationEpoch
         );
         rotationRef.current.rotation.y = currentRotation;
+        if (cloudRotationRef.current) {
+          cloudRotationRef.current.rotation.y =
+            currentRotation * CLOUD_SUPER_ROTATION_FACTOR;
+        }
       }
 
       // Shader Uniforms (Analytical Shadows & Day/Night)
@@ -1056,27 +1065,6 @@ const PlanetVisual = ({
             </mesh>
           ) : null}
 
-          {/* 2. Cloud Layer (Visual - Additive) */}
-          {cloudMaterial && (
-            <mesh scale={[1.01, 1.01, 1.01]} castShadow={false} receiveShadow>
-              <sphereGeometry args={[1, 64, 64]} />
-              <primitive object={cloudMaterial} attach="material" />
-            </mesh>
-          )}
-
-          {/* 2b. Cloud Shadow Caster (Invisible, only casts shadow) */}
-          {cloudShadowMaterial && (
-            <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow={false}>
-              <sphereGeometry args={[1, 64, 64]} />
-              <primitive
-                object={cloudShadowMaterial}
-                attach="customDepthMaterial"
-              />
-              {/* We need a basic material to make it renderable, but we make it invisible */}
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-            </mesh>
-          )}
-
           {/* 3. Atmosphere Layer (Larger still) */}
           {body.id === "earth" && (
             <mesh scale={[1.025, 1.025, 1.025]}>
@@ -1096,6 +1084,30 @@ const PlanetVisual = ({
             >
               <primitive object={ringGeometry} />
               <primitive object={ringMaterial} attach="material" />
+            </mesh>
+          )}
+        </group>
+
+        {/* Cloud Rotation Group — super-rotates independently of the solid body */}
+        <group ref={cloudRotationRef}>
+          {/* 2. Cloud Layer (Visual - Additive) */}
+          {cloudMaterial && (
+            <mesh scale={[1.01, 1.01, 1.01]} castShadow={false} receiveShadow>
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive object={cloudMaterial} attach="material" />
+            </mesh>
+          )}
+
+          {/* 2b. Cloud Shadow Caster (Invisible, only casts shadow) */}
+          {cloudShadowMaterial && (
+            <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow={false}>
+              <sphereGeometry args={[1, 64, 64]} />
+              <primitive
+                object={cloudShadowMaterial}
+                attach="customDepthMaterial"
+              />
+              {/* We need a basic material to make it renderable, but we make it invisible */}
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
           )}
         </group>

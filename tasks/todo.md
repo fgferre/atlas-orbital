@@ -59,10 +59,11 @@ All five sub-phases shipped:
 
 - [x] Earth day/night shader fix — shipped in `abb2f6c`
       (world-space sun uniform; night-side clouds dim correctly).
-- [ ] Separate Earth cloud rotation from surface rotation. Currently
-      cloud mesh lives inside the surface `rotationRef`; needs its own
-      rotation ref with a ~3 % faster rate (atmospheric super-rotation).
-      Medium surface, low risk. ~1h.
+- [x] Separate Earth cloud rotation from surface rotation. Cloud mesh
+      and cloud-shadow caster now live in a sibling `cloudRotationRef`
+      group under the axial-tilt parent, driven at
+      `currentRotation * CLOUD_SUPER_ROTATION_FACTOR` (1.03). Applies to
+      any body that renders a cloud layer.
 - [ ] PBR maps (normal / specular / roughness) where trustworthy
       sources exist. Needs per-body source research (USGS Astrogeology
       for rocky worlds, Solar System Scope for gas giants, etc.) and
