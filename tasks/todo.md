@@ -29,42 +29,50 @@ It complements the long-form plan in `PLAN.md` (strategy) and
       moons (Io, Phobos, Mimas) stay within Phase-4 tolerance at
       present-day simulation dates.
 
-### HYG Starfield — third starfield preset (pending, gated)
+### HYG Starfield — in-place replacement of the legacy tycho2 preset
 
-**Gate (do not skip):** before writing any code, validate the following
-claims about the HYG v4.2 database against the official sources at
-<https://www.astronexus.com/hyg> and
-<https://codeberg.org/astronexus/hyg>. If any claim is wrong, stop and
-report back to the user:
+Plan approved by the user: not a third preset, but a clean rebuild of the
+preset whose UI label already says "HYG v4.2" (the legacy "tycho2" binary
+is actually a magnitude-filtered HYG export with five of the 37 fields
+kept). Claims validated against <https://codeberg.org/astronexus/hyg>
+(119,614 stars, `ci`, `proper`, `pmra`/`pmdec`, x/y/z, ~14 MB CSV.gz,
+CC BY-SA 4.0 — all confirmed, see session transcript). Path: upgrade the
+pipeline in place so there is still exactly two presets (NASA + HYG) at
+the end, with the HYG preset carrying the rich fields.
 
-- Star count: ~119,000–120,000
-- Has B-V colour index (`ci` field)
-- Has proper names for ~300+ bright stars
-- Has proper motion (`pmra`, `pmdec`)
-- Has pre-computed cartesian x / y / z
-- Raw CSV.gz size ≈ 14 MB
-- License CC BY-SA 4.0
+Sub-phases:
 
-Implementation requirements (once gate passes):
+- [x] **HYG-A** — new offline pipeline:
+      `scripts/download-hyg.js` caches the CSV.gz;
+      `scripts/build-hyg-binary.js` emits four LOD-tier binaries
+      (`hyg-v1-{low,medium,high,full}.bin{,.gz}`) + `hyg-v1.names.json`
+      under `public/data/hyg-stars/`. Binary spec lives in
+      `src/utils/hygBinary.ts` (parser + encoder), 12 round-trip tests.
+      Does not touch runtime yet.
+- [ ] **HYG-B** — runtime parser migration + Starfield renderer upgrade
+      (B-V colour LUT, Pogson magnitude→size curve, proper motion uniform
+      driven by simulation time). Store key migrated `"tycho2"` → `"hyg"`.
+- [ ] **HYG-C** — tier selection wired to `qualityProfile` so the right
+      tier file loads based on device capability. Cache per tier.
+- [ ] **HYG-D** — hover labels (200 ms sustain, sidecar look-up,
+      disabled on `constrained` tier).
+- [ ] **HYG-E** — cleanup: delete `src/data/tycho2-processed.*`,
+      `scripts/process-hyg.js`, `scripts/generate-tycho2-binary.js`,
+      `scripts/hyg_v42.csv`. Rename the source type / store key to `hyg`,
+      update `STARFIELD_SOURCE_METADATA` and `CreditsModal` with the
+      real CC BY-SA 4.0 attribution.
 
-- [ ] Third starfield preset alongside NASA and Tycho-2.
-- [ ] Offline binary conversion: `npm run download:hyg` downloads CSV,
-      processes, emits compact binary under `public/data/hyg-stars/`
-      (match the existing NASA binary pipeline).
-- [ ] LOD system identical to NASA / Tycho-2: Low / Medium / High based on
-      apparent magnitude, same lazy-load + cache.
-- [ ] **Must not regress performance on any device tier.** Audit against
-      the existing `qualityProfile` breakpoints before shipping.
-- [ ] HYG-only features, on by default for this preset: - Real B-V colours - Per-magnitude variable point size - Proper motion over time (only if cheap; cut if it costs fps) - Optional bright-star label on hover (only if UX fits cleanly —
-      design note required before implementation)
-- [ ] 100 % backward compatible with NASA + Tycho-2 presets, or improve
-      all three. Never regress the existing presets.
+Design decisions locked for HYG (approved by user, 2026-04-17):
 
-Reuse-first pass (AGENTS.md #11): before coding, read the current
-starfield pipeline end-to-end (`src/lib/starfield.ts`,
-`src/utils/nasaStarParser.ts`, `src/utils/tycho2Binary.ts`, canvas
-renderer, `qualityProfile.ts`) and produce a "what gets reused vs what
-has to be generalized vs what is new" map.
+- Float32 for x / y / z — simpler than manual Float16 decode, gzip absorbs
+  most of the redundancy, zero CPU cost on weak devices.
+- Names sidecar shipped as `hyg-v1.names.json`, loaded on demand when the
+  hover-label feature activates — free cost for users who never hover.
+- Hover UX: cursor feedback instant, tooltip on 200 ms sustain, disabled
+  entirely on `constrained` tier.
+- Proper motion on by default (shader cost invisible even for 109k stars).
+- LOD via separate tier files rather than single-file + offsets — simpler
+  caching, independent versioning, one `.bin.gz` fetch per tier.
 
 ### Phase 5 — Deferred visual realism (pending)
 

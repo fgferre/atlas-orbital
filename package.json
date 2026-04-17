@@ -14,6 +14,8 @@
     "prepare": "husky",
     "download:nasa-stars": "node scripts/download-nasa-stars.js",
     "generate:tycho2-binary": "node scripts/generate-tycho2-binary.js",
+    "download:hyg": "node scripts/download-hyg.js",
+    "build:hyg": "node --experimental-strip-types scripts/build-hyg-binary.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
