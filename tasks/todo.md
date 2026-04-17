@@ -39,7 +39,8 @@ legacy tycho2 sky. Diagnosis confirmed two compound causes:
         target, so no adjustment needed.
 - [x] **Fase 1 — verification.**
   - [x] `npm run lint` clean.
-  - [x] `npm run test:run` green — 287/287 across 30 files.
+  - [x] `npm run test:run` green — 287/287 across 30 files at
+        `fae8a7a`. (Current tally 293/293 as of `aef03b8`.)
   - [x] Browser verify: fresh preview served `hyg-v1-full.bin.gz`
         (1.77 MB, ~109 400 stars) on page load, confirming the tier
         fix; rendered sky showed clearly dense faint-star field with
@@ -245,7 +246,7 @@ confirmed correct after verifying the math and re-reading the paths:
    `qualityProfile.test.ts:43`. 5× more stars means 5× decode,
    geometry build, and GPU upload, not just 5× network.
 
-Corrections shipped (commit pending):
+Corrections shipped in `60cb1fa`:
 
 - **`src/components/canvas/Starfield.tsx`** — shader floors reverted
   to `1.5 px / 0.08 α` so the Pogson curve preserves magnitude
@@ -296,7 +297,8 @@ density control with a different label.
 Verification:
 
 - `npm run lint` clean.
-- `npm run test:run` 287/287 green across 30 test files.
+- `npm run test:run` 287/287 green across 30 test files at `60cb1fa`.
+  (Current tally 293/293 as of `aef03b8`.)
 - Fresh preview instance confirmed `hyg-v1-full.bin.gz` (1.77 MB,
   ~109 400 stars) served on page load — i.e. the tier remap is live
   — and the rendered sky shows faint stars visibly resolved with
@@ -357,8 +359,8 @@ first):
     tolerance at present-day simulation dates. 84 new fixtures, 52
     obsolete ones removed, `MULTI_EPOCH_DATES` bumped to 2025 / 2025-07
     / 2026.
-12. **Second Codex review follow-up** (`fix(orbital)…`, this pending
-    commit) — fixes the hover-picker catalog race that could keep
+12. **Second Codex review follow-up** (`fix(orbital)…`, `30994e8`) —
+    fixes the hover-picker catalog race that could keep
     tooltips disabled on first load, bumps
     `generate-horizons-fixtures.js` default dates to the 2025 set,
     aligns CreditsModal and task log to the current epoch.
@@ -386,4 +388,6 @@ Known remaining limits, surfaced explicitly (AGENTS.md #8):
   multi-epoch tolerance (tracked in "Phase 3 tail").
 
 Verification status: `npm run lint` clean, `npm run test:run` at
-287/287 green across 30 test files, `npm run build` ~9 s.
+287/287 green across 30 test files, `npm run build` ~9 s — as of the
+10-commit session that closed at `ae2a2a3`. Subsequent sessions pushed
+this to 293/293 across 30 files (current as of `aef03b8`).

@@ -51,8 +51,9 @@ Phase 5 (deferred realism) landed in-session — see the Phase 5 entry below.
 - `src/lib/orbital/time.ts` is the canonical source of `JD`, `TT`, `TDB`.
 - `didactic` and `realistic` share the same physical orbital base.
 - Telemetry, render, and orbit lines all consume the orbital engine path.
-- Real Horizons fixtures exist for the representative coverage set at a
-  single epoch (2020-01-01).
+- Real Horizons fixtures exist for the representative coverage set across
+  four epochs (2020-01-01, 2020-07-01, 2021-01-01, 1890-01-01), with
+  follow-on 2025/2026 fixtures already on disk (see Phase 3 tail).
 - Deploy is static on GitHub Pages; Horizons is used offline only for fixture
   generation.
 
@@ -75,7 +76,7 @@ Reach the point where Atlas is scientifically honest and materially more accurat
 - Kepler is used only for unsupported bodies or out-of-range dates **(done)**
 - regression tests prove the upgrade against real Horizons fixtures across multiple dates **(4 epochs × 28 bodies; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas still pending)**
 - UI and docs always report the live model truthfully **(done)**
-- Earth and texture realism upgrades are completed after orbital accuracy is in place **(pending)**
+- Earth and texture realism upgrades are completed after orbital accuracy is in place **(done — Earth day/night shader, cloud rotation split, and PBR normal + roughness shipped across `abb2f6c`, `2862f7d`, `05ebaf7`)**
 
 ## Hard Constraints
 
@@ -299,9 +300,9 @@ This project is only done when:
 - Kepler is limited to unsupported bodies or invalid dates **(done)**
 - Horizons multi-date regression proves the gain numerically **(4 epochs × 28 bodies shipped; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas remains)**
 - UI and docs always show the true live model **(done)**
-- realism upgrades are delivered without breaking the orbital integration **(pending)**
+- realism upgrades are delivered without breaking the orbital integration **(done for Phase 5 Earth tracks; per-body PBR beyond Earth deferred to Phase 7)**
 - build, lint, tests, and smoke all remain green **(green)**
 
 ## One-Line Summary For A Fresh Executor
 
-Atlas has been turned from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system (Path A: VSOP87D / Meeus Pluto / ELP-MPP02-trunc / J2000-reduced mean elements / osculating asteroids). Remaining work: multi-epoch Horizons validation, then the deferred visual realism upgrades.
+Atlas has been turned from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system (Path A: VSOP87D / Meeus Pluto / ELP-MPP02-trunc / J2000-reduced mean elements / osculating asteroids) with Phase 5 Earth realism (day/night shader, cloud rotation split, PBR normal + roughness) also landed. Remaining work: multi-epoch Horizons validation tail, and per-body PBR bakes beyond Earth in Phase 7.
