@@ -191,6 +191,8 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       map: TEXTURE_PATH + "8k_earth_daymap.jpg",
       night: TEXTURE_PATH + "8k_earth_nightmap.jpg",
       clouds: TEXTURE_PATH + "8k_earth_clouds.jpg",
+      normal: TEXTURE_PATH + "8k_earth_normal_map.jpg",
+      roughness: TEXTURE_PATH + "8k_earth_roughness_map.jpg",
     },
   },
   {

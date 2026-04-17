@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import type * as THREE from "three";
 import {
   acquireDeferredTexture,
   getDeferredTextureSnapshot,
@@ -12,6 +13,13 @@ interface UseDeferredTextureOptions {
   enabled?: boolean;
   pin?: boolean;
   dependencies?: ReadonlyArray<unknown>;
+  /**
+   * Colour space to apply when the texture finishes loading. Defaults to
+   * sRGB (matches the existing behaviour for colour/albedo maps). Pass
+   * `THREE.NoColorSpace` for linear data channels like normal, roughness,
+   * metalness or AO so the GPU samples them without gamma correction.
+   */
+  colorSpace?: THREE.ColorSpace;
 }
 
 export const useDeferredTexture = (
@@ -22,6 +30,7 @@ export const useDeferredTexture = (
     enabled = true,
     pin = false,
     dependencies = EMPTY_DEPENDENCIES,
+    colorSpace,
   } = options;
   const isActive = Boolean(url) && enabled;
   const subscribe = useCallback(
@@ -30,7 +39,7 @@ export const useDeferredTexture = (
         return () => {};
       }
 
-      acquireDeferredTexture(url, { pin });
+      acquireDeferredTexture(url, { pin, colorSpace });
       const unsubscribe = subscribeToDeferredTexture(url, notify);
 
       return () => {
@@ -38,7 +47,7 @@ export const useDeferredTexture = (
         releaseDeferredTexture(url, { pin });
       };
     },
-    [isActive, pin, url]
+    [isActive, pin, url, colorSpace]
   );
   const getSnapshot = useCallback(() => getDeferredTextureSnapshot(url), [url]);
 

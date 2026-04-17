@@ -75,10 +75,6 @@ const TEXTURES = [
     url: "https://www.solarsystemscope.com/textures/download/8k_stars_milky_way.jpg",
   },
   {
-    name: "4k_ceres_fictional.jpg",
-    url: "https://www.solarsystemscope.com/textures/download/4k_ceres_fictional.jpg",
-  },
-  {
     name: "4k_haumea_fictional.jpg",
     url: "https://www.solarsystemscope.com/textures/download/4k_haumea_fictional.jpg",
   },

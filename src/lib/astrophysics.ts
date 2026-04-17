@@ -114,6 +114,8 @@ export interface CelestialBody {
     ring?: string;
     clouds?: string;
     night?: string;
+    normal?: string;
+    roughness?: string;
   };
 
   // New Fields for Enhanced UI

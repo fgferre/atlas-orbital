@@ -482,6 +482,30 @@ const PlanetVisual = ({
     [body, mapSalience, qualityProfileName]
   );
 
+  const normalRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "normal",
+        qualityProfileName,
+        mapSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, mapSalience, qualityProfileName]
+  );
+
+  const roughnessRequest = useMemo(
+    () =>
+      resolveTextureRequest(
+        body,
+        "roughness",
+        qualityProfileName,
+        mapSalience,
+        TEXTURE_VARIANT_MANIFEST
+      ),
+    [body, mapSalience, qualityProfileName]
+  );
+
   const ringTextureLoaded = useDeferredTexture(ringRequest.selectedPath, {
     enabled: shouldLoadSecondary,
     pin: shouldPinMap,
@@ -498,6 +522,22 @@ const PlanetVisual = ({
     enabled: shouldLoadSecondary,
     pin: shouldPinMap,
   });
+  // Normal + roughness share the "secondary" gating because they only matter
+  // at close range. They need NoColorSpace so the GPU samples them linearly —
+  // sRGB decoding would corrupt the tangent-space normals and mis-scale roughness.
+  const normalTextureLoaded = useDeferredTexture(normalRequest.selectedPath, {
+    enabled: shouldLoadSecondary,
+    pin: shouldPinMap,
+    colorSpace: THREE.NoColorSpace,
+  });
+  const roughnessTextureLoaded = useDeferredTexture(
+    roughnessRequest.selectedPath,
+    {
+      enabled: shouldLoadSecondary,
+      pin: shouldPinMap,
+      colorSpace: THREE.NoColorSpace,
+    }
+  );
 
   useEffect(() => {
     if (assetPriority !== 1 || !mapRequest?.selectedPath) {
@@ -535,6 +575,14 @@ const PlanetVisual = ({
     ? (bodyTextureLoaded.texture ?? undefined)
     : undefined;
   const textureNight = nightTextureLoaded.texture ?? undefined;
+  // PBR maps only apply when the albedo map is loaded — they describe the
+  // same surface, and a naked normal map over a procedural base looks broken.
+  const textureNormal = textureMap
+    ? (normalTextureLoaded.texture ?? undefined)
+    : undefined;
+  const textureRoughness = textureMap
+    ? (roughnessTextureLoaded.texture ?? undefined)
+    : undefined;
   const proceduralSurfaceMap = useMemo(() => {
     if (body.type === "star" || textureMap) return null;
     return createProceduralSurfaceTexture(body);
@@ -718,6 +766,14 @@ const PlanetVisual = ({
       planetParams.map = surfaceMap;
     }
 
+    if (textureNormal) {
+      planetParams.normalMap = textureNormal;
+    }
+
+    if (textureRoughness) {
+      planetParams.roughnessMap = textureRoughness;
+    }
+
     const mat = new THREE.MeshStandardMaterial(planetParams);
 
     // Apply Earth day/night shader (takes priority over ring shadows)
@@ -861,6 +917,8 @@ const PlanetVisual = ({
   }, [
     surfaceMap,
     textureNight,
+    textureNormal,
+    textureRoughness,
     textureRing,
     body.id,
     body.color,

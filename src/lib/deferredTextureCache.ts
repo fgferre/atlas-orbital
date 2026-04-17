@@ -19,6 +19,7 @@ interface DeferredTextureEntry extends DeferredTextureSnapshot {
   pinCount: number;
   lastUsedAt: number;
   evictionTimer: number | null;
+  colorSpace: THREE.ColorSpace;
 }
 
 export interface DeferredTextureEvictionCandidate {
@@ -204,7 +205,7 @@ const scheduleIdleEviction = (entry: DeferredTextureEntry) => {
   }, IDLE_EVICTION_MS);
 };
 
-const ensureEntry = (url: string) => {
+const ensureEntry = (url: string, colorSpace?: THREE.ColorSpace) => {
   let entry = entries.get(url);
   if (entry) {
     return entry;
@@ -223,6 +224,7 @@ const ensureEntry = (url: string) => {
     pinCount: 0,
     lastUsedAt: getNow(),
     evictionTimer: null,
+    colorSpace: colorSpace ?? THREE.SRGBColorSpace,
   };
   syncEntrySnapshot(entry);
   entries.set(url, entry);
@@ -242,7 +244,7 @@ const startLoad = (entry: DeferredTextureEntry) => {
   entry.promise = loader
     .loadAsync(entry.url!)
     .then((texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.colorSpace = entry.colorSpace;
       texture.needsUpdate = true;
       entry.texture = texture;
       entry.status = "ready";
@@ -302,9 +304,9 @@ export const subscribeToDeferredTexture = (
 
 export const acquireDeferredTexture = (
   url: string,
-  options?: { pin?: boolean }
+  options?: { pin?: boolean; colorSpace?: THREE.ColorSpace }
 ) => {
-  const entry = ensureEntry(url);
+  const entry = ensureEntry(url, options?.colorSpace);
   entry.refCount += 1;
   if (options?.pin) {
     entry.pinCount += 1;
@@ -337,9 +339,9 @@ export const releaseDeferredTexture = (
 
 export const preloadDeferredTexture = (
   url: string,
-  options?: { pin?: boolean }
+  options?: { pin?: boolean; colorSpace?: THREE.ColorSpace }
 ) => {
-  const entry = ensureEntry(url);
+  const entry = ensureEntry(url, options?.colorSpace);
   if (options?.pin) {
     entry.pinCount += 1;
   }

@@ -13,6 +13,16 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     map: {
       boot: `${TEXTURE_PATH}boot_earth_daymap.jpg`,
     },
+    normal: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_earth_normal_map.jpg`,
+      },
+    },
+    roughness: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_earth_roughness_map.jpg`,
+      },
+    },
   },
   saturn: {
     map: {

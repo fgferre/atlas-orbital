@@ -1,6 +1,13 @@
 import type { CelestialBody } from "../lib/astrophysics";
 
-export type TextureChannel = "map" | "clouds" | "night" | "ring" | "atmosphere";
+export type TextureChannel =
+  | "map"
+  | "clouds"
+  | "night"
+  | "ring"
+  | "atmosphere"
+  | "normal"
+  | "roughness";
 
 export type TextureQualityProfile =
   | "ultra"
