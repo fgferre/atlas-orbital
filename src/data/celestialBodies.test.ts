@@ -42,6 +42,12 @@ describe("minor-body visual provenance", () => {
     }
   });
 
+  it("wires Earth's PBR channels to the baked SSS normal + roughness maps", () => {
+    const earth = getBody("earth");
+    expect(earth.textures?.normal).toMatch(/8k_earth_normal_map\.jpg$/);
+    expect(earth.textures?.roughness).toMatch(/8k_earth_roughness_map\.jpg$/);
+  });
+
   it("uses observational upgrades where the handoff calls for them", () => {
     expect(getBody("vesta").model?.path).toContain("Vesta_1_100.glb");
     expect(getBody("vesta").textures?.map).toContain("vesta_dawn_embedded");

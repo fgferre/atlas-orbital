@@ -91,6 +91,40 @@ describe("resolveTextureRequest", () => {
     expect(resolved.source).toBe("manifest");
   });
 
+  it("resolves Earth PBR channels through the shared manifest pipeline", () => {
+    const body = makeBody({
+      id: "earth",
+      textures: {
+        map: "textures/8k_earth_daymap.jpg",
+        normal: "textures/8k_earth_normal_map.jpg",
+        roughness: "textures/8k_earth_roughness_map.jpg",
+      },
+    });
+
+    const ultraNormal = resolveTextureRequest(
+      body,
+      "normal",
+      "ultra",
+      1,
+      TEXTURE_VARIANT_MANIFEST
+    );
+    expect(ultraNormal.selectedPath).toBe("textures/8k_earth_normal_map.jpg");
+    expect(ultraNormal.selectedTier).toBe("8k");
+
+    const constrainedRoughness = resolveTextureRequest(
+      body,
+      "roughness",
+      "constrained",
+      0.1,
+      TEXTURE_VARIANT_MANIFEST
+    );
+    expect(constrainedRoughness.selectedPath).toBe(
+      "/textures/2k_earth_roughness_map.jpg"
+    );
+    expect(constrainedRoughness.selectedTier).toBe("2k");
+    expect(constrainedRoughness.source).toBe("manifest");
+  });
+
   it("prefers manifest-backed boot assets for constrained first-view textures", () => {
     const cases = [
       {
