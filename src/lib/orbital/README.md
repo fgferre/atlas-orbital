@@ -15,8 +15,9 @@ static bundle (no network, no ephemeris files at runtime).
   - **ELP/MPP02 (truncated)** (via `astronomia/elp`) for the Moon.
   - **JPL SSD mean elements** reduced to J2000 ecliptic osculating elements
     for the Galilean, Saturnian, Uranian, and Martian satellites.
-  - **Osculating Keplerian elements** (epoch 2020-01-01 where tested against
-    Horizons, J2000 otherwise) for Ceres, Pallas, and Vesta.
+  - **Osculating Keplerian elements** at epoch 2020-01-01, derived from
+    Horizons state vectors via `scripts/derive-elements-from-fixtures.js`,
+    for Ceres, Pallas, and Vesta.
 - `keplerProvider.ts` remains the transparent fallback for any body without a
   published analytical theory. It is also used for all minor bodies whose
   orbits are defined by user-supplied or registry-sourced elements.

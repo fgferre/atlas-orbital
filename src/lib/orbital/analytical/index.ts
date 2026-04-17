@@ -16,9 +16,11 @@ export {
   isAnalyticalSatellite,
   getSatelliteParent,
   calculateSatellitePosition,
+  getSatelliteOsculatingElements,
 } from "./satellites";
 export {
   ASTEROID_IDS,
   isAnalyticalAsteroid,
   calculateAsteroidPosition,
+  getAsteroidOsculatingElements,
 } from "./asteroids";

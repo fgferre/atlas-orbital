@@ -87,47 +87,63 @@ Design decisions locked for HYG (approved by user, 2026-04-17):
 - [ ] Audit remaining scope-comments in tests (`regression.test.ts` lines
       referring to "scope of EPHASTER" etc.) — decide whether to keep as
       historical context or rewrite.
-- [ ] Decide whether `deriveElementsFromFixture` should become a real
-      reproducible script under `scripts/` (inverts Horizons state vectors
-      to the tabulated osculating elements used by Io / Titan / Oberon).
-      Right now the derivation is only narrated in a comment.
+- [ ] Clarify the Playwright acceptance gate in `PLAN.md` — the current
+      command fails with `ERR_CONNECTION_REFUSED` unless `npm run
+    preview:test` is running first. Either document the two-step flow
+      or add a wrapper npm script that starts and tears down the preview.
 
 ## Review — 2026-04-17 session
 
-Shipped:
+Shipped in chronological order (5 commits after the pre-session baseline):
 
-1. `src/lib/orbital/analytical/` — real analytical stack (VSOP87D,
-   Meeus Pluto, ELP/MPP02-trunc, JPL SSD mean elements reduced to J2000
-   ecliptic, osculating asteroids).
-2. `src/lib/orbital/analyticalProvider.ts` — no longer a stub; dispatches
-   per body.
-3. `src/lib/orbital/analytical/coordUtils.ts` — single source of truth for
-   Kepler solver and perifocal → ecliptic rotation. `keplerProvider.ts`
-   now delegates to it (DRY).
-4. `src/lib/orbital/analytical/astronomiaShim.ts` — typed shim for the
-   untyped `astronomia` npm package (documented workaround for
-   `moduleResolution: "bundler"` ignoring ambient `declare module`).
-5. Honest provenance strings throughout (no more "GUST86-derived" claims
-   when GUST86 did not run).
-6. Dead code pruned: `planetEquatorToEclipticMatrix`, `asJDE`,
-   `OBLIQUITY_J2000_RAD` (all orphaned after the offline-rotation
-   strategy change).
-7. New unit tests: `coordUtils.test.ts` (15 cases).
-8. Docs aligned: `PLAN.md`, `src/lib/orbital/README.md`,
-   `src/lib/orbital/index.ts`, `src/lib/orbital/types.ts`, `time.ts`,
-   `src/components/ui/CreditsModal.tsx`.
+1. **Earth cloud day/night shader** — world-space sun uniform
+   (`feat(planet): …`, commit `abb2f6c`). Earth cloud layer now dims on
+   the night side regardless of camera orientation.
+2. **Real offline analytical ephemeris stack** — `feat(orbital): …`,
+   commit `bbec355`. Replaces the stub analyticalProvider with real
+   dispatch into `src/lib/orbital/analytical/`: VSOP87D (8 planets),
+   Pluto-Meeus, ELP/MPP02-trunc Moon, satellite + asteroid modules.
+   Consolidates Kepler math in `coordUtils.ts` (DRY), removes dead
+   code, adds 15 unit tests, aligns docs/credits.
+3. **Multi-epoch Horizons regression** — `test(orbital): …`, commit
+   `9279424`. Generalises `generate-horizons-fixtures.js` (multi-body /
+   multi-date / retry), adds 41 fixtures across 4 epochs (baseline,
+   mid-year, one-year, out-of-range), expands `regression.test.ts` to 74
+   tests covering multi-epoch drift + validity-window routing.
+4. **Fixture-derived satellite / asteroid elements** — `fix(orbital):
+…`, commit `fe23150`. New `scripts/derive-elements-from-fixtures.js`
+   inverts Horizons (r, v) into ecliptic-J2000 osculating elements via
+   the standard RV→COE algorithm. All 18 `*MeanElements` + asteroid
+   entries regenerated from this pipeline. Fixes the 50–170° phase
+   errors on the 12 previously-tabular moons and the 72° Pallas error.
+   Tolerances tightened to 0.5°/1 % at epoch; multi-epoch drift
+   documented per body. Also discovers and fixes the UT-vs-TDB epoch
+   mismatch that was costing Phobos ~1° at the supposed epoch (L9).
+5. **HYG v4.2 binary pipeline (offline)** — `feat(starfield): …`,
+   commit `e4994c3`. New format, downloader and LOD-tier builder under
+   `public/data/hyg-stars/`. Does not touch runtime yet; HYG-B onwards
+   will migrate the renderer.
 
-Known remaining risks, surfaced explicitly (see AGENTS.md #8):
+Code quality checkpoints:
 
-- Fixtures are single-epoch. Long-term drift of truncated theories is not
-  validated yet.
-- Of the 15 `*MeanElements` satellites, only Io / Titan / Oberon are
-  held to Phase-4 tight tolerance. The other 12 pass frame /
-  registry tests only.
-- Pallas has no fixture on disk; its elements come from published J2000
-  SBDB values and are expected to drift slightly faster than the
-  fixture-derived asteroids.
+- `AGENTS.md` principles applied literally (no dead code, no duplicated
+  Kepler solvers, honest provenance, no invented file references).
+- Independent review (Codex): three findings — orbit lines using stale
+  Kepler elements for upgraded moons (P2), credits misstating the
+  satellite solver (P2), task log drifting from reality (P3). All three
+  acted on in the Codex-follow-up commit.
+
+Known remaining limits, surfaced explicitly (see AGENTS.md #8):
+
+- Multi-epoch drift for fast-moving satellites is real and bounded, not
+  hidden: Io ±80° /year, Titan / Oberon ±2° /year. Encoded in
+  `regression.test.ts > MULTI_EPOCH_OVERRIDES` with physical cause.
+- Of the 17 fixture-derived `*MeanElements` satellites + asteroids,
+  only the original 12 representative bodies + Ceres / Vesta have
+  fixtures at all three multi-epoch dates. The remaining 15 bodies +
+  Pallas are held tight only at the 2020-01-01 baseline. Listed under
+  "Phase 3 tail".
 
 Verification status: `npm run lint` clean, `npm run test:run` at
-225/225 green (includes the 15 new coordUtils cases),
-`npm run build` 9.6 s.
+291/291 green (30 test files, includes `hygBinary` round-trip),
+`npm run build` ~13 s.

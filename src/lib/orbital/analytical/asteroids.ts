@@ -19,6 +19,7 @@
  */
 
 import * as THREE from "three";
+import type { OsculatingElements } from "../types";
 import { elementsToCartesian, ecliptic2ThreeJs, mod2Pi } from "./coordUtils";
 
 const D2R = Math.PI / 180;
@@ -79,6 +80,11 @@ export function isAnalyticalAsteroid(bodyId: string): boolean {
   return bodyId in ASTEROIDS;
 }
 
+/** Mean motion in deg/day from μ_sun and the semi-major axis. */
+function meanMotionDegPerDay(aAU: number): number {
+  return (Math.sqrt(MU_SUN / (aAU * aAU * aAU)) * 180) / Math.PI;
+}
+
 /**
  * Heliocentric position in AU for the requested asteroid, expressed in the
  * engine's three.js frame.
@@ -92,10 +98,7 @@ export function calculateAsteroidPosition(
     throw new Error(`No analytical asteroid entry for ${bodyId}`);
   }
 
-  // Mean motion from Kepler III keeps n and a self-consistent.
-  const nDegPerDay =
-    (Math.sqrt(MU_SUN / (el.aAU * el.aAU * el.aAU)) * 180) / Math.PI;
-
+  const nDegPerDay = meanMotionDegPerDay(el.aAU);
   const dt = jdTDB - el.epochJD;
   const Mdeg = el.M0Deg + nDegPerDay * dt;
 
@@ -109,4 +112,33 @@ export function calculateAsteroidPosition(
   });
 
   return ecliptic2ThreeJs(rEcl);
+}
+
+/**
+ * Osculating elements for the analytical asteroid at `jdTDB`. Used by the
+ * engine to draw an orbit line whose plane and apsides match the live
+ * analytical position, instead of falling back to `celestialBodies.ts`
+ * placeholders.
+ */
+export function getAsteroidOsculatingElements(
+  bodyId: string,
+  jdTDB: number
+): OsculatingElements | null {
+  const el = ASTEROIDS[bodyId];
+  if (!el) return null;
+
+  const nDegPerDay = meanMotionDegPerDay(el.aAU);
+  const dt = jdTDB - el.epochJD;
+  const mNow = (((el.M0Deg + nDegPerDay * dt) % 360) + 360) % 360;
+
+  return {
+    a: el.aAU,
+    e: el.e,
+    i: el.iDeg,
+    O: el.OmegaDeg,
+    w: el.omegaDeg,
+    M: mNow,
+    n: nDegPerDay,
+    epoch: el.epochJD,
+  };
 }

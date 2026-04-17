@@ -39,7 +39,7 @@ const FIXTURES_DIR = fileURLToPath(
   new URL("../../test/fixtures/horizons/", import.meta.url)
 );
 const REPRESENTATIVE_BODIES = [
-  // Original 12 (single-epoch baseline)
+  // Original 12 (checked at all Multi-Epoch Dates below)
   "mercury",
   "earth",
   "moon",

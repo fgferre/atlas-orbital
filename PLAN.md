@@ -14,23 +14,24 @@ publications do not ship as a browser-friendly offline bundle. We adopted
 **Path A**: use pragmatic truncated / reduced theories with equivalent scope,
 and label each result with the model that actually ran.
 
-| Original label | Shipped implementation                    | Notes                                           |
-| -------------- | ----------------------------------------- | ----------------------------------------------- |
-| VSOP2013       | `VSOP87D` via `astronomia`                | Meeus-truncated D variant, arcsec-level         |
-| TOP2013        | `VSOP87D` (outer planets) + `Pluto-Meeus` | Pluto uses Meeus Ch. 37 series                  |
-| ELP2000        | `ELP-MPP02-trunc` via `astronomia/elp`    | DE-fitted truncated MPP02                       |
-| MARSSAT        | `MartianSatMeanElements`                  | J2000 ecliptic osculating elements              |
-| L1             | `GalileanMeanElements`                    | Io tuned from Horizons state vector at 2020-01  |
-| TASS17         | `SaturnianMeanElements`                   | Titan tuned from Horizons state vector          |
-| GUST86         | `UranianMeanElements`                     | Oberon tuned from Horizons state vector         |
-| EPHASTER       | `AsteroidOsculating`                      | Ceres/Vesta osculating at 2020-01; Pallas J2000 |
+| Original label | Shipped implementation                    | Notes                                         |
+| -------------- | ----------------------------------------- | --------------------------------------------- |
+| VSOP2013       | `VSOP87D` via `astronomia`                | Meeus-truncated D variant, arcsec-level       |
+| TOP2013        | `VSOP87D` (outer planets) + `Pluto-Meeus` | Pluto uses Meeus Ch. 37 series                |
+| ELP2000        | `ELP-MPP02-trunc` via `astronomia/elp`    | DE-fitted truncated MPP02                     |
+| MARSSAT        | `MartianSatMeanElements`                  | J2000 ecliptic osculating elements            |
+| L1             | `GalileanMeanElements`                    | All 4 moons Horizons-derived at 2020-01       |
+| TASS17         | `SaturnianMeanElements`                   | All 7 major moons Horizons-derived at 2020-01 |
+| GUST86         | `UranianMeanElements`                     | All 5 major moons Horizons-derived at 2020-01 |
+| EPHASTER       | `AsteroidOsculating`                      | All 3 asteroids Horizons-derived at 2020-01   |
 
 Shipped today:
 
 - `src/lib/orbital/analyticalProvider.ts` is no longer a stub; it dispatches
   per body to real providers in `src/lib/orbital/analytical/`.
 - Full regression suite (`src/lib/orbital/regression.test.ts`) green at Phase 4
-  tolerances against a single-epoch Horizons fixture set.
+  tolerances against a 4-epoch Horizons fixture set (2020-01-01,
+  2020-07-01, 2021-01-01, and 1890-01-01 for asteroid window coverage).
 - `npm run build`, `npm run lint`, `npm run test:run` all green.
 - UI (Sidebar, `CreditsModal`) and `src/lib/orbital/README.md` aligned to the
   shipped labels.
@@ -70,7 +71,7 @@ Reach the point where Atlas is scientifically honest and materially more accurat
 
 - real analytical models are active for supported bodies **(done)**
 - Kepler is used only for unsupported bodies or out-of-range dates **(done)**
-- regression tests prove the upgrade against real Horizons fixtures across multiple dates **(single-epoch done for 12 representative bodies; multi-epoch and full-family coverage pending)**
+- regression tests prove the upgrade against real Horizons fixtures across multiple dates **(4 epochs × 28 bodies; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas still pending)**
 - UI and docs always report the live model truthfully **(done)**
 - Earth and texture realism upgrades are completed after orbital accuracy is in place **(pending)**
 
@@ -278,7 +279,10 @@ Before final completion:
 - `npm run build`
 - `npm run lint`
 - `npm run test:run`
-- `npx playwright test scripts/phase4-regression.spec.js --reporter=line`
+- start the preview server first (`npm run preview:test`, listens on
+  `127.0.0.1:4174`), then run
+  `npx playwright test scripts/phase4-regression.spec.js --reporter=line`.
+  Without the preview the test fails with `ERR_CONNECTION_REFUSED`.
 
 ## Done Means
 
@@ -287,7 +291,7 @@ This project is only done when:
 - the analytical provider is no longer a stub **(done)**
 - supported bodies really run on their intended analytical models **(done; labels reflect Path A scope-equivalents)**
 - Kepler is limited to unsupported bodies or invalid dates **(done)**
-- Horizons multi-date regression proves the gain numerically **(single-epoch done for 12 bodies; multi-epoch and rotated-tabular family coverage pending)**
+- Horizons multi-date regression proves the gain numerically **(4 epochs × 28 bodies shipped; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas remains)**
 - UI and docs always show the true live model **(done)**
 - realism upgrades are delivered without breaking the orbital integration **(pending)**
 - build, lint, tests, and smoke all remain green **(green)**

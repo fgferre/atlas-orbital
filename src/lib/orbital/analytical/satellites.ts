@@ -34,6 +34,7 @@
  */
 
 import * as THREE from "three";
+import type { OsculatingElements } from "../types";
 import { elementsToCartesian, ecliptic2ThreeJs, mod2Pi } from "./coordUtils";
 
 const D2R = Math.PI / 180;
@@ -318,6 +319,11 @@ export function getSatelliteParent(bodyId: string): string | null {
   return SATELLITES[bodyId]?.parent ?? null;
 }
 
+/** Mean motion in deg/day from μ_parent and the semi-major axis. */
+function meanMotionDegPerDay(aAU: number, mu: number): number {
+  return (Math.sqrt(mu / (aAU * aAU * aAU)) * 180) / Math.PI;
+}
+
 /**
  * Parent-centered satellite position in AU, expressed in the engine's
  * three.js frame (Y-up ecliptic).
@@ -336,11 +342,7 @@ export function calculateSatellitePosition(
     throw new Error(`No gravitational parameter for parent ${parent}`);
   }
 
-  // Mean motion from Kepler III keeps n and a self-consistent.
-  const nDegPerDay =
-    (Math.sqrt(mu / (elements.aAU * elements.aAU * elements.aAU)) * 180) /
-    Math.PI;
-
+  const nDegPerDay = meanMotionDegPerDay(elements.aAU, mu);
   const dt = jdTDB - elements.epochJD;
   const Mdeg = elements.M0Deg + nDegPerDay * dt;
 
@@ -354,4 +356,37 @@ export function calculateSatellitePosition(
   });
 
   return ecliptic2ThreeJs(rEcl);
+}
+
+/**
+ * Osculating elements for the analytical satellite at `jdTDB`. The ellipse
+ * shape (a, e, i, Ω, ω, n) is fixed by the fixture-derived block above;
+ * only the mean anomaly M advances with time. Returning these lets the
+ * engine draw an orbit line that matches the plane and apsides of the
+ * live analytical position instead of the placeholder Kepler fallback.
+ */
+export function getSatelliteOsculatingElements(
+  bodyId: string,
+  jdTDB: number
+): OsculatingElements | null {
+  const entry = SATELLITES[bodyId];
+  if (!entry) return null;
+  const { parent, elements } = entry;
+  const mu = MU_PARENT[parent];
+  if (mu === undefined) return null;
+
+  const nDegPerDay = meanMotionDegPerDay(elements.aAU, mu);
+  const dt = jdTDB - elements.epochJD;
+  const mNow = (((elements.M0Deg + nDegPerDay * dt) % 360) + 360) % 360;
+
+  return {
+    a: elements.aAU,
+    e: elements.e,
+    i: elements.iDeg,
+    O: elements.OmegaDeg,
+    w: elements.omegaDeg,
+    M: mNow,
+    n: nDegPerDay,
+    epoch: elements.epochJD,
+  };
 }

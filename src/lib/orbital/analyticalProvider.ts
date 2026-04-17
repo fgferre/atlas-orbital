@@ -30,8 +30,10 @@ import {
   calculateMoonPosition,
   isAnalyticalSatellite,
   calculateSatellitePosition,
+  getSatelliteOsculatingElements,
   isAnalyticalAsteroid,
   calculateAsteroidPosition,
+  getAsteroidOsculatingElements,
 } from "./analytical";
 
 type ProviderBranch =
@@ -177,11 +179,17 @@ export class AnalyticalProvider implements OrbitalProvider {
         break;
     }
 
-    // Osculating elements: delegate to Kepler provider so orbit lines keep
-    // rendering. The analytical position is authoritative; the orbit line is
-    // a visual aid derived from the registered Keplerian reference ellipse.
+    // Osculating elements drive the rendered orbit line. Prefer the
+    // fixture-derived analytical elements (satellites.ts / asteroids.ts) so
+    // the line's plane and apsides actually match the live analytical
+    // position. Fall back to the Kepler provider only when the analytical
+    // branch does not maintain its own element block (VSOP87D planets,
+    // Pluto-Meeus, ELP/MPP02-trunc Moon — their orbits are still well
+    // represented by the registry's reference ellipse at this scale).
     const elements =
-      keplerProvider.getOsculatingElements(bodyId, context.date) ?? undefined;
+      this.lookupAnalyticalElements(bodyId, jdTDB) ??
+      keplerProvider.getOsculatingElements(bodyId, context.date) ??
+      undefined;
 
     return {
       position,
@@ -195,12 +203,33 @@ export class AnalyticalProvider implements OrbitalProvider {
   }
 
   /**
-   * Osculating elements come from the registered Keplerian reference set.
-   * This keeps orbit lines visually consistent with previous releases while
-   * the position itself is served by the analytical theory.
+   * Osculating elements for the requested date. Returns analytical elements
+   * when the body is in our fixture-derived tables; otherwise falls back to
+   * the registered Keplerian reference ellipse.
    */
   getOsculatingElements(bodyId: string, date: Date): OsculatingElements | null {
-    return keplerProvider.getOsculatingElements(bodyId, date);
+    // No jdTDB here; approximate with UT JD for the secondary element
+    // lookup. The absolute epoch mismatch is sub-second and only shifts M
+    // by a negligible amount for the bodies that consume this path.
+    const jdUT = 2440587.5 + date.getTime() / 86_400_000;
+    return (
+      this.lookupAnalyticalElements(bodyId, jdUT) ??
+      keplerProvider.getOsculatingElements(bodyId, date)
+    );
+  }
+
+  /** Internal: analytical-only element lookup, returns null when absent. */
+  private lookupAnalyticalElements(
+    bodyId: string,
+    jdTDB: number
+  ): OsculatingElements | null {
+    if (isAnalyticalSatellite(bodyId)) {
+      return getSatelliteOsculatingElements(bodyId, jdTDB);
+    }
+    if (isAnalyticalAsteroid(bodyId)) {
+      return getAsteroidOsculatingElements(bodyId, jdTDB);
+    }
+    return null;
   }
 }
 
