@@ -129,3 +129,43 @@ the files. The user had to flag it twice.
 **Rule:** When a project instruction names a file path (`tasks/todo.md`,
 `tasks/lessons.md`, `AGENTS.md`), create or update that exact file. The
 `TodoWrite` in-memory list is complementary, not a substitute.
+
+### L9. Element epoch must live in the same time scale the engine evaluates at
+
+**Context:** I tagged fixture-derived satellite elements with
+`epochJD = 2458849.5` — the **UT** Julian Date of 2020-01-01T00:00:00Z.
+The engine evaluates at `jdTDB`, which at that instant is ≈ 2458849.50086
+(offset ≈ 74.4 s, dominated by Delta-T). For slow bodies the mismatch is
+invisible; for Phobos (mean motion 1128 °/day) the 74 s gap becomes a
+real 0.97° angular error at the supposed epoch — enough to fail a
+Phase-4 tight-tolerance regression.
+
+**Rule:** When writing "epoch" alongside osculating elements, store the
+Julian Date in the **same time scale the propagator consumes**. If the
+engine takes TDB, the epoch tag is TDB. Write the conversion step
+explicitly in the code comment so future readers don't confuse UT JD
+("the normal one") with TDB JD. `scripts/derive-elements-from-fixtures.js`
+now applies the engine's `dateToTDB` formula before emitting epochJD.
+
+**Code marker:** comment on `EPOCH_2020_JD` in
+`src/lib/orbital/analytical/satellites.ts`.
+
+### L10. Two-body Kepler propagation has a well-defined accuracy horizon
+
+**Context:** After fixture-deriving all 15 `*MeanElements` satellites at
+2020-01-01, multi-epoch regression showed drift consistent with real
+perturbations the engine does not model: Io ~70°/yr (jovian resonance +
+Jupiter J2), Titan ~1°/yr (Saturn J2 + Hyperion resonance + solar), Oberon
+~1.5°/yr (Uranus J2). Attempting to hold these to the Phase-4 0.5°
+target for multi-epoch would require modelling the secular perturbations.
+
+**Rule:** Accept the two-body horizon honestly. Record per-body drift
+rates in `MULTI_EPOCH_OVERRIDES` (and `satellites.ts` comments) with the
+physical reason for each — not as "the test is too strict" but as "this
+is exactly how far two-body propagation works". When drift becomes a
+real UX problem, the fix is periodic epoch refresh (re-invert from a
+newer fixture) or adding the specific perturbation term, not loosening
+tolerances silently.
+
+**Code marker:** `MULTI_EPOCH_OVERRIDES` in `regression.test.ts` with
+physical-reason comments.

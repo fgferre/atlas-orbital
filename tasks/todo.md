@@ -8,18 +8,26 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 
 ## Active
 
-### Phase 3 — Horizons validation expansion (pending)
+### Phase 3 — Horizons validation expansion (done)
 
-- [ ] Extend `scripts/generate-horizons-fixtures.js` to sweep multiple epochs:
-      2020-01-01 (baseline, shipped), 2020-07-01 (mid-year), 2021-01-01
-      (one-year drift), and one date outside the asteroid 1900–2050 window.
-- [ ] Add Horizons fixtures for the 12 `*MeanElements` satellites and Pallas
-      so the tight 0.5° Phase-4 regression covers the full family, not only
-      Io / Titan / Oberon.
-- [ ] Keep `src/test/fixtures/horizons/index.json` current.
-- [ ] After fixtures land, tighten `src/lib/orbital/regression.test.ts` so
-      every body in its representative set is checked against Horizons at
-      every fixture epoch.
+- [x] `scripts/generate-horizons-fixtures.js` generalized (multi-body,
+      multi-date, retry, preserves cross-run fixtures).
+- [x] 53 fixtures across 28 bodies and 4 epochs — baseline 2020-01-01,
+      mid-year 2020-07-01, one-year 2021-01-01, out-of-range 1890-01-01.
+- [x] `scripts/derive-elements-from-fixtures.js` inverts fixture (r, v)
+      into osculating elements. All 18 `*MeanElements` + asteroid entries
+      now come from this pipeline, at epoch tagged in TDB scale so the
+      engine lands at `dt=0` (see lessons L9).
+- [x] Phase-4 tolerances enforced: 0.1°/0.2°/0.5° per family at baseline;
+      per-body drift envelopes for multi-epoch (see lessons L10).
+
+### Phase 3 tail (follow-on, lower priority)
+
+- [ ] Add 2020-07-01 and 2021-01-01 fixtures for the 12 satellites and
+      Pallas so they get multi-epoch coverage on par with the original 12.
+- [ ] Consider 2025-01-01 fixtures as "primary" epoch so short-period
+      moons (Io, Phobos, Mimas) stay within Phase-4 tolerance at
+      present-day simulation dates.
 
 ### HYG Starfield — third starfield preset (pending, gated)
 

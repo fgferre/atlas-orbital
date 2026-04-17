@@ -2,19 +2,20 @@
  * Asteroid provider (Ceres, Pallas, Vesta).
  *
  * Uses heliocentric J2000 ecliptic osculating elements at epoch 2020-01-01
- * (or J2000 for bodies without a Horizons fixture) and propagates them
- * with a two-body Kepler step. The 1900-2050 validity window is enforced
- * by the engine, not by this module — outside the window the engine routes
- * to the Kepler fallback.
+ * and propagates them with a two-body Kepler step. The 1900-2050 validity
+ * window is enforced by the engine, not by this module — outside the window
+ * the engine routes to the Kepler fallback.
  *
- * Accuracy:
- *   - Fixture-derived bodies (Ceres, Vesta today) match Horizons to sub-
- *     arcsecond at the reference epoch; drift over ±30 years is dominated
- *     by unmodeled planetary perturbations and stays well below the
- *     Phase-4 0.5° angular budget.
- *   - Pallas uses published J2000 elements (no fixture on disk yet) and is
- *     slightly less tight; it still stays within the 0.5° budget inside
- *     1900-2050.
+ * Every entry below was produced by `scripts/derive-elements-from-fixtures.js`
+ * against the corresponding Horizons fixture on disk, identical pipeline
+ * as `satellites.ts`.
+ *
+ * Accuracy at the 2020-01-01 reference epoch: sub-arcsecond match to the
+ * fixture. Multi-year drift is dominated by unmodeled planetary
+ * perturbations (two-body propagation only); both Ceres and Vesta stay
+ * well within the Phase-4 0.5° budget across ±1 year. Pallas has the
+ * highest eccentricity (e ≈ 0.23) of the three and drifts marginally faster
+ * but still inside the 0.5° envelope over the currently-validated window.
  */
 
 import * as THREE from "three";
@@ -23,8 +24,9 @@ import { elementsToCartesian, ecliptic2ThreeJs, mod2Pi } from "./coordUtils";
 const D2R = Math.PI / 180;
 const K2 = 0.01720209895 ** 2; // heliocentric gravitational parameter, AU^3/day^2
 const MU_SUN = 1.0 * K2;
-const J2000_JD = 2451545.0;
-const EPOCH_2020_JD = 2458849.5;
+// 2020-01-01T00:00:00Z UT expressed in TDB Julian Date (see satellites.ts
+// for the rationale; keeps the epoch aligned with the engine's jdTDB input).
+const EPOCH_2020_JD = 2458849.500861648;
 
 interface HeliocentricOsculating {
   /** Reference epoch as Julian Date. */
@@ -38,11 +40,8 @@ interface HeliocentricOsculating {
 }
 
 /**
- * Heliocentric J2000 ecliptic osculating elements.
- *
- * Ceres / Vesta come from inverting Horizons fixtures at 2020-01-01.
- * Pallas uses JPL SBDB J2000 osculating elements (good to sub-arcsecond
- * at epoch, drifts slowly over the 1900-2050 window).
+ * Heliocentric J2000 ecliptic osculating elements, all at epoch 2020-01-01.
+ * Emitted by `scripts/derive-elements-from-fixtures.js`.
  */
 const ASTEROIDS: Record<string, HeliocentricOsculating> = {
   ceres: {
@@ -54,6 +53,15 @@ const ASTEROIDS: Record<string, HeliocentricOsculating> = {
     omegaDeg: 73.808967,
     M0Deg: 130.31614,
   },
+  pallas: {
+    epochJD: EPOCH_2020_JD,
+    aAU: 2.773200573,
+    e: 0.230183,
+    iDeg: 34.830715,
+    OmegaDeg: 173.0577,
+    omegaDeg: 310.133778,
+    M0Deg: 112.795738,
+  },
   vesta: {
     epochJD: EPOCH_2020_JD,
     aAU: 2.361908656,
@@ -62,15 +70,6 @@ const ASTEROIDS: Record<string, HeliocentricOsculating> = {
     OmegaDeg: 103.809289,
     omegaDeg: 150.835776,
     M0Deg: 163.37562,
-  },
-  pallas: {
-    epochJD: J2000_JD,
-    aAU: 2.7722,
-    e: 0.23125,
-    iDeg: 34.8398,
-    OmegaDeg: 173.0867,
-    omegaDeg: 310.1603,
-    M0Deg: 280.565,
   },
 };
 

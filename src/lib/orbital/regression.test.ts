@@ -105,7 +105,7 @@ const TOLERANCES: Record<
   string,
   { maxAngularErrorDeg: number; maxDistanceErrorRatio: number }
 > = {
-  // VSOP87D planets (scope formerly covered by VSOP2013 / TOP2013)
+  // VSOP87D planets + Pluto-Meeus
   mercury: { maxAngularErrorDeg: 0.1, maxDistanceErrorRatio: 0.002 },
   venus: { maxAngularErrorDeg: 0.1, maxDistanceErrorRatio: 0.002 },
   earth: { maxAngularErrorDeg: 0.1, maxDistanceErrorRatio: 0.002 },
@@ -115,39 +115,35 @@ const TOLERANCES: Record<
   uranus: { maxAngularErrorDeg: 0.1, maxDistanceErrorRatio: 0.002 },
   neptune: { maxAngularErrorDeg: 0.1, maxDistanceErrorRatio: 0.002 },
   pluto: { maxAngularErrorDeg: 0.2, maxDistanceErrorRatio: 0.005 },
-  // ELP/MPP02 Moon
+  // ELP/MPP02-trunc Moon
   moon: { maxAngularErrorDeg: 0.2, maxDistanceErrorRatio: 0.005 },
-  // Fixture-validated satellite families (tight two-body Kepler at epoch)
-  io: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.02 },
-  titan: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.02 },
-  oberon: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.02 },
-  // Phase-A satellites: rotated-tabular elements at J2000 epoch.
-  // These bodies have ~20-year epoch drift and are "explicitly outside
-  // the Phase-4 tight-tolerance regression" (see satellites.ts).
-  // Angular tolerance is coarse until fixture-derived elements replace
-  // the tabular ones (Phase-4 work item). Distance is still verified.
-  europa: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  ganymede: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  callisto: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  mimas: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  enceladus: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  tethys: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  dione: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  rhea: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  iapetus: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.05 },
-  miranda: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  ariel: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  umbriel: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  titania: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  phobos: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  deimos: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.02 },
-  // Asteroid osculating (scope of EPHASTER)
+  // All *MeanElements satellites and all AsteroidOsculating bodies are now
+  // fixture-derived from Horizons at 2020-01-01 (see
+  // scripts/derive-elements-from-fixtures.js and satellites.ts /
+  // asteroids.ts). They match the fixture to sub-arcsecond at epoch, so we
+  // hold them to the Phase-4 tight targets: < 0.5 deg angular, < 1%
+  // distance. Multi-epoch drift is evaluated separately with wider bounds.
+  io: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  europa: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  ganymede: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  callisto: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  mimas: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  enceladus: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  tethys: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  dione: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  rhea: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  titan: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  iapetus: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  miranda: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  ariel: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  umbriel: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  titania: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  oberon: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  phobos: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  deimos: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
   ceres: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  pallas: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
   vesta: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
-  // Pallas uses J2000-epoch elements (no 2020 fixture inversion yet).
-  // 72° phase error, 24% distance error observed at 2020-01-01.
-  // Both angular and distance tolerances coarse until elements are updated.
-  pallas: { maxAngularErrorDeg: 180, maxDistanceErrorRatio: 0.3 },
   // Kepler-only bodies keep the original coarse envelope
   triton: { maxAngularErrorDeg: 150, maxDistanceErrorRatio: 0.6 },
 } as const;
@@ -170,8 +166,17 @@ const KEPLER_COARSE_TOLERANCES = {
 const MULTI_EPOCH_OVERRIDES: Partial<
   Record<string, { maxAngularErrorDeg: number; maxDistanceErrorRatio: number }>
 > = {
-  // Io: 1.77-day orbit → ~35° drift at mid-year, ~70° at year+1.
+  // Observed drifts from epoch 2020-01-01 (two-body Kepler propagation, no
+  // resonance / J2 / tidal modelling). The engine is honest about this:
+  // fixture-derived elements are locally excellent but secular effects
+  // accumulate with orbital period × elapsed time.
+  //
+  //  - Io (P=1.77 d, jovian resonance + J2):  ~35° at +6 mo, ~70° at +12 mo
+  //  - Titan (P=15.95 d, solar + Hyperion):  ~0.5° at +6 mo, ~1.0° at +12 mo
+  //  - Oberon (P=13.46 d, uranian J2):       ~0.8° at +6 mo, ~1.5° at +12 mo
   io: { maxAngularErrorDeg: 80, maxDistanceErrorRatio: 0.02 },
+  titan: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.02 },
+  oberon: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.02 },
 };
 
 const BODY_PARENT_BY_ID = new Map(

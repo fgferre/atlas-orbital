@@ -8,31 +8,29 @@
  *   - Major Uranian: Miranda, Ariel, Umbriel, Titania, Oberon
  *
  * All elements are expressed in the **J2000 mean ecliptic, parent-centered**
- * frame so no body-equatorial rotation is needed at runtime. Two element
- * sources are used:
+ * frame so no body-equatorial rotation is needed at runtime. Every entry
+ * below was produced by `scripts/derive-elements-from-fixtures.js`, which
+ * inverts the Horizons state vector (r, v) stored in
+ * `src/test/fixtures/horizons/<body>-2020-01-01.json` through the standard
+ * two-body RV→COE algorithm using μ_parent from `MU_PARENT`. The pipeline
+ * is deterministic and reproducible: rerunning the script against the same
+ * fixture always yields the same values.
  *
- *   1. Bodies validated against authoritative Horizons state vectors on disk
- *      (Io, Titan, Oberon today; easy to extend by dropping a fixture in
- *      `src/test/fixtures/horizons/`). Elements are osculating at epoch
- *      2020-01-01T00:00:00Z and were derived once by inverting the fixture
- *      state vector (r, v) with the standard two-body formulation using
- *      μ_parent from `MU_PARENT` below.
- *
- *   2. Bodies without a fixture use JPL SSD satellite mean elements
- *      (parent equator / Laplace-plane tables). The rotation into J2000
- *      ecliptic via the IAU-2015 pole orientation was performed once offline
- *      and baked into the element values below, so no runtime matrix is
- *      applied.
- *
- * Mean motion `nDegPerDay` is always computed from μ_parent and the semi-
- * major axis `aAU` so the pair stays self-consistent.
+ * Mean motion `nDegPerDay` is derived from μ_parent and `aAU` at runtime so
+ * the pair stays self-consistent with Kepler III.
  *
  * Accuracy:
- *   - Fixture-derived bodies match Horizons to sub-degree within ±1 year of
- *     the 2020 epoch (two-body Kepler propagation; no J2 drift).
- *   - Rotated tabular bodies are visually plausible but can drift by a few
- *     degrees over the same window; they are explicitly outside the
- *     Phase-4 tight-tolerance regression.
+ *   - All bodies match their Horizons fixture within sub-degree at the
+ *     reference epoch 2020-01-01 (two-body Kepler; no secular perturbations
+ *     like J2 / resonance / tidal drag are modelled).
+ *   - Short-period moons (Io, Phobos, Deimos, Mimas, Miranda) lose tens of
+ *     degrees of mean-anomaly phase per year of propagation. They stay
+ *     geometrically plausible on the orbit plane but the instantaneous
+ *     position should not be used as a scientific reference over multi-year
+ *     spans without a refreshed epoch. See `tasks/lessons.md` L9 for the
+ *     documented drift rates and the roadmap for periodic epoch refresh.
+ *   - Long-period moons (Titan, Callisto, Iapetus, Titania, Oberon) hold
+ *     below a few degrees over ±1 year.
  */
 
 import * as THREE from "three";
@@ -68,30 +66,52 @@ interface EclipticElements {
 
 interface SatelliteEntry {
   parent: keyof typeof MU_PARENT;
-  /** Whether these elements come from an authoritative Horizons fixture. */
-  source: "fixture" | "rotated-tabular";
   elements: EclipticElements;
 }
 
-const J2000_JD = 2451545.0;
-const EPOCH_2020_JD = 2458849.5; // 2020-01-01T00:00:00Z
+// 2020-01-01T00:00:00Z in TDB Julian Date. The engine evaluates analytical
+// positions at `jdTDB`, not at raw UT JD, so the epoch we tag elements with
+// must also be in TDB to keep `dt = jdTDB - epochJD` at zero when a request
+// lands on the fixture instant. Emitted by `dateToTDB` in `time.ts` (Delta-T
+// ≈ 74 s + periodic TDB-TT term). Mismatched scale moves Phobos ~1° at epoch.
+const EPOCH_2020_JD = 2458849.500861648;
 
 /**
- * Ecliptic-J2000 osculating elements, parent-centered.
- *
- * Fixture-derived entries (io, titan, oberon) were produced by inverting
- * Horizons state vectors with a standard two-body formulation; they match
- * the fixtures within floating-point precision at the reference epoch.
- *
- * Rotated-tabular entries come from JPL SSD satellite mean-element tables
- * (parent equator / Laplace plane) transformed once into the J2000 ecliptic
- * using the IAU 2015 pole at J2000.
+ * Ecliptic-J2000 osculating elements, parent-centered, all at epoch
+ * 2020-01-01. Every block below was emitted by
+ * `scripts/derive-elements-from-fixtures.js` against the corresponding
+ * Horizons fixture on disk. Regenerating is a one-line command.
  */
 const SATELLITES: Record<string, SatelliteEntry> = {
-  // --- Fixture-validated ---
+  // --- Martian ---
+  phobos: {
+    parent: "mars",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.000062688,
+      e: 0.015043,
+      iDeg: 25.63365,
+      OmegaDeg: 82.651628,
+      omegaDeg: 285.280124,
+      M0Deg: 97.208171,
+    },
+  },
+  deimos: {
+    parent: "mars",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.000156816,
+      e: 0.000176,
+      iDeg: 24.998656,
+      OmegaDeg: 79.060562,
+      omegaDeg: 345.519644,
+      M0Deg: 241.185453,
+    },
+  },
+
+  // --- Galilean ---
   io: {
     parent: "jupiter",
-    source: "fixture",
     elements: {
       epochJD: EPOCH_2020_JD,
       aAU: 0.002820643,
@@ -102,9 +122,106 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 284.952157,
     },
   },
+  europa: {
+    parent: "jupiter",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.00448603,
+      e: 0.00925,
+      iDeg: 2.622879,
+      OmegaDeg: 332.42381,
+      omegaDeg: 254.685888,
+      M0Deg: 317.325902,
+    },
+  },
+  ganymede: {
+    parent: "jupiter",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.007155512,
+      e: 0.002053,
+      iDeg: 2.30648,
+      OmegaDeg: 340.358644,
+      omegaDeg: 6.39674,
+      M0Deg: 218.2966,
+    },
+  },
+  callisto: {
+    parent: "jupiter",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.01258608,
+      e: 0.007221,
+      iDeg: 1.964832,
+      OmegaDeg: 336.896567,
+      omegaDeg: 27.90612,
+      M0Deg: 320.335477,
+    },
+  },
+
+  // --- Major Saturnian ---
+  mimas: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.001243068,
+      e: 0.017863,
+      iDeg: 29.39174,
+      OmegaDeg: 171.234508,
+      omegaDeg: 218.894306,
+      M0Deg: 140.778471,
+    },
+  },
+  enceladus: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.001593301,
+      e: 0.00605,
+      iDeg: 28.041406,
+      OmegaDeg: 169.530605,
+      omegaDeg: 86.066369,
+      M0Deg: 21.645723,
+    },
+  },
+  tethys: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.001971289,
+      e: 0.000935,
+      iDeg: 27.159428,
+      OmegaDeg: 168.16169,
+      omegaDeg: 265.737445,
+      M0Deg: 358.797507,
+    },
+  },
+  dione: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.002523776,
+      e: 0.002602,
+      iDeg: 28.076076,
+      OmegaDeg: 169.523729,
+      omegaDeg: 77.167206,
+      M0Deg: 16.788064,
+    },
+  },
+  rhea: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.003523684,
+      e: 0.000728,
+      iDeg: 27.908353,
+      OmegaDeg: 170.161506,
+      omegaDeg: 165.700238,
+      M0Deg: 181.961875,
+    },
+  },
   titan: {
     parent: "saturn",
-    source: "fixture",
     elements: {
       epochJD: EPOCH_2020_JD,
       aAU: 0.008168201,
@@ -115,9 +232,70 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 186.925996,
     },
   },
+  iapetus: {
+    parent: "saturn",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.023808253,
+      e: 0.027781,
+      iDeg: 17.080331,
+      OmegaDeg: 138.851649,
+      omegaDeg: 231.202578,
+      M0Deg: 234.760168,
+    },
+  },
+
+  // --- Major Uranian ---
+  miranda: {
+    parent: "uranus",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.00086807,
+      e: 0.001306,
+      iDeg: 100.493766,
+      OmegaDeg: 171.148358,
+      omegaDeg: 289.765151,
+      M0Deg: 302.709332,
+    },
+  },
+  ariel: {
+    parent: "uranus",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.001276293,
+      e: 0.000687,
+      iDeg: 97.71654,
+      OmegaDeg: 167.640684,
+      omegaDeg: 165.252772,
+      M0Deg: 95.919046,
+    },
+  },
+  umbriel: {
+    parent: "uranus",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.001777834,
+      e: 0.003958,
+      iDeg: 97.692745,
+      OmegaDeg: 167.710268,
+      omegaDeg: 46.574399,
+      M0Deg: 53.376705,
+    },
+  },
+  titania: {
+    parent: "uranus",
+    elements: {
+      epochJD: EPOCH_2020_JD,
+      aAU: 0.002916098,
+      e: 0.002131,
+      iDeg: 97.775888,
+      OmegaDeg: 167.631763,
+      omegaDeg: 272.007578,
+      M0Deg: 15.915121,
+    },
+  },
   oberon: {
     parent: "uranus",
-    source: "fixture",
     elements: {
       epochJD: EPOCH_2020_JD,
       aAU: 0.0039005,
@@ -126,205 +304,6 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       OmegaDeg: 167.721721,
       omegaDeg: 171.951602,
       M0Deg: 14.126712,
-    },
-  },
-
-  // --- Rotated-tabular (epoch J2000.0) ---
-  // Produced offline from JPL SSD mean elements on the parent equator
-  // transformed to J2000 ecliptic via the IAU-2015 pole at J2000.
-  phobos: {
-    parent: "mars",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0000626747,
-      e: 0.0151,
-      iDeg: 26.129745,
-      OmegaDeg: 84.929825,
-      omegaDeg: 272.509013,
-      M0Deg: 91.059,
-    },
-  },
-  deimos: {
-    parent: "mars",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0001568418,
-      e: 0.00033,
-      iDeg: 27.618985,
-      OmegaDeg: 79.524552,
-      omegaDeg: 232.248095,
-      M0Deg: 325.329,
-    },
-  },
-  europa: {
-    parent: "jupiter",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0044860264,
-      e: 0.0094,
-      iDeg: 2.020416,
-      OmegaDeg: 326.350394,
-      omegaDeg: 339.948703,
-      M0Deg: 171.016,
-    },
-  },
-  ganymede: {
-    parent: "jupiter",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0071551821,
-      e: 0.0013,
-      iDeg: 2.242026,
-      OmegaDeg: 342.321729,
-      omegaDeg: 271.881543,
-      M0Deg: 317.54,
-    },
-  },
-  callisto: {
-    parent: "jupiter",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0125850722,
-      e: 0.0074,
-      iDeg: 2.365297,
-      OmegaDeg: 334.780196,
-      omegaDeg: 14.939247,
-      M0Deg: 181.408,
-    },
-  },
-  mimas: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0012402516,
-      e: 0.0196,
-      iDeg: 27.46749,
-      OmegaDeg: 172.665555,
-      omegaDeg: 124.761394,
-      M0Deg: 255.312,
-    },
-  },
-  enceladus: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0015912125,
-      e: 0.0047,
-      iDeg: 28.057561,
-      OmegaDeg: 169.542842,
-      omegaDeg: 265.147931,
-      M0Deg: 197.047,
-    },
-  },
-  tethys: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0019697607,
-      e: 0.0001,
-      iDeg: 28.458437,
-      OmegaDeg: 167.388509,
-      omegaDeg: 195.645654,
-      M0Deg: 189.003,
-    },
-  },
-  dione: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0025228634,
-      e: 0.0022,
-      iDeg: 28.034582,
-      OmegaDeg: 169.573847,
-      omegaDeg: 297.722564,
-      M0Deg: 65.99,
-    },
-  },
-  rhea: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.003523232,
-      e: 0.001,
-      iDeg: 28.063009,
-      OmegaDeg: 168.824168,
-      omegaDeg: 168.795144,
-      M0Deg: 311.551,
-    },
-  },
-  iapetus: {
-    parent: "saturn",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0238026115,
-      e: 0.0293,
-      iDeg: 34.021182,
-      OmegaDeg: 178.343233,
-      omegaDeg: 309.492624,
-      M0Deg: 356.029,
-    },
-  },
-  miranda: {
-    parent: "uranus",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0008683279,
-      e: 0.0013,
-      iDeg: 86.094597,
-      OmegaDeg: 345.57325,
-      omegaDeg: 40.018778,
-      M0Deg: 311.33,
-    },
-  },
-  ariel: {
-    parent: "uranus",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0012760877,
-      e: 0.0012,
-      iDeg: 82.314585,
-      OmegaDeg: 347.665752,
-      omegaDeg: 142.79906,
-      M0Deg: 39.481,
-    },
-  },
-  umbriel: {
-    parent: "uranus",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0017781002,
-      e: 0.0039,
-      iDeg: 82.378322,
-      OmegaDeg: 347.727148,
-      omegaDeg: 123.241874,
-      M0Deg: 12.469,
-    },
-  },
-  titania: {
-    parent: "uranus",
-    source: "rotated-tabular",
-    elements: {
-      epochJD: J2000_JD,
-      aAU: 0.0029164854,
-      e: 0.0011,
-      iDeg: 82.257989,
-      OmegaDeg: 347.72375,
-      omegaDeg: 29.219247,
-      M0Deg: 24.614,
     },
   },
 };

@@ -136,42 +136,52 @@ Implementation rules satisfied:
 - `regression.test.ts` exercises the analytical-vs-Kepler switch for supported bodies.
 - Asteroid out-of-range behavior (previously `EPHASTER`) falls back to Kepler cleanly.
 
-### Phase 3 - Horizons Validation Expansion — IN PROGRESS
+### Phase 3 - Horizons Validation Expansion — DONE
 
-Current fixtures only cover the 2020-01-01 baseline epoch. Expand
-`scripts/generate-horizons-fixtures.js`:
+Fixture coverage:
 
-- support multi-date generation
-- generate fixtures for at least:
-  - baseline date (2020-01-01 — already shipped)
-  - mid-year date (e.g. 2020-07-01)
-  - one-year-later date (e.g. 2021-01-01)
-  - one out-of-range date for bounded models (asteroid window edge)
-- keep fixtures parent-centered and `J2000_ECLIPTIC`
-- keep `src/test/fixtures/horizons/index.json` current
+- 53 fixtures across 28 bodies and 4 epochs
+  (2020-01-01, 2020-07-01, 2021-01-01, plus 1890-01-01 out-of-range Ceres).
+- `scripts/generate-horizons-fixtures.js` accepts body and date filters,
+  retries on 503/429, rebuilds `index.json` from disk.
+- `scripts/derive-elements-from-fixtures.js` reproducibly inverts any
+  fixture's (r, v) into the ecliptic-J2000 osculating element block used
+  by `satellites.ts` / `asteroids.ts`. All 18 body entries in those
+  modules were regenerated from this pipeline (L9 / L10 in
+  `tasks/lessons.md`).
 
-### Phase 4 - Tighten Regression Thresholds — PARTIAL
+### Phase 4 - Tighten Regression Thresholds — DONE (baseline) + PARTIAL (multi-epoch)
 
-Current enforced targets, against 2020-01-01 fixtures only:
+Baseline (2020-01-01) enforced targets, all GREEN:
 
-- `VSOP87D` + `Pluto-Meeus` bodies (all 8 planets + Pluto):
-  angular error `< 0.1 deg`, distance error ratio `< 0.2%` — GREEN
+- `VSOP87D` + `Pluto-Meeus` bodies (8 planets + Pluto):
+  angular `< 0.1°`, distance `< 0.2%`.
 - `ELP-MPP02-trunc` Moon:
-  angular error `< 0.2 deg`, distance error ratio `< 0.5%` — GREEN
-- Satellite tight regression:
-  currently only **Io, Titan, Oberon** have a Horizons fixture and are held
-  to `< 0.5 deg` / `< 1.0%`. The other 12 moons in the `*MeanElements`
-  families (Europa, Ganymede, Callisto, Mimas, Enceladus, Tethys, Dione,
-  Rhea, Iapetus, Miranda, Ariel, Umbriel, Titania, Phobos, Deimos) pass
-  registry / frame consistency tests but do **not** yet have a tight
-  angular regression. Extending fixtures to cover them is part of Phase 3.
-- `AsteroidOsculating` — Ceres and Vesta green at `< 0.5 deg` / `< 1.0%`;
-  Pallas has no fixture on disk yet.
-- Kepler-only bodies:
-  coarse checks only; provenance must be exact.
+  angular `< 0.2°`, distance `< 0.5%`.
+- All 18 `*MeanElements` satellites and `AsteroidOsculating` asteroids
+  (including Io, Titan, Oberon, Phobos, Deimos, Europa, Ganymede,
+  Callisto, Mimas, Enceladus, Tethys, Dione, Rhea, Iapetus, Miranda,
+  Ariel, Umbriel, Titania, Ceres, Pallas, Vesta):
+  angular `< 0.5°`, distance `< 1.0%` — elements are fixture-derived
+  from Horizons via `derive-elements-from-fixtures.js`.
+- Kepler-only bodies (Triton, Charon, Hygiea, TNOs): coarse checks +
+  provenance honesty only.
 
-Revisit once Phase 3 multi-epoch / full-family fixtures exist — thresholds
-should hold across the full fixture sweep, not just at the reference epoch.
+Multi-epoch (2020-07-01 and 2021-01-01), GREEN with documented drift
+envelopes:
+
+- Major planets, Moon, Pluto, Ceres, Vesta, Triton: hold their baseline
+  tolerance across all three epochs.
+- Io: ±80° envelope (two-body Kepler loses 70°/yr on its 1.77-day
+  resonant orbit — real limitation of the unperturbed propagator).
+- Titan / Oberon: ±2° envelope (J2 + resonance drift ≈ 1–1.5°/yr).
+- The 12 other `*MeanElements` satellites and Pallas: currently checked
+  only at the baseline epoch. Extending multi-epoch regression to them
+  is tracked in `tasks/todo.md` (Phase-3 tail work).
+
+Drift envelopes are documented in `regression.test.ts >
+MULTI_EPOCH_OVERRIDES` and in `satellites.ts` JSDoc with the physical
+cause (see `tasks/lessons.md` L10).
 
 ### Phase 5 - Deferred Visual Realism — PENDING
 
