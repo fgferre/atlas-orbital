@@ -1,5 +1,6 @@
 import { parseHygBinaryBuffer, type HygCatalogData } from "../utils/hygBinary";
 import { parseNASAStarFile, type NASAStar } from "../utils/nasaStarParser";
+import type { ResolvedQualityName } from "./qualityProfile";
 
 export type { NASAStar } from "../utils/nasaStarParser";
 export type { HygCatalogData } from "../utils/hygBinary";
@@ -139,6 +140,28 @@ export const loadNASAStarCatalog = async (): Promise<NASAStar[]> => {
 export type HygTier = "low" | "medium" | "high" | "full";
 
 const DEFAULT_HYG_TIER: HygTier = "full";
+
+/**
+ * Map the resolved device quality profile to the HYG tier file the
+ * browser should fetch. The tier sizes were chosen so each profile stays
+ * inside a sensible payload budget:
+ *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / slow network)
+ *   balanced    → medium (~160 KB,  ~10 000 stars — naked-eye sky)
+ *   high        → high   (~790 KB,  ~50 000 stars — amateur binocular)
+ *   ultra       → full   (~1.7 MB, ~109 000 stars — every surviving HYG row)
+ */
+export function hygTierForQuality(name: ResolvedQualityName): HygTier {
+  switch (name) {
+    case "constrained":
+      return "low";
+    case "balanced":
+      return "medium";
+    case "high":
+      return "high";
+    case "ultra":
+      return "full";
+  }
+}
 
 const getHygTierPath = (tier: HygTier, compressed: boolean) => {
   const base = import.meta.env.BASE_URL || "/";

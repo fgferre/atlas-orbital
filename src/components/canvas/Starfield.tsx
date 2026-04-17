@@ -22,14 +22,16 @@
  */
 
 import * as THREE from "three";
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import {
   getCachedHygCatalog,
+  hygTierForQuality,
   loadHygCatalog,
   type HygCatalogData,
 } from "../../lib/starfield";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 // 1 parsec expressed in the scene's unit system (matches the legacy
@@ -169,13 +171,27 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
 export const Starfield = () => {
   const scaleMode = useStore((state) => state.scaleMode);
   const datetime = useStore((state) => state.datetime);
+  const qualityMode = useStore((state) => state.qualityMode);
+  const qualityProfile = useQualityProfile(qualityMode);
+  const tier = hygTierForQuality(qualityProfile.name);
+
   const { gl, size } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
+
+  // Memoise the tier-bound loader / cache getter so
+  // `useStarfieldCatalog`'s effect only re-runs when the device tier
+  // actually changes (e.g. user toggling quality mode in the settings).
+  const loadCatalogForTier = useCallback(() => loadHygCatalog(tier), [tier]);
+  const getCachedCatalogForTier = useCallback(
+    () => getCachedHygCatalog(tier),
+    [tier]
+  );
+
   const catalog = useStarfieldCatalog<HygCatalogData>({
     source: "hyg",
-    loadCatalog: loadHygCatalog,
-    getCachedCatalog: getCachedHygCatalog,
+    loadCatalog: loadCatalogForTier,
+    getCachedCatalog: getCachedCatalogForTier,
   });
 
   const geometry = useMemo(() => {
