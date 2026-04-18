@@ -25,40 +25,12 @@ const readPersistedField = async (
 test.describe("quality", () => {
   test.setTimeout(60_000);
 
-  test("Scene-panel Quality group drives graphicsSlice (post-P1.2 fix)", async ({
-    page,
-  }) => {
-    await visitAtlasAndWaitForReady(page);
-
-    await expect(page.getByText("System Online")).toBeVisible({
-      timeout: 30_000,
-    });
-
-    // Scene-panel Quality group: after Wave α P1.2 fix it writes to
-    // graphicsPreset + graphicsAutoMode on the slice (the compat
-    // `qualityMode` field is no longer the source of truth; the hook
-    // ignores it).
-    const sceneTrigger = page.locator('[data-right-control-trigger="scene"]');
-    await sceneTrigger.dispatchEvent("click");
-
-    const qualityGroup = page.getByRole("group", { name: "Quality mode" });
-    await expect(qualityGroup).toBeVisible();
-
-    await qualityGroup
-      .getByRole("button", { name: "Ultra" })
-      .dispatchEvent("click");
-
-    await expect
-      .poll(() => readPersistedField(page, "graphicsPreset"), {
-        timeout: 5_000,
-      })
-      .toBe("ultra");
-    await expect
-      .poll(() => readPersistedField(page, "graphicsAutoMode"), {
-        timeout: 5_000,
-      })
-      .toBe(false);
-  });
+  // The Scene panel no longer carries a Quality ChoiceButton group
+  // (Wave α UX pass deduped it against Display panel — Scene now only
+  // shows the current tier label and points users at Display for
+  // changes). The previous "Scene-panel Quality group drives
+  // graphicsSlice" test here is obsolete; the equivalent behavior
+  // is covered by the Display panel test below.
 
   test("Display panel preset click updates graphicsSlice + clears overrides", async ({
     page,

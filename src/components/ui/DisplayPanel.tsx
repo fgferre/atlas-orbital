@@ -99,7 +99,18 @@ export const DisplayPanel = () => {
   );
 
   const isCustom = displayedPreset === "custom";
-  const presetSelectionDisabled = graphicsAutoMode;
+  // Wave α UX fix: clicking a preset button is the "reset to X"
+  // shortcut, so the buttons stay enabled even in Custom mode AND
+  // when Auto-detect is on. Clicking:
+  //   - in Auto mode → turn Auto off + switch to that preset
+  //   - in Custom mode → clear overrides + switch to that preset
+  //   - otherwise → plain preset switch
+  // Matches AAA convention (CP2077 / Starfield): preset list is
+  // always the one-click escape hatch.
+  const handlePresetClick = (preset: Exclude<GraphicsPresetName, "custom">) => {
+    if (graphicsAutoMode) setGraphicsAutoMode(false);
+    setGraphicsPreset(preset);
+  };
 
   return (
     <div className="space-y-6" data-testid="display-panel">
@@ -134,9 +145,12 @@ export const DisplayPanel = () => {
               <ChoiceButton
                 key={option.id}
                 label={option.label}
-                isActive={!isCustom && activePreset === option.id}
-                disabled={presetSelectionDisabled}
-                onClick={() => setGraphicsPreset(option.id)}
+                // Highlight the active preset even in Custom mode —
+                // it's the base the user came from (customBase) and
+                // clicking it again resets. That's easier to reason
+                // about than a row of equally-grayed buttons.
+                isActive={activePreset === option.id}
+                onClick={() => handlePresetClick(option.id)}
               />
             ))}
           </div>
@@ -250,16 +264,24 @@ export const DisplayPanel = () => {
           hint="R1 #2 default 1.0 — lower lets more surfaces glow."
         />
 
+        {/* Tone Mapping dropdown intentionally disabled in Wave α.
+            The store persists the user's choice in
+            `graphicsOverrides.toneMapping`, but the composer in
+            `PostProcessingPipeline.tsx` stays pinned to AgX until
+            Wave γ wires `<ToneMapping mode={effective.toneMapping}>`
+            through. Showing the dropdown as active would let users
+            click options that produce zero visible change — hiding it
+            behind a disabled state with an explicit tooltip keeps the
+            panel honest. */}
         <Select
           label="Tone Mapping"
-          value={effective.toneMapping}
+          value="agx"
           options={TONE_MAPPING_OPTIONS}
-          onChange={(v) => setGraphicsOverride("toneMapping", v)}
-          onReset={
-            graphicsOverrides.toneMapping !== undefined
-              ? () => setGraphicsOverride("toneMapping", undefined)
-              : undefined
-          }
+          onChange={() => {
+            /* disabled — see comment above */
+          }}
+          disabled
+          disabledHint="AgX is the active operator. Dropdown activates in a future update."
         />
 
         <Slider
@@ -490,6 +512,10 @@ interface SelectProps<T extends string | number> {
   options: Array<{ id: T; label: string }>;
   onChange: (next: T) => void;
   onReset?: () => void;
+  /** When true, every option button is disabled + grayed. */
+  disabled?: boolean;
+  /** Tooltip + caption below the group when the Select is disabled. */
+  disabledHint?: string;
 }
 
 const Select = <T extends string | number>({
@@ -498,11 +524,13 @@ const Select = <T extends string | number>({
   options,
   onChange,
   onReset,
+  disabled = false,
+  disabledHint,
 }: SelectProps<T>) => (
   <div>
     <SubsectionLabel>
       {label}
-      {onReset && (
+      {!disabled && onReset && (
         <button
           type="button"
           onClick={onReset}
@@ -523,9 +551,17 @@ const Select = <T extends string | number>({
           key={option.id}
           label={option.label}
           isActive={value === option.id}
-          onClick={() => onChange(option.id)}
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) onChange(option.id);
+          }}
         />
       ))}
     </div>
+    {disabled && disabledHint && (
+      <div className="mt-1 text-[10px] leading-snug text-white/45">
+        {disabledHint}
+      </div>
+    )}
   </div>
 );

@@ -50,7 +50,7 @@ export interface VisualPreset {
 
 export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
   DEEP_SPACE: {
-    bloomIntensity: 0.6,
+    bloomIntensity: 1.0,
     bloomThreshold: 0.78,
     bloomRadius: 0.3,
     saturation: 0.29,
@@ -64,7 +64,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   PLANET_ORBIT: {
-    bloomIntensity: 0.6,
+    bloomIntensity: 1.0,
     bloomThreshold: 0.78,
     bloomRadius: 0.3,
     saturation: 0.29,
@@ -78,7 +78,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   CLOSE_FLYBY: {
-    bloomIntensity: 0.6,
+    bloomIntensity: 1.0,
     bloomThreshold: 0.78,
     bloomRadius: 0.3,
     saturation: 0.29,
@@ -92,7 +92,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   INNER_SYSTEM: {
-    bloomIntensity: 0.6,
+    bloomIntensity: 1.0,
     bloomThreshold: 0.78,
     bloomRadius: 0.3,
     saturation: 0.29,
@@ -106,7 +106,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   OUTER_SYSTEM: {
-    bloomIntensity: 0.6,
+    bloomIntensity: 1.0,
     bloomThreshold: 0.78,
     bloomRadius: 0.3,
     saturation: 0.29,

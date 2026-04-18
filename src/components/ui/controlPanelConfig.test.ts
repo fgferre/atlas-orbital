@@ -24,7 +24,7 @@ describe("controlPanelConfig", () => {
       "Scene",
       "Overlay",
       "Display",
-      "A11y",
+      "Access",
       "Project",
     ]);
   });

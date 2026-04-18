@@ -37,7 +37,13 @@ export const RIGHT_CONTROL_BUTTONS = [
   { id: "scene", label: "Scene" },
   { id: "overlay", label: "Overlay" },
   { id: "display", label: "Display" },
-  { id: "a11y", label: "A11y" },
+  // "Access" instead of "Accessibility" — the vertical rail button
+  // caps at roughly 7 characters before truncation; "Access" reads
+  // as an abbreviation users parse correctly and keeps layout in
+  // parity with the existing "Project" / "Display" labels. The
+  // panel header (PANEL_COPY.a11y.title in LayersPanel.tsx) spells
+  // it out in full.
+  { id: "a11y", label: "Access" },
   { id: "project", label: "Project" },
 ] as const satisfies ReadonlyArray<{
   id: RightControlPanelId;

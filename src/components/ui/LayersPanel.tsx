@@ -10,7 +10,6 @@ import {
   OVERLAY_FILTER_OPTIONS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   RIGHT_CONTROL_BUTTONS,
-  SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
   SCENE_SUN_RENDER_OPTIONS,
@@ -82,16 +81,13 @@ export const LayersPanel = ({
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
-  // Wave α P1.2 fix: the Scene panel's Quality group is rewired to
-  // the graphics slice so clicks here drive the same state as the
-  // Display panel. Before the fix it wrote to `qualityMode`, which
-  // `useQualityProfile` no longer reads — so clicks were silently
-  // dead and Sun Render "Auto resolves to {name}" got stale.
+  // Wave α UX follow-up: the Scene panel no longer carries its own
+  // Quality control group — the Display panel is canonical. We only
+  // read `graphicsAutoMode` (to label Auto vs manual) + the derived
+  // `qualityProfile.name` (to surface the current tier). The setters
+  // and raw preset/autoMode flags are dropped from this surface.
   const qualityMode = useStore((state) => state.qualityMode);
-  const graphicsPreset = useStore((state) => state.graphicsPreset);
   const graphicsAutoMode = useStore((state) => state.graphicsAutoMode);
-  const setGraphicsPreset = useStore((state) => state.setGraphicsPreset);
-  const setGraphicsAutoMode = useStore((state) => state.setGraphicsAutoMode);
   const sunRenderMode = useStore((state) => state.sunRenderMode);
   const setSunRenderMode = useStore((state) => state.setSunRenderMode);
   const showStarfield = useStore((state) => state.showStarfield);
@@ -257,59 +253,29 @@ export const LayersPanel = ({
 
         <div>
           <SubsectionLabel>Quality</SubsectionLabel>
-          <div
-            role="group"
-            aria-label="Quality mode"
-            className="grid grid-cols-2 gap-2"
-          >
-            {SCENE_QUALITY_OPTIONS.map((option) => {
-              // Drive the graphics slice, not the compat `qualityMode`.
-              // The option.id is a legacy tier label; map to the slice's
-              // preset vocabulary.
-              const isActive = graphicsAutoMode
-                ? option.id === "auto"
-                : !graphicsAutoMode &&
-                  option.id !== "auto" &&
-                  ((option.id === "balanced" && graphicsPreset === "medium") ||
-                    (option.id === "constrained" && graphicsPreset === "low") ||
-                    graphicsPreset === option.id);
-              return (
-                <ChoiceButton
-                  key={option.id}
-                  label={option.label}
-                  isActive={isActive}
-                  onClick={() => {
-                    if (option.id === "auto") {
-                      setGraphicsAutoMode(true);
-                      return;
-                    }
-                    setGraphicsAutoMode(false);
-                    setGraphicsPreset(
-                      option.id === "balanced"
-                        ? "medium"
-                        : option.id === "constrained"
-                          ? "low"
-                          : option.id
-                    );
-                  }}
-                  isWide={option.id === "auto"}
-                />
-              );
-            })}
-          </div>
-          {graphicsAutoMode && (
-            <div className="mt-2 text-[11px] text-white/55">
-              Resolved profile: {qualityProfile.name}
-            </div>
-          )}
-          {!graphicsAutoMode && graphicsPreset === "ultra" && (
-            <div className="mt-3 border border-nasa-alert/20 bg-nasa-alert/8 px-3 py-2 text-[11px] leading-relaxed text-white/70">
-              Ultra favors maximum scene fidelity and may cost responsiveness on
-              smaller laptops.
-            </div>
-          )}
-          <div className="mt-2 text-[10px] text-white/40">
-            Full graphics controls live in the Display panel.
+          {/* Wave α UX fix: the Scene panel no longer carries a Quality
+              control group. The Display panel is the canonical
+              surface for graphics tier + all per-feature tuning, and
+              keeping a parallel dropdown here was a source of
+              confusion (duplicate state, market non-standard).
+              Subsection kept as a pointer so users with muscle
+              memory find their way. Current tier is surfaced inline
+              so they can verify Sun Render's "Auto" target. */}
+          <div className="border border-white/5 bg-black/20 px-3 py-2.5 text-[11px] leading-relaxed text-white/55">
+            Graphics quality + tuning live in the{" "}
+            <span className="text-nasa-accent">Display</span> panel.
+            {graphicsAutoMode ? (
+              <div className="mt-1 text-white/70">
+                Currently running on{" "}
+                <span className="text-white">{qualityProfile.name}</span>{" "}
+                (auto-detect).
+              </div>
+            ) : (
+              <div className="mt-1 text-white/70">
+                Currently running on{" "}
+                <span className="text-white">{qualityProfile.name}</span>.
+              </div>
+            )}
           </div>
         </div>
 
