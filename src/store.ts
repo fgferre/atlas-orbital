@@ -18,6 +18,7 @@ import {
   PERSIST_VERSION,
   type PersistedSlice,
 } from "./store.persistMigration";
+import { telemetry } from "./lib/telemetry";
 
 interface AppState {
   /**
@@ -420,7 +421,7 @@ export const useStore = create<AppState>()(
       }),
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.warn("[store] persist rehydrate error:", error);
+          telemetry.warn("boot", "store persist rehydrate error", { error });
           return;
         }
         if (!state) return;

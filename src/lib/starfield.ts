@@ -1,6 +1,7 @@
 import { parseHygBinaryBuffer, type HygCatalogData } from "../utils/hygBinary";
 import { parseNASAStarFile, type NASAStar } from "../utils/nasaStarParser";
 import type { ResolvedQualityName } from "./qualityProfile";
+import { telemetry } from "./telemetry";
 
 export type { NASAStar } from "../utils/nasaStarParser";
 export type { HygCatalogData } from "../utils/hygBinary";
@@ -108,7 +109,9 @@ export const loadNASAStarCatalog = async (): Promise<NASAStar[]> => {
             continue;
           }
 
-          console.warn("Failed to load NASA star file:", result.reason);
+          telemetry.warn("asset", "Failed to load NASA star file", {
+            reason: result.reason,
+          });
         }
 
         if (allStars.length === 0) {

@@ -29,6 +29,7 @@
 import { useEffect } from "react";
 import { useStore } from "../../store";
 import { orbitalEngine } from "../../lib/orbital";
+import { telemetry } from "../../lib/telemetry";
 
 const REPORT_INTERVAL_MS = 1000;
 
@@ -45,8 +46,9 @@ export const OrbitalEngineDebugReporter = () => {
     const intervalId = window.setInterval(() => {
       const stats = orbitalEngine.getCacheStats();
       const pct = (stats.hitRate * 100).toFixed(1);
-      console.info(
-        `[orbital-engine] hitRate=${pct}% (hits=${stats.hits} miss=${stats.misses} bypass=${stats.bypassed}) size=${stats.size}`
+      telemetry.info(
+        "perf",
+        `orbital-engine hitRate=${pct}% (hits=${stats.hits} miss=${stats.misses} bypass=${stats.bypassed}) size=${stats.size}`
       );
       orbitalEngine.resetCacheStats();
     }, REPORT_INTERVAL_MS);
