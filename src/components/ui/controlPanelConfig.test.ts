@@ -16,10 +16,15 @@ import {
 
 describe("controlPanelConfig", () => {
   it("keeps the explicit right-side tool order intact", () => {
+    // Wave α Commit 3 (R2 Wave 1): Display + A11y slotted between
+    // Overlay and Project — the tweak-then-forget surfaces sit left
+    // of the document-scoped Project panel.
     expect(RIGHT_CONTROL_BUTTONS.map((button) => button.label)).toEqual([
       "Search",
       "Scene",
       "Overlay",
+      "Display",
+      "A11y",
       "Project",
     ]);
   });

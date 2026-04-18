@@ -5,7 +5,13 @@ import {
 } from "../../lib/starfield";
 import type { SunRenderMode } from "../../lib/sunRenderMode";
 
-export type RightControlPanelId = "search" | "scene" | "overlay" | "project";
+export type RightControlPanelId =
+  | "search"
+  | "scene"
+  | "overlay"
+  | "display"
+  | "a11y"
+  | "project";
 
 export interface RightControlPanelState {
   activePanel: RightControlPanelId | null;
@@ -19,10 +25,19 @@ export type VisibilityCategory =
   | "asteroids"
   | "tnos";
 
+// Wave α Commit 3 (R2 Wave 1) rail ordering:
+//   search | scene | overlay | display | a11y | project
+//
+// Display + A11y sit left of Project because they're session-scoped
+// (tweak-then-forget) rather than document-scoped (project name, epoch
+// range). Design §1 rationale kept inline so future additions don't
+// silently re-order this list.
 export const RIGHT_CONTROL_BUTTONS = [
   { id: "search", label: "Search" },
   { id: "scene", label: "Scene" },
   { id: "overlay", label: "Overlay" },
+  { id: "display", label: "Display" },
+  { id: "a11y", label: "A11y" },
   { id: "project", label: "Project" },
 ] as const satisfies ReadonlyArray<{
   id: RightControlPanelId;

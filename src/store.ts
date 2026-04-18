@@ -13,11 +13,20 @@ import type {
 import { createDefaultViewportFramingState } from "./lib/camera/effectiveViewport";
 import {
   createDedupedStorage,
+  migrate,
   migrateLegacyStorage,
   PERSIST_KEY,
   PERSIST_VERSION,
   type PersistedSlice,
 } from "./store.persistMigration";
+import {
+  DEFAULT_GRAPHICS_STATE,
+  getDefaultAccessibilityState,
+  type AccessibilityState,
+  type GraphicsBasePreset,
+  type GraphicsOverrides,
+  type GraphicsPresetName,
+} from "./store/graphicsSlice";
 import { telemetry } from "./lib/telemetry";
 
 interface AppState {
@@ -52,6 +61,17 @@ interface AppState {
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   qualityMode: QualityMode;
+  /**
+   * Wave α Commit 3 (R2 Wave 1) graphics slice. `qualityMode` above
+   * stays as a compat field that the old 28 consumer sites read via
+   * `projectToLegacyShape` in `qualityProfile.ts`; Wave 6 retires it.
+   */
+  graphicsPreset: GraphicsPresetName;
+  graphicsAutoMode: boolean;
+  graphicsOverrides: GraphicsOverrides;
+  customBase: GraphicsBasePreset;
+  /** Accessibility state — sibling of the graphics slice. */
+  accessibility: AccessibilityState;
   sunRenderMode: SunRenderMode;
   visualPreset: VisualPresetType;
   autoPresetEnabled: boolean;
@@ -108,6 +128,17 @@ interface AppState {
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setQualityMode: (mode: QualityMode) => void;
+  setGraphicsPreset: (preset: GraphicsPresetName) => void;
+  setGraphicsAutoMode: (on: boolean) => void;
+  setGraphicsOverride: <K extends keyof GraphicsOverrides>(
+    key: K,
+    value: GraphicsOverrides[K]
+  ) => void;
+  resetGraphicsOverrides: () => void;
+  setAccessibility: <K extends keyof AccessibilityState>(
+    key: K,
+    value: AccessibilityState[K]
+  ) => void;
   setSunRenderMode: (mode: SunRenderMode) => void;
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
@@ -170,6 +201,14 @@ export const useStore = create<AppState>()(
       // step when a previously-saved (or legacy-migrated) value is
       // available in localStorage.
       qualityMode: "auto",
+      // Wave α Commit 3 defaults. Rehydrated from persist if available
+      // (migrate v0 → v1 derives these from the legacy qualityMode so
+      // no user preference is lost); first-boot users get auto-detect.
+      graphicsPreset: DEFAULT_GRAPHICS_STATE.graphicsPreset,
+      graphicsAutoMode: DEFAULT_GRAPHICS_STATE.graphicsAutoMode,
+      graphicsOverrides: DEFAULT_GRAPHICS_STATE.graphicsOverrides,
+      customBase: DEFAULT_GRAPHICS_STATE.customBase,
+      accessibility: getDefaultAccessibilityState(),
       sunRenderMode: "auto",
       visualPreset: "DEEP_SPACE",
       autoPresetEnabled: true,
@@ -331,6 +370,93 @@ export const useStore = create<AppState>()(
         set((state) =>
           state.qualityMode === qualityMode ? state : { qualityMode }
         ),
+      // Wave α Commit 3 graphics-slice setters.
+      //
+      // setGraphicsPreset — choosing a named preset clears overrides
+      // and pins that preset as the new customBase (so "Reset to X"
+      // stays meaningful if the user immediately starts tweaking).
+      // Selecting "custom" without overrides is a no-op (the UI flips
+      // to custom automatically when any override is set).
+      setGraphicsPreset: (graphicsPreset) =>
+        set((state) => {
+          if (state.graphicsPreset === graphicsPreset) return state;
+          if (graphicsPreset === "custom") {
+            return { graphicsPreset };
+          }
+          return {
+            graphicsPreset,
+            customBase: graphicsPreset,
+            graphicsOverrides: {},
+          };
+        }),
+      // setGraphicsAutoMode — enabling auto clears overrides + pins
+      // customBase = "high" as a safe placeholder (the resolver picks
+      // the actual tier from device signals, ignoring the label).
+      setGraphicsAutoMode: (on) =>
+        set((state) => {
+          if (state.graphicsAutoMode === on) return state;
+          if (on) {
+            return {
+              graphicsAutoMode: true,
+              graphicsOverrides: {},
+            };
+          }
+          return { graphicsAutoMode: false };
+        }),
+      // setGraphicsOverride — the design §5 "flip to custom" rule. Any
+      // override write flips graphicsPreset to "custom" and records
+      // customBase = the preset that WAS active (so the Reset button
+      // surfaces the right target). Passing undefined clears that
+      // override field; if the resulting record is empty AND the
+      // preset was "custom", flip back to the customBase preset
+      // (reverse of the flip — keeps the Custom label honest).
+      setGraphicsOverride: (key, value) =>
+        set((state) => {
+          const nextOverrides: GraphicsOverrides = {
+            ...state.graphicsOverrides,
+          };
+          if (value === undefined) {
+            delete nextOverrides[key];
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (nextOverrides as any)[key] = value;
+          }
+          const anyOverride = Object.values(nextOverrides).some(
+            (v) => v !== undefined
+          );
+          if (anyOverride) {
+            if (state.graphicsPreset === "custom") {
+              return { graphicsOverrides: nextOverrides };
+            }
+            return {
+              graphicsOverrides: nextOverrides,
+              customBase: state.graphicsPreset,
+              graphicsPreset: "custom",
+            };
+          }
+          // Empty overrides — reset back to the base preset if we
+          // were showing Custom.
+          if (state.graphicsPreset === "custom") {
+            return {
+              graphicsOverrides: nextOverrides,
+              graphicsPreset: state.customBase,
+            };
+          }
+          return { graphicsOverrides: nextOverrides };
+        }),
+      // resetGraphicsOverrides — button in the Display panel.
+      resetGraphicsOverrides: () =>
+        set((state) => ({
+          graphicsOverrides: {},
+          graphicsPreset:
+            state.graphicsPreset === "custom"
+              ? state.customBase
+              : state.graphicsPreset,
+        })),
+      setAccessibility: (key, value) =>
+        set((state) => ({
+          accessibility: { ...state.accessibility, [key]: value },
+        })),
       setSunRenderMode: (sunRenderMode) =>
         set((state) =>
           state.sunRenderMode === sunRenderMode ? state : { sunRenderMode }
@@ -414,11 +540,24 @@ export const useStore = create<AppState>()(
         typeof localStorage === "undefined"
           ? undefined
           : createJSONStorage(() => createDedupedStorage(localStorage)),
+      // Wave α Commit 3 — expanded from 3 to 8 fields. `qualityMode`
+      // stays as a compat field (read by `qualityProfile.ts` shim
+      // during the transition; Wave 6 retires it). `customBase` is
+      // persisted despite being absent from design §6's snippet
+      // because the impl-plan's "Custom-base state loss" risk
+      // requires it — without persistence, "Reset to High" loses
+      // meaning across reloads.
       partialize: (state): PersistedSlice => ({
         qualityMode: state.qualityMode,
         sunRenderMode: state.sunRenderMode,
         tutorialCompletionStatus: state.tutorialCompletionStatus,
+        graphicsPreset: state.graphicsPreset,
+        graphicsAutoMode: state.graphicsAutoMode,
+        graphicsOverrides: state.graphicsOverrides,
+        customBase: state.customBase,
+        accessibility: state.accessibility,
       }),
+      migrate: (persistedState, version) => migrate(persistedState, version),
       onRehydrateStorage: () => (state, error) => {
         if (error) {
           telemetry.warn("boot", "store persist rehydrate error", { error });

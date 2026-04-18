@@ -100,8 +100,8 @@ Every row tagged exactly one of:
 | Bloom                  | toggle                                          | off / on / on / on        | E     | `qualityProfile.bloomEnabled`                             |
 | Bloom Intensity        | slider 0–2 step 0.05                            | 0 / 0.45 / 0.60 / 0.60    | H     | `VISUAL_PRESETS.bloomIntensity` × new `bloomIntensityMul` |
 | Bloom Threshold        | slider 0–1 step 0.02                            | 0.78 absolute             | H     | `VISUAL_PRESETS.bloomThreshold` (absolute override)       |
-| Tone Mapping           | dropdown (ACES / Reinhard / Cineon / Linear)    | ACES                      | H     | `PostProcessingPipeline` tone-effect operator             |
-| Exposure               | slider 0–2 step 0.05                            | 1.0                       | H     | Maps to three's `gl.toneMappingExposure`                  |
+| Tone Mapping           | dropdown (AgX / ACES / Reinhard / Cineon)       | AgX                       | H     | `PostProcessingPipeline` tone-effect operator ¹           |
+| Exposure               | slider 0–2 step 0.05                            | 1.0                       | F ²   | Deferred to Wave η.6 (adaptive exposure)                  |
 | Contrast               | slider −1..1 step 0.05                          | 0.42                      | H     | `VISUAL_PRESETS.contrast` + `contrastDelta`               |
 | Brightness             | slider −1..1 step 0.05                          | 0.0                       | H     | `VISUAL_PRESETS.brightness` + `brightnessDelta`           |
 | Saturation             | slider 0–1 step 0.05                            | 0.29                      | H     | `VISUAL_PRESETS.saturation` × `saturationMul`             |
@@ -143,6 +143,12 @@ FPS target, auto-downgrade watchdog, texture-tier override, HDR (WebGPU path), S
 - Numeric `dprMax` defaults are 1.0 / 1.5 / 1.75 / 2.0 — verified against `qualityProfile.ts:73–104`, not the incorrect v1 plan values.
 - "VRAM budget" is **not** an available control. What ships is a **best-effort heap indicator** labeled "Est. heap" in the UI, using `performance.memory.usedJSHeapSize`. Hidden when the API is undefined (Firefox, Safari).
 - All H rows require the Wave 0 `useVisualPresetLerp` refactor before they are user-facing without fighting the per-frame write.
+
+**Wave α amendments (Finding 7 — 2026-04-18, shipped in Wave α Commit 3):**
+
+¹ **Tone Mapping dropdown:** options became `{AgX [default], ACES, Reinhard, Cineon}` — `Linear` is dropped because R1 #1A removed the renderer's tone-mapping compression, so a "no tone map" mode would let HDR values clip and break bloom pickup. AgX replaces ACES as the default per R1 #1A §1.1 (AgX preserves highlight fidelity at extremes; Blender 4 default). The dropdown persists the user's choice in `graphicsOverrides.toneMapping`; the `<ToneMapping mode={...}>` wiring through the composer lands in the Wave γ pass that revisits the post-chain.
+
+² **Exposure slider:** deferred from Wave 1. The pre-Wave-α plan was to back this with `gl.toneMappingExposure`, but R1 #1A sets `gl.toneMapping = NoToneMapping` — the renderer ignores `toneMappingExposure` entirely under that contract. `@react-three/postprocessing`'s `<ToneMapping>` effect has no exposed exposure prop in non-adaptive mode. Shipping the slider in Wave 1 would have landed a dead control. Adaptive exposure (R1 #6) is Wave η.6 scope and will land a real compositor-level exposure path at the same time; the slider re-enters the catalog then.
 
 ---
 

@@ -24,9 +24,28 @@
 
 import type { QualityMode } from "./lib/qualityProfile";
 import type { SunRenderMode } from "./lib/sunRenderMode";
+import {
+  DEFAULT_GRAPHICS_STATE,
+  getDefaultAccessibilityState,
+  type AccessibilityState,
+  type GraphicsBasePreset,
+  type GraphicsOverrides,
+  type GraphicsPresetName,
+} from "./store/graphicsSlice";
 
 export const PERSIST_KEY = "atlas-orbital-store";
-export const PERSIST_VERSION = 0;
+/**
+ * Persist envelope version.
+ *
+ * v0 → `{ qualityMode, sunRenderMode, tutorialCompletionStatus }`
+ *      Pre-Wave-α envelope; covered by the pre-existing migration below.
+ * v1 → adds `graphicsPreset`, `graphicsAutoMode`, `graphicsOverrides`,
+ *      `customBase`, `accessibility`. Wave α Commit 3's R2 Wave 1 bumps
+ *      here; the `migrate()` branch below derives the new fields from
+ *      the v0 `qualityMode` so no user preference is lost across the
+ *      upgrade.
+ */
+export const PERSIST_VERSION = 1;
 
 export const LEGACY_QUALITY_MODE_KEY = "qualityMode";
 export const LEGACY_SUN_RENDER_MODE_KEY = "sunRenderMode";
@@ -34,10 +53,26 @@ export const LEGACY_TUTORIAL_STATUS_KEY = "tutorialStatus";
 
 export type LegacyTutorialStatus = "skipped" | "completed";
 
+/**
+ * Shape of the v1 persist envelope. `qualityMode` stays as a compat
+ * read-path consumer until Wave 6 retires it.
+ */
 export interface PersistedSlice {
   qualityMode: QualityMode;
   sunRenderMode: SunRenderMode;
   tutorialCompletionStatus: "not-seen" | LegacyTutorialStatus | null;
+  graphicsPreset: GraphicsPresetName;
+  graphicsAutoMode: boolean;
+  graphicsOverrides: GraphicsOverrides;
+  customBase: GraphicsBasePreset;
+  accessibility: AccessibilityState;
+}
+
+/** v0 envelope (what unmigrated users have in localStorage). */
+export interface PersistedSliceV0 {
+  qualityMode?: QualityMode;
+  sunRenderMode?: SunRenderMode;
+  tutorialCompletionStatus?: "not-seen" | LegacyTutorialStatus | null;
 }
 
 const isQualityMode = (v: unknown): v is QualityMode =>
@@ -52,6 +87,142 @@ const isSunRenderMode = (v: unknown): v is SunRenderMode =>
 
 const isLegacyTutorialStatus = (v: unknown): v is LegacyTutorialStatus =>
   v === "skipped" || v === "completed";
+
+/**
+ * Map a v0 `qualityMode` value to the v1 graphics slice fields
+ * `(graphicsPreset, graphicsAutoMode, customBase)`. Mirror of
+ * `graphics-settings-design.md §6` — kept as a pure helper so the
+ * `migrate()` branch below and the v0→v1 tests share one definition.
+ *
+ * For `auto`, the preset label is `high` (a safe placeholder while
+ * Auto is on; the resolver ignores it and picks the tier from device
+ * signals). A missing/unrecognised qualityMode defaults to `auto` so a
+ * corrupted envelope never crashes boot (impl-plan "Persist v0 → v1
+ * migration" risk).
+ */
+export const deriveGraphicsFieldsFromQualityMode = (
+  q: QualityMode | undefined | null
+): {
+  graphicsPreset: GraphicsPresetName;
+  graphicsAutoMode: boolean;
+  customBase: GraphicsBasePreset;
+} => {
+  switch (q) {
+    case "ultra":
+      return {
+        graphicsPreset: "ultra",
+        graphicsAutoMode: false,
+        customBase: "ultra",
+      };
+    case "high":
+      return {
+        graphicsPreset: "high",
+        graphicsAutoMode: false,
+        customBase: "high",
+      };
+    case "balanced":
+      return {
+        graphicsPreset: "medium",
+        graphicsAutoMode: false,
+        customBase: "medium",
+      };
+    case "constrained":
+      return {
+        graphicsPreset: "low",
+        graphicsAutoMode: false,
+        customBase: "low",
+      };
+    case "auto":
+    default:
+      return {
+        graphicsPreset: "high",
+        graphicsAutoMode: true,
+        customBase: "high",
+      };
+  }
+};
+
+/**
+ * Migrate a persisted envelope from an older version to the current
+ * `PERSIST_VERSION`. Called by Zustand's `persist` middleware on
+ * rehydration when the stored `version` doesn't match.
+ *
+ * v0 → v1 (Wave α Commit 3): derive the graphics slice from `qualityMode`;
+ * seed `graphicsOverrides: {}` and the platform-sensitive accessibility
+ * defaults. `qualityMode`, `sunRenderMode`, and `tutorialCompletionStatus`
+ * are preserved untouched — the store still reads `qualityMode` via the
+ * compat shim until Wave 6 retires it.
+ */
+export const migrate = (
+  persistedState: unknown,
+  fromVersion: number
+): PersistedSlice => {
+  const input = (persistedState ?? {}) as Partial<
+    PersistedSlice & PersistedSliceV0
+  >;
+
+  // If we're already at v1 shape, trust the fields and fill any gaps
+  // (forward-compat degradation path: a corrupted v1 payload gets
+  // re-seeded from v0 defaults rather than crashing boot).
+  if (fromVersion >= 1) {
+    return coerceToV1(input);
+  }
+
+  // v0 → v1: derive the new graphics + accessibility fields from
+  // whatever the v0 envelope had.
+  const qualityMode =
+    input.qualityMode && isQualityMode(input.qualityMode)
+      ? input.qualityMode
+      : "auto";
+  const sunRenderMode =
+    input.sunRenderMode && isSunRenderMode(input.sunRenderMode)
+      ? input.sunRenderMode
+      : "auto";
+  const tutorialCompletionStatus =
+    input.tutorialCompletionStatus !== undefined
+      ? input.tutorialCompletionStatus
+      : null;
+
+  const graphics = deriveGraphicsFieldsFromQualityMode(qualityMode);
+
+  return {
+    qualityMode,
+    sunRenderMode,
+    tutorialCompletionStatus,
+    graphicsPreset: graphics.graphicsPreset,
+    graphicsAutoMode: graphics.graphicsAutoMode,
+    graphicsOverrides: {},
+    customBase: graphics.customBase,
+    accessibility: getDefaultAccessibilityState(),
+  };
+};
+
+/**
+ * Coerce an arbitrary partial payload into a well-formed v1 envelope,
+ * filling missing fields from defaults. Used in the `fromVersion >= 1`
+ * path (guards against truncated/corrupted storage).
+ */
+const coerceToV1 = (input: Partial<PersistedSlice>): PersistedSlice => ({
+  qualityMode:
+    input.qualityMode && isQualityMode(input.qualityMode)
+      ? input.qualityMode
+      : "auto",
+  sunRenderMode:
+    input.sunRenderMode && isSunRenderMode(input.sunRenderMode)
+      ? input.sunRenderMode
+      : "auto",
+  tutorialCompletionStatus:
+    input.tutorialCompletionStatus !== undefined
+      ? input.tutorialCompletionStatus
+      : null,
+  graphicsPreset: input.graphicsPreset ?? DEFAULT_GRAPHICS_STATE.graphicsPreset,
+  graphicsAutoMode:
+    input.graphicsAutoMode ?? DEFAULT_GRAPHICS_STATE.graphicsAutoMode,
+  graphicsOverrides:
+    input.graphicsOverrides ?? DEFAULT_GRAPHICS_STATE.graphicsOverrides,
+  customBase: input.customBase ?? DEFAULT_GRAPHICS_STATE.customBase,
+  accessibility: input.accessibility ?? getDefaultAccessibilityState(),
+});
 
 /**
  * If the unified `atlas-orbital-store` key is missing but one or more
@@ -74,17 +245,23 @@ export const migrateLegacyStorage = (storage?: Storage | null): boolean => {
   const r = s.getItem(LEGACY_SUN_RENDER_MODE_KEY);
   const t = s.getItem(LEGACY_TUTORIAL_STATUS_KEY);
 
-  const legacy: Partial<PersistedSlice> = {};
+  const legacy: Partial<PersistedSliceV0> = {};
   if (isQualityMode(q)) legacy.qualityMode = q;
   if (isSunRenderMode(r)) legacy.sunRenderMode = r;
   if (isLegacyTutorialStatus(t)) legacy.tutorialCompletionStatus = t;
 
   if (Object.keys(legacy).length === 0) return false;
 
-  s.setItem(
-    PERSIST_KEY,
-    JSON.stringify({ state: legacy, version: PERSIST_VERSION })
-  );
+  // Write as version 0 so Zustand's persist middleware runs `migrate()`
+  // on rehydration — that's where v0→v1 derives `graphicsPreset`,
+  // `graphicsAutoMode`, `customBase`, `graphicsOverrides`, and
+  // `accessibility` from the `qualityMode` value we just seeded. If we
+  // wrote the current `PERSIST_VERSION` here, Zustand would treat the
+  // three-field envelope as already-migrated and the new graphics
+  // slice fields would silently fall back to initial-state defaults
+  // (the user's qualityMode preference effectively lost across the
+  // Wave α upgrade).
+  s.setItem(PERSIST_KEY, JSON.stringify({ state: legacy, version: 0 }));
   return true;
 };
 

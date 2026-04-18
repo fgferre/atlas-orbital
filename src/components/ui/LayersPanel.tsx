@@ -16,6 +16,8 @@ import {
   SCENE_SUN_RENDER_OPTIONS,
   type RightControlPanelId,
 } from "./controlPanelConfig";
+import { DisplayPanel } from "./DisplayPanel";
+import { A11yPanel } from "./A11yPanel";
 
 interface LayersPanelProps {
   activePanel: RightControlPanelId | null;
@@ -31,6 +33,14 @@ const PANEL_COPY = {
   overlay: {
     title: "Overlay",
     meta: "scientific guides",
+  },
+  display: {
+    title: "Display",
+    meta: "graphics & quality",
+  },
+  a11y: {
+    title: "Accessibility",
+    meta: "motion & scale",
   },
   project: {
     title: "Project",
@@ -50,6 +60,8 @@ export const LayersPanel = ({
   const openPanel =
     activePanel === "scene" ||
     activePanel === "overlay" ||
+    activePanel === "display" ||
+    activePanel === "a11y" ||
     activePanel === "project"
       ? activePanel
       : null;
@@ -337,6 +349,10 @@ export const LayersPanel = ({
           />
         </div>
       </>
+    ) : openPanel === "display" ? (
+      <DisplayPanel />
+    ) : openPanel === "a11y" ? (
+      <A11yPanel />
     ) : openPanel === "project" ? (
       <div className="space-y-3">
         <SectionLabel>Project</SectionLabel>
@@ -585,6 +601,45 @@ const RailButtonIcon = ({
           strokeLinecap="round"
           strokeLinejoin="round"
           d="M4.5 15.75 12 19.5l7.5-3.75"
+        />
+      </svg>
+    );
+  }
+
+  if (panelId === "display") {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="h-4 w-4"
+        aria-hidden="true"
+      >
+        <rect x="3" y="4" width="18" height="12" rx="1.5" />
+        <path d="M8 20h8" strokeLinecap="round" />
+        <path d="M12 16v4" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (panelId === "a11y") {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="h-4 w-4"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="5" r="1.75" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 9h14M9 9v5l-1.5 6M15 9v5l1.5 6M9.5 14h5"
         />
       </svg>
     );

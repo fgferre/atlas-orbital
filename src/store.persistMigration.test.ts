@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDedupedStorage,
+  deriveGraphicsFieldsFromQualityMode,
   LEGACY_QUALITY_MODE_KEY,
   LEGACY_SUN_RENDER_MODE_KEY,
   LEGACY_TUTORIAL_STATUS_KEY,
+  migrate,
   migrateLegacyStorage,
   PERSIST_KEY,
   PERSIST_VERSION,
 } from "./store.persistMigration";
+import type { QualityMode } from "./lib/qualityProfile";
 
 const createMockStorage = (): Storage => {
   const store = new Map<string, string>();
@@ -57,7 +60,7 @@ describe("migrateLegacyStorage", () => {
     expect(storage.getItem(PERSIST_KEY)).toBe(existing);
   });
 
-  it("seeds the unified envelope from legacy keys on first migration", () => {
+  it("seeds the unified envelope from legacy keys on first migration (writes as v0 so Zustand's migrate() runs on rehydration)", () => {
     storage.setItem(LEGACY_QUALITY_MODE_KEY, "ultra");
     storage.setItem(LEGACY_SUN_RENDER_MODE_KEY, "procedural");
     storage.setItem(LEGACY_TUTORIAL_STATUS_KEY, "completed");
@@ -66,13 +69,18 @@ describe("migrateLegacyStorage", () => {
     expect(migrated).toBe(true);
 
     const envelope = JSON.parse(storage.getItem(PERSIST_KEY) ?? "null");
+    // MUST be version 0 — Zustand's migrate() runs on rehydration to
+    // derive the Wave α graphics + accessibility fields from
+    // qualityMode. Tagging the envelope as the current PERSIST_VERSION
+    // here would skip that derivation and silently lose the user's
+    // qualityMode preference.
     expect(envelope).toEqual({
       state: {
         qualityMode: "ultra",
         sunRenderMode: "procedural",
         tutorialCompletionStatus: "completed",
       },
-      version: PERSIST_VERSION,
+      version: 0,
     });
   });
 
@@ -184,5 +192,195 @@ describe("createDedupedStorage", () => {
     storage.setItem("a", "x");
     storage.setItem("b", "y");
     expect(spy).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("deriveGraphicsFieldsFromQualityMode — Wave α Commit 3 v0→v1", () => {
+  it.each([
+    [
+      "ultra",
+      { graphicsPreset: "ultra", graphicsAutoMode: false, customBase: "ultra" },
+    ],
+    [
+      "high",
+      { graphicsPreset: "high", graphicsAutoMode: false, customBase: "high" },
+    ],
+    [
+      "balanced",
+      {
+        graphicsPreset: "medium",
+        graphicsAutoMode: false,
+        customBase: "medium",
+      },
+    ],
+    [
+      "constrained",
+      { graphicsPreset: "low", graphicsAutoMode: false, customBase: "low" },
+    ],
+    [
+      "auto",
+      { graphicsPreset: "high", graphicsAutoMode: true, customBase: "high" },
+    ],
+  ] as const)("qualityMode %s → %o", (mode, expected) => {
+    expect(deriveGraphicsFieldsFromQualityMode(mode as QualityMode)).toEqual(
+      expected
+    );
+  });
+
+  it("undefined / unknown qualityMode falls back to auto (corrupted-envelope safety)", () => {
+    expect(deriveGraphicsFieldsFromQualityMode(undefined)).toEqual({
+      graphicsPreset: "high",
+      graphicsAutoMode: true,
+      customBase: "high",
+    });
+    expect(deriveGraphicsFieldsFromQualityMode(null)).toEqual({
+      graphicsPreset: "high",
+      graphicsAutoMode: true,
+      customBase: "high",
+    });
+  });
+});
+
+describe("migrate — v0 → v1", () => {
+  // Zustand's persist middleware calls this on rehydration when the
+  // stored envelope version is less than PERSIST_VERSION. The Wave α
+  // contract: every existing user's qualityMode preference maps to the
+  // correct (graphicsPreset, graphicsAutoMode, customBase) triple, and
+  // sunRenderMode / tutorialCompletionStatus pass through unchanged.
+
+  it.each([
+    [
+      "auto",
+      { graphicsPreset: "high", graphicsAutoMode: true, customBase: "high" },
+    ],
+    [
+      "ultra",
+      { graphicsPreset: "ultra", graphicsAutoMode: false, customBase: "ultra" },
+    ],
+    [
+      "high",
+      { graphicsPreset: "high", graphicsAutoMode: false, customBase: "high" },
+    ],
+    [
+      "balanced",
+      {
+        graphicsPreset: "medium",
+        graphicsAutoMode: false,
+        customBase: "medium",
+      },
+    ],
+    [
+      "constrained",
+      { graphicsPreset: "low", graphicsAutoMode: false, customBase: "low" },
+    ],
+  ] as const)(
+    "qualityMode=%s migrates to the matching graphics triple",
+    (mode, expected) => {
+      const v0 = {
+        qualityMode: mode as QualityMode,
+        sunRenderMode: "auto" as const,
+        tutorialCompletionStatus: "completed" as const,
+      };
+      const v1 = migrate(v0, 0);
+      expect(v1.graphicsPreset).toBe(expected.graphicsPreset);
+      expect(v1.graphicsAutoMode).toBe(expected.graphicsAutoMode);
+      expect(v1.customBase).toBe(expected.customBase);
+      expect(v1.qualityMode).toBe(mode);
+    }
+  );
+
+  it("preserves sunRenderMode untouched across v0 → v1", () => {
+    for (const sunMode of ["auto", "texture", "procedural"] as const) {
+      const v1 = migrate(
+        {
+          qualityMode: "high",
+          sunRenderMode: sunMode,
+          tutorialCompletionStatus: "completed",
+        },
+        0
+      );
+      expect(v1.sunRenderMode).toBe(sunMode);
+    }
+  });
+
+  it("preserves tutorialCompletionStatus untouched across v0 → v1", () => {
+    for (const status of ["not-seen", "skipped", "completed", null] as const) {
+      const v1 = migrate(
+        {
+          qualityMode: "high",
+          sunRenderMode: "auto",
+          tutorialCompletionStatus: status,
+        },
+        0
+      );
+      expect(v1.tutorialCompletionStatus).toBe(status);
+    }
+  });
+
+  it("seeds graphicsOverrides as an empty record", () => {
+    const v1 = migrate({ qualityMode: "high", sunRenderMode: "auto" }, 0);
+    expect(v1.graphicsOverrides).toEqual({});
+  });
+
+  it("seeds a valid accessibility default (handles missing matchMedia gracefully)", () => {
+    const v1 = migrate({ qualityMode: "high", sunRenderMode: "auto" }, 0);
+    expect(v1.accessibility).toEqual(
+      expect.objectContaining({
+        uiScale: 1,
+        colorblindMode: "none",
+        highContrast: false,
+      })
+    );
+    expect(typeof v1.accessibility.reducedMotion).toBe("boolean");
+  });
+
+  it("handles a completely empty v0 envelope by defaulting to auto-detect", () => {
+    const v1 = migrate({}, 0);
+    expect(v1.qualityMode).toBe("auto");
+    expect(v1.graphicsAutoMode).toBe(true);
+    expect(v1.graphicsPreset).toBe("high");
+    expect(v1.sunRenderMode).toBe("auto");
+    expect(v1.tutorialCompletionStatus).toBe(null);
+  });
+
+  it("handles an unknown qualityMode string without crashing (defaults to auto)", () => {
+    const v1 = migrate(
+      { qualityMode: "bogus" as QualityMode, sunRenderMode: "auto" },
+      0
+    );
+    expect(v1.graphicsAutoMode).toBe(true);
+    expect(v1.graphicsPreset).toBe("high");
+    expect(v1.qualityMode).toBe("auto");
+  });
+});
+
+describe("migrate — v1 forward path", () => {
+  it("passes a well-formed v1 envelope through unchanged", () => {
+    const v1in = {
+      qualityMode: "ultra" as const,
+      sunRenderMode: "procedural" as const,
+      tutorialCompletionStatus: "completed" as const,
+      graphicsPreset: "ultra" as const,
+      graphicsAutoMode: false,
+      graphicsOverrides: { bloomIntensityMul: 1.5 },
+      customBase: "ultra" as const,
+      accessibility: {
+        reducedMotion: true,
+        uiScale: 1.2,
+        colorblindMode: "none" as const,
+        highContrast: false,
+      },
+    };
+    const out = migrate(v1in, 1);
+    expect(out).toEqual(v1in);
+  });
+
+  it("coerces a partial v1 envelope by filling missing fields from defaults", () => {
+    const v1partial = { qualityMode: "high" as const };
+    const out = migrate(v1partial, 1);
+    expect(out.qualityMode).toBe("high");
+    expect(out.sunRenderMode).toBe("auto");
+    expect(out.graphicsPreset).toBe("high");
+    expect(out.graphicsOverrides).toEqual({});
   });
 });
