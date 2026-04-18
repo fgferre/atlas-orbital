@@ -11,6 +11,21 @@ export const dismissTutorial = async (page: Page) => {
 };
 
 /**
+ * Freezes the simulation clock before the app's module graph evaluates
+ * so visual-diff screenshots capture a byte-stable frame across runs.
+ * Read by the test-hook block at the bottom of `src/store.ts`. Must be
+ * called before `page.goto` (`addInitScript` queues the snippet so
+ * Playwright re-runs it on every navigation in this context).
+ */
+export const freezeSimulation = async (page: Page) => {
+  await page.addInitScript(() => {
+    (
+      window as unknown as { __ATLAS_TEST_FREEZE__: boolean }
+    ).__ATLAS_TEST_FREEZE__ = true;
+  });
+};
+
+/**
  * Resolves to `true` when at least one `<canvas>` element exists and has
  * been sized (width and height > 10) — the cheapest visible proof that the
  * three.js renderer has mounted a real framebuffer.

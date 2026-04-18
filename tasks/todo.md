@@ -8,6 +8,58 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 
 ## Active
 
+### Wave α — HDR foundation + Graphics panel — 2026-04-18 (in flight)
+
+**Governing doc:** `tasks/implementation-roadmap.md` wave card α.
+**Authoritative refs:** `tasks/lighting-backlog.md` §1.1 §1.2 §1.3 (R1 #1A/#1B/#2),
+`tasks/graphics-settings-design.md` (R2 architecture), `tasks/graphics-settings-implementation-plan.md`
+(Wave 0 + Wave 1).
+
+Three-commit spine (strict order — do NOT reorder; `Autonomy — NONE` on the prompt):
+
+- [ ] **Commit 1 — R2 Wave 0** — `refactor(graphics): single-source overrides via visualPreset lerp`
+  - [ ] Extend `useVisualPresetLerp` signature with `userOverrides: GraphicsOverrides` (default `{}`).
+  - [ ] Per-frame math: `ref = (preset × (Mul ?? 1)) + (Delta ?? 0)` for compose-fields; absolute override for `bloomThreshold` etc.
+  - [ ] Identity-invariant when `overrides = {}` (same pixel output).
+  - [ ] Add `GraphicsOverrides` type next to the lerp (Commit 3 will move to `graphicsSlice`; leaving a local type now keeps Commit 1 self-contained).
+  - [ ] Add `toHaveScreenshot` assertions to `e2e/boot.spec.ts`, `e2e/focus.spec.ts`, `e2e/postprocessing.spec.ts` with `maxDiffPixelRatio: 0.001`.
+  - [ ] Capture baseline PNGs (commit them alongside the refactor).
+  - [ ] Add `useVisualPresetLerp.test.ts` — identity, `bloomIntensityMul`, `bloomThreshold` absolute.
+  - [ ] Gates: `npm run lint`, `npm run test:run`, `npm run build`, `npx playwright test` (visual-diff ≤ 0.1%).
+
+- [ ] **Commit 2 — R1 #1A + #1B + #2** — `feat(vfx): HDR pipeline + AgX + selective bloom + star emissive recal`
+  - [ ] **#1A** — remove `gl.toneMapping = ReinhardToneMapping` in `Scene.tsx:267`; set `gl.outputColorSpace = THREE.SRGBColorSpace` explicitly; replace `<ToneMapping />` with `<ToneMapping mode={ToneMappingMode.AGX} />`; reorder chain so ToneMapping runs last (Bloom → HueSat → BrightnessContrast → ToneMapping).
+  - [ ] Grep `gl.toneMapping` repo-wide — must be zero after this commit.
+  - [ ] **#1B** — introduce `vfxHdrGain` uniform on both `Starfield.tsx` and `NASAStarfield.tsx` ShaderMaterials (useMemo pattern — L15 literal; NO JSX children). Final fragment color × `vfxHdrGain`. Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0. Feed tier-keyed default through existing `qualityProfile` plumbing (tier read already available in both files).
+  - [ ] Update `starfieldShaderMath.ts` + `starfieldShaderMath.test.ts` — propagate `vfxHdrGain` into the final size/brightness test expectations.
+  - [ ] **#2** — `luminanceThreshold={1.0}` + `luminanceSmoothing={0.1}` on `<Bloom>` in `PostProcessingPipeline.tsx`.
+  - [ ] Re-capture Playwright baselines (pixel shift is expected). Verify the shift is intentional (star halos, bloom only above 1.0, crisper bright-star bloom) not a regression.
+  - [ ] Gates: same as Commit 1.
+
+- [ ] **Commit 3 — R2 Wave 1** — `feat(graphics): graphicsSlice + Display/A11y panels + migration`
+  - [ ] **New files:** `src/store/graphicsSlice.ts`, `src/lib/graphics/resolver.ts`, `src/lib/graphics/deviceSignals.ts`, `src/hooks/useEffectiveGraphics.ts`, `src/components/ui/DisplayPanel.tsx`, `src/components/ui/A11yPanel.tsx`, `src/components/ui/primitives/Slider.tsx`, `src/lib/graphics/resolver.test.ts`, `e2e/a11y.spec.ts`.
+  - [ ] **Extended (NOT created — per Finding 8):** `src/store.persistMigration.ts` (bump `PERSIST_VERSION 0→1`; add `migrate()` branch); `src/store.persistMigration.test.ts` (v0→v1 for all 5 `qualityMode` values + preservation of `sunRenderMode`/`tutorialCompletionStatus`).
+  - [ ] **Modified:** `src/store.ts` (integrate slice + expand partialize 3→7 + wire migrate), `src/lib/qualityProfile.ts` (compat shim via `resolveEffectiveGraphics` + `projectToLegacyShape`), `src/hooks/useQualityProfile.ts` (wrapper), `src/components/ui/controlPanelConfig.ts` (+display +a11y), `src/components/ui/LayersPanel.tsx` (route), `e2e/quality.spec.ts` (panel open + preset change + override flip + Reset).
+  - [ ] **Finding 7 inline amend:** `tasks/graphics-settings-design.md §3` — Tone Mapping dropdown becomes `{AgX [default], ACES, Reinhard, Cineon}` (drop Linear, add AgX); Exposure slider's backing becomes the `<ToneMapping>` effect's exposure (ref mutation inside `useVisualPresetLerp`, same pattern as bloom ref).
+  - [ ] Finding 1 — `vfxSettings` is NOT a separate slice; R1 keys live inside `graphicsSlice.graphicsOverrides`.
+  - [ ] A11yPanel ships 4 rows: Reduced Motion (E, active), UI Scale (H, active), Colorblind Mode (grayed "Available in a future update"), High Contrast (grayed same tooltip).
+  - [ ] Gates: same, plus new `e2e/a11y.spec.ts` and extended `e2e/quality.spec.ts`.
+
+**After Commit 3:**
+
+- [ ] Update `HANDOFF.md` status block — flip the "Reinhard is the live tone mapper" claim if present; note Wave α shipped.
+- [ ] Final chat report per prompt §"Final report format".
+
+**Critical invariants (L-literal references, mandatory reads):**
+
+- L15 — `vfxHdrGain` MUST flow through useMemo'd `THREE.ShaderMaterial`, NEVER via JSX children.
+- L17 — any DPR math uses `gl.getPixelRatio()`, never `window.devicePixelRatio`.
+- L18 — simulation-time stays outside store; hot-path consumers use `simulationClock.getNow()`.
+- L19 — Display panel MUST NOT subscribe to `displayedDatetime`; shallow-select only the fields it needs.
+- Finding 9 — Playwright invocation is `npx playwright test` only; `playwright.config.ts:10` owns preview lifecycle.
+
+---
+
 ### Project-wide critical review — 2026-04-18 (started)
 
 Plan at `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v3).

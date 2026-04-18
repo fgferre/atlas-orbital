@@ -466,6 +466,29 @@ simulationClock.syncFromState({
   isLiveMode: useStore.getState().isLiveMode,
 });
 
+// (3.5) Test-only: if Playwright set `window.__ATLAS_TEST_FREEZE__`
+// before this module evaluated, pin clock + store to a fixed epoch so
+// visual-diff specs capture a byte-stable frame. Wave α's identity
+// gate in e2e/boot.spec.ts / focus.spec.ts / postprocessing.spec.ts
+// depends on the simulation clock being stationary across runs;
+// without this, wall-clock drift alone guarantees pixel diff > 0.1%.
+// Production code never sets the flag.
+if (
+  typeof window !== "undefined" &&
+  (window as unknown as { __ATLAS_TEST_FREEZE__?: boolean })
+    .__ATLAS_TEST_FREEZE__
+) {
+  const frozenEpoch = new Date(Date.UTC(2026, 0, 1, 0, 0, 0, 0));
+  useStore.setState({
+    isPlaying: false,
+    isLiveMode: false,
+    displayedDatetime: frozenEpoch,
+  });
+  simulationClock.setIsPlaying(false);
+  simulationClock.setIsLiveMode(false);
+  simulationClock.seek(frozenEpoch);
+}
+
 // (4) Vite HMR: drop both bridges when the store module is torn down so
 // a reload does not accumulate duplicate `onUiTick` and `subscribe`
 // handlers on the long-lived simulationClock singleton. In production

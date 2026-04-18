@@ -13,6 +13,10 @@ import type {
   HueSaturationController,
   BrightnessContrastController,
 } from "./PostProcessingPipeline";
+import {
+  resolveLerpRefTargets,
+  type GraphicsOverrides,
+} from "./visualPresetOverrides";
 
 export interface DebugValues {
   ambientIntensity: number;
@@ -42,6 +46,13 @@ interface UseVisualPresetLerpArgs {
   debugValues: DebugValues;
   debugMode: boolean;
   bloomIntensityMultiplier: number;
+  /**
+   * Per-field user overrides resolved from `graphicsSlice.graphicsOverrides`
+   * (landing in Commit 3). Wave 0 ships the composition path with an
+   * empty-record default so callers remain byte-identical to pre-Wave-α
+   * behavior — see `visualPresetOverrides.test.ts` for the identity gate.
+   */
+  userOverrides?: GraphicsOverrides;
 }
 
 export const useVisualPresetLerp = ({
@@ -55,6 +66,7 @@ export const useVisualPresetLerp = ({
   debugValues,
   debugMode,
   bloomIntensityMultiplier,
+  userOverrides,
 }: UseVisualPresetLerpArgs) => {
   const scene = useThree((s) => s.scene);
   const visualPreset = useStore((state) => state.visualPreset);
@@ -102,47 +114,41 @@ export const useVisualPresetLerp = ({
       );
     });
 
-    // Apply to Refs
+    // Resolve the target values for every ref through the pure helper.
+    // With `userOverrides = {}` and `debugMode = false`, this is
+    // byte-identical to the pre-Wave-α per-field math (pinned by
+    // `visualPresetOverrides.test.ts`). The hook stays responsible for
+    // the imperative ref mutation; the decision of *what* to write lives
+    // in the pure module.
+    const targets = resolveLerpRefTargets(
+      currentValues.current,
+      userOverrides ?? {},
+      bloomIntensityMultiplier,
+      debugMode,
+      debugValues
+    );
+
     if (bloomRef.current) {
-      bloomRef.current.intensity = debugMode
-        ? debugValues.bloomIntensity
-        : currentValues.current.bloomIntensity * bloomIntensityMultiplier;
-      bloomRef.current.luminanceThreshold = debugMode
-        ? debugValues.bloomThreshold
-        : currentValues.current.bloomThreshold;
+      bloomRef.current.intensity = targets.bloomIntensity;
+      bloomRef.current.luminanceThreshold = targets.bloomThreshold;
       // Radius is tricky with mipmapBlur, often static. We'll skip radius lerping for now or assume it works.
     }
-    if (hueSatRef.current)
-      hueSatRef.current.saturation = debugMode
-        ? debugValues.saturation
-        : currentValues.current.saturation;
+    if (hueSatRef.current) hueSatRef.current.saturation = targets.saturation;
     if (brightnessRef.current) {
-      brightnessRef.current.brightness = debugMode
-        ? debugValues.brightness
-        : currentValues.current.brightness;
-      brightnessRef.current.contrast = debugMode
-        ? debugValues.contrast
-        : currentValues.current.contrast;
+      brightnessRef.current.brightness = targets.brightness;
+      brightnessRef.current.contrast = targets.contrast;
     }
     if (ambientLightRef.current)
-      ambientLightRef.current.intensity = debugMode
-        ? debugValues.ambientIntensity
-        : currentValues.current.ambientIntensity;
+      ambientLightRef.current.intensity = targets.ambientIntensity;
     if (sunLightRef.current)
-      sunLightRef.current.intensity = debugMode
-        ? debugValues.sunIntensity
-        : currentValues.current.sunIntensity;
+      sunLightRef.current.intensity = targets.sunIntensity;
     if (smartSunLightRef.current)
-      smartSunLightRef.current.intensity = debugMode
-        ? debugValues.shadowIntensity
-        : currentValues.current.shadowIntensity;
+      smartSunLightRef.current.intensity = targets.shadowIntensity;
 
     // Environment Intensity
     // scene.environmentIntensity is available in newer Three.js versions (r163+)
     // We keep the mutable scene handle in a ref so the React hooks lint rule
     // doesn't treat this imperative Three.js update as a render-time mutation.
-    sceneRef.current.environmentIntensity = debugMode
-      ? debugValues.envMapIntensity
-      : currentValues.current.envMapIntensity;
+    sceneRef.current.environmentIntensity = targets.envMapIntensity;
   });
 };

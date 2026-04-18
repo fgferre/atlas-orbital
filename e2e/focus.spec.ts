@@ -46,4 +46,14 @@ test.describe("focus", () => {
       })
       .toContain("MARS");
   });
+
+  // NB: Wave α considered adding a visual-diff test here, but the Mars
+  // selection runs camera damping on the wall clock (NOT the frozen
+  // simulation clock), and OrbitControls convergence after 2.5 s of
+  // settle varied by up to 42 % of pixels run-to-run — no meaningful
+  // tolerance makes this a gate. The structural test above (Mars
+  // appears in the info panel) stays; the render-identity check is
+  // covered by `boot.spec.ts` / `postprocessing.spec.ts` at 1 %
+  // tolerance plus `visualPresetOverrides.test.ts` (pure-function
+  // equality) which is stricter than any pixel-diff.
 });
