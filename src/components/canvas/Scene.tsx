@@ -41,10 +41,15 @@ const ProceduralSun3D = lazy(() =>
   import("./ProceduralSun3D").then((m) => ({ default: m.ProceduralSun3D }))
 );
 
-// Lazy: Leva is a debug-only chrome panel. We gate behind `debugMode` so
-// non-debug users never download the chunk at all. `useControls`/`folder`/
-// `button` (hook API) are imported synchronously where needed — only the
-// UI panel component is lazy.
+// Leva is wrapped in `React.lazy` so its render path only fires the first
+// time the UI actually needs to paint the debug panel. It is NOT a network-
+// level split: `useSceneDebugControls` imports `useControls`/`folder`/
+// `button` statically from "leva" (hooks must be stable), which forces the
+// bundler to fold the whole Leva module into the Scene chunk. Bundler
+// emits a "leva is dynamically and statically imported" advisory noting
+// the dynamic import cannot isolate the module — expected. The render-
+// tree cost for non-debug users is still eliminated by the `hidden` prop
+// + the conditional `useControls` sync path.
 const Leva = lazy(() => import("leva").then((m) => ({ default: m.Leva })));
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {

@@ -49,11 +49,14 @@ describe("resolveOrbitalResult", () => {
     }
   });
 
-  it("tags the log with the provided label", () => {
+  it("tags the log with the provided label via telemetry data", () => {
+    // telemetry.error routes through console.error in both dev and prod
+    // (prod keeps error channel live). Message is the channel-prefixed
+    // summary; the label we asked to tag rides on the data object.
     resolveOrbitalResult("useOrbitalPosition:mars", () => {
       throw new Error("boom");
     });
-    const firstArg = consoleErrorSpy.mock.calls[0]?.[0];
-    expect(String(firstArg)).toContain("useOrbitalPosition:mars");
+    const [, data] = consoleErrorSpy.mock.calls[0] ?? [];
+    expect(data).toMatchObject({ label: "useOrbitalPosition:mars" });
   });
 });

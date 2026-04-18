@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { useStore } from "../store";
 import { orbitalEngine } from "../lib/orbital";
 import type { OrbitalPositionResult } from "../lib/orbital";
+import { telemetry } from "../lib/telemetry";
 
 /**
  * Discriminated-union result type for orbital hooks.
@@ -32,7 +33,7 @@ export function resolveOrbitalResult<T>(
   try {
     return { state: "ready", data: compute() };
   } catch (error) {
-    console.error(`[${label}] Failed:`, error);
+    telemetry.error("error", `orbital engine failed`, { label, error });
     return { state: "error", error: toError(error) };
   }
 }

@@ -571,3 +571,68 @@ store moved, which was always.
 `src/components/canvas/CameraController.tsx` — `focusMeshRef` +
 `TMP_WORLD_POS` + `TMP_PREV_TARGET`. Verified by a DOM `MutationObserver`
 on the overlay container reading zero mutations in 3 s of camera idle.
+
+## L20 — Leva's `useControls` auto-mounts a global panel in `document.body` when no `<Leva />` is present in the tree
+
+**2026-04-18. Discovered while landing Onda 9a (lazy-load of Leva) and
+caught by the user on first reload.**
+
+The Onda 9a refactor wrapped Leva's `<Leva />` component in
+`{debugMode && <Suspense><Leva /></Suspense>}` so non-debug users
+wouldn't pay the render-tree cost. The app then shipped a surprise:
+the debug panel appeared on every fresh boot even though `debugMode`
+defaulted to `false` and was not persisted.
+
+**Root cause.** Leva (v0.10) is a controls library with global-store
+semantics. When `useControls` / `folder` / `button` are invoked —
+which `useSceneDebugControls` does unconditionally, because hooks
+cannot be conditional — Leva looks up the explicit `<Leva />` anchor
+in the component tree. If it can't find one, it **auto-inserts a
+default `<Leva />` panel into `document.body`** so the controls have
+somewhere to render. Gating the `<Leva />` JSX behind `debugMode`
+removed the explicit anchor; Leva's fallback path mounted an
+uncontrolled, fully-visible panel on top of the scene.
+
+**Rule.** Any component tree that consumes `useControls` / `folder` /
+`button` **must** keep `<Leva />` mounted. Visibility is controlled
+via the `hidden` prop, never by gating the element with conditional
+JSX.
+
+**Tooling corollary.** Lazy-loading Leva via `React.lazy` is fine —
+the library still auto-inserts its root only once, and the lazy
+wrapper delays the paint, not the module registration. But when the
+hook API (`useControls`) is imported statically (which it must be —
+hooks need stable identity across renders), the bundler will fold
+Leva into the owning chunk. There is no network-bytes saving from
+lazy-loading Leva's `<Leva />` UI component under that constraint,
+only render-tree savings. Do not write comments claiming otherwise.
+
+**Code marker.** `src/components/canvas/Scene.tsx` —
+`<Suspense fallback={null}><Leva hidden={!debugMode} /></Suspense>`
+mounted unconditionally; `src/components/canvas/scene/useSceneDebugControls.ts`
+imports `useControls, folder, button` from `"leva"` statically.
+
+## L21 — Fixed-port harnesses must pass `--strictPort` to the dev server they assume
+
+**2026-04-18. Caught by Codex review of Onda 9c/9b/7 batch.**
+
+The Playwright config in `playwright.config.ts` hard-codes
+`http://127.0.0.1:4174/atlas-orbital/`, but the `preview:test` npm
+script in `package.json` was originally `vite preview --port 4174`
+without `--strictPort`. If port 4174 is already occupied — common on
+a developer machine running multiple previews — Vite auto-bumps to
+4175, 4176, etc., while Playwright's `webServer` waits on (or reuses) 4174. Result: flaky failures that surface as timeouts, with no
+obvious hint that the preview moved.
+
+**Rule.** When a test harness (Playwright, curl probes, any integration
+client) targets a fixed port, the spawning script MUST pass
+`--strictPort` (or the framework equivalent) so the dev server fails
+loudly on port conflict rather than silently relocating. The harness
+config and the server script are a coupled pair; either both know
+where the other is or neither does.
+
+**Code marker.** `package.json:12` —
+`"preview:test": "vite preview --host 127.0.0.1 --port 4174 --strictPort"`.
+`playwright.config.ts:3` — `baseURL: "http://127.0.0.1:4174/atlas-orbital/"`
+
+- `webServer: { command: "npm run preview:test", url: "...:4174/..." }`.

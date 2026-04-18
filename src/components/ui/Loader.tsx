@@ -8,8 +8,7 @@ import {
 import { resolveLoaderSnapshot } from "../../lib/loaderStages";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
-
-const BOOT_SPLASH_ID = "app-boot-splash";
+import { dismissBootSplash } from "../../lib/dismissBootSplash";
 
 const formatElapsedTime = (elapsedMs: number) =>
   `${(elapsedMs / 1000).toFixed(elapsedMs < 10_000 ? 1 : 0)}s`;
@@ -156,20 +155,7 @@ export const Loader = () => {
       : "waiting";
   const sceneStatus = isSceneReady ? "ONLINE" : active ? "SYNCING" : "STANDBY";
 
-  useEffect(() => {
-    const bootSplash = document.getElementById(BOOT_SPLASH_ID);
-    if (!bootSplash) {
-      return;
-    }
-
-    bootSplash.setAttribute("data-state", "handoff");
-
-    const timer = window.setTimeout(() => {
-      bootSplash.remove();
-    }, 360);
-
-    return () => window.clearTimeout(timer);
-  }, []);
+  useEffect(() => dismissBootSplash(), []);
 
   useEffect(() => {
     if (!visible) {

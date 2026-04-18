@@ -286,10 +286,11 @@ Before final completion:
 - `npm run build`
 - `npm run lint`
 - `npm run test:run`
-- start the preview server first (`npm run preview:test`, listens on
-  `127.0.0.1:4174`), then run
-  `npx playwright test scripts/phase4-regression.spec.js --reporter=line`.
-  Without the preview the test fails with `ERR_CONNECTION_REFUSED`.
+- `npm run test:e2e` — Playwright harness at `e2e/*.spec.ts`, config
+  in `playwright.config.ts`. Spawns its own preview server on port
+  4174 (`--strictPort`); do not start one separately. Five specs:
+  `boot`, `focus`, `quality`, `postprocessing`, plus the shared
+  helpers in `e2e/helpers.ts`.
 
 ## Done Means
 
