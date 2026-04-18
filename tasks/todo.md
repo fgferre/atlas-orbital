@@ -555,7 +555,7 @@ como superfície de confiança para o runtime.
 - [x] **5.5.1 — Criado `src/lib/assetProcessing.ts`** com 5 helpers
       puros: `applyDepthSettings`, `disposeObject3D`,
       `normalizeToUnitSphereScale`, `cloneGlbSceneForRuntime(scene,
-    adjustMaterial?)`, `prepareObjMeshGeometry(geometry)`.
+  adjustMaterial?)`, `prepareObjMeshGeometry(geometry)`.
       Construção de material (roughness, metalness, emissive,
       map-selection) fica per-component porque as duas superfícies
       intencionalmente divergem (estudo: 0.95 flat para
@@ -603,6 +603,37 @@ como superfície de confiança para o runtime.
 `src/lib/assetProcessing.test.ts` (novo),
 `src/components/canvas/PlanetModel.tsx`,
 `src/components/ui/AssetStudyApp.tsx`.
+
+**Codex follow-up (P2 + P3):**
+
+- **P2 — Docstring de `disposeObject3D` estava factualmente errado.**
+  O texto afirmava que `scene.clone()` / `obj.clone()` produzem
+  geometrias e materiais próprios — mas `THREE.Object3D.clone()` é
+  shallow: a árvore clonada compartilha as referências até o caller
+  destacar explicitamente. Passar raw loader output aqui destruiria os
+  recursos cacheados para o app inteiro. Docstring reescrito com o
+  **ownership contract** explícito (só chamar em árvores cujo mesh
+  já teve geometry/material destacados via `cloneGlbSceneForRuntime`
+  ou construídos com `prepareObjMeshGeometry`). Os 2 call sites atuais
+  respeitam o contrato; o comentário agora protege usos futuros.
+- **P3 — Behavior change latente em GLBs multi-material.** A versão
+  pré-refactor do `AssetStudyApp` só aplicava os overrides flat
+  (0.9 / 0.02 / body.color) quando `child.material` passava
+  `instanceof MeshStandardMaterial`. Para `material[]` a condição
+  falhava e os sub-materiais autorais do GLB eram preservados. O
+  extract passou a aplicar por-material (consistente com a intenção
+  do visitor), o que seria observável se um GLB futuro trouxesse
+  sub-materiais distintos. Os GLBs atuais (`Haumea_1_1000.glb`,
+  `Vesta_1_100.glb`) são single-material, então latent — mas não
+  strictly identity-preserving. Guard adicionado no visitor do
+  `StudyGlbBody`: `if (Array.isArray(mesh.material)) return;`
+  restaura a semântica antiga. Regression test em
+  `assetProcessing.test.ts` documenta o padrão: material único
+  recebe override, material array retém valores autorais.
+
+Verificação follow-up: lint clean, 358/358 (+1 new), preview asset
+study ok (Haumea GLB renderiza idêntico ao pré-guard por ser
+single-material — o guard é no-op no caso atual, por construção).
 
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 

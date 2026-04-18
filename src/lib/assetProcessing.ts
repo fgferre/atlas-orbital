@@ -42,12 +42,20 @@ export const applyDepthSettings = (
 
 /**
  * Deep-dispose every geometry and material reachable from `object`.
- * Call this in a React cleanup effect keyed on the cloned root — each
- * `scene.clone()` / `obj.clone()` produces its own material and
- * geometry instances (see `cloneGlbSceneForRuntime` /
- * `prepareObjMeshGeometry`), so disposing them is safe and necessary
- * to avoid leaking GPU resources when props change and a new clone
- * replaces the old one.
+ *
+ * **Ownership contract — read before calling.** `THREE.Object3D.clone()`
+ * is a shallow copy: the cloned tree shares geometry and material
+ * references with the original. Calling this on raw loader output
+ * (`useGLTF`, `useLoader(OBJLoader, …)`) or on a plain `scene.clone()`
+ * would dispose the loader's cached resources and break every other
+ * component reading from the same cache.
+ *
+ * Only call on an object whose meshes have already had their
+ * geometries and materials detached — i.e. the result of
+ * `cloneGlbSceneForRuntime` (which clones both per-mesh) or a tree you
+ * built with `prepareObjMeshGeometry` (which returns a fresh geometry
+ * the caller owns). The React pattern is to use it in a cleanup effect
+ * keyed on the owned clone.
  */
 export const disposeObject3D = (object: THREE.Object3D): void => {
   object.traverse((child) => {

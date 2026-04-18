@@ -179,4 +179,40 @@ describe("cloneGlbSceneForRuntime", () => {
     cloneGlbSceneForRuntime(scene, visitor);
     expect(visitor).toHaveBeenCalledTimes(2);
   });
+
+  it("lets the visitor distinguish single vs array materials via mesh.material", () => {
+    // Pattern used by AssetStudyApp to preserve pre-refactor behaviour:
+    // skip grouped-material meshes so authored sub-materials render
+    // as-imported.
+    const scene = new THREE.Group();
+    scene.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ roughness: 0.5 })
+      )
+    );
+    scene.add(
+      new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [
+        new THREE.MeshStandardMaterial({ roughness: 0.5 }),
+        new THREE.MeshStandardMaterial({ roughness: 0.5 }),
+      ])
+    );
+
+    const OVERRIDE = 0.9;
+    const { cloned } = cloneGlbSceneForRuntime(scene, (material, mesh) => {
+      if (Array.isArray(mesh.material)) return;
+      if (material instanceof THREE.MeshStandardMaterial) {
+        material.roughness = OVERRIDE;
+      }
+    });
+
+    const meshes = cloned.children as THREE.Mesh[];
+    // Single-material mesh: override applied.
+    expect((meshes[0].material as THREE.MeshStandardMaterial).roughness).toBe(
+      OVERRIDE
+    );
+    // Array-material mesh: every sub-material retains its authored value.
+    const arrayMats = meshes[1].material as THREE.MeshStandardMaterial[];
+    for (const m of arrayMats) expect(m.roughness).toBe(0.5);
+  });
 });

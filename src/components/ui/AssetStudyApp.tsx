@@ -93,7 +93,15 @@ const StudyGlbBody = ({
 
   const { cloned, normalizationScale } = useMemo(
     () =>
-      cloneGlbSceneForRuntime(scene, (material) => {
+      cloneGlbSceneForRuntime(scene, (material, mesh) => {
+        // Preserve pre-refactor behaviour: the old code only applied
+        // overrides when `child.material` itself passed the instanceof
+        // check (i.e. single-material meshes). Multi-material meshes
+        // fell through untouched so the GLB's authored sub-materials
+        // render as-imported. Today's shipped GLBs are single-material,
+        // but skipping arrays here keeps the extract strictly render-
+        // identical for any future multi-material study asset.
+        if (Array.isArray(mesh.material)) return;
         if (
           material instanceof THREE.MeshStandardMaterial ||
           material instanceof THREE.MeshPhysicalMaterial
