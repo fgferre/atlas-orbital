@@ -24,6 +24,7 @@ import {
   normalizeToUnitSphereScale,
   prepareObjMeshGeometry,
 } from "../../lib/assetProcessing";
+import { dismissBootSplash } from "../../lib/dismissBootSplash";
 
 const formatBytes = (bytes: number) => {
   if (bytes >= 1024 * 1024) {
@@ -477,6 +478,12 @@ export const AssetStudyApp = () => {
   useEffect(() => {
     document.title = "Atlas Orbital - Asset Study";
   }, []);
+
+  // The boot splash in index.html is normally dismissed by the Loader
+  // component, which this branch (`?study=asset-review`) intentionally
+  // skips. Without this effect the splash covers the asset-study
+  // viewport indefinitely (Onda 8.0 fix).
+  useEffect(() => dismissBootSplash(), []);
 
   return (
     <main
