@@ -1,5 +1,6 @@
 import { Loader } from "./components/ui/Loader";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+import { useStore } from "./store";
 
 const Scene = lazy(() =>
   import("./components/canvas/Scene").then((module) => ({
@@ -38,6 +39,23 @@ const AssetStudyApp = lazy(() =>
 );
 
 function App() {
+  // Wave α P1.5 fix: apply accessibility.uiScale to the document root
+  // from the App lifetime, not per-panel. Previously the effect lived
+  // on A11yPanel; its cleanup restored the prior font-size when the
+  // panel unmounted, so closing the rail drawer silently reverted the
+  // user's scale choice (even though the slice state stayed persisted).
+  // Global subscription here means the scale applies on boot (persisted
+  // value rehydrates before App mounts) and stays applied regardless
+  // of whether any specific panel is open.
+  const uiScale = useStore((state) => state.accessibility.uiScale);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.style.setProperty(
+      "font-size",
+      `${uiScale * 100}%`
+    );
+  }, [uiScale]);
+
   const isAssetStudyMode =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("study") === "asset-review";

@@ -69,6 +69,8 @@ import {
   type DebugValues,
 } from "./scene/useVisualPresetLerp";
 import { useSceneDebugControls } from "./scene/useSceneDebugControls";
+import type { GraphicsOverrides } from "./scene/visualPresetOverrides";
+import { useShallow } from "zustand/react/shallow";
 
 const CriticalSceneAssetsGate = () => {
   const showStarfield = useStore((state) => state.showStarfield);
@@ -202,6 +204,14 @@ interface VisualPresetLerpBridgeProps {
   debugValues: DebugValues;
   debugMode: boolean;
   bloomIntensityMultiplier: number;
+  /**
+   * User-facing override layer from `graphicsSlice.graphicsOverrides`.
+   * Wave α Commit 3 added the param on `useVisualPresetLerp` but the
+   * Scene bridge was never updated to pass it — so every DisplayPanel
+   * slider in Post-Processing / Atmosphere & Sun silently wrote to a
+   * store record nothing read. Fix wave-alpha P1.1 routes it through.
+   */
+  userOverrides: GraphicsOverrides;
 }
 
 const VisualPresetLerpBridge = (props: VisualPresetLerpBridgeProps) => {
@@ -219,6 +229,12 @@ export const Scene = () => {
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const scaleMode = useStore((state) => state.scaleMode);
   const qualityProfile = useQualityProfile(qualityMode);
+  // Wave α P1.1 fix: pull graphicsOverrides from the slice so the
+  // DisplayPanel's sliders actually reach useVisualPresetLerp. Shallow-
+  // select to avoid re-render on unrelated store fields (L19).
+  const graphicsOverrides = useStore(
+    useShallow((state) => state.graphicsOverrides)
+  );
   const resolvedSunRenderMode = useMemo(
     () => resolveSunRenderMode(sunRenderMode, qualityProfile.name),
     [qualityProfile.name, sunRenderMode]
@@ -381,6 +397,7 @@ export const Scene = () => {
           debugValues={debugValues}
           debugMode={debugMode}
           bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
+          userOverrides={graphicsOverrides}
         />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <EclipticGrid />}
@@ -393,9 +410,19 @@ export const Scene = () => {
           >
             {/* Starfield removed from Environment - was causing planet lighting issues */}
             {/* Only sun mesh for reflections */}
+            {/* Wave α P1-fix: under the pre-Wave-α Reinhard renderer the
+                cubemap captured this 10-wide source compressed to ~0.91
+                (Reinhard(10) = 10/11). The Commit 2 renderer is
+                NoToneMapping, so the cubemap now captures linear 10 —
+                10× brighter IBL than the pre-Wave-α baseline, which
+                flooded planet surface lighting and contributed to the
+                washed-out look. Dropping to 2 gives a modest HDR
+                headroom for envMap highlights without over-lighting
+                planet materials. envMapIntensity from visualPresets
+                (1.9) keeps compounding on top. */}
             <mesh position={[0, 0, 0]} scale={[100, 100, 100]}>
               <sphereGeometry args={[1, 32, 32]} />
-              <meshBasicMaterial color={[10, 10, 10]} toneMapped={false} />
+              <meshBasicMaterial color={[2, 2, 2]} toneMapped={false} />
             </mesh>
           </Environment>
         </Suspense>

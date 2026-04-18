@@ -252,7 +252,15 @@ export const proceduralSunSphereFragmentShader = `
     float fresnel = pow(1.0 - nDotV, uFresnelPower) * uFresnelInfluence;
 
     float brightness = ocean() * uBase + uBrightnessOffset + fresnel;
-    vec3 col = clamp(brightnessToColor(brightness), 0.0, 1.0);
+    // Wave α P1.4 fix: the upper clamp at 1.0 crushed the sun core to
+    // LDR under the R1 #1A HDR pipeline — core pixels never exceeded
+    // the selective-bloom threshold (1.0), bloom pickup died, and
+    // combined with Commit 2's mis-ordered grading the visible sun
+    // went nearly black. Keep the zero floor (brightnessToColor can
+    // dip slightly negative near the ocean minimum) but let HDR
+    // values pass through so the composer's AgX tone-map is what
+    // decides the final on-screen luminance.
+    vec3 col = max(brightnessToColor(brightness), vec3(0.0));
     float alpha = getAlpha(normalize(vNormalWorld));
 
     gl_FragColor = vec4(col, alpha);

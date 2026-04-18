@@ -82,8 +82,16 @@ export const LayersPanel = ({
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
+  // Wave α P1.2 fix: the Scene panel's Quality group is rewired to
+  // the graphics slice so clicks here drive the same state as the
+  // Display panel. Before the fix it wrote to `qualityMode`, which
+  // `useQualityProfile` no longer reads — so clicks were silently
+  // dead and Sun Render "Auto resolves to {name}" got stale.
   const qualityMode = useStore((state) => state.qualityMode);
-  const setQualityMode = useStore((state) => state.setQualityMode);
+  const graphicsPreset = useStore((state) => state.graphicsPreset);
+  const graphicsAutoMode = useStore((state) => state.graphicsAutoMode);
+  const setGraphicsPreset = useStore((state) => state.setGraphicsPreset);
+  const setGraphicsAutoMode = useStore((state) => state.setGraphicsAutoMode);
   const sunRenderMode = useStore((state) => state.sunRenderMode);
   const setSunRenderMode = useStore((state) => state.setSunRenderMode);
   const showStarfield = useStore((state) => state.showStarfield);
@@ -254,27 +262,55 @@ export const LayersPanel = ({
             aria-label="Quality mode"
             className="grid grid-cols-2 gap-2"
           >
-            {SCENE_QUALITY_OPTIONS.map((option) => (
-              <ChoiceButton
-                key={option.id}
-                label={option.label}
-                isActive={qualityMode === option.id}
-                onClick={() => setQualityMode(option.id)}
-                isWide={option.id === "auto"}
-              />
-            ))}
+            {SCENE_QUALITY_OPTIONS.map((option) => {
+              // Drive the graphics slice, not the compat `qualityMode`.
+              // The option.id is a legacy tier label; map to the slice's
+              // preset vocabulary.
+              const isActive = graphicsAutoMode
+                ? option.id === "auto"
+                : !graphicsAutoMode &&
+                  option.id !== "auto" &&
+                  ((option.id === "balanced" && graphicsPreset === "medium") ||
+                    (option.id === "constrained" && graphicsPreset === "low") ||
+                    graphicsPreset === option.id);
+              return (
+                <ChoiceButton
+                  key={option.id}
+                  label={option.label}
+                  isActive={isActive}
+                  onClick={() => {
+                    if (option.id === "auto") {
+                      setGraphicsAutoMode(true);
+                      return;
+                    }
+                    setGraphicsAutoMode(false);
+                    setGraphicsPreset(
+                      option.id === "balanced"
+                        ? "medium"
+                        : option.id === "constrained"
+                          ? "low"
+                          : option.id
+                    );
+                  }}
+                  isWide={option.id === "auto"}
+                />
+              );
+            })}
           </div>
-          {qualityMode === "auto" && (
+          {graphicsAutoMode && (
             <div className="mt-2 text-[11px] text-white/55">
               Resolved profile: {qualityProfile.name}
             </div>
           )}
-          {qualityMode === "ultra" && (
+          {!graphicsAutoMode && graphicsPreset === "ultra" && (
             <div className="mt-3 border border-nasa-alert/20 bg-nasa-alert/8 px-3 py-2 text-[11px] leading-relaxed text-white/70">
               Ultra favors maximum scene fidelity and may cost responsiveness on
               smaller laptops.
             </div>
           )}
+          <div className="mt-2 text-[10px] text-white/40">
+            Full graphics controls live in the Display panel.
+          </div>
         </div>
 
         <div>

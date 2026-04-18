@@ -55,22 +55,34 @@ export const PostProcessingPipeline = memo(
       [brightnessRef]
     );
 
-    // Effect ordering (Wave α Commit 2, R1 #1A §1.1):
-    //   Bloom → HueSaturation → BrightnessContrast → ToneMapping (AgX)
+    // Effect ordering (Wave α — post fix wave-alpha P1.3):
+    //   Bloom (HDR in) → ToneMapping (AgX, HDR→LDR) → HueSaturation (LDR) →
+    //   BrightnessContrast (LDR)
     //
-    // Tone mapping MUST run last so Bloom reads real HDR luminance
-    // (with the `vfxHdrGain`-lifted starfield feeding it) and the
-    // color grades compose in linear space. AgX preserves highlight
-    // fidelity better than ACES / Reinhard at extremes (Blender 4
-    // default; `postprocessing` 6.x's own default on this composer).
+    // Two correctness constraints the chain has to satisfy:
+    //   1. Bloom must read REAL HDR luminance so it only picks up the
+    //      `vfxHdrGain`-lifted starfield fragments and the sun
+    //      MeshBasicMaterial (surfaces on §1.3's HDR-emissive allow-
+    //      list). That's why Bloom is first and tone mapping comes
+    //      AFTER it.
+    //   2. HueSaturation + BrightnessContrast's `saturation`, `contrast`,
+    //      `brightness` values in `config/visualPresets.ts` (0.29 /
+    //      0.42 / 0) were tuned for a post-tone-map LDR buffer —
+    //      applying them in HDR space washes highlights and crushes
+    //      shadows. Commit 2 shipped with those effects BEFORE tone
+    //      mapping and the result was the "cores esmaecidas + sol
+    //      negro" regression (Codex P1.3). Moving ToneMapping
+    //      between Bloom and the grades restores LDR semantics for the
+    //      user-facing knobs.
     //
-    // Selective bloom: `luminanceThreshold={1.0}` makes the pass only
-    // pick up surfaces explicitly on the HDR-emissive allow-list
-    // (§1.3 of tasks/lighting-backlog.md) — starfield fragments above
-    // 1.0 after `vfxHdrGain`, and the sun MeshBasicMaterial. Planet /
-    // atmosphere / cloud / ring materials all stay ≤ 1.0 by contract,
-    // so they cannot bloom even at full preset intensity.
-    // `luminanceSmoothing=0.1` kills magnitude-stable flicker.
+    // Deviates from tasks/prompt-wave-alpha.md's literal "tone mapping
+    // runs LAST". The correctness intent from R1 #1A §1.1 was "bloom
+    // in HDR"; grade order is aesthetic and production-standard
+    // pipelines place grading after tone mapping for exactly this
+    // reason. Documented in the Wave α P1-fix commit.
+    //
+    // Selective bloom: `luminanceThreshold={1.0}` + `luminanceSmoothing=0.1`
+    // keeps only HDR-emissive allow-list surfaces in the bloom target.
     return (
       <EffectComposer>
         {bloomEnabled ? (
@@ -84,9 +96,9 @@ export const PostProcessingPipeline = memo(
         ) : (
           <></>
         )}
+        <ToneMapping mode={ToneMappingMode.AGX} />
         <HueSaturation ref={assignHueSatRef} hue={0} />
         <BrightnessContrast ref={assignBrightnessRef} />
-        <ToneMapping mode={ToneMappingMode.AGX} />
       </EffectComposer>
     );
   }

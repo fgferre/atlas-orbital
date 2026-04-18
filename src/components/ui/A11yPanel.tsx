@@ -20,7 +20,6 @@
  * new controls" feel later). Tooltip explains the state explicitly.
  */
 
-import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useStore } from "../../store";
@@ -42,18 +41,10 @@ export const A11yPanel = () => {
       setAccessibility: state.setAccessibility,
     }))
   );
-
-  // Apply uiScale to the document root so Tailwind rem sizes scale
-  // together. Cheap side-effect — only runs when the scale changes.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    const previous = root.style.getPropertyValue("font-size");
-    root.style.setProperty("font-size", `${uiScale * 100}%`);
-    return () => {
-      root.style.setProperty("font-size", previous);
-    };
-  }, [uiScale]);
+  // Note: the uiScale side-effect (writing document root font-size)
+  // lives on App.tsx (Wave α P1.5 fix). Hoisted there so closing this
+  // panel doesn't revert the scale, and first-boot users get their
+  // persisted value applied without having to open A11y first.
 
   return (
     <div className="space-y-3" data-testid="a11y-panel">
