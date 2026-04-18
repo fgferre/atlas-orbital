@@ -77,10 +77,11 @@ interface AppState {
   setLiveMode: (isLive: boolean) => void;
 
   /**
-   * Milestone setter for `displayedDatetime`. Use it when the user
-   * explicitly asks for a specific date (seek, live-mode snap). The
-   * simulation clock bridge writes milestones on its own; callers
-   * should NOT use this in a `requestAnimationFrame` loop.
+   * Milestone setter for the simulation time. Delegates to
+   * `simulationClock.seek()`, which moves the authoritative clock and
+   * synchronously updates `displayedDatetime` via the bridge below.
+   * Use this for date-picker seeks and explicit snaps; do NOT call it
+   * from a `requestAnimationFrame` loop (the clock already owns that).
    */
   setDisplayedDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
@@ -230,11 +231,16 @@ export const useStore = create<AppState>((set) => ({
 
   setLiveMode: (isLiveMode) => set({ isLiveMode }),
 
-  setDisplayedDatetime: (value) =>
-    set((state) => ({
-      displayedDatetime:
-        typeof value === "function" ? value(state.displayedDatetime) : value,
-    })),
+  setDisplayedDatetime: (value) => {
+    const next =
+      typeof value === "function" ? value(simulationClock.getNow()) : value;
+    // Delegate to the clock so authoritative simulation time moves too.
+    // `seek()` fires a UI tick synchronously, which the bridge mirrors
+    // into `displayedDatetime`. The `set()` fallback below covers the
+    // edge case where the bridge is disabled (tests / HMR teardown).
+    simulationClock.seek(next);
+    set({ displayedDatetime: next });
+  },
   setSpeed: (speed) => set({ speed }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setSelectedId: (selectedId) => set({ selectedId }),
@@ -416,7 +422,7 @@ export const useStore = create<AppState>((set) => ({
 // letting the clock's per-frame rhythm reach React.
 
 // (1) Clock → store: mirror UI-tick snapshots into `displayedDatetime`.
-simulationClock.onUiTick((now) => {
+const disposeClockToStoreBridge = simulationClock.onUiTick((now) => {
   const state = useStore.getState();
   if (state.displayedDatetime.getTime() !== now.getTime()) {
     useStore.setState({ displayedDatetime: now });
@@ -424,7 +430,7 @@ simulationClock.onUiTick((now) => {
 });
 
 // (2) Store → clock: keep playback intents in sync.
-useStore.subscribe((state, prev) => {
+const disposeStoreToClockBridge = useStore.subscribe((state, prev) => {
   if (state.speed !== prev.speed) simulationClock.setSpeed(state.speed);
   if (state.isLiveMode !== prev.isLiveMode)
     simulationClock.setIsLiveMode(state.isLiveMode);
@@ -440,3 +446,14 @@ simulationClock.syncFromState({
   isPlaying: useStore.getState().isPlaying,
   isLiveMode: useStore.getState().isLiveMode,
 });
+
+// (4) Vite HMR: drop both bridges when the store module is torn down so
+// a reload does not accumulate duplicate `onUiTick` and `subscribe`
+// handlers on the long-lived simulationClock singleton. In production
+// builds `import.meta.hot` is undefined and the block is tree-shaken.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    disposeClockToStoreBridge();
+    disposeStoreToClockBridge();
+  });
+}
