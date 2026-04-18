@@ -241,3 +241,31 @@ monotonic at half a dozen sample magnitudes on paper before shipping
 (`src/components/canvas/Starfield.tsx`) — window 6 → 7.5 peak, fade
 9.5 → 12, adding up to +1 px / +0.12 α; clamped back into the raw
 `1.5 px / 0.08 α` Pogson floor outside the window.
+
+### L14. Perceptual lifts must stay anchored to the raw physical axis, never a derived one
+
+**Context:** When shipping the Photometric/Cinematic toggle I added a
+magnitude-axis compression step (`compressedMag`) for cinematic mode,
+then — thinking it was "cleaner" — routed the existing smoothstep
+lift window through `compressedMag` too. Codex caught the regression
+numerically: in cinematic, raw mag 12 compressed to 8.4 and hit the
+lift's peak (`faintLift = 1`) while raw mag 7.5 compressed to 6.6 and
+only got the ramp (`faintLift ≈ 0.352`). Result: telescopic stars
+out-brightened binocular stars — exactly the "haze of faint stars
+brighter than mid-faint stars" failure mode L13 was supposed to
+prevent. The user's "I don't see any difference" report was this bug
+manifesting as incoherent noise rather than a visible density lift.
+
+**Rule:** Perceptual adjustments (smoothstep lifts, tone curves,
+gamma bumps) must be parameterised on the **raw physical axis** that
+the human reasons about, not on any internal transform of it. If a
+new feature introduces a compression or remapping step, keep the
+original axis around and feed downstream perceptual layers from it.
+Share only what's strictly required by the physics path (Pogson flux,
+in this case).
+
+**Code marker:** `faintLift = smoothstep(6.0, 7.5, mag) * (1 -
+smoothstep(9.5, 12.0, mag))` in `src/components/canvas/Starfield.tsx`
+— uses raw `mag`, not `compressedMag`. Regression pinned by
+`starfieldShaderMath.test.ts` "mag 7.5 strictly brighter than mag 12"
+test.

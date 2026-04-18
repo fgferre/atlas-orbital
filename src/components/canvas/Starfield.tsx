@@ -56,6 +56,11 @@ const vertexShader = /* glsl */ `
   uniform float pixelRatio;
   uniform float particleSize;
   uniform float yearsSinceJ2000;
+  // styleMix: 0 = photometric (Pogson-accurate), 1 = cinematic (compresses
+  // the faint tail, enlarges sprites, sharpens the fragment falloff so dim
+  // stars stop flickering on camera motion at the cost of strict photometric
+  // ordering). Interpolated linearly so intermediate values stay valid.
+  uniform float styleMix;
 
   varying vec3 vColor;
   varying float vBrightness;
@@ -111,15 +116,58 @@ const vertexShader = /* glsl */ `
     // faint-mid stars get up to +1 px / +0.12 α; very faint stars go
     // back to the raw floor. This preserves ordering end-to-end while
     // adding real presence where the eye expects it.
-    float fluxRatio = pow(10.0, (6.5 - mag) * 0.4); // = 2.512^(6.5-mag)
+    // Cinematic magnitude compression: pull the faint tail toward the
+    // naked-eye anchor. Monotonic by construction — bright end (mag < 6)
+    // passes through unchanged; each unit of mag above 6 shrinks by the
+    // factor mix(1.0, 0.4, styleMix), so mag 20 lands at shader-mag 11.6
+    // under full cinematic. Ordering is preserved, but the Pogson curve
+    // now sees a tighter range and gives meaningful flux to stars the
+    // eye would otherwise lose.
+    float compressedMag = mag < 6.0
+      ? mag
+      : 6.0 + (mag - 6.0) * mix(1.0, 0.4, styleMix);
+
+    // Pogson-style size on the (possibly compressed) magnitude. Bright
+    // stars (mag < 6) are invariant under styleMix for the flux
+    // calculation; compression is gated off in that range.
+    float fluxRatio = pow(10.0, (6.5 - compressedMag) * 0.4);
     float sqrtFlux = sqrt(fluxRatio);
+
+    // Graduated smoothstep lift: adds presence to the naked-eye→binocular
+    // window without flattening the rest of the catalogue. The lift MUST
+    // be driven by the raw (uncompressed) mag, not the compressed value —
+    // otherwise cinematic's compression shifts the window so that deep
+    // telescopic stars (raw mag ~12) land at the lift's peak while
+    // binocular stars (raw mag ~7.5) only see the ramp. That inverts
+    // magnitude ordering in the vBrightness output, which is exactly the
+    // "haze of faint stars brighter than mid-faint stars" bug that the
+    // perceptual design is supposed to avoid.
     float faintLift = smoothstep(6.0, 7.5, mag) *
                       (1.0 - smoothstep(9.5, 12.0, mag));
 
-    float baseSize = clamp(sqrtFlux * 2.5 + faintLift * 1.0, 1.5, 60.0);
-    gl_PointSize = baseSize * particleSize * pixelRatio;
+    // Sprite enlargement in cinematic mode. Applied globally to every
+    // star, not only the faint tail: even bright stars jitter slightly
+    // at small screen sizes during slow pans, and a larger sprite kills
+    // that. Honestly: this does lift bright-star screen energy by
+    // roughly 25–35% in additive blend, even after the sharper fragment
+    // falloff compensates part of the enlargement. That is an
+    // intentional perceptual gain — "cinematic" is a visible feature,
+    // not a photometric-invariant re-skin. Photometric mode
+    // (styleMix = 0) keeps the original sprite exactly.
+    float sizeBoost = mix(1.0, 1.8, styleMix);
 
-    vBrightness = clamp(sqrtFlux * 0.08 + faintLift * 0.12, 0.08, 1.0);
+    float baseSize = clamp(sqrtFlux * 2.5 + faintLift * 1.0, 1.5, 60.0);
+    gl_PointSize = baseSize * sizeBoost * particleSize * pixelRatio;
+
+    // Base alpha rides the Pogson curve with a small lift in the faint
+    // window. Cinematic mode adds a tiny flat floor bump (≈ +0.03 α) so
+    // the dimmest stars are visible during slow pans; the bright-end
+    // alpha rises by the same 0.03 (intentional, see sizeBoost note).
+    vBrightness = clamp(
+      sqrtFlux * 0.08 + faintLift * 0.12 + styleMix * 0.03,
+      0.08,
+      1.0
+    );
     vColor = bvToRGB(ci);
   }
 `;
@@ -127,13 +175,20 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   precision highp float;
 
+  uniform float styleMix;
+
   varying vec3 vColor;
   varying float vBrightness;
 
   void main() {
-    // Soft glow: radial falloff inside the point sprite.
+    // Soft glow: radial falloff inside the point sprite. In cinematic
+    // mode the falloff exponent rises from 5 → 9, sharpening the core
+    // so the enlarged sprite still reads as a point of light rather
+    // than a diffuse disc. Combined with the vertex-stage sizeBoost
+    // this gives a "crisp core + halo" look without a second draw pass.
     float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float alpha = pow(d, 5.0);
+    float falloffPow = mix(5.0, 9.0, styleMix);
+    float alpha = pow(d, falloffPow);
     gl_FragColor = vec4(vColor, alpha * vBrightness);
   }
 `;
@@ -190,6 +245,7 @@ export const Starfield = () => {
   const scaleMode = useStore((state) => state.scaleMode);
   const datetime = useStore((state) => state.datetime);
   const qualityMode = useStore((state) => state.qualityMode);
+  const starfieldStyle = useStore((state) => state.starfieldStyle);
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
@@ -269,6 +325,13 @@ export const Starfield = () => {
     // uses it as a scalar multiplier of each star's proper-motion vector.
     const years = (datetime.getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;
     materialRef.current.uniforms.yearsSinceJ2000.value = years;
+
+    // styleMix is driven by the user's Photometric/Cinematic choice in
+    // Settings. Assigning here (not just at mount) means flipping the
+    // toggle updates the rendered sky instantly without re-creating the
+    // material.
+    materialRef.current.uniforms.styleMix.value =
+      starfieldStyle === "cinematic" ? 1 : 0;
   });
 
   if (!geometry) return null;
@@ -289,6 +352,7 @@ export const Starfield = () => {
           pixelRatio: { value: gl.getPixelRatio() },
           particleSize: { value: 1.0 },
           yearsSinceJ2000: { value: 0.0 },
+          styleMix: { value: starfieldStyle === "cinematic" ? 1 : 0 },
         }}
         transparent={true}
         depthWrite={false}

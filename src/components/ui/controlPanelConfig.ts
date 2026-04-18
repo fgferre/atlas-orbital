@@ -97,6 +97,14 @@ export const SCENE_SOURCE_OPTIONS = [
   { id: "nasa", label: STARFIELD_SOURCE_LABELS.nasa },
 ] as const satisfies ReadonlyArray<{ id: StarfieldSource; label: string }>;
 
+export const SCENE_STARFIELD_STYLE_OPTIONS = [
+  { id: "photometric", label: "Photometric" },
+  { id: "cinematic", label: "Cinematic" },
+] as const satisfies ReadonlyArray<{
+  id: "photometric" | "cinematic";
+  label: string;
+}>;
+
 export const SCENE_SCALE_OPTIONS = [
   { id: "didactic", label: "Didactic" },
   { id: "realistic", label: "Realistic" },

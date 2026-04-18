@@ -145,6 +145,135 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — Cinematic toggle + third Codex follow-up (2026-04-17)
+
+Shipped the Photometric/Cinematic toggle designed earlier in the
+session, then fielded a third Codex review after the user reported
+no perceived difference between modes. Codex caught three issues, all
+confirmed correct. Two were fixed; the third was a documentation
+lie fixed in the comment without changing math.
+
+**What the toggle does (final form):**
+
+- `styleMix ∈ [0, 1]` uniform driven by `starfieldStyle` store field
+  (persisted in localStorage, default `cinematic`). Photometric is
+  exact identity to the previous shipped shader; cinematic adds
+  three coordinated effects:
+  1. Magnitude compression for `mag ≥ 6` — pulls the faint tail
+     toward the naked-eye anchor, so the Pogson curve on
+     `compressedMag` gives meaningful flux to stars the eye would
+     otherwise lose.
+  2. Sprite enlargement (`×1.8`) — applied globally to kill
+     sub-pixel flicker during slow camera pans. Comes with an
+     honest trade-off: bright stars do gain about 25–35% extra
+     additive screen energy even after the sharper fragment
+     falloff compensates. That is an intentional perceptual gain,
+     not strict photometric invariance.
+  3. Fragment falloff `pow(5 → 9)` — sharpens the sprite core so
+     the enlarged sprite still reads as a point of light, plus a
+     small flat `+0.03 α` bump so the dimmest stars stay visible
+     during slow pans.
+
+**Codex findings + resolutions:**
+
+- **P2 — Ordering inversion (fixed).** The lift was running on
+  `compressedMag` instead of raw `mag`. Codex verified: in cinematic,
+  raw mag 12 compressed to 8.4 landed at the lift peak (`faintLift = 1`),
+  while raw mag 7.5 compressed to 6.6 sat at the ramp
+  (`faintLift ≈ 0.352`). Result: dim survey stars out-brightened
+  binocular stars. Fixed by driving the smoothstep from raw `mag`,
+  so the window stays anchored to the actual naked-eye limit.
+  Regression pinned by a unit test in `starfieldShaderMath.test.ts`.
+- **P2 — "Bright end preserved" was a lie (comment fixed, math
+  kept).** Compression is gated to `mag ≥ 6`, but `sizeBoost`,
+  `falloffPow`, and the flat `+0.03 α` bump apply to every star.
+  Codex integrated the fragment profile and measured `~1.24×` extra
+  energy on mag 3 in cinematic even after the sharper falloff
+  compensates. The math is intentional — cinematic is supposed to
+  lift overall presence, not just the faint tail — but the comment
+  was claiming invariance it did not deliver. Rewrote the comment to
+  say what actually happens and why it's a feature, not a bug. Math
+  unchanged.
+- **P3 — NASA source no-op (fixed).** The toggle lived in the Scene
+  panel unconditionally, but only `<Starfield />` (HYG) reads
+  `starfieldStyle`. `<NASAStarfield />` ignores it. When the user
+  flipped to NASA source and toggled styles, nothing happened.
+  Fixed by conditionally rendering the "Starfield Style" subsection
+  only when `starfieldSource === "hyg"`.
+
+**New test coverage (`starfieldShaderMath.test.ts`, 20 tests):**
+
+Extracted the full per-star transfer curve into a pure TS helper
+`starfieldPointMetrics(mag, styleMix)` that mirrors the GLSL vertex
+stage exactly. Tests now pin:
+
+- `styleMix = 0` identity (no regression of the photometric baseline)
+- Cinematic sample values at 7 hand-verified magnitudes
+- Codex Finding 1 regression: `mag 7.5 > mag 12` in cinematic
+- Strict monotonicity outside the lift window (`mag < 6`, `mag > 12`)
+- Documented invariant: the lift window intentionally creates a
+  local maximum at mag 7.5 above mag 6 — perceptual design choice,
+  present in both modes, NOT a bug
+
+**AAA rendering backlog (from parallel research subagent):**
+
+Research agent surveyed modern AAA space-game pipelines (Elite
+Dangerous, Star Citizen, No Man's Sky, Starfield, EVE Frontier) and
+the 2026 Three.js / R3F ecosystem. Items prioritized by ROI:
+
+- [ ] **HDR + tone-mapped selective bloom.** Highest ROI. Pattern:
+      `ACESFilmicToneMapping` + `<EffectComposer>` with `<Bloom
+    mipmapBlur luminanceThreshold={1.0} intensity={0.6}>` via
+      `@react-three/postprocessing`. Bright stars emit colours
+      above 1.0 in the fragment shader; the Bloom pass picks them
+      up selectively. Hours to days of work. Confirmed by multiple
+      Digital Foundry breakdowns as "the" space-scene unlock.
+- [ ] **Milky Way + zodiacal light layer.** Equirect ESO/Gaia
+      public-domain texture on a large inverted sphere, rendered
+      beneath the star catalog but beneath the bloom pass too, so
+      bright stars still punch through. Adds real "depth" — the
+      faint dust continuum instead of black void. Day of work.
+- [ ] **Per-star lens flare on mag ≤ 0 stars** (Sirius, Canopus,
+      Arcturus, Vega, Rigel). Star Citizen-style anamorphic
+      streaks on the brightest catalogue entries. Tricky: existing
+      `@andersonmancini/lens-flare` is designed for one sun-like
+      source; multi-instance needs custom billboards + pre-baked
+      anamorphic texture. Day of work.
+- [ ] **Sprite-size floor for sub-pixel stability — SHIPPED** in
+      the Cinematic mode above. Research agent independently listed
+      it as recommendation #4; we got it for free as the flicker
+      fix.
+- [ ] **WebGPU + TSL compute path.** Deferred. Three.js WebGPU is
+      production-ready as of r171 (Sept 2025) but at 109k static
+      points we are nowhere near the bottleneck that justifies the
+      rewrite. Revisit when animated nebulae or dust particles
+      land.
+
+**What we already do well (research confirms):**
+
+- Catalog-accurate B-V colour + Pogson magnitude + proper motion
+  puts us ahead of drei's `<Stars>` (random, count=5000) and the
+  widely-cited EVE Frontier demo (which uses `MeshBasicMaterial +
+setColorAt` on an `InstancedMesh`).
+- Single `THREE.Points` + custom GLSL at 109k stars is still the
+  right 2026 pattern for non-interactive points. EVE Frontier only
+  went `InstancedMesh` because they wanted per-instance raycast
+  picking — a constraint we don't have.
+- Tiered quality profile (500 / 50k / 109k) matches what Flight
+  Sim 2024 community fixes and Starfield patch notes flag as the
+  primary mobile/low-end lever.
+
+Verification: `npm run lint` clean, `npm run test:run` 313/313
+green (20 new shader-math tests + 293 previous). Browser preview
+still hits the L11 iframe 0 × 0 bug, so side-by-side visual
+validation of Photometric vs Cinematic in ultra remains the user's
+to confirm in a real browser.
+
+Lesson L14: "Transfer-curve inputs must stay anchored to the
+physical axis (raw mag) — running a perceptual lift on a
+compressed domain lets the lift land on the wrong stars and
+invert cosmic ordering."
+
 ## Review — graduated faint-star lift (2026-04-17)
 
 Second Codex review, after the user reported the corrected sky felt

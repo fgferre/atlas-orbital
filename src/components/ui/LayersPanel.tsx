@@ -13,6 +13,7 @@ import {
   SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
+  SCENE_STARFIELD_STYLE_OPTIONS,
   SCENE_SUN_RENDER_OPTIONS,
   type RightControlPanelId,
 } from "./controlPanelConfig";
@@ -78,6 +79,8 @@ export const LayersPanel = ({
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
   const starfieldSource = useStore((state) => state.starfieldSource);
   const setStarfieldSource = useStore((state) => state.setStarfieldSource);
+  const starfieldStyle = useStore((state) => state.starfieldStyle);
+  const setStarfieldStyle = useStore((state) => state.setStarfieldStyle);
   const activeStarfieldProviderState = useStore(
     (state) => state.starfieldProviderStates[state.starfieldSource]
   );
@@ -198,6 +201,31 @@ export const LayersPanel = ({
               ))}
             </div>
           </div>
+
+          {starfieldSource === "hyg" && (
+            <div>
+              <SubsectionLabel>Starfield Style</SubsectionLabel>
+              <div
+                role="group"
+                aria-label="Starfield style"
+                className="grid grid-cols-2 gap-2"
+              >
+                {SCENE_STARFIELD_STYLE_OPTIONS.map((option) => (
+                  <ChoiceButton
+                    key={option.id}
+                    label={option.label}
+                    isActive={starfieldStyle === option.id}
+                    onClick={() => setStarfieldStyle(option.id)}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 text-[11px] leading-relaxed text-white/55">
+                {starfieldStyle === "photometric"
+                  ? "Photometric: Pogson-accurate sizes and alpha. Faint stars are sub-pixel and may flicker on camera motion."
+                  : "Cinematic: compresses the faint tail, enlarges sprites, and sharpens the core so dim stars read as steady points of light."}
+              </div>
+            </div>
+          )}
 
           <div
             aria-live="polite"
