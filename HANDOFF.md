@@ -1,6 +1,6 @@
 # Atlas Orbital Handoff
 
-Last updated: 2026-04-18 (status block added; body below preserved for historical context)
+Last updated: 2026-04-18 (Wave α shipped)
 
 ## Purpose
 
@@ -8,7 +8,27 @@ This file is the canonical handoff for starting a new Codex conversation on this
 
 The goal is to preserve validated context, prevent repeated false assumptions, and give the next conversation a low-noise starting point.
 
-## Status update — 2026-04-18
+## Status update — 2026-04-18 (Wave α)
+
+**Wave α — HDR foundation + Graphics panel — SHIPPED.** Three commits landed atomically per `tasks/prompt-wave-alpha.md` + `tasks/implementation-roadmap.md`:
+
+- `653cbe9` docs: MCP tooling policy relaxation (allows Claude Preview MCP alongside Playwright CLI; L11 HMR caveat preserved as factual).
+- `73e75d3` refactor(graphics): R2 Wave 0 identity refactor. `useVisualPresetLerp` now accepts a `userOverrides: GraphicsOverrides` param (default `{}`) and composes against a pure `resolveLerpRefTargets` helper in `src/components/canvas/scene/visualPresetOverrides.ts`. Identity gate pinned by 12 unit tests; smoke gate via `boot-frozen` Playwright visual-diff at 1 % tolerance (focus + postprocessing ultra visual-diff tests were ruled unreliable and documented; the unit test is the rigorous identity gate).
+- `73cd2c2` feat(vfx): R1 #1A + #1B + #2. `gl.toneMapping = NoToneMapping`, `gl.outputColorSpace = SRGBColorSpace`, `<ToneMapping mode={ToneMappingMode.AGX}>` runs LAST in the composer chain (after Bloom → HueSaturation → BrightnessContrast). `vfxHdrGain` uniform on Starfield + NASAStarfield ShaderMaterials (L15 literal: flows through the useMemo'd material ref, not JSX children) with tier defaults ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0. Bloom `luminanceThreshold={1.0}` + `luminanceSmoothing={0.1}`. 5 new HDR-composite tests in `starfieldShaderMath.test.ts`.
+- `4601969` feat(graphics): R2 Wave 1. `src/lib/graphics/resolver.ts` with `PRESET_DEFAULTS` (byte-matched to `qualityProfile.RESOLVED_PROFILES`), `src/store/graphicsSlice.ts`, `src/store.persistMigration.ts` bump v0 → v1 with migration for every legacy `qualityMode` value. User-facing `DisplayPanel` (18 E/H rows across Rendering / Post-Processing / Atmosphere & Sun) and `A11yPanel` (Reduced Motion + UI Scale active; Colorblind Mode + High Contrast grayed for Wave 4). Compat shim in `useQualityProfile.ts` keeps the 5 pre-Wave-α consumer sites working unchanged.
+
+**Current live tone mapping:** AgX via composer `<ToneMapping mode={ToneMappingMode.AGX}>`. Renderer is `NoToneMapping`. Any doc that references `gl.toneMapping = ReinhardToneMapping` as the live path is pre-Wave-α and should be read as historical. `tasks/graphics-settings-design.md §3` carries the Finding 7 amendment (Tone Mapping dropdown options, Exposure deferred to Wave η.6).
+
+**Deferred from Wave α (tracked for future waves):**
+
+- Exposure slider — Wave η.6 (adaptive exposure / R1 #6). `gl.toneMappingExposure` is a no-op under the new contract; shipping a placeholder slider in Wave 1 would have been a dead control.
+- Tone Mapping composer wiring — the dropdown persists user choice in `graphicsOverrides.toneMapping` but the composer stays pinned to AgX until Wave γ revisits the post-chain for lens-flare integration.
+- Leva → `graphicsOverrides` routing — Wave 0 plan step 2, deferred past Wave α; Leva stays debug-only and doesn't affect user-facing paths.
+- `postprocessing-ultra-frozen` visual-diff spec — Chromium headless `Page.captureScreenshot` protocol reproducibly hangs with the AgX + Bloom pipeline on ultra; the unit tests (`visualPresetOverrides.test.ts`, `starfieldShaderMath.test.ts`) are the rigorous gates and the boot visual-diff still covers default-tier render.
+
+**Gates at Wave α close:** `npm run lint` clean, `npm run test:run` 689/689 across 44 files, `npm run build` ~9 s, `npx playwright test --workers=1` 7/7.
+
+## Status update — 2026-04-18 (pre-Wave-α)
 
 The sections further down predate the HYG migration and the analytical-ephemeris work. Corrections to the most load-bearing claims:
 
