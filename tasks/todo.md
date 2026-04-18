@@ -761,6 +761,102 @@ preset-toggling e churn de GPU de longa duração não foi exercida pelo
 Codex — nosso smoke preview (Sun/overview/Saturno/Earth) cobriu parte,
 mas o stress-test completo fica para a Onda 7 (Playwright reproduzível).
 
+#### Batch 2026-04-18 — Ondas 8.0 + 10 + 8 + 9a (paralelo)
+
+Crítica Codex pós-Onda 6 motivou reordenação: "se o critério é dor
+sentida pelo usuário agora, a ordem estava invertida". Batch executado
+em 4 frentes: 1 inline (8.0 + plan sync v4) + 3 agentes general-purpose
+em paralelo (Onda 8, 9a, 10). Plano master sincronizado em
+`~/.claude/plans/revise-este-projeto-de-zany-abelson.md` para v4.
+
+**Onda 8.0 — splash dismiss no asset-study (done inline, `5c39c0b`)**
+
+- `src/lib/dismissBootSplash.ts` (novo, 32 l) — extrai two-step dismiss
+  (`data-state="handoff"` → 360 ms → `remove()`) em helper com cancel
+  function para `useEffect` cleanup.
+- `src/components/ui/AssetStudyApp.tsx` — `useEffect(() =>
+dismissBootSplash(), [])`. Loader.tsx intocado (migra numa passe de
+  limpeza futura).
+- Bug era pré-existente: `App.tsx:45` asset-study branch pula Loader;
+  splash ficava preso indefinidamente em `?study=asset-review`.
+  Verificado em preview: `splashExists=false` sem intervenção.
+
+**Onda 10 — telemetry facade (done Agente C, `806b21f`)**
+
+- `src/lib/telemetry.ts` (novo) — 4 canais × 3 levels. API
+  `telemetry.info/warn/error(channel, msg, data?)`. Dev forwarda pra
+  `console.*` com prefixo `[channel]`; prod: `info`/`warn` no-op
+  (dead-code-eliminated), `error` sempre forwarda. Facade, não SDK.
+- `src/lib/telemetry.test.ts` — 5 casos (dev/prod gating, channels,
+  level independence, data pass-through).
+- Migração estratégica de 4 call sites: `starfield.ts` (load warn),
+  `store.ts` (persist rehydrate warn), `ErrorBoundary.tsx` (uncaught
+  error), `OrbitalEngineDebugReporter.tsx` (perf stats).
+- `r3f-perf` skipado: não em deps.
+- Spot-check prod bundle: `grep "import.meta.env.DEV"` + `grep "IS_DEV"`
+  zero hits em `dist/assets/*.js` — facade body eliminado.
+
+**Onda 8 — resilience runtime (done Agente A, `36bb99e`)**
+
+- `ErrorBoundary.tsx`: `fallback` aceita `ReactNode | (({error, reset})
+=> ReactNode)`; state captura `error: Error | null`; `componentDidCatch`
+  roteia via `telemetry.error("error", …, { error, componentStack })`.
+- `src/components/utils/ErrorBoundary.test.ts` (novo, 6 casos): happy
+  path, `getDerivedStateFromError`, ambos fallback contracts, `reset()`
+  restaura children, log shape via telemetry.
+- `useOrbitalEngine.ts`: três hooks (`useOrbitalPosition`,
+  `useOrbitalCalculation`, `useOrbitalPositions`) retornam
+  `OrbitalResult<T> = { state: "ready", data } | { state: "error", error }`
+  ao invés de `T | null` silencioso. Try/catch centralizado em
+  `resolveOrbitalResult` (pure helper) para testes sem React.
+- `src/hooks/useOrbitalEngine.test.ts` (novo, 4 casos).
+- `Sidebar.tsx` adapta consumer (`result.state === "ready" ? result.data : null`).
+- `App.tsx`: 6× `<Suspense fallback={null}>` substituídos:
+  - `<Scene />` → `<Loader />`
+  - `<TutorialOverlay />`, `<CreditsModal />` → spinner centralizado
+    Tailwind (`border-nasa-accent/30`)
+  - `<Overlay />`, `<StarHoverTooltip />`, `<AssetStudyApp />` → ficaram
+    `null` com one-line comment justificando (chrome, hover-only,
+    full-page takeover).
+
+**Onda 9a — chunking + lazy (done Agente B, `0d2e0f2`)**
+
+- `vite.config.ts` `manualChunks`:
+  - `three-vendor` (three + fiber + drei): 1 262 kB
+  - `postfx` (postprocessing): 72 kB
+  - `animation` (framer-motion): 124 kB
+  - `state` (zustand): 7 kB
+- `Scene.tsx`: `Leva` via `React.lazy` + `{debugMode && <Suspense>…}`
+  (render-tree cost eliminado, mas módulo fica em Scene-\*.js por causa
+  do `useControls` sync em `useSceneDebugControls` — caveat aceito).
+- `Scene.tsx`: `ProceduralSun3D` via `React.lazy` + `<Suspense>`
+  condicionado a `resolvedSunRenderMode === "procedural"`. Chunk
+  separado: 22.6 kB + 18 kB `proceduralSurface` = ~40 kB que photo-
+  mode users nunca baixam.
+- **Build delta:** `index` 2 670 kB → 1 982 kB (−26%). Bulk residual é
+  `astronomia` 19 MB (eagerly imported em `main.tsx`), `celestialBodies`
+  data, asset manifest. Target ≤1 MB do spec não atingido; para chegar
+  lá precisaria de regra para `astronomia` — deferred, não foi inventado
+  fora do spec (AGENTS.md #3 + #4).
+- Warning `>500 kB` ainda dispara para `three-vendor` (inerente ao
+  three.js) e `index` (astronomia/data) — separately tracked.
+
+**Verificação combinada:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 373/373 (+15 novos — 6 ErrorBoundary +
+  4 useOrbitalEngine + 5 telemetry).
+- `npm run build`: ✅ 7,8 s.
+- Preview runtime `/atlas-orbital/`: canvas 1098×1890, 0 console errors,
+  splash removido automaticamente, Sun renderiza.
+- Preview asset-study `/atlas-orbital/?study=asset-review`: splash
+  removido (bug 8.0 fixado), asset-study-root presente, 13 canvases
+  mountados, matriz Pallas/Hygiea/Vesta/Haumea/Jupiter… renderizando.
+
+**Arquivos tocados (batch):** 10 modificados + 5 novos = 15 arquivos.
+4 commits atômicos: `5c39c0b` (8.0), `806b21f` (10), `36bb99e` (8),
+`0d2e0f2` (9a).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
