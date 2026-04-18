@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import type { QualityMode } from "./lib/qualityProfile";
+import { simulationClock } from "./lib/simulationClock";
 import type { SunRenderMode } from "./lib/sunRenderMode";
 import type {
   HoveredStarInfo,
@@ -11,7 +12,15 @@ import type {
 import { createDefaultViewportFramingState } from "./lib/camera/effectiveViewport";
 
 interface AppState {
-  datetime: Date;
+  /**
+   * Low-rate copy of the simulation clock intended for UI consumers
+   * (Timeline readout, Sidebar stats, TopBar date label). Written from
+   * the `simulationClock` bridge installed below at ~4 Hz while playing
+   * plus on milestones (pause, seek, live-mode toggle). In-canvas
+   * consumers inside `useFrame` should read `simulationClock.getNow()`
+   * directly rather than subscribing to this field.
+   */
+  displayedDatetime: Date;
   speed: number;
   isPlaying: boolean;
   selectedId: string | null;
@@ -67,7 +76,13 @@ interface AppState {
 
   setLiveMode: (isLive: boolean) => void;
 
-  setDatetime: (date: Date | ((prev: Date) => Date)) => void;
+  /**
+   * Milestone setter for `displayedDatetime`. Use it when the user
+   * explicitly asks for a specific date (seek, live-mode snap). The
+   * simulation clock bridge writes milestones on its own; callers
+   * should NOT use this in a `requestAnimationFrame` loop.
+   */
+  setDisplayedDatetime: (date: Date | ((prev: Date) => Date)) => void;
   setSpeed: (speed: number) => void;
   setIsPlaying: (isPlaying: boolean) => void;
   setSelectedId: (id: string | null) => void;
@@ -157,7 +172,7 @@ const getInitialSunRenderMode = (): SunRenderMode => {
 };
 
 export const useStore = create<AppState>((set) => ({
-  datetime: new Date(),
+  displayedDatetime: new Date(),
   speed: 1,
   isPlaying: true,
   selectedId: null,
@@ -215,9 +230,10 @@ export const useStore = create<AppState>((set) => ({
 
   setLiveMode: (isLiveMode) => set({ isLiveMode }),
 
-  setDatetime: (value) =>
+  setDisplayedDatetime: (value) =>
     set((state) => ({
-      datetime: typeof value === "function" ? value(state.datetime) : value,
+      displayedDatetime:
+        typeof value === "function" ? value(state.displayedDatetime) : value,
     })),
   setSpeed: (speed) => set({ speed }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
@@ -392,3 +408,35 @@ export const useStore = create<AppState>((set) => ({
   debugMode: false,
   toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
 }));
+
+// ─── simulationClock ↔ store bridge ─────────────────────────────────────────
+// The clock owns the passage of simulated time. The store owns the UI-facing
+// copy (`displayedDatetime`) plus playback intents (isPlaying / speed /
+// isLiveMode). This wiring mirrors changes in both directions without ever
+// letting the clock's per-frame rhythm reach React.
+
+// (1) Clock → store: mirror UI-tick snapshots into `displayedDatetime`.
+simulationClock.onUiTick((now) => {
+  const state = useStore.getState();
+  if (state.displayedDatetime.getTime() !== now.getTime()) {
+    useStore.setState({ displayedDatetime: now });
+  }
+});
+
+// (2) Store → clock: keep playback intents in sync.
+useStore.subscribe((state, prev) => {
+  if (state.speed !== prev.speed) simulationClock.setSpeed(state.speed);
+  if (state.isLiveMode !== prev.isLiveMode)
+    simulationClock.setIsLiveMode(state.isLiveMode);
+  if (state.isPlaying !== prev.isPlaying)
+    simulationClock.setIsPlaying(state.isPlaying);
+});
+
+// (3) Initial alignment at module load (defaults: isPlaying=true, speed=1,
+// isLiveMode=true). The clock starts its loop immediately so getNow() is
+// valid before any Zustand subscribers mount.
+simulationClock.syncFromState({
+  speed: useStore.getState().speed,
+  isPlaying: useStore.getState().isPlaying,
+  isLiveMode: useStore.getState().isLiveMode,
+});

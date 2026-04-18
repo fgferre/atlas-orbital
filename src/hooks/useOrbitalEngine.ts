@@ -12,7 +12,7 @@ export function useOrbitalPosition(
   bodyId: string,
   parentId?: string
 ): THREE.Vector3 | null {
-  const datetime = useStore((state) => state.datetime);
+  const datetime = useStore((state) => state.displayedDatetime);
 
   return useMemo(() => {
     try {
@@ -37,7 +37,7 @@ export function useOrbitalCalculation(
   bodyId: string,
   parentId?: string
 ): OrbitalPositionResult | null {
-  const datetime = useStore((state) => state.datetime);
+  const datetime = useStore((state) => state.displayedDatetime);
 
   return useMemo(() => {
     try {
@@ -59,7 +59,7 @@ export function useOrbitalProvenance(bodyId: string): {
   plannedModel?: string;
   validityNote?: string;
 } {
-  const datetime = useStore((state) => state.datetime);
+  const datetime = useStore((state) => state.displayedDatetime);
 
   return useMemo(() => {
     return orbitalEngine.getProvenance(bodyId, datetime);
@@ -78,7 +78,7 @@ export function useOsculatingElements(bodyId: string): {
   M: number;
   n: number;
 } | null {
-  const datetime = useStore((state) => state.datetime);
+  const datetime = useStore((state) => state.displayedDatetime);
 
   return useMemo(() => {
     return orbitalEngine.getOsculatingElements(bodyId, datetime);
@@ -92,7 +92,7 @@ export function useOsculatingElements(bodyId: string): {
 export function useOrbitalPositions(
   bodies: Array<{ bodyId: string; parentId?: string }>
 ): Map<string, THREE.Vector3> {
-  const datetime = useStore((state) => state.datetime);
+  const datetime = useStore((state) => state.displayedDatetime);
 
   return useMemo(() => {
     const results = orbitalEngine.calculatePositions(bodies, datetime);

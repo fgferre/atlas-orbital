@@ -153,8 +153,9 @@ normalized^4.0 × 12.0`, `maxMag = 6.0 + log(zoom)`, `pow(1-dist×2, 3)`)
   `[5, 50] px` e `[0.05, 1.0] α`, `pow(d, 5)` no fragmento). Seção LOD
   dinâmico trocada por descrição da seleção de tier por `qualityProfile`.
 - Fórmula didática `r' = A × r^0.45` substituída por descrição correta
-  (interpolação log ancorada + Hermite para heliocentral; `2,2 + 0,95 ×
-raio_físico^0,55` para subsistemas) — aponta para `astrophysics.ts`.
+  (interpolação log ancorada + Hermite para heliocentral;
+  `2,2 + 0,95 × raio_físico^0,55` para subsistemas) — aponta para
+  `astrophysics.ts`.
 - Linha do tempo: "1x / 10x / 100x" → descrição real (steps discretos de
   "3 segundos/segundo" a "3 anos/segundo", Live Sync, Pause).
 - Plano de câmera: "near/far adaptativos" → honesto — `far` é fixo em
@@ -166,6 +167,94 @@ raio_físico^0,55` para subsistemas) — aponta para `astrophysics.ts`.
 Verificação: grep final por termos problemáticos em APRESENTACAO.md
 ("70+", "27+", "5 luas", "r^0.45", "1x.\*10x", "117.931", "Power-Scaled",
 "floating-origin") = 0 matches. Lint/test/build não rodados (docs only).
+
+Shipped em `de50f88` + `406d921`.
+
+#### Onda 1 — Desacoplar tick da simulação do React (done, 2026-04-18)
+
+Maior ganho do plano. Antes desta onda, `Timeline.tsx` escrevia
+`store.datetime` dentro de um `requestAnimationFrame` loop a ~60 Hz,
+então Planet (×45), Starfield, SmartSunLight, Timeline e todos os 5
+hooks de `useOrbitalEngine` (consumidos pelo Sidebar) re-renderizavam
+60× por segundo enquanto a simulação rodava. O cache interno do
+`orbitalEngine` (em `engine.ts:30`, bucket ~0,864 s) também não pegava
+porque cada frame criava um `Date` novo.
+
+- [x] **1.1** — Criado `src/lib/simulationClock.ts` com API enxuta:
+      `getNow()` (polled imperativamente), `onUiTick(fn)` (4 Hz + em
+      milestones), `setSpeed`, `setIsLiveMode`, `setIsPlaying`, `seek`,
+      `syncFromState`, `advanceForTest`. Loop interno via `rAF`; SSR-
+      guarded (sem `requestAnimationFrame` o loop não inicia, mas
+      `getNow()` continua válido). 11 testes unitários
+      (`src/lib/simulationClock.test.ts`).
+- [x] **1.2** — `src/store.ts`: renomeado campo `datetime` →
+      `displayedDatetime` + setter `setDatetime` → `setDisplayedDatetime`.
+      Adicionada a bridge clock↔store no fim do arquivo:
+      (a) `simulationClock.onUiTick` escreve `displayedDatetime` no
+      store a cada ~250 ms enquanto playing + em milestones
+      (pause/seek/live-toggle);
+      (b) `useStore.subscribe` espelha `isPlaying` / `speed` /
+      `isLiveMode` para o clock;
+      (c) `syncFromState` no boot alinha o clock com o estado inicial
+      do store e dispara o rAF loop se `isPlaying=true`.
+- [x] **1.3** — `src/components/ui/Timeline.tsx`: deletado o rAF loop
+      que escrevia `setDatetime` por frame. `formattedTime` e
+      `formattedDate` agora lêem `displayedDatetime` (atualizam ~1 Hz
+      na resolução visível dos segundos). Import `useEffect`/`useRef`
+      removidos.
+- [x] **1.4** — Consumers in-canvas migrados:
+  - `Planet.tsx` (5 referências): subscription agora em
+    `displayedDatetime` (para invalidar `orbitPoints` useMemo a 4 Hz);
+    `useFrame` lê `simulationClock.getNow()` direto — sem re-render
+    React. `TMP_WORLD_POS` da Onda 0.4 preservado.
+  - `PlanetModel.tsx` (rotação): lê clock direto.
+  - `Starfield.tsx`: subscription REMOVIDA; proper motion lê clock
+    direto em `useFrame`. Componente sai do re-render hot path.
+  - `SmartSunLight.tsx`: idem — subscription removida.
+  - `CameraController.tsx`: `useStore.getState().datetime` → clock.
+  - `InitialCameraAnimation.tsx`: idem.
+- [x] **1.4c** — `src/hooks/useOrbitalEngine.ts` (5 hooks consumidos
+      pelo Sidebar): trocado para `state.displayedDatetime`. Sidebar
+      agora re-renderiza em 4 Hz (antes: 60 Hz) — rápido o suficiente
+      para os números de distância/velocidade e incomparavelmente mais
+      barato.
+- [x] **1.5** — `src/store.test.ts`: rename do snapshot inicial.
+
+**Bug pego na verificação do preview:** a primeira versão do
+`syncFromState` não chamava `startLoop()` quando o `isPlaying` alvo
+batia com o default da classe (`true`), então o rAF loop nunca
+iniciava no boot e o relógio congelava no timestamp inicial. Fix:
+`syncFromState` agora chama `startLoop`/`stopLoop` incondicionalmente
+pelo estado alvo (ambos são idempotentes). Teste de regressão
+`syncFromState with matching isPlaying=true still emits a UI tick
+(boot parity)` adicionado.
+
+**Verificação Onda 1:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 319/319 (+11 do `simulationClock.test.ts`).
+- `npm run build`: ✅ 9,59 s, sem erros novos.
+- Preview manual: app boota, canvas dimensiona corretamente, timeline
+  avança 1:1 com wall clock em live mode, pause congela o relógio,
+  resume continua. Zero console errors. Contador de mutações no DOM
+  do relógio: ~0,67 Hz (sincroniza com mudança de segundo visível),
+  **não** 60 Hz como antes.
+
+**Arquivos tocados (Onda 1):** 11 arquivos:
+
+- novo: `src/lib/simulationClock.ts`, `src/lib/simulationClock.test.ts`.
+- modificado: `src/store.ts`, `src/store.test.ts`,
+  `src/components/ui/Timeline.tsx`,
+  `src/components/canvas/Planet.tsx`,
+  `src/components/canvas/PlanetModel.tsx`,
+  `src/components/canvas/Starfield.tsx`,
+  `src/components/canvas/SmartSunLight.tsx`,
+  `src/components/canvas/CameraController.tsx`,
+  `src/components/canvas/InitialCameraAnimation.tsx`,
+  `src/hooks/useOrbitalEngine.ts`.
+
+Lição L18 adicionada a `tasks/lessons.md` (tick de simulação não deve
+viver em Zustand quando tem consumidores hot-path em React).
 
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 

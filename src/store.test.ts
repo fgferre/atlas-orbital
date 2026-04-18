@@ -27,7 +27,7 @@ const resetStore = () => {
   useStore.setState(
     {
       ...initialState,
-      datetime: new Date(initialState.datetime),
+      displayedDatetime: new Date(initialState.displayedDatetime),
       focusHistory: [...initialState.focusHistory],
       overlayItems: [...initialState.overlayItems],
       visibility: { ...initialState.visibility },

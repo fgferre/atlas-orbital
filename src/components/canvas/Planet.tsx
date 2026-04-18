@@ -11,6 +11,7 @@ import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
 import { getOrbitCacheKey, getOrbitSegments } from "../../lib/orbitQuality";
+import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
@@ -1051,12 +1052,11 @@ const PlanetVisual = ({
     if (rotationRef.current) {
       // Rotation (synchronized with astronomical time using offset)
       if (body.rotationPeriodHours) {
-        const { datetime } = useStore.getState();
         const rotationEpoch = body.rotationEpoch
           ? new Date(body.rotationEpoch)
           : new Date("2000-01-01T12:00:00Z");
         const currentRotation = AstroPhysics.calculateRotationAngle(
-          datetime,
+          simulationClock.getNow(),
           body.rotationPeriodHours,
           body.id === "earth"
             ? earthRotationOffset
@@ -1315,7 +1315,12 @@ export const Planet = ({
   const focusId = useStore((state) => state.focusId);
   const showProgradeVector = useStore((state) => state.showProgradeVector);
   const visualPreset = useStore((state) => state.visualPreset);
-  const datetime = useStore((state) => state.datetime);
+  // UI-rate tick driven by simulationClock via the store bridge. We
+  // subscribe to this only so React-level memos (orbitPoints) invalidate
+  // at ~4 Hz while the simulation is playing. All high-frequency reads
+  // inside useFrame use simulationClock.getNow() directly so the
+  // component does not re-render at 60 Hz.
+  const displayedDatetime = useStore((state) => state.displayedDatetime);
   const vectorIntensity = VISUAL_PRESETS[visualPreset]?.vectorIntensity ?? 1;
 
   const progradeColors = useMemo(() => {
@@ -1431,8 +1436,8 @@ export const Planet = ({
     [body.parentId]
   );
   const orbitDateBucket = useMemo(
-    () => getOrbitDateBucket(body, datetime),
-    [body, datetime]
+    () => getOrbitDateBucket(body, displayedDatetime),
+    [body, displayedDatetime]
   );
 
   // Orbit points with adaptive resolution
@@ -1462,7 +1467,7 @@ export const Planet = ({
     const pts = getOrbitalDisplayOrbitPoints({
       body,
       parentBody,
-      date: datetime,
+      date: displayedDatetime,
       segments,
       scaleMode,
     });
@@ -1475,7 +1480,7 @@ export const Planet = ({
   }, [
     body,
     declutterOrbits,
-    datetime,
+    displayedDatetime,
     orbitSalience,
     orbitDateBucket,
     parentBody,
@@ -1488,11 +1493,13 @@ export const Planet = ({
     const { camera, size } = state;
     if (!groupRef.current) return;
 
-    // 1. Update Group Position (Orbital motion)
+    // 1. Update Group Position (Orbital motion). Read the sim clock
+    // directly so useFrame never participates in React re-renders.
+    const simNow = simulationClock.getNow();
     const pos = resolveOrbitalDisplayPosition({
       body,
       parentBody,
-      date: datetime,
+      date: simNow,
       scaleMode,
     });
     groupRef.current.position.copy(pos);
@@ -1576,7 +1583,7 @@ export const Planet = ({
         const dtDays = THREE.MathUtils.clamp(0.1 / meanMotion, 1 / 1440, 60);
         const dtMs = dtDays * 86400000;
 
-        const later = new Date(datetime.getTime() + dtMs);
+        const later = new Date(simNow.getTime() + dtMs);
         const posLater = resolveOrbitalDisplayPosition({
           body,
           parentBody,

@@ -8,6 +8,7 @@ import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
+import { simulationClock } from "../../lib/simulationClock";
 import { resolveTextureRequest } from "../../lib/textureVariants";
 import { useStore } from "../../store";
 import { ensureSphericalUvProjection } from "../../utils/sphericalUv";
@@ -273,11 +274,9 @@ export const PlanetModel = ({
 
     // Rotation
     if (rotationRef.current && body.rotationPeriodHours) {
-      const { datetime } = useStore.getState();
+      const nowMs = simulationClock.getNow().getTime();
       const currentRotation =
-        (datetime.getTime() / (body.rotationPeriodHours * 3600000)) *
-        Math.PI *
-        2;
+        (nowMs / (body.rotationPeriodHours * 3600000)) * Math.PI * 2;
       rotationRef.current.rotation.y = currentRotation;
     }
   });

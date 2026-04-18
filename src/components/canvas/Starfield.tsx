@@ -29,6 +29,7 @@ import * as THREE from "three";
 import { useCallback, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
+import { simulationClock } from "../../lib/simulationClock";
 import {
   getCachedHygCatalog,
   hygTierForQuality,
@@ -185,7 +186,10 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
 }
 
 export const Starfield = () => {
-  const datetime = useStore((state) => state.datetime);
+  // Proper motion tracks the simulation clock directly inside useFrame
+  // (see `years` computation below). No React subscription on datetime
+  // is needed — that keeps this component out of the 60 Hz re-render
+  // path and avoids rebuilding geometry/material when time advances.
   const qualityMode = useStore((state) => state.qualityMode);
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
@@ -292,7 +296,9 @@ export const Starfield = () => {
       Math.sqrt(Math.max(size.width, size.height) * effectiveDpr) / 60;
     matUniforms.particleSize.value = viewportScale;
 
-    const years = (datetime.getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;
+    const years =
+      (simulationClock.getNow().getTime() - J2000_EPOCH_MS) /
+      MS_PER_JULIAN_YEAR;
     matUniforms.yearsSinceJ2000.value = years;
   });
   /* eslint-enable react-hooks/immutability */

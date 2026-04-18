@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from "react";
+import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -69,7 +62,7 @@ const TIME_STEPS = [
 const NORMAL_SPEED = 1;
 
 export const Timeline = () => {
-  const datetime = useStore((state) => state.datetime);
+  const displayedDatetime = useStore((state) => state.displayedDatetime);
   const isPlaying = useStore((state) => state.isPlaying);
   const setIsPlaying = useStore((state) => state.setIsPlaying);
   const speed = useStore((state) => state.speed);
@@ -80,8 +73,6 @@ export const Timeline = () => {
   const isCompact = useMediaQuery("(max-width: 1365px)");
 
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const requestRef = useRef<number | undefined>(undefined);
-  const previousTimeRef = useRef<number | undefined>(undefined);
 
   const currentStepIndex = useMemo(() => {
     const absSpeed = Math.abs(speed);
@@ -190,35 +181,10 @@ export const Timeline = () => {
     setIsPlaying(!isPlaying);
   };
 
-  useEffect(() => {
-    const animate = (time: number) => {
-      if (previousTimeRef.current !== undefined) {
-        const deltaTime = time - previousTimeRef.current;
-        if (useStore.getState().isLiveMode) {
-          useStore.getState().setDatetime(new Date());
-        } else if (useStore.getState().isPlaying) {
-          useStore
-            .getState()
-            .setDatetime(
-              (previous) =>
-                new Date(
-                  previous.getTime() + useStore.getState().speed * deltaTime
-                )
-            );
-        }
-      }
-
-      previousTimeRef.current = time;
-      requestRef.current = requestAnimationFrame(animate);
-    };
-
-    requestRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (requestRef.current !== undefined) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
-  }, []);
+  // Simulated-time advancement lives in `simulationClock` (see
+  // `src/lib/simulationClock.ts`). The store bridge mirrors UI-tick
+  // snapshots into `displayedDatetime`, so Timeline only has to render
+  // from that field — no per-frame store writes here anymore.
 
   const currentLabel = useMemo(() => {
     if (Math.abs(speed - NORMAL_SPEED) < 1e-10) {
@@ -243,8 +209,8 @@ export const Timeline = () => {
         minute: "2-digit",
         second: "2-digit",
         hour12: false,
-      }).format(datetime),
-    [datetime]
+      }).format(displayedDatetime),
+    [displayedDatetime]
   );
 
   const formattedDate = useMemo(
@@ -254,9 +220,9 @@ export const Timeline = () => {
         month: "short",
         year: "numeric",
       })
-        .format(datetime)
+        .format(displayedDatetime)
         .toUpperCase(),
-    [datetime]
+    [displayedDatetime]
   );
 
   const rateSummary = useMemo(() => {

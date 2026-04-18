@@ -450,3 +450,62 @@ bug — the reference renderer in the repo was subtly wrong too.
 fixed 0.08) — matches NASA's nasaStarShaders.ts exactly. DPR source
 is `gl.getPixelRatio()` in both `Starfield.tsx` and
 `NASAStarfield.tsx`'s `useFrame`.
+
+## 2026-04-18 session
+
+### L18. Simulation-time tick does not belong in the React store
+
+**Context:** `Timeline.tsx` drove the simulation by writing
+`store.datetime = new Date(prev + speed × deltaMs)` inside its own
+`requestAnimationFrame` loop. That made the advancing time a Zustand
+mutation at ~60 Hz, which cascaded into every subscriber:
+
+- `Planet.tsx` (×45 instances) subscribed to `state.datetime` and
+  re-rendered 60× per second, taking the `orbitPoints` useMemo with it.
+- `Starfield.tsx`, `SmartSunLight.tsx`, `Timeline.tsx` itself, and the
+  five hooks in `useOrbitalEngine.ts` (consumed by `Sidebar.tsx`) all
+  sat on the same 60 Hz re-render cascade.
+- The `orbitalEngine` cache in `engine.ts:30` (bucket ~0,864 s, TTL 1 s)
+  could never hit because every frame constructed a brand-new `Date`
+  and React never gave the memos a stable key to reuse.
+
+The visible effect was fine — the orbits looked smooth — but the React
+reconciliation cost scaled with the number of in-canvas components.
+Two independent Codex reviews flagged this as the biggest single lever
+in the project before any feature work.
+
+**Rule:** the owner of "what time is the simulation at right now" is a
+plain object/class with its own `requestAnimationFrame` loop, not the
+React store. In-canvas consumers inside `useFrame` read the value
+imperatively (`simulationClock.getNow()`). UI surfaces that need a
+readable clock subscribe to a low-rate mirror (`displayedDatetime`,
+updated at ~4 Hz + on milestones) that is written by a clock→store
+bridge. The store still owns playback intent (`isPlaying`, `speed`,
+`isLiveMode`); a store→clock bridge mirrors those into the clock, so
+Timeline's React behavior — buttons, sliders, Live Sync — doesn't have
+to change.
+
+Two specific traps this pattern avoids:
+
+1. **"Default state means loop is already running" is a lie.** When
+   the clock's boot call is `syncFromState({ isPlaying: true, ... })`
+   and the clock's default field is also `isPlaying = true`, the naive
+   "only start if transitioning from false" guard never fires. The rAF
+   loop never starts, the displayed clock freezes on the initial
+   timestamp, and the bug is silent. Drive `startLoop`/`stopLoop`
+   unconditionally from the intended state (both calls are idempotent).
+   Pinned by the `syncFromState with matching isPlaying=true still
+emits a UI tick (boot parity)` regression test.
+2. **Removing datetime from deps is not the same as removing it from
+   the subscription.** Hot consumers that still need React-level
+   invalidation (e.g. `Planet.tsx`'s `orbitPoints` useMemo) should
+   subscribe to the **low-rate** mirror (`displayedDatetime`), not to
+   the raw simulation time. The `useFrame` math inside the same
+   component then reads the clock directly for the full-rate value.
+   The subscription decides "when does this component re-render"; the
+   imperative read decides "what value does this frame see".
+
+**Code marker:** `src/lib/simulationClock.ts` (class + singleton with
+`getNow`, `onUiTick`, `setIsPlaying`, `syncFromState`, `advanceForTest`)
+and the bridge block at the bottom of `src/store.ts`. 11 unit tests in
+`src/lib/simulationClock.test.ts`.

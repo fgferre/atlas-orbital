@@ -5,6 +5,7 @@ import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import { PrivilegedPosition } from "../../lib/camera";
+import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 
 const INTRO_DURATION_MS = 12000;
@@ -95,7 +96,7 @@ export const InitialCameraAnimation = () => {
     const focusExtent = AstroPhysics.resolveFocusExtent({
       body: sunBody,
       bodies: SOLAR_SYSTEM_BODIES,
-      date: useStore.getState().datetime,
+      date: simulationClock.getNow(),
       scaleMode,
     });
     const idealDistance = PrivilegedPosition.calculateViewportAwareDistance(

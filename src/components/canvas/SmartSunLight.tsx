@@ -9,6 +9,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
+import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
 
@@ -18,7 +19,6 @@ export const SmartSunLight = forwardRef<
 >(({ intensity = 1.5, shadowMapSize = 4096 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
-  const datetime = useStore((state) => state.datetime);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const shadowCameraRef = useRef<THREE.OrthographicCamera>(null);
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
@@ -47,7 +47,7 @@ export const SmartSunLight = forwardRef<
     const shadowExtent = AstroPhysics.resolveShadowExtent({
       body: trackedBody,
       bodies: SOLAR_SYSTEM_BODIES,
-      date: datetime,
+      date: simulationClock.getNow(),
       scaleMode,
     });
     const frame = resolveSmartSunLightFrame({

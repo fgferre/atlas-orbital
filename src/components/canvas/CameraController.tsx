@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { useStore } from "../../store";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
+import { simulationClock } from "../../lib/simulationClock";
 import {
   PrivilegedPosition,
   CameraTransition,
@@ -92,7 +93,7 @@ export const CameraController = () => {
       return AstroPhysics.resolveFocusExtent({
         body,
         bodies: SOLAR_SYSTEM_BODIES,
-        date: useStore.getState().datetime,
+        date: simulationClock.getNow(),
         scaleMode,
       });
     },
