@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Gotcha: this file imports `./store` BEFORE it stubs `localStorage`
+// in `beforeEach`. By the time the import resolves, the persist
+// middleware has already captured `storage: undefined` (because
+// `typeof localStorage === "undefined"` in the Node test env at
+// import time) and `migrateLegacyStorage` has already early-returned.
+// So the assertions below do NOT exercise the persist runtime path —
+// they validate pure state-shape behaviour. Migration and dedupe
+// wrapper coverage lives in `store.persistMigration.test.ts`, which
+// can take a `Storage` by parameter and avoid this ordering issue.
 import { useStore } from "./store";
 
 const createStorageMock = () => {

@@ -11,6 +11,13 @@ import type {
   StarfieldSource,
 } from "./lib/starfield";
 import { createDefaultViewportFramingState } from "./lib/camera/effectiveViewport";
+import {
+  createDedupedStorage,
+  migrateLegacyStorage,
+  PERSIST_KEY,
+  PERSIST_VERSION,
+  type PersistedSlice,
+} from "./store.persistMigration";
 
 interface AppState {
   /**
@@ -130,65 +137,15 @@ interface AppState {
 }
 
 // ─── Persist configuration ──────────────────────────────────────────────────
-
-const PERSIST_KEY = "atlas-orbital-store";
-const PERSIST_VERSION = 0;
-
-// Legacy per-key slots that predated the persist middleware. Kept as
-// constants so the one-time migration below can seed the unified key
-// without hard-coded strings scattered around. We deliberately do NOT
-// delete these after migrating — a future rollback to a pre-persist
-// build would still honour the old keys without losing user settings.
-const LEGACY_QUALITY_MODE_KEY = "qualityMode";
-const LEGACY_SUN_RENDER_MODE_KEY = "sunRenderMode";
-const LEGACY_TUTORIAL_STATUS_KEY = "tutorialStatus";
-
-/** Subset of the store that actually gets serialized. */
-type PersistedSlice = Pick<
-  AppState,
-  "qualityMode" | "sunRenderMode" | "tutorialCompletionStatus"
->;
-
-const isQualityMode = (v: unknown): v is QualityMode =>
-  v === "auto" ||
-  v === "ultra" ||
-  v === "high" ||
-  v === "balanced" ||
-  v === "constrained";
-
-const isSunRenderMode = (v: unknown): v is SunRenderMode =>
-  v === "auto" || v === "texture" || v === "procedural";
-
-/**
- * One-time migration: if the app was previously installed under the
- * per-key localStorage layout (`qualityMode`, `sunRenderMode`,
- * `tutorialStatus`) and the new unified key (`atlas-orbital-store`)
- * does not exist yet, synthesise the unified envelope so the persist
- * middleware can rehydrate from it transparently on next boot. No-op
- * in SSR / test environments without `localStorage` and no-op once
- * the new key is already in place.
- */
-const migrateLegacyStorage = (): void => {
-  if (typeof localStorage === "undefined") return;
-  if (localStorage.getItem(PERSIST_KEY)) return;
-
-  const q = localStorage.getItem(LEGACY_QUALITY_MODE_KEY);
-  const s = localStorage.getItem(LEGACY_SUN_RENDER_MODE_KEY);
-  const t = localStorage.getItem(LEGACY_TUTORIAL_STATUS_KEY);
-
-  const legacy: Partial<PersistedSlice> = {};
-  if (isQualityMode(q)) legacy.qualityMode = q;
-  if (isSunRenderMode(s)) legacy.sunRenderMode = s;
-  if (t === "skipped" || t === "completed") legacy.tutorialCompletionStatus = t;
-
-  if (Object.keys(legacy).length === 0) return;
-
-  localStorage.setItem(
-    PERSIST_KEY,
-    JSON.stringify({ state: legacy, version: PERSIST_VERSION })
-  );
-};
-
+// The migration helper, dedupe wrapper, and key/version constants live
+// in `./store.persistMigration` so they can be unit-tested without
+// dragging in the module-level side effects below (Zustand store
+// creation, simulationClock bridge). Comments at that file document
+// the contract; here we just wire everything up.
+//
+// `migrateLegacyStorage()` runs synchronously at module load — before
+// `persist(...)` evaluates — so rehydration picks up the migrated
+// envelope without racing against the pre-persist per-key layout.
 migrateLegacyStorage();
 
 // ─── Store definition ───────────────────────────────────────────────────────
@@ -441,10 +398,21 @@ export const useStore = create<AppState>()(
       // `undefined` straight through so the persist middleware
       // degrades to in-memory only instead of crashing on
       // `getItem`/`setItem` against a null storage.
+      //
+      // `createDedupedStorage` wraps `localStorage.setItem` so that
+      // it no-ops when the serialised value is identical to the
+      // previous write. Zustand 5's persist calls `setItem` on every
+      // `set()` regardless of whether `partialize`'s output changed,
+      // and this store mutates multiple times per second from the
+      // simulationClock UI tick and overlay updates — without the
+      // dedupe we'd be firing a synchronous `localStorage.setItem`
+      // at 4–60 Hz writing the same three-field envelope over and
+      // over. The wrapper is in `./store.persistMigration` and is
+      // covered by `store.persistMigration.test.ts`.
       storage:
         typeof localStorage === "undefined"
           ? undefined
-          : createJSONStorage(() => localStorage),
+          : createJSONStorage(() => createDedupedStorage(localStorage)),
       partialize: (state): PersistedSlice => ({
         qualityMode: state.qualityMode,
         sunRenderMode: state.sunRenderMode,
