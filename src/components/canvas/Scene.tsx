@@ -324,11 +324,18 @@ export const Scene = () => {
 
   return (
     <>
-      {debugMode && (
-        <Suspense fallback={null}>
-          <Leva theme={{ sizes: { rootWidth: "350px" } }} hidden={!debugMode} />
-        </Suspense>
-      )}
+      {/* <Leva /> must stay mounted even when debugMode is false: Leva's
+          `useControls` (called unconditionally by `useSceneDebugControls`
+          below) auto-inserts a panel into document.body if no <Leva />
+          is present in the tree. Gating the element behind debugMode
+          made the panel appear uncontrolled on every boot. The `hidden`
+          prop handles visibility; the chunk still folds into Scene-*.js
+          because useControls/folder/button are imported synchronously by
+          the hook — lazy-loading here only saves the render path cost
+          for non-debug users, not network bytes. */}
+      <Suspense fallback={null}>
+        <Leva theme={{ sizes: { rootWidth: "350px" } }} hidden={!debugMode} />
+      </Suspense>
       <Canvas
         shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
