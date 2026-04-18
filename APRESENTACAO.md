@@ -15,17 +15,17 @@ Cada planeta, lua e asteroide segue um modelo orbital analítico calibrado. O At
 **O que isso significa?**
 
 - Posições recalculadas em tempo real a partir da série analítica de cada corpo, não animações pré-programadas.
-- Pipeline de regressão valida os 28 corpos principais contra JPL Horizons em 4 épocas, com tolerâncias por família (≤ 0,1°/0,2°/0,5°) registradas em `src/lib/orbital/regression.test.ts`.
+- Pipeline de regressão valida 28 corpos no baseline (2025-01-01) contra JPL Horizons, com tolerâncias por família (≤ 0,1°/0,2°/0,5°); um subset de 12 representantes (Mercúrio, Terra, Lua, Marte, Io, Titã, Oberon, Netuno, Plutão, Ceres, Vesta, Tritão) é ainda testado em duas épocas adicionais (2025-07-01 e 2026-01-01) para monitorar drift. Ver `src/lib/orbital/regression.test.ts`.
 - Elementos orbitais clássicos (a, e, i, Ω, ω, M, n) são tratados por cada provider conforme convenção da teoria que o origina.
 - Ressonâncias orbitais reais aparecem como consequência da precisão das séries (ex.: a ressonância 1:2:4 entre Io, Europa e Ganimedes — as luas de Júpiter que "dançam" em sincronia).
 
-### **70+ Objetos Celestes com Dados Reais**
+### **~45 Objetos Celestes com Dados Reais**
 
 Exploramos:
 
 - **8 planetas** (de Mercúrio a Netuno)
 - **O Sol** (com física emissiva realista)
-- **27+ luas naturais** (incluindo a nossa Lua, as 4 luas galileanas de Júpiter, as fascinantes luas de Saturno como Titã e Encélado, e até as misteriosas luas de Urano)
+- **~23 luas naturais** (a nossa Lua, as 4 galileanas de Júpiter, luas principais de Saturno como Titã e Encélado, Fobos e Deimos em Marte, Tritão em Netuno, Caronte em Plutão, entre outras — com 4 luas de Urano cobertas).
 - **Planetas anões** (Plutão, Ceres, Éris, Makemake, Haumea)
 - **Asteroides** (Vesta, Pallas, Hygiea com modelos 3D de alta definição)
 
@@ -41,13 +41,14 @@ Cada corpo celeste inclui:
 
 ## 🎨 **Excelência Visual de Tirar o Fôlego**
 
-### **Texturas em Ultra Alta Resolução (8K)**
+### **Texturas de Alta Resolução**
 
-Usamos as **melhores imagens disponíveis da NASA** — as mesmas que cientistas e agências espaciais utilizam:
+Usamos imagens de alta resolução para cada corpo, combinando assets oficiais da NASA/JPL/USGS quando disponíveis com mapas de alta qualidade da comunidade astronômica:
 
-- Texturas 8K (8192×4096 pixels) para **Sol, Mercúrio, Vênus, Terra, Lua, Marte, Júpiter, Saturno, Urano, Plutão** e para o fundo estelar da Via Láctea.
-- Mapas 4K/2K para corpos menores (luas de Marte, luas galileanas, luas principais de Saturno, Netuno, asteroides) — tier escolhido conforme salência em tela e perfil de qualidade do dispositivo.
-- Mapas especiais: **Terra de noite** mostrando luzes das cidades, **camadas de nuvens**, **transparência dos anéis de Saturno**, além de normal/roughness maps PBR para a Terra.
+- Texturas 8K (8192×4096) para **Sol, Mercúrio, Vênus, Terra (daymap/nightmap/clouds/normal/roughness), Lua, Marte, Plutão** e a Via Láctea — na sua maioria originadas de fontes NASA/ESA.
+- Mapas não-8K-ideais mas ainda próximos para os gigantes gasosos e Urano (p.ex. Júpiter ~7200×3600 VGR1, Urano ~8000×4336) — fontes comunitárias mantidas até termos um equivalente NASA mais recente.
+- Saturno usa 2K para o disco + PNG com transparência dos anéis; as luas maiores e as duas luas de Marte usam 2K/4K conforme salência em tela e o perfil de qualidade escolhe o tier.
+- Mapas especiais: **Terra de noite** com luzes das cidades, **camadas de nuvens**, anéis de Saturno com alfa, normal e roughness PBR para a Terra. A proveniência por corpo está documentada em `src/data/assetManifest.ts`.
 
 ### **Campo Estelar Realista: Catálogo HYG v4.2 em Tiers Adaptativos**
 
@@ -85,7 +86,7 @@ Z = distância × sin(Dec)
 
 **Renderização Física das Estrelas**
 
-Sistema de shaders customizado com 3 técnicas científicas:
+Shader customizado portado do transfer curve que a NASA Eyes usa no navegador:
 
 **1. Cores Estelares Realistas (Radiação de Corpo Negro)**
 
@@ -95,26 +96,23 @@ Sistema de shaders customizado com 3 técnicas científicas:
 - **B-V = 2.0** (estrelas vermelhas frias como Betelgeuse) → RGB com máximo de vermelho
 - Preserva a aparência científica: estrelas O/B são azuis, K/M são laranjas/vermelhas
 
-**2. Tamanho Baseado em Magnitude (Razão de Pogson)**
+**2. Compressão Logarítmica de Brilho (curva tipo NASA Eyes)**
 
-- Fórmula exponencial: `size = 0.5 + normalized^4.0 × 12.0`
-- **Magnitude -1.46** (Sírio, a mais brilhante) → ponto grande e brilhante
-- **Magnitude 6** (limite do olho humano) → ponto médio
-- **Magnitude 12** (limite do catálogo) → ponto minúsculo
-- Simula o efeito de "glare" de estrelas brilhantes sem exagero
+- `flux = 10^(-mag × 0.4)` (definição de Pogson do fluxo relativo).
+- `brightness = 2 × log(1 + flux × 250)` — uma única etapa log que já respeita a lei de Fechner, então o mesmo valor alimenta tamanho e alfa preservando a ordem de magnitude ponta a ponta.
+- Tamanho do sprite clampado em `[5, 50]` px depois de escalar por `particleSize`, e alfa clampado em `[0.05, 1.0]`. Estrelas brilhantes saturam suavemente; estrelas do limite do catálogo ficam num floor discreto.
+- O DPR efetivo vem de `gl.getPixelRatio()` (respeita o clamp de qualidade do renderer), evitando sprites exagerados em displays Retina sob o perfil constrained.
 
-**3. LOD Dinâmico (Level of Detail)**
+**3. Seleção de Tier por Perfil de Qualidade**
 
-- Quando a câmera está afastada (vista do Sistema Solar completo), apenas estrelas brilhantes (mag < 2) são visíveis
-- Quando a câmera está próxima, estrelas mais fracas aparecem gradualmente
-- Fórmula logarítmica: `maxMag = 6.0 + log(zoom) × 1.0`
-- **Otimização de performance**: não renderiza estrelas invisíveis, economizando GPU
+- A densidade do catálogo é escolhida offline pelo `qualityProfile` (constrained / balanced / high / ultra), não pela distância da câmera — o `LOD dinâmico` que existia em versões anteriores foi removido por gerar popping visível quando o usuário se afastava.
+- `ultra` carrega ~109.400 estrelas (1,77 MB gzip); `high` ~50k; `balanced/medium` ~10k; `constrained/low` ~500. Detalhes em `src/lib/starfield.ts`.
 
 **Realismo Espacial (Sem Atmosfera)**
 
 - **Estrelas nítidas e pontuais**: simulam difração limitada, não há "brilho atmosférico" como na Terra
 - **Sem cintilação**: no espaço, estrelas não piscam (diferente da visão da superfície terrestre)
-- **Falloff acentuado**: `strength = pow(1.0 - dist×2.0, 3.0)` para pontos ultra-definidos
+- **Falloff acentuado**: `alpha = pow(d, 5)` no fragmento, seguindo o shader de referência da NASA Eyes.
 - **Blending aditivo**: estrelas sobrepostas somam luz realisticamente
 
 **Precisão de Coordenadas**
@@ -200,7 +198,7 @@ Efeitos cinematográficos em tempo real:
 
 **Modo Didático**
 
-- Algoritmo matemático especial que usa **escala não-linear** (fórmula: r' = A × r^0.45)
+- Escala não-linear que comprime as distâncias heliocentrais via interpolação logarítmica ancorada (com suavização Hermite) e separa o raio em subsistemas via `2,2 + 0,95 × raio_físico^0,55`. Ver `src/lib/astrophysics.ts`.
 - Permite ver todo o Sistema Solar mantendo os planetas visíveis
 - Preserva relações topológicas enquanto sacrifica proporções exatas para clareza educacional
 - **Inovação única**: você pode alternar entre os modos instantaneamente!
@@ -209,13 +207,13 @@ Efeitos cinematográficos em tempo real:
 
 **Linha do Tempo**
 
-- Avance ou retroceda no tempo
-- Velocidades configuráveis: 1x (tempo real), 10x, 100x
+- Avance ou retroceda no tempo em passos discretos de taxa (de "3 segundos por segundo" até "3 anos por segundo"), com botões dedicados de aceleração e reversão.
+- Modo Live Sync retorna à data/hora atual do navegador; Pause congela para leitura.
 - Veja eclipses históricos ou futuros alinhamentos planetários
 
 **Busca Instantânea**
 
-- Procure qualquer um dos 70+ corpos celestes
+- Procure qualquer um dos ~45 corpos celestes do catálogo
 - Navegação rápida para qualquer lugar do Sistema Solar
 - Suporte bilíngue (português/inglês)
 
@@ -260,7 +258,7 @@ Diferente de outros simuladores que usam sombras "assadas" (pré-calculadas), o 
 O desafio mais difícil em simulações espaciais: como mostrar algo da ordem de quilômetros e algo da ordem de bilhões de quilômetros na mesma cena sem perder detalhe?
 
 - Buffer de profundidade logarítmico do WebGL para distâncias dinâmicas muito amplas.
-- Câmera com clamps de `near`/`far` adaptativos ao corpo focado (ajustados em `CameraController` conforme o raio do alvo).
+- Plano `far` da câmera fixado em 1e15 (cobre a cena inteira sem stutter de reprojeção); `near` adaptativo ao raio do corpo focado em `CameraController` para manter precisão quando o usuário aproxima.
 - Dois modos de escala intercambiáveis (didático × realista) para cobrir a faixa de leitura desejada sem trocar de cena.
 
 ### **Precisão de Vírgula Flutuante**
@@ -355,7 +353,7 @@ O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
 **Sem instalação. Sem cadastro. Apenas pura exploração científica.**
 
-Navegue pelo Sistema Solar com um motor orbital analítico calibrado contra dados reais. Veja a Terra de uma perspectiva rara. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e suas 5 luas. Avance o tempo e veja os planetas dançarem em suas órbitas reais. Contemple dezenas de milhares de estrelas reais posicionadas a partir do catálogo HYG v4.2, com o tier escolhido automaticamente conforme o seu dispositivo.
+Navegue pelo Sistema Solar com um motor orbital analítico calibrado contra dados reais. Veja a Terra de uma perspectiva rara. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e conheça Caronte. Avance o tempo e veja os planetas dançarem em suas órbitas reais. Contemple dezenas de milhares de estrelas reais posicionadas a partir do catálogo HYG v4.2, com o tier escolhido automaticamente conforme o seu dispositivo.
 
 **Atlas Orbital: O Cosmos ao alcance de um clique.**
 

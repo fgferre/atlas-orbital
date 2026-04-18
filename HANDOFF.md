@@ -13,7 +13,7 @@ The goal is to preserve validated context, prevent repeated false assumptions, a
 The sections further down predate the HYG migration and the analytical-ephemeris work. Corrections to the most load-bearing claims:
 
 - **Starfield pipeline.** The legacy `src/data/tycho2-processed.bin` and `scripts/process-hyg.js` referenced below were deleted during the HYG-E cleanup (see `tasks/todo.md`). Runtime now loads tiered gzipped binaries from `public/data/hyg-stars/` (low/medium/high/full, max ~109.400 stars). Format lives in `src/utils/hygBinary.ts`. `CreditsModal` was updated to name HYG v4.2 correctly.
-- **Orbital engine.** "Simplified keplerian elements" is no longer the whole story. The runtime uses analytical theories per family — VSOP87D for the 8 planets, Pluto-Meeus for Pluto, ELP/MPP02-trunc for the Moon, and Kepler propagation of osculating elements (derived from JPL Horizons fixtures at 2025-01-01 in TDB scale) for the remaining moons and asteroids. The "5 Newton-Raphson iterations" claim is obsolete: the active solver is `solveKeplerRad` in `src/lib/orbital/analytical/coordUtils.ts` (12 iterations, 1e-12 convergence). Regression suite in `src/lib/orbital/regression.test.ts` pins 28 bodies × 4 epochs against Horizons.
+- **Orbital engine.** "Simplified keplerian elements" is no longer the whole story. The runtime uses analytical theories per family — VSOP87D for the 8 planets, Pluto-Meeus for Pluto, ELP/MPP02-trunc for the Moon, and Kepler propagation of osculating elements (derived from JPL Horizons fixtures at 2025-01-01 in TDB scale) for the remaining moons and asteroids. The "5 Newton-Raphson iterations" claim is obsolete: the active solver is `solveKeplerRad` in `src/lib/orbital/analytical/coordUtils.ts` (12 iterations, 1e-12 convergence). Regression suite in `src/lib/orbital/regression.test.ts` pins 28 bodies at the baseline epoch (2025-01-01) against Horizons, with a 12-body subset (`MULTI_EPOCH_BODIES`) also checked at 2025-07-01 and 2026-01-01 for drift envelopes. Extending multi-epoch coverage to all 28 bodies is tracked in `tasks/todo.md` under the Phase 3 tail.
 - **"Current runtime uses full NASA/JPL-grade ephemerides"** — still rejected as stated. The runtime uses **analytical approximations validated against Horizons**, not live Horizons or SPICE propagation.
 - **Documentation drift.** `APRESENTACAO.md` was tightened in 2026-04-18 (Onda 0.5 of the current plan): Kepler-only claim, "117.931 stars" fixed number, fabricated PSC/floating-origin, and the 8K texture list are now corrected. `README.md` was rewritten to match today's pipeline.
 - **Active saneamento plan.** See `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v3). Onda 0 (quick wins) and Onda 0.5 (docs) are done as of 2026-04-18. Next up: Onda 1 (decouple simulation tick from React store).
@@ -99,9 +99,9 @@ These claims were reviewed and should not be repeated without new evidence:
 
 ## Current Scientific Reality Of The App
 
-- The orbital runtime is based on simplified keplerian elements stored in `src/data/celestialBodies.ts`.
-- This is not the same as high-fidelity SPICE or Horizons ephemeris propagation.
-- Marketing and presentation copy currently overstate precision in places, especially in `APRESENTACAO.md`.
+- The orbital runtime uses analytical theories per family (VSOP87D for planets, Pluto-Meeus for Pluto, ELP/MPP02-trunc for the Moon, Kepler propagation of osculating elements derived from Horizons fixtures for the remaining moons/asteroids). See `src/lib/orbital/registry.ts` and the 2026-04-18 status block at the top of this file.
+- This is validated against Horizons fixtures but is **not** live SPICE or Horizons ephemeris propagation — it is an offline-calibrated analytical approximation.
+- Marketing and presentation copy historically overstated precision in places, especially in `APRESENTACAO.md`. Onda 0.5 (2026-04-18) tightened the most load-bearing claims; residual marketing prose elsewhere should still be read with a critical eye.
 - Some scientific and provenance UI already exists, especially around `visualProvenance`, but the model is incomplete and not consistently enforced across the product.
 
 ## Highest-Value Opportunities

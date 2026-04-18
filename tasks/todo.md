@@ -132,6 +132,41 @@ leem-se coerentes com `registry.ts`, `starfield.ts`, `assetManifest.ts` e
 **Arquivos tocados (Onda 0.5):** 3 (APRESENTACAO.md, README.md,
 HANDOFF.md) + tasks/todo.md.
 
+Follow-up Codex review da Onda 0.5 (incorporado): 7 findings (2 Altas, 5
+Médias) endereçados em APRESENTACAO.md + HANDOFF.md. Resumo:
+
+- Escopo da regressão Horizons ajustado: 28 corpos no **baseline**
+  (2025-01-01); 12 representantes em 3 épocas (2025-01-01 / 2025-07-01 /
+  2026-01-01) — não "28 × 4 épocas" como eu tinha escrito. Corrigido em
+  APRESENTACAO L18 e no status block do HANDOFF.
+- Tamanho do catálogo: "70+ objetos" → ~45; "27+ luas" → ~23; "Plutão e
+  suas 5 luas" → "Plutão e Caronte" (o catálogo ship só Caronte). Quatro
+  ocorrências corrigidas.
+- Texturas 8K: bloco "blanket 8192×4096 + NASA" substituído por descrição
+  honesta — mix NASA/community por corpo (Júpiter é VGR1 7200×3600,
+  Saturno é 2K, Urano é 8000×4336 community). Proveniência por corpo
+  aponta para `src/data/assetManifest.ts`.
+- Seção do shader de estrelas: fórmulas antigas (`size = 0.5 +
+normalized^4.0 × 12.0`, `maxMag = 6.0 + log(zoom)`, `pow(1-dist×2, 3)`)
+  substituídas pela realidade atual (compressão log NASA Eyes-style:
+  `flux = 10^(-mag×0.4)`, `brightness = 2·log(1 + flux·250)`, clamps
+  `[5, 50] px` e `[0.05, 1.0] α`, `pow(d, 5)` no fragmento). Seção LOD
+  dinâmico trocada por descrição da seleção de tier por `qualityProfile`.
+- Fórmula didática `r' = A × r^0.45` substituída por descrição correta
+  (interpolação log ancorada + Hermite para heliocentral; `2,2 + 0,95 ×
+raio_físico^0,55` para subsistemas) — aponta para `astrophysics.ts`.
+- Linha do tempo: "1x / 10x / 100x" → descrição real (steps discretos de
+  "3 segundos/segundo" a "3 anos/segundo", Live Sync, Pause).
+- Plano de câmera: "near/far adaptativos" → honesto — `far` é fixo em
+  1e15 em `Scene.tsx`; apenas `near` é adaptativo em `CameraController`.
+- HANDOFF body: linha "simplified keplerian elements" (que contradizia
+  o status block do topo) reescrita para descrever a realidade analítica
+  atual + caveat explícito de que não é SPICE/Horizons live.
+
+Verificação: grep final por termos problemáticos em APRESENTACAO.md
+("70+", "27+", "5 luas", "r^0.45", "1x.\*10x", "117.931", "Power-Scaled",
+"floating-origin") = 0 matches. Lint/test/build não rodados (docs only).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
