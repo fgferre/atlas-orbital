@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import type { QualityMode } from "./lib/qualityProfile";
@@ -128,292 +129,341 @@ interface AppState {
   toggleDebugMode: () => void;
 }
 
-const QUALITY_MODE_STORAGE_KEY = "qualityMode";
-const SUN_RENDER_MODE_STORAGE_KEY = "sunRenderMode";
+// ─── Persist configuration ──────────────────────────────────────────────────
 
-const canUseLocalStorage = () =>
-  typeof localStorage !== "undefined" &&
-  typeof localStorage.getItem === "function" &&
-  typeof localStorage.setItem === "function";
+const PERSIST_KEY = "atlas-orbital-store";
+const PERSIST_VERSION = 0;
 
-const getInitialQualityMode = (): QualityMode => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return "auto";
-  }
+// Legacy per-key slots that predated the persist middleware. Kept as
+// constants so the one-time migration below can seed the unified key
+// without hard-coded strings scattered around. We deliberately do NOT
+// delete these after migrating — a future rollback to a pre-persist
+// build would still honour the old keys without losing user settings.
+const LEGACY_QUALITY_MODE_KEY = "qualityMode";
+const LEGACY_SUN_RENDER_MODE_KEY = "sunRenderMode";
+const LEGACY_TUTORIAL_STATUS_KEY = "tutorialStatus";
 
-  const storedValue = localStorage.getItem(QUALITY_MODE_STORAGE_KEY);
-  if (
-    storedValue === "auto" ||
-    storedValue === "ultra" ||
-    storedValue === "high" ||
-    storedValue === "balanced" ||
-    storedValue === "constrained"
-  ) {
-    return storedValue;
-  }
+/** Subset of the store that actually gets serialized. */
+type PersistedSlice = Pick<
+  AppState,
+  "qualityMode" | "sunRenderMode" | "tutorialCompletionStatus"
+>;
 
-  return "auto";
+const isQualityMode = (v: unknown): v is QualityMode =>
+  v === "auto" ||
+  v === "ultra" ||
+  v === "high" ||
+  v === "balanced" ||
+  v === "constrained";
+
+const isSunRenderMode = (v: unknown): v is SunRenderMode =>
+  v === "auto" || v === "texture" || v === "procedural";
+
+/**
+ * One-time migration: if the app was previously installed under the
+ * per-key localStorage layout (`qualityMode`, `sunRenderMode`,
+ * `tutorialStatus`) and the new unified key (`atlas-orbital-store`)
+ * does not exist yet, synthesise the unified envelope so the persist
+ * middleware can rehydrate from it transparently on next boot. No-op
+ * in SSR / test environments without `localStorage` and no-op once
+ * the new key is already in place.
+ */
+const migrateLegacyStorage = (): void => {
+  if (typeof localStorage === "undefined") return;
+  if (localStorage.getItem(PERSIST_KEY)) return;
+
+  const q = localStorage.getItem(LEGACY_QUALITY_MODE_KEY);
+  const s = localStorage.getItem(LEGACY_SUN_RENDER_MODE_KEY);
+  const t = localStorage.getItem(LEGACY_TUTORIAL_STATUS_KEY);
+
+  const legacy: Partial<PersistedSlice> = {};
+  if (isQualityMode(q)) legacy.qualityMode = q;
+  if (isSunRenderMode(s)) legacy.sunRenderMode = s;
+  if (t === "skipped" || t === "completed") legacy.tutorialCompletionStatus = t;
+
+  if (Object.keys(legacy).length === 0) return;
+
+  localStorage.setItem(
+    PERSIST_KEY,
+    JSON.stringify({ state: legacy, version: PERSIST_VERSION })
+  );
 };
 
-const getInitialSunRenderMode = (): SunRenderMode => {
-  if (!canUseLocalStorage()) {
-    return "auto";
-  }
+migrateLegacyStorage();
 
-  const storedValue = localStorage.getItem(SUN_RENDER_MODE_STORAGE_KEY);
-  if (
-    storedValue === "auto" ||
-    storedValue === "texture" ||
-    storedValue === "procedural"
-  ) {
-    return storedValue;
-  }
+// ─── Store definition ───────────────────────────────────────────────────────
 
-  return "auto";
-};
-
-export const useStore = create<AppState>((set) => ({
-  displayedDatetime: new Date(),
-  speed: 1,
-  isPlaying: true,
-  selectedId: null,
-  focusId: null,
-  showLabels: true,
-  showIcons: true,
-  showOrbits: true,
-  declutterOrbits: true,
-  showEclipticGrid: true,
-  showProgradeVector: true,
-  scaleMode: "didactic",
-  qualityMode: getInitialQualityMode(),
-  sunRenderMode: getInitialSunRenderMode(),
-  visualPreset: "DEEP_SPACE",
-  autoPresetEnabled: true,
-  focusHistory: [],
-  overlayItems: [],
-  viewportFraming:
-    typeof window !== "undefined"
-      ? createDefaultViewportFramingState(window.innerWidth, window.innerHeight)
-      : createDefaultViewportFramingState(),
-  showStarfield: true,
-  starfieldSource: "hyg",
-  starfieldProviderStates: {
-    hyg: { status: "idle", error: null },
-    nasa: { status: "idle", error: null },
-  },
-  hoveredStar: null,
-  showCredits: false,
-  visibility: {
-    planets: true,
-    dwarfs: true,
-    moons: true,
-    asteroids: true,
-    tnos: true,
-  },
-  showTutorial:
-    typeof window !== "undefined" && window.localStorage
-      ? !localStorage.getItem("tutorialStatus")
-      : true, // Default true for SSR
-  tutorialCompletionStatus:
-    typeof window !== "undefined" && window.localStorage
-      ? (localStorage.getItem("tutorialStatus") as
-          | "skipped"
-          | "completed"
-          | null)
-      : null,
-  tutorialStep: 0,
-  criticalAssetsReady: false,
-  isSceneReady: false,
-  isLoaderHidden: false,
-  hasPlayedIntroAnimation: false, // Always play on page load
-  isIntroAnimating: false,
-  isLiveMode: true,
-
-  setLiveMode: (isLiveMode) => set({ isLiveMode }),
-
-  setDisplayedDatetime: (value) => {
-    const next =
-      typeof value === "function" ? value(simulationClock.getNow()) : value;
-    // Delegate to the clock so authoritative simulation time moves too.
-    // `seek()` fires a UI tick synchronously, which the bridge mirrors
-    // into `displayedDatetime`. The `set()` fallback below covers the
-    // edge case where the bridge is disabled (tests / HMR teardown).
-    simulationClock.seek(next);
-    set({ displayedDatetime: next });
-  },
-  setSpeed: (speed) => set({ speed }),
-  setIsPlaying: (isPlaying) => set({ isPlaying }),
-  setSelectedId: (selectedId) => set({ selectedId }),
-  selectId: (selectedId) =>
-    set((state) => {
-      if (selectedId === state.focusId) {
-        return { selectedId, focusId: selectedId };
-      }
-
-      const focusHistory = [...state.focusHistory];
-      if (state.focusId && state.focusId !== selectedId) {
-        const last = focusHistory[focusHistory.length - 1];
-        if (last !== state.focusId) focusHistory.push(state.focusId);
-      }
-
-      return { selectedId, focusId: selectedId, focusHistory };
-    }),
-  setFocusId: (focusId) => set({ focusId }),
-  setOverlayItems: (overlayItems) => set({ overlayItems }),
-  setViewportFraming: (viewportFraming) =>
-    set((state) =>
-      state.viewportFraming.signature === viewportFraming.signature &&
-      state.viewportFraming.viewportWidth === viewportFraming.viewportWidth &&
-      state.viewportFraming.viewportHeight === viewportFraming.viewportHeight
-        ? state
-        : { viewportFraming }
-    ),
-  toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
-  toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
-  toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
-  toggleDeclutterOrbits: () =>
-    set((state) => ({ declutterOrbits: !state.declutterOrbits })),
-  toggleEclipticGrid: () =>
-    set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
-  toggleProgradeVector: () =>
-    set((state) => ({ showProgradeVector: !state.showProgradeVector })),
-  toggleShowStarfield: () =>
-    set((state) => ({ showStarfield: !state.showStarfield })),
-  setStarfieldSource: (starfieldSource) =>
-    set((state) =>
-      state.starfieldSource === starfieldSource ? state : { starfieldSource }
-    ),
-  setHoveredStar: (hoveredStar) =>
-    set((state) =>
-      state.hoveredStar === hoveredStar ? state : { hoveredStar }
-    ),
-  setStarfieldProviderState: (source, nextState) =>
-    set((state) => {
-      const currentState = state.starfieldProviderStates[source];
-      const mergedState = {
-        ...currentState,
-        ...nextState,
-      };
-
-      if (
-        currentState.status === mergedState.status &&
-        currentState.error === mergedState.error
-      ) {
-        return state;
-      }
-
-      return {
-        starfieldProviderStates: {
-          ...state.starfieldProviderStates,
-          [source]: mergedState,
-        },
-      };
-    }),
-  toggleStarfieldImplementation: () =>
-    set((state) => ({
-      starfieldSource: state.starfieldSource === "nasa" ? "hyg" : "nasa",
-    })),
-  toggleCredits: () => set((state) => ({ showCredits: !state.showCredits })),
-  focusHome: () =>
-    set((state) => {
-      const focusHistory = [...state.focusHistory];
-      if (state.focusId && state.focusId !== "sun") {
-        const last = focusHistory[focusHistory.length - 1];
-        if (last !== state.focusId) focusHistory.push(state.focusId);
-      }
-      return { focusId: "sun", selectedId: null, focusHistory };
-    }),
-  focusBack: () =>
-    set((state) => {
-      if (state.focusHistory.length === 0) return {};
-      const focusHistory = [...state.focusHistory];
-      const prev = focusHistory.pop() ?? null;
-      if (!prev) return { focusHistory };
-      return { focusId: prev, selectedId: prev, focusHistory };
-    }),
-  toggleScaleMode: () =>
-    set((state) => ({
-      scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
-    })),
-  setQualityMode: (qualityMode) => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(QUALITY_MODE_STORAGE_KEY, qualityMode);
-    }
-
-    set((state) =>
-      state.qualityMode === qualityMode ? state : { qualityMode }
-    );
-  },
-  setSunRenderMode: (sunRenderMode) => {
-    if (canUseLocalStorage()) {
-      localStorage.setItem(SUN_RENDER_MODE_STORAGE_KEY, sunRenderMode);
-    }
-
-    set((state) =>
-      state.sunRenderMode === sunRenderMode ? state : { sunRenderMode }
-    );
-  },
-  setVisualPreset: (visualPreset) => set({ visualPreset }),
-  toggleAutoPreset: () =>
-    set((state) => ({ autoPresetEnabled: !state.autoPresetEnabled })),
-  toggleVisibility: (category) =>
-    set((state) => ({
-      visibility: {
-        ...state.visibility,
-        [category]: !state.visibility[category],
-      },
-    })),
-  closeTutorial: (status = "completed") => {
-    localStorage.setItem("tutorialStatus", status);
-    set({ showTutorial: false, tutorialCompletionStatus: status });
-  },
-  completeTutorial: () => {
-    localStorage.setItem("tutorialStatus", "completed");
-    set({
-      showTutorial: false,
-      tutorialCompletionStatus: "completed",
+export const useStore = create<AppState>()(
+  persist(
+    (set) => ({
+      displayedDatetime: new Date(),
+      speed: 1,
+      isPlaying: true,
       selectedId: null,
       focusId: null,
-    });
-  },
-  openTutorial: () => set({ showTutorial: true, tutorialStep: 0 }),
-  reopenTutorial: () =>
-    set({
+      showLabels: true,
+      showIcons: true,
+      showOrbits: true,
+      declutterOrbits: true,
+      showEclipticGrid: true,
+      showProgradeVector: true,
+      scaleMode: "didactic",
+      // Defaults overwritten by the persist middleware's rehydration
+      // step when a previously-saved (or legacy-migrated) value is
+      // available in localStorage.
+      qualityMode: "auto",
+      sunRenderMode: "auto",
+      visualPreset: "DEEP_SPACE",
+      autoPresetEnabled: true,
+      focusHistory: [],
+      overlayItems: [],
+      viewportFraming:
+        typeof window !== "undefined"
+          ? createDefaultViewportFramingState(
+              window.innerWidth,
+              window.innerHeight
+            )
+          : createDefaultViewportFramingState(),
+      showStarfield: true,
+      starfieldSource: "hyg",
+      starfieldProviderStates: {
+        hyg: { status: "idle", error: null },
+        nasa: { status: "idle", error: null },
+      },
+      hoveredStar: null,
+      showCredits: false,
+      visibility: {
+        planets: true,
+        dwarfs: true,
+        moons: true,
+        asteroids: true,
+        tnos: true,
+      },
+      // Derived from `tutorialCompletionStatus` after rehydration — see
+      // `onRehydrateStorage` below. The `true` default is only correct
+      // for a brand-new user; returning visitors get it flipped to
+      // `false` when their saved status is non-null.
       showTutorial: true,
-      tutorialStep: 0,
       tutorialCompletionStatus: null,
-      hasPlayedIntroAnimation: false, // Triggers intro animation to replay
+      tutorialStep: 0,
+      criticalAssetsReady: false,
+      isSceneReady: false,
+      isLoaderHidden: false,
+      hasPlayedIntroAnimation: false, // Always play on page load
+      isIntroAnimating: false,
+      isLiveMode: true,
+
+      setLiveMode: (isLiveMode) => set({ isLiveMode }),
+
+      setDisplayedDatetime: (value) => {
+        const next =
+          typeof value === "function" ? value(simulationClock.getNow()) : value;
+        // Delegate to the clock so authoritative simulation time moves
+        // too. `seek()` fires a UI tick synchronously, which the bridge
+        // mirrors into `displayedDatetime`. The `set()` fallback below
+        // covers the edge case where the bridge is disabled (tests /
+        // HMR teardown).
+        simulationClock.seek(next);
+        set({ displayedDatetime: next });
+      },
+      setSpeed: (speed) => set({ speed }),
+      setIsPlaying: (isPlaying) => set({ isPlaying }),
+      setSelectedId: (selectedId) => set({ selectedId }),
+      selectId: (selectedId) =>
+        set((state) => {
+          if (selectedId === state.focusId) {
+            return { selectedId, focusId: selectedId };
+          }
+
+          const focusHistory = [...state.focusHistory];
+          if (state.focusId && state.focusId !== selectedId) {
+            const last = focusHistory[focusHistory.length - 1];
+            if (last !== state.focusId) focusHistory.push(state.focusId);
+          }
+
+          return { selectedId, focusId: selectedId, focusHistory };
+        }),
+      setFocusId: (focusId) => set({ focusId }),
+      setOverlayItems: (overlayItems) => set({ overlayItems }),
+      setViewportFraming: (viewportFraming) =>
+        set((state) =>
+          state.viewportFraming.signature === viewportFraming.signature &&
+          state.viewportFraming.viewportWidth ===
+            viewportFraming.viewportWidth &&
+          state.viewportFraming.viewportHeight ===
+            viewportFraming.viewportHeight
+            ? state
+            : { viewportFraming }
+        ),
+      toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
+      toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
+      toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
+      toggleDeclutterOrbits: () =>
+        set((state) => ({ declutterOrbits: !state.declutterOrbits })),
+      toggleEclipticGrid: () =>
+        set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
+      toggleProgradeVector: () =>
+        set((state) => ({ showProgradeVector: !state.showProgradeVector })),
+      toggleShowStarfield: () =>
+        set((state) => ({ showStarfield: !state.showStarfield })),
+      setStarfieldSource: (starfieldSource) =>
+        set((state) =>
+          state.starfieldSource === starfieldSource
+            ? state
+            : { starfieldSource }
+        ),
+      setHoveredStar: (hoveredStar) =>
+        set((state) =>
+          state.hoveredStar === hoveredStar ? state : { hoveredStar }
+        ),
+      setStarfieldProviderState: (source, nextState) =>
+        set((state) => {
+          const currentState = state.starfieldProviderStates[source];
+          const mergedState = {
+            ...currentState,
+            ...nextState,
+          };
+
+          if (
+            currentState.status === mergedState.status &&
+            currentState.error === mergedState.error
+          ) {
+            return state;
+          }
+
+          return {
+            starfieldProviderStates: {
+              ...state.starfieldProviderStates,
+              [source]: mergedState,
+            },
+          };
+        }),
+      toggleStarfieldImplementation: () =>
+        set((state) => ({
+          starfieldSource: state.starfieldSource === "nasa" ? "hyg" : "nasa",
+        })),
+      toggleCredits: () =>
+        set((state) => ({ showCredits: !state.showCredits })),
+      focusHome: () =>
+        set((state) => {
+          const focusHistory = [...state.focusHistory];
+          if (state.focusId && state.focusId !== "sun") {
+            const last = focusHistory[focusHistory.length - 1];
+            if (last !== state.focusId) focusHistory.push(state.focusId);
+          }
+          return { focusId: "sun", selectedId: null, focusHistory };
+        }),
+      focusBack: () =>
+        set((state) => {
+          if (state.focusHistory.length === 0) return {};
+          const focusHistory = [...state.focusHistory];
+          const prev = focusHistory.pop() ?? null;
+          if (!prev) return { focusHistory };
+          return { focusId: prev, selectedId: prev, focusHistory };
+        }),
+      toggleScaleMode: () =>
+        set((state) => ({
+          scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
+        })),
+      // Persistence of `qualityMode`, `sunRenderMode`, and
+      // `tutorialCompletionStatus` is handled entirely by the persist
+      // middleware below — these setters no longer write to
+      // localStorage directly.
+      setQualityMode: (qualityMode) =>
+        set((state) =>
+          state.qualityMode === qualityMode ? state : { qualityMode }
+        ),
+      setSunRenderMode: (sunRenderMode) =>
+        set((state) =>
+          state.sunRenderMode === sunRenderMode ? state : { sunRenderMode }
+        ),
+      setVisualPreset: (visualPreset) => set({ visualPreset }),
+      toggleAutoPreset: () =>
+        set((state) => ({ autoPresetEnabled: !state.autoPresetEnabled })),
+      toggleVisibility: (category) =>
+        set((state) => ({
+          visibility: {
+            ...state.visibility,
+            [category]: !state.visibility[category],
+          },
+        })),
+      closeTutorial: (status = "completed") =>
+        set({ showTutorial: false, tutorialCompletionStatus: status }),
+      completeTutorial: () =>
+        set({
+          showTutorial: false,
+          tutorialCompletionStatus: "completed",
+          selectedId: null,
+          focusId: null,
+        }),
+      openTutorial: () => set({ showTutorial: true, tutorialStep: 0 }),
+      reopenTutorial: () =>
+        set({
+          showTutorial: true,
+          tutorialStep: 0,
+          tutorialCompletionStatus: null,
+          hasPlayedIntroAnimation: false, // Triggers intro animation to replay
+        }),
+      setTutorialStep: (step) => set({ tutorialStep: step }),
+      setCriticalAssetsReady: (ready) =>
+        set((state) =>
+          state.criticalAssetsReady === ready
+            ? state
+            : { criticalAssetsReady: ready }
+        ),
+      setSceneReady: (ready) =>
+        set((state) =>
+          state.isSceneReady === ready ? state : { isSceneReady: ready }
+        ),
+      setLoaderHidden: (hidden) =>
+        set((state) =>
+          state.isLoaderHidden === hidden ? state : { isLoaderHidden: hidden }
+        ),
+      setHasPlayedIntroAnimation: (played) =>
+        set((state) =>
+          state.hasPlayedIntroAnimation === played
+            ? state
+            : { hasPlayedIntroAnimation: played }
+        ),
+      setIsIntroAnimating: (animating) =>
+        set((state) =>
+          state.isIntroAnimating === animating
+            ? state
+            : { isIntroAnimating: animating }
+        ),
+      debugMode: false,
+      toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
     }),
-  setTutorialStep: (step) => set({ tutorialStep: step }),
-  setCriticalAssetsReady: (ready) =>
-    set((state) =>
-      state.criticalAssetsReady === ready
-        ? state
-        : { criticalAssetsReady: ready }
-    ),
-  setSceneReady: (ready) =>
-    set((state) =>
-      state.isSceneReady === ready ? state : { isSceneReady: ready }
-    ),
-  setLoaderHidden: (hidden) =>
-    set((state) =>
-      state.isLoaderHidden === hidden ? state : { isLoaderHidden: hidden }
-    ),
-  setHasPlayedIntroAnimation: (played) =>
-    set((state) =>
-      state.hasPlayedIntroAnimation === played
-        ? state
-        : { hasPlayedIntroAnimation: played }
-    ),
-  setIsIntroAnimating: (animating) =>
-    set((state) =>
-      state.isIntroAnimating === animating
-        ? state
-        : { isIntroAnimating: animating }
-    ),
-  debugMode: false,
-  toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
-}));
+    {
+      name: PERSIST_KEY,
+      version: PERSIST_VERSION,
+      // In SSR / node-vitest there is no `localStorage`; pass
+      // `undefined` straight through so the persist middleware
+      // degrades to in-memory only instead of crashing on
+      // `getItem`/`setItem` against a null storage.
+      storage:
+        typeof localStorage === "undefined"
+          ? undefined
+          : createJSONStorage(() => localStorage),
+      partialize: (state): PersistedSlice => ({
+        qualityMode: state.qualityMode,
+        sunRenderMode: state.sunRenderMode,
+        tutorialCompletionStatus: state.tutorialCompletionStatus,
+      }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.warn("[store] persist rehydrate error:", error);
+          return;
+        }
+        if (!state) return;
+        // `showTutorial` is derived, not persisted. A returning user
+        // (non-null completion status) should NOT see the tutorial
+        // overlay on boot; a brand-new user (null status) should.
+        state.showTutorial = state.tutorialCompletionStatus === null;
+      },
+    }
+  )
+);
 
 // ─── simulationClock ↔ store bridge ─────────────────────────────────────────
 // The clock owns the passage of simulated time. The store owns the UI-facing

@@ -402,6 +402,77 @@ Não precisei adicionar L20 — o conteúdo prático está em L18 (tick
 decoupling) e L19 (hot-path hygiene). A medição confirma que o padrão
 das ondas anteriores foi suficiente.
 
+Shipped em `11a7c96`, seguido por follow-up Codex `aa6144c` (split
+de `getCacheStats()` + correção da narrativa `size` + 8 unit tests
+novos em `engine.test.ts`).
+
+#### Onda 4 — Higiene Zustand + persist (done, 2026-04-18)
+
+- [x] **4.1 — `useStore()` sem seletor:** grep com padrão
+      `useStore\s*\(\s*\)` retorna **zero** matches em código
+      runtime (única ocorrência é um comentário em `PlanetOverlay.tsx`
+      explicando por que NÃO usamos mais esse padrão). O anti-pattern
+      foi extinto junto com a Onda 2.
+- [x] **4.2 — Middleware de persistência:** migrado `src/store.ts`
+      para `create<AppState>()(persist(...))` da Zustand 5.
+  - Três chaves antigas (`qualityMode`, `sunRenderMode`,
+    `tutorialStatus`) + uma chave morta já purgada
+    (`hasSeenTutorial`) consolidadas na chave unificada
+    `atlas-orbital-store` com envelope `{ state, version: 0 }`.
+  - `partialize` serializa apenas os 3 campos que realmente
+    precisam persistir (`qualityMode`, `sunRenderMode`,
+    `tutorialCompletionStatus`) — resto é efêmero por sessão.
+  - `onRehydrateStorage` deriva `showTutorial` de
+    `tutorialCompletionStatus` (null → mostra pra novo usuário;
+    não-null → não mostra pra quem já viu). Substitui a leitura
+    inline de `localStorage.getItem("tutorialStatus")` que o
+    initial state fazia antes.
+  - `setQualityMode` / `setSunRenderMode` / `closeTutorial` /
+    `completeTutorial` deixaram de chamar `localStorage.setItem`
+    direto — persist escuta mudanças do store e sincroniza
+    sozinho.
+  - Migração one-shot: `migrateLegacyStorage()` roda no top-level
+    ANTES de `create(...)`. Se encontra chaves antigas + não
+    encontra a nova, sintetiza o envelope unificado. Legacy keys
+    ficam intocadas (belt & suspenders para eventual rollback).
+  - Storage guard: quando `localStorage` é indefinido (SSR, vitest
+    environment `node`), persist recebe `storage: undefined` e
+    opera em memória — `createJSONStorage(() => localStorage)`
+    sem guard crashava no `getItem`.
+- [x] **4.2b — `store.test.ts`:** três assertions que verificavam
+      keys legadas (`localStorageMock.getItem("sunRenderMode")`
+      etc.) removidas. Persist middleware é código de terceiros
+      bem testado — nosso contrato é o state em si, que já é
+      verificado.
+- [x] **4.3 — `useShallow`:** grep por seletores retornando objeto
+      ou array composto (`useStore((s) => ({...}))`,
+      `useStore((s) => [...])`) retorna **zero** matches. Todos
+      os ~118 call sites passam seletores escalares (`(s) => s.foo`).
+      `useShallow` não tem aplicação prática nesta base de código —
+      foi descartado do escopo desta onda por AGENTS.md #16
+      (racionalização: não adicionar complexidade sem ganho).
+
+**Verificação Onda 4:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 327/327 (sem novos testes; rename/remove
+  de 3 assertions compensado pela cobertura de estado que já
+  existia).
+- `npm run build`: ✅ 9,18 s, sem erros.
+- Preview smoke com usuário pré-existente (tinha `qualityMode=ultra`
+  - `tutorialStatus=completed` na localStorage antiga): após a
+    migração, `atlas-orbital-store` contém
+    `{ state: { qualityMode: "ultra", sunRenderMode: "auto",
+tutorialCompletionStatus: "completed" }, version: 0 }` e o state
+    runtime reflete. Tutorial não abre. Legacy keys permanecem
+    intocadas.
+- Round-trip: toggle `sunRenderMode` "auto" → "procedural" via UI
+  grava imediatamente no envelope persist (`{ ..., sunRenderMode:
+"procedural", ... }`). Funciona sem tocar em nenhum código de
+  setter custom.
+
+**Arquivos tocados (Onda 4):** 2: `src/store.ts`, `src/store.test.ts`.
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
