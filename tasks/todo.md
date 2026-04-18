@@ -747,6 +747,20 @@ e acoplados à JSX tree do Scene (AGENTS.md #16 racionalização).
   stable-identity `useMemo`s). Trade aceitável: dois arquivos
   gigantes com responsabilidades múltiplas viraram 11 módulos focados.
 
+**Codex review (`ac5976f`): aprovado sem findings.** Codex verificou
+por leitura contra o parent commit + ran `npm run build` e
+`npm run test:run` (35 files / 358 tests). Invariants confirmados:
+scratch state módulo-level, `simulationClock.getNow()` no useFrame,
+`orbitPoints` invalidando via `orbitDateBucket` (não
+`displayedDatetime`), gate `constrained` do PostProcessing, sceneRef
+indirection para `environmentIntensity`, `forwardRef` expondo Three
+objects mutáveis ao parent useFrame, hooks retornando identidades
+memoizadas. Zero cleanup/dispose gap introduzido, zero regressão de
+dep array. Residual risk flagado: validação interativa de
+preset-toggling e churn de GPU de longa duração não foi exercida pelo
+Codex — nosso smoke preview (Sun/overview/Saturno/Earth) cobriu parte,
+mas o stress-test completo fica para a Onda 7 (Playwright reproduzível).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
