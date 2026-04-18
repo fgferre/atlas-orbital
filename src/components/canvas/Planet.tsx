@@ -1442,7 +1442,19 @@ export const Planet = ({
     [body, displayedDatetime]
   );
 
-  // Orbit points with adaptive resolution
+  // `displayedDatetime` is used inside the memo (passed to
+  // `getOrbitalDisplayOrbitPoints`) but intentionally NOT listed in
+  // the dep array. Invalidation is gated by `orbitDateBucket`, which
+  // is itself derived from `displayedDatetime` and only flips when we
+  // cross a per-body bucket (hours to a month depending on orbital
+  // period). Within a bucket the polyline is topologically identical
+  // — we sweep an osculating ellipse at the bucket epoch — so feeding
+  // a slightly-stale Date is safe, and the ORBIT_POINTS_CACHE keyed
+  // on bucket guarantees we never actually observe the difference.
+  // Before Onda 1 this extra dep caused the memo to invalidate at
+  // ~60 Hz per body (2 700 invalidations/s across the catalogue) via
+  // the per-frame `datetime` write; now that write is gone and the
+  // dep list narrows to the real invalidators.
   const orbitPoints = useMemo(() => {
     if (body.type === "star") return null;
     if (declutterOrbits && orbitSalience <= 0) return null;
@@ -1479,10 +1491,10 @@ export const Planet = ({
     }
     ORBIT_POINTS_CACHE.set(cacheKey, pts);
     return pts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     body,
     declutterOrbits,
-    displayedDatetime,
     orbitSalience,
     orbitDateBucket,
     parentBody,

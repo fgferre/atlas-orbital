@@ -43,6 +43,17 @@ export class OrbitalEngine {
   private positionCache: Map<string, PositionCacheEntry> = new Map();
   private config: OrbitalEngineConfig;
 
+  // Cache instrumentation. `cacheHits` + `cacheMisses` sum to every
+  // cacheable `calculatePosition` call (i.e. everything that isn't the
+  // Sun special case). Sun calls are counted separately in
+  // `cacheBypassed` since they never touch the cache. `resetCacheStats`
+  // is expected to be called by a debug reporter once per measurement
+  // window so the numbers reflect a known time slice rather than
+  // session-cumulative totals.
+  private cacheHits = 0;
+  private cacheMisses = 0;
+  private cacheBypassed = 0;
+
   constructor(config: Partial<OrbitalEngineConfig> = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...config };
 
@@ -135,6 +146,7 @@ export class OrbitalEngine {
   ): OrbitalPositionResult {
     // Special case: Sun is the center of the system
     if (bodyId === "sun") {
+      this.cacheBypassed++;
       return {
         position: new THREE.Vector3(0, 0, 0),
         distanceAU: 0,
@@ -155,9 +167,11 @@ export class OrbitalEngine {
       if (cached) {
         const age = Date.now() - cached.timestamp;
         if (age < this.config.cacheTtlMs) {
+          this.cacheHits++;
           return cached.result;
         }
       }
+      this.cacheMisses++;
     }
 
     // Select provider
@@ -303,10 +317,27 @@ export class OrbitalEngine {
   }
 
   /**
-   * Get cache statistics
+   * Reset the hit/miss counters without touching cache contents. Call
+   * this at the start of each measurement window so reported rates
+   * reflect the last window, not session-cumulative totals.
+   */
+  resetCacheStats(): void {
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+    this.cacheBypassed = 0;
+  }
+
+  /**
+   * Get cache statistics. `hitRate` is computed over cacheable calls
+   * only (bypassed calls, currently just the Sun special case, are
+   * counted separately in `bypassed`).
    */
   getCacheStats(): {
     size: number;
+    hits: number;
+    misses: number;
+    bypassed: number;
+    hitRate: number;
     entries: Array<{ key: string; age: number }>;
   } {
     const now = Date.now();
@@ -316,9 +347,15 @@ export class OrbitalEngine {
         age: now - entry.timestamp,
       })
     );
+    const totalCacheable = this.cacheHits + this.cacheMisses;
+    const hitRate = totalCacheable === 0 ? 0 : this.cacheHits / totalCacheable;
 
     return {
       size: this.positionCache.size,
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      bypassed: this.cacheBypassed,
+      hitRate,
       entries,
     };
   }

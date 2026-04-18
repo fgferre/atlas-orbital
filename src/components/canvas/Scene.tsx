@@ -37,6 +37,7 @@ import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
+import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
@@ -810,6 +811,7 @@ export const Scene = () => {
         <SceneReadyChecker />
       </Canvas>
       <PlanetOverlay />
+      <OrbitalEngineDebugReporter />
     </>
   );
 };

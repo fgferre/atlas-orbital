@@ -335,6 +335,65 @@ Lição L19 adicionada a `tasks/lessons.md` (hygiene do hot path em
 useFrame: cache de getObjectByName, scratch vectors module-level,
 fingerprint em pixel para evitar setOverlayItems redundante).
 
+Shipped em `bb1bf2a`, seguido por follow-up Codex `ce9d88a` (ring
+scratch vectors + a11y tab stops).
+
+#### Onda 3 — Cache orbital: medir antes de mexer (done, 2026-04-18)
+
+Plano mandava instrumentar o cache existente no `orbitalEngine`
+(engine.ts:30, bucket ~0,864 s, TTL 1 s) e decidir com base em dados
+se precisava de mais fix. Com Ondas 1/2 drenadas, a hipótese era que
+o cache já estaria performando bem.
+
+- [x] **3.1** — `src/lib/orbital/engine.ts`: adicionados counters
+      privados `cacheHits`, `cacheMisses`, `cacheBypassed` (este
+      último para o special case do Sol, que pula o cache).
+      `getCacheStats()` estendido com `hits`, `misses`, `bypassed`,
+      `hitRate` além do `size`/`entries` já existente.
+      `resetCacheStats()` novo para janelas de medição.
+- [x] **3.1b** — Novo `src/components/canvas/OrbitalEngineDebugReporter.tsx`
+      montado como sibling de `PlanetOverlay` fora do Canvas. Enquanto
+      `debugMode === true`, loga stats a cada 1 s + reset para refletir
+      a janela.
+- [x] **3.2** — Medição ao vivo em preview (4 amostras consecutivas
+      em live-play idle, câmera parada):
+  - Antes do 3.4: `hitRate=98.1% (hits=2288 miss=44 bypass=61) size=1628`.
+  - Depois do 3.4: `hitRate=98.3% (hits=2552 miss=44 bypass=67) size=880`.
+  - Overlay continua em `0 emit / 54 frames / 1s` (Onda 2 ainda vale).
+- [x] **3.3** — **NÃO ship**. Codex #1 já previa: criar um cache
+      paralelo seria duplicação. A medição confirma — ~44 misses/s é
+      exatamente 1 miss por bucket transition por corpo, esperado do
+      bucket 0,864 s. As Ondas 1/2 já entregaram o ganho estrutural.
+- [x] **3.4** — `Planet.tsx:1446-1499`: removido `displayedDatetime`
+      do dep array do `orbitPoints` useMemo. `orbitDateBucket` já é a
+      chave real — dentro de um bucket a polilinha é topologicamente
+      idêntica (sweep de elipse osculante no epoch do bucket).
+      `displayedDatetime` continua passando para
+      `getOrbitalDisplayOrbitPoints`, mas só em cache-miss (bucket
+      cruzando). Comment block explica a intenção +
+      `eslint-disable-next-line` direcionado ao array de deps. Hit rate
+      subiu 98.1 → 98.3%, `size` caiu de 1628 → 880 porque a memo não
+      empurra mais entries a cada 4 Hz.
+
+**Verificação Onda 3:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 319/319.
+- `npm run build`: ✅ 9,86 s.
+- Preview manual: zero console errors, órbitas visualmente idênticas.
+  Reporter emite linhas consistentes.
+
+**Arquivos tocados (Onda 3):** 4:
+
+- novo: `src/components/canvas/OrbitalEngineDebugReporter.tsx`
+- modificado: `src/lib/orbital/engine.ts`,
+  `src/components/canvas/Planet.tsx`,
+  `src/components/canvas/Scene.tsx` (import + mount do reporter).
+
+Não precisei adicionar L20 — o conteúdo prático está em L18 (tick
+decoupling) e L19 (hot-path hygiene). A medição confirma que o padrão
+das ondas anteriores foi suficiente.
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
