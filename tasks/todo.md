@@ -256,6 +256,85 @@ pelo estado alvo (ambos são idempotentes). Teste de regressão
 Lição L18 adicionada a `tasks/lessons.md` (tick de simulação não deve
 viver em Zustand quando tem consumidores hot-path em React).
 
+Shipped em `207aaa2`, seguido por follow-up Codex `c63c74f` (setter
+contract + HMR dispose).
+
+#### Onda 2 — Hot path overlay + câmera (done, 2026-04-18)
+
+Com Onda 1 drenada da fonte (datetime não sai mais do clock por frame),
+restaram três focos de custo por frame: `scene.getObjectByName` em
+loops, alocação de `Vector3` por corpo por frame, e `setOverlayItems`
+sendo chamado mesmo quando nada mudava em pixels inteiros — que forçava
+re-render de `PlanetOverlay` + subtree.
+
+- [x] **2.1** — `OverlayPositionTracker.tsx`:
+  - Cache module-level `meshCache: Map<string, Object3D>` para
+    `scene.getObjectByName(body.id)`. Invalida lazily quando
+    `mesh.parent === null` (unmount). Scene traversal passa a ser uma
+    vez por corpo por sessão, não 60 × N por segundo.
+  - `TMP_WORLD` module-level substitui `new THREE.Vector3()` por corpo
+    por frame. Uma alocação por sessão em vez de N × 60 / s.
+  - Remove `worldPos.clone()`: projeção reusa `TMP_WORLD` (após
+    `.project(camera)` o vetor vira NDC; leitura acontece
+    síncrona no mesmo passo).
+  - **Fingerprint por pixel inteiro**: monta string
+    `id|x|0|y|0|showLabel|showIcon;` para cada overlay e só chama
+    `setOverlayItems(finalOverlays)` quando o fingerprint muda em
+    relação ao último emitido. Sub-pixel jitter (focus tracker,
+    drift lento) não dispara mais re-render do `PlanetOverlay`.
+- [x] **2.2** — `PlanetOverlay.tsx`:
+  - Substituído `const { overlayItems, showLabels, showIcons, selectId }
+= useStore();` por 4 seletores específicos. O padrão sem
+    argumento subscrevia o componente a toda mutação do store —
+    datetime, hover, tutorial, focus — e re-renderizava mesmo quando
+    nada do que o componente consome mudava.
+  - Wrap em `React.memo` com `displayName`. Combinado com 2.1, o
+    subtree HTML só re-renderiza quando a lista muda em pixel.
+  - **A11y**: `<div onClick>` → `<button type="button">` em ícone e
+    rótulo. Adicionados `aria-label="Focus <name>"`, classes
+    `focus-visible:outline-*` para indicador de foco visível,
+    `bg-transparent` + `border-0` + `p-0` para preservar o visual
+    original. Navegação via Tab + Enter/Espaço agora funciona
+    — alinha com o resto da UI (SearchBar, LayersPanel, dialogs).
+- [x] **2.3** — `CameraController.tsx`:
+  - `TMP_WORLD_POS` e `TMP_PREV_TARGET` module-level no lugar de
+    `new THREE.Vector3()` e `controlsInstance.target.clone()` por
+    frame.
+  - `focusMeshRef` populado por `useEffect([focusId, scene])`.
+    `useFrame` lê do ref; se `parent === null` (HMR/hot-swap),
+    re-resolve on the fly. `scene.getObjectByName(focusId)` sai do
+    caminho quente.
+  - `resolveFocusTrackingFrame` ainda faz `.clone()` internamente
+    — otimização dessa função fica para Onda 6 (decomposição do
+    controls lib).
+- [x] **2.4** — Contador em `debugMode`:
+  - `OverlayPositionTracker` loga a cada segundo `setOverlayItems:
+N emit / M frames / 1s` quando `debugMode === true`. Útil para
+    validar o ganho em navegação futura sem instrumentar por fora.
+
+**Verificação Onda 2:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 319/319 (sem novos testes — Onda 2 é refactor
+  de paths já exercitados).
+- `npm run build`: ✅ 12,45 s; tamanho de bundle inalterado.
+- Preview smoke: app boota, canvas dimensiona, zero console errors.
+  Observer de mutações no container do `PlanetOverlay` conta
+  **0 mutações em 3 s** com câmera parada. Antes: até 60 × N mutações
+  por frame (cada `setOverlayItems` fazia `PlanetOverlay` re-renderizar
+  completo, mesmo subpixel). Ganho observável > 99 % em idle.
+- A11y: botões navegáveis por Tab, indicador de foco visível quando
+  focado via teclado (`focus-visible`).
+
+**Arquivos tocados (Onda 2):** 3 arquivos:
+`src/components/canvas/OverlayPositionTracker.tsx`,
+`src/components/canvas/PlanetOverlay.tsx`,
+`src/components/canvas/CameraController.tsx`.
+
+Lição L19 adicionada a `tasks/lessons.md` (hygiene do hot path em
+useFrame: cache de getObjectByName, scratch vectors module-level,
+fingerprint em pixel para evitar setOverlayItems redundante).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the

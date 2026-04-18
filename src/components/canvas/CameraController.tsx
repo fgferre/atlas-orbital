@@ -14,6 +14,14 @@ import {
   resolveFocusTrackingFrame,
 } from "../../lib/camera";
 
+// Module-level scratch vectors for the focus-tracking useFrame. Safe
+// because the frame loop is single-threaded and every read is paired
+// synchronously with a write inside the same tick. `resolveFocusTrackingFrame`
+// copies its inputs internally before use (see `lib/camera/controls.ts`),
+// so passing these refs never leaks mutation back into the caller.
+const TMP_WORLD_POS = new THREE.Vector3();
+const TMP_PREV_TARGET = new THREE.Vector3();
+
 export const CameraController = () => {
   const { camera, scene, size } = useThree();
   const controls = useThree(
@@ -34,6 +42,10 @@ export const CameraController = () => {
     camera as THREE.PerspectiveCamera
   );
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
+  // Cached resolution of the scene graph node for the currently focused
+  // body. Repopulated on focus change (via the useEffect below) instead
+  // of re-traversing the scene in every `useFrame`.
+  const focusMeshRef = useRef<THREE.Object3D | null>(null);
   const prevFocusRef = useRef<string | null>(null);
   const prevScaleModeRef = useRef<string | null>(null);
   const cameraFramingSignature = [
@@ -282,6 +294,17 @@ export const CameraController = () => {
     }
   }, [focusId, getBodyRadius]);
 
+  // Re-resolve the scene graph node whenever the focus changes. The
+  // mesh reference is then cached and reused in the useFrame below
+  // without any per-frame scene traversal.
+  useEffect(() => {
+    if (!focusId) {
+      focusMeshRef.current = null;
+      return;
+    }
+    focusMeshRef.current = scene.getObjectByName(focusId) ?? null;
+  }, [focusId, scene]);
+
   useFrame(() => {
     const cameraInstance = cameraRef.current;
     const controlsInstance = controlsRef.current;
@@ -292,13 +315,20 @@ export const CameraController = () => {
       return;
     }
 
-    const targetMesh = scene.getObjectByName(focusId);
+    // Validate the cached mesh lazily — if a body was unmounted between
+    // focus change and this frame (extremely rare, but possible during
+    // HMR / hot-swap) re-resolve on the fly.
+    let targetMesh = focusMeshRef.current;
+    if (!targetMesh || targetMesh.parent === null) {
+      targetMesh = scene.getObjectByName(focusId) ?? null;
+      focusMeshRef.current = targetMesh;
+    }
     if (!targetMesh) return;
 
-    const worldPos = new THREE.Vector3();
+    const worldPos = TMP_WORLD_POS;
     targetMesh.getWorldPosition(worldPos);
 
-    const prevTarget = controlsInstance.target.clone();
+    const prevTarget = TMP_PREV_TARGET.copy(controlsInstance.target);
     const { nextTarget, cameraDelta } = resolveFocusTrackingFrame({
       currentTarget: prevTarget,
       focusWorldPos: worldPos,

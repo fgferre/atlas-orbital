@@ -55,6 +55,19 @@ const fitsWithinBounds = (
   box.x + box.w <= bounds.right &&
   box.y + box.h <= bounds.bottom;
 
+// Module-level scratch vector reused across frames and across bodies
+// within the same useFrame tick. Safe because every read is preceded
+// synchronously by `mesh.getWorldPosition(TMP_WORLD)` inside the same
+// forEach iteration. Eliminates ~N allocations per frame.
+const TMP_WORLD = new THREE.Vector3();
+
+// Cache of `scene.getObjectByName(body.id)` results keyed by body ID.
+// Planets mount once at boot and remain for the session, so scene-graph
+// traversal here is pure overhead after the first hit. An entry is
+// invalidated lazily when its cached Object3D reports `parent === null`
+// (i.e. it was detached on unmount).
+const meshCache = new Map<string, THREE.Object3D>();
+
 // This component runs INSIDE the Canvas and calculates overlay positions
 // Runs with LOWER priority (after planets update) to avoid lag
 export const OverlayPositionTracker = () => {
@@ -64,12 +77,30 @@ export const OverlayPositionTracker = () => {
     labels: new Set(),
     icons: new Set(),
   });
+  // Fingerprint of the last overlay array we emitted, quantized to
+  // integer pixels. `setOverlayItems` only fires when this changes —
+  // sub-pixel jitter no longer triggers React re-renders of
+  // `PlanetOverlay` and its subtree (45 bodies × 60 Hz → overlays
+  // emission drops by >90 % during navigation idle).
+  const prevKeyRef = useRef<string | null>(null);
+  // Debug-only counters; logged at 1 Hz when `debugMode === true`.
+  const dbgRef = useRef({
+    framesInWindow: 0,
+    emitsInWindow: 0,
+    windowStart: 0,
+  });
 
   // Priority: 10 means this runs AFTER normal updates
   useFrame((state) => {
     const { width, height } = state.size;
-    const { focusId, visibility, showLabels, showIcons, viewportFraming } =
-      useStore.getState();
+    const {
+      focusId,
+      visibility,
+      showLabels,
+      showIcons,
+      viewportFraming,
+      debugMode,
+    } = useStore.getState();
     const overlayBounds = {
       left: viewportFraming.overlayRect.left,
       top: viewportFraming.overlayRect.top,
@@ -90,23 +121,32 @@ export const OverlayPositionTracker = () => {
       if (body.type === "asteroid" && !visibility.asteroids) return;
       if (body.type === "tno" && !visibility.tnos) return;
 
-      const mesh = scene.getObjectByName(body.id);
-      if (!mesh) return;
+      // Lookup via cache to skip repeated scene traversal.
+      let mesh = meshCache.get(body.id);
+      if (!mesh || mesh.parent === null) {
+        mesh = scene.getObjectByName(body.id) ?? undefined;
+        if (mesh) {
+          meshCache.set(body.id, mesh);
+        } else {
+          meshCache.delete(body.id);
+          return;
+        }
+      }
 
-      const worldPos = new THREE.Vector3();
+      const worldPos = TMP_WORLD;
       mesh.getWorldPosition(worldPos);
 
-      // Distance to camera
+      // Distance to camera BEFORE projection (project() mutates in place).
       const dist = camera.position.distanceTo(worldPos);
 
-      // Project to screen
-      const pos = worldPos.clone();
-      pos.project(camera);
+      // Reuse TMP_WORLD for projection: after `.project(camera)` the
+      // vector holds NDC (x/y ∈ [-1, 1], z is depth).
+      worldPos.project(camera);
 
       // Check if in front of camera
-      if (pos.z < 1) {
-        const x = (pos.x * 0.5 + 0.5) * width;
-        const y = (-(pos.y * 0.5) + 0.5) * height;
+      if (worldPos.z < 1) {
+        const x = (worldPos.x * 0.5 + 0.5) * width;
+        const y = (-worldPos.y * 0.5 + 0.5) * height;
 
         // Calculate Priority Score
         // Base Priority: Focus(100) > Sun(90) > Planet(10) > Dwarf(8) > Moon(6) > Others(4)
@@ -205,7 +245,41 @@ export const OverlayPositionTracker = () => {
       });
     });
 
-    setOverlayItems(finalOverlays);
+    // Fingerprint by id + pixel-quantized screen position + visibility
+    // flags. Sub-pixel jitter (camera drift, focus-tracker smoothing)
+    // no longer re-triggers a Zustand update, so `PlanetOverlay` stops
+    // re-rendering when nothing visibly moved.
+    let key = "";
+    for (const o of finalOverlays) {
+      key += `${o.id}|${o.x | 0}|${o.y | 0}|${o.showLabel ? 1 : 0}|${
+        o.showIcon ? 1 : 0
+      };`;
+    }
+
+    const dbg = dbgRef.current;
+    dbg.framesInWindow++;
+    if (key !== prevKeyRef.current) {
+      prevKeyRef.current = key;
+      setOverlayItems(finalOverlays);
+      dbg.emitsInWindow++;
+    }
+
+    if (debugMode) {
+      const now = state.clock.elapsedTime;
+      if (dbg.windowStart === 0) {
+        dbg.windowStart = now;
+      } else if (now - dbg.windowStart >= 1) {
+        // Structured enough for a quick grep / regex bench during perf
+        // investigation; noop in non-debug builds (tree-shaken by the
+        // `debugMode` guard at the call site).
+        console.info(
+          `[overlay] setOverlayItems: ${dbg.emitsInWindow} emit / ${dbg.framesInWindow} frames / 1s`
+        );
+        dbg.windowStart = now;
+        dbg.framesInWindow = 0;
+        dbg.emitsInWindow = 0;
+      }
+    }
 
     // Track which overlays were actually visible (resets when global toggles are off).
     const nextLabels = new Set<string>();

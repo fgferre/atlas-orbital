@@ -509,3 +509,65 @@ emits a UI tick (boot parity)` regression test.
 `getNow`, `onUiTick`, `setIsPlaying`, `syncFromState`, `advanceForTest`)
 and the bridge block at the bottom of `src/store.ts`. 11 unit tests in
 `src/lib/simulationClock.test.ts`.
+
+### L19. Overlay hot-path hygiene — three compounding wins
+
+**Context:** After L18 drained the simulation-tick re-render cascade,
+profiling the overlay subsystem still showed a steady cost per frame.
+Three independent items were eating CPU and triggering redundant React
+work inside `OverlayPositionTracker.tsx` (and its consumer
+`PlanetOverlay.tsx`):
+
+1. **Scene traversal every frame.** `scene.getObjectByName(body.id)`
+   walks the Three.js scene graph looking for a matching `.name`. For
+   each of ~45 bodies × 60 FPS = 2 700 traversals per second. Planets
+   mount once and stay for the session — the lookup result doesn't
+   change between renders unless a body unmounts.
+2. **Vector3 allocation per body per frame.** `new THREE.Vector3()` on
+   line 96 (world position) and `worldPos.clone()` on line 103 (before
+   `.project(camera)` which mutates in place) gave ~90 allocations per
+   frame → ~5 400/s of GC pressure for values that live one iteration.
+3. **Unconditional `setOverlayItems`.** Even when the pixel-quantized
+   screen positions hadn't changed (camera idle, tracker smoothing
+   still emitting nanometer-level drift), the Zustand setter fired and
+   `PlanetOverlay` — which was ALSO subscribed via `useStore()` without
+   a selector (see L19c below) — re-rendered its entire HTML subtree.
+
+**Rules:**
+
+- **(L19a) Cache scene-graph lookups across frames.** Module-level
+  `Map<bodyId, Object3D>` populated on first hit, invalidated lazily
+  when the cached entry reports `parent === null`. Same shape works
+  for singular lookups (CameraController's focus mesh, populated by a
+  `useEffect([focusId])`).
+- **(L19b) Scratch vectors at module scope, not per-frame `new`.** One
+  `TMP_WORLD` reused across bodies in the same `useFrame` tick is
+  safe because React-Three-Fiber serializes frame callbacks and each
+  body reads synchronously in the iteration it wrote. If the code
+  wants a projected copy, prefer reusing the same vector —
+  `TMP_WORLD.project(camera)` turns it into NDC in place instead of
+  calling `.clone()`.
+- **(L19c) Don't emit store updates when the observable output is
+  unchanged.** Build a compact fingerprint (id + pixel-quantized x/y +
+  visibility flags) and only call the setter when the key differs
+  from the last emitted one. Cheap key generation amortizes the
+  deeper React reconciliation cost, and combined with `React.memo` on
+  the downstream HTML component the subtree stays quiet while the
+  user hasn't moved.
+
+**Tooling corollary:** `useStore()` with no selector subscribes the
+component to EVERY store mutation. This is never what you want in a
+render-heavy subtree — always pass a selector (`useStore((s) => s.x)`)
+or use `useShallow`. `PlanetOverlay.tsx:5` was this exact anti-pattern
+before the fix; combined with `setOverlayItems` firing every frame, it
+meant the HTML overlay re-rendered at 60 Hz whenever anything in the
+store moved, which was always.
+
+**Code marker:**
+`src/components/canvas/OverlayPositionTracker.tsx` — `meshCache`,
+`TMP_WORLD`, `prevKeyRef`, and the pixel-quantized fingerprint loop.
+`src/components/canvas/PlanetOverlay.tsx` — specific selectors +
+`memo`.
+`src/components/canvas/CameraController.tsx` — `focusMeshRef` +
+`TMP_WORLD_POS` + `TMP_PREV_TARGET`. Verified by a DOM `MutationObserver`
+on the overlay container reading zero mutations in 3 s of camera idle.
