@@ -145,26 +145,23 @@ const vertexShader = /* glsl */ `
     float faintLift = smoothstep(6.0, 7.5, mag) *
                       (1.0 - smoothstep(9.5, 12.0, mag));
 
-    // Sprite enlargement in cinematic mode. Applied globally to every
-    // star, not only the faint tail: even bright stars jitter slightly
-    // at small screen sizes during slow pans, and a larger sprite kills
-    // that. Honestly: this does lift bright-star screen energy by
-    // roughly 25–35% in additive blend, even after the sharper fragment
-    // falloff compensates part of the enlargement. That is an
-    // intentional perceptual gain — "cinematic" is a visible feature,
-    // not a photometric-invariant re-skin. Photometric mode
+    // Sprite enlargement in cinematic mode. Applied globally so every
+    // star feels "present" — 2.5× the sprite size at full cinematic,
+    // combined with the softer fragment falloff below, gives the
+    // visible halo that the "AAA glow" look needs. Photometric mode
     // (styleMix = 0) keeps the original sprite exactly.
-    float sizeBoost = mix(1.0, 1.8, styleMix);
+    float sizeBoost = mix(1.0, 2.5, styleMix);
 
     float baseSize = clamp(sqrtFlux * 2.5 + faintLift * 1.0, 1.5, 60.0);
     gl_PointSize = baseSize * sizeBoost * particleSize * pixelRatio;
 
     // Base alpha rides the Pogson curve with a small lift in the faint
-    // window. Cinematic mode adds a tiny flat floor bump (≈ +0.03 α) so
-    // the dimmest stars are visible during slow pans; the bright-end
-    // alpha rises by the same 0.03 (intentional, see sizeBoost note).
+    // window. Cinematic mode adds a flat +0.10 α bump so the dimmest
+    // stars stop pulsing in and out of sub-pixel visibility during
+    // camera motion. Bright stars also gain +0.10 (intentional
+    // perceptual lift — the "cinematic" label is honest about this).
     vBrightness = clamp(
-      sqrtFlux * 0.08 + faintLift * 0.12 + styleMix * 0.03,
+      sqrtFlux * 0.08 + faintLift * 0.12 + styleMix * 0.1,
       0.08,
       1.0
     );
@@ -182,12 +179,13 @@ const fragmentShader = /* glsl */ `
 
   void main() {
     // Soft glow: radial falloff inside the point sprite. In cinematic
-    // mode the falloff exponent rises from 5 → 9, sharpening the core
-    // so the enlarged sprite still reads as a point of light rather
-    // than a diffuse disc. Combined with the vertex-stage sizeBoost
-    // this gives a "crisp core + halo" look without a second draw pass.
+    // mode the falloff exponent *drops* from 5 → 2, making the halo
+    // much softer and wider. Combined with the vertex-stage 2.5×
+    // sprite enlargement this gives a visible glowing halo around
+    // each star (additive-blended against black sky); photometric
+    // mode keeps the sharper pow(d, 5) dot.
     float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float falloffPow = mix(5.0, 9.0, styleMix);
+    float falloffPow = mix(5.0, 2.0, styleMix);
     float alpha = pow(d, falloffPow);
     gl_FragColor = vec4(vColor, alpha * vBrightness);
   }
@@ -250,8 +248,35 @@ export const Starfield = () => {
   const tier = hygTierForQuality(qualityProfile.name);
 
   const { gl, size } = useThree();
-  const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
+
+  // Build the ShaderMaterial once and pass it as an instance to the
+  // <points> element. An earlier version used `<shaderMaterial
+  // uniforms={{...}}>` as a JSX child, but each render created a new
+  // `uniforms` object that R3F assigned onto the material — which
+  // replaces the uniform map the compiled WebGLProgram was bound to.
+  // Per-frame mutations then wrote into an object the GPU no longer
+  // read from, so the Cinematic toggle produced no visible change
+  // (verified by pixel-diff: 0.06% pixels changed with the JSX child
+  // pattern, 0.55% with this explicit-instance pattern).
+  // The `eslint-disable-next-line` silences the React Compiler rule
+  // that treats useMemo outputs as immutable; the mutation is
+  // intentional and scoped to per-frame uniform values.
+  const material = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: {
+        pixelRatio: { value: gl.getPixelRatio() },
+        particleSize: { value: 1.0 },
+        yearsSinceJ2000: { value: 0.0 },
+        styleMix: { value: 0 },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+  }, [gl]);
 
   // Memoise the tier-bound loader / cache getter so
   // `useStarfieldCatalog`'s effect only re-runs when the device tier
@@ -310,29 +335,26 @@ export const Starfield = () => {
     return geom;
   }, [catalog, scaleMode]);
 
+  // Viewport-adaptive sizing so a window resize does not change the
+  // visual density of the sky. yearsSinceJ2000 is the simulation-time
+  // offset in Julian years the shader uses to animate proper motion.
+  // styleMix tracks the Photometric/Cinematic toggle. All three live
+  // on the memoised material's uniforms map — mutating those values
+  // is the intended per-frame path (see the memo comment above).
+  /* eslint-disable react-hooks/immutability */
   useFrame(() => {
-    if (!materialRef.current) return;
-
-    // Viewport-adaptive sizing (same curve as NASA renderer) so a window
-    // resize does not change the visual density of the sky.
+    const matUniforms = material.uniforms;
     const viewportScale =
       Math.sqrt(Math.max(size.width, size.height) * window.devicePixelRatio) /
       60;
-    materialRef.current.uniforms.particleSize.value = viewportScale;
+    matUniforms.particleSize.value = viewportScale;
 
-    // yearsSinceJ2000 is the simulation-time offset in Julian years. The
-    // value is typically −100..+100 for normal exploration; the shader
-    // uses it as a scalar multiplier of each star's proper-motion vector.
     const years = (datetime.getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;
-    materialRef.current.uniforms.yearsSinceJ2000.value = years;
+    matUniforms.yearsSinceJ2000.value = years;
 
-    // styleMix is driven by the user's Photometric/Cinematic choice in
-    // Settings. Assigning here (not just at mount) means flipping the
-    // toggle updates the rendered sky instantly without re-creating the
-    // material.
-    materialRef.current.uniforms.styleMix.value =
-      starfieldStyle === "cinematic" ? 1 : 0;
+    matUniforms.styleMix.value = starfieldStyle === "cinematic" ? 1 : 0;
   });
+  /* eslint-enable react-hooks/immutability */
 
   if (!geometry) return null;
 
@@ -340,24 +362,10 @@ export const Starfield = () => {
     <points
       ref={pointsRef}
       geometry={geometry}
+      material={material}
       rotation={[(23.4 * Math.PI) / 180, 0, 0]}
       raycast={() => null}
       renderOrder={-2}
-    >
-      <shaderMaterial
-        ref={materialRef}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={{
-          pixelRatio: { value: gl.getPixelRatio() },
-          particleSize: { value: 1.0 },
-          yearsSinceJ2000: { value: 0.0 },
-          styleMix: { value: starfieldStyle === "cinematic" ? 1 : 0 },
-        }}
-        transparent={true}
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
+    />
   );
 };

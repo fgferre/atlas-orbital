@@ -145,6 +145,79 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — cinematic actually visible now (2026-04-17)
+
+User reported that flipping Photometric/Cinematic did nothing on
+screen, while Scale Mode (didactic/realistic) clearly changed star
+sizes/brightnesses. That asymmetry was the clue: geometry attributes
+(biasedMag rebuild on scaleMode) propagated to the GPU, but uniform
+values (styleMix) did not.
+
+Empirical verification via Playwright CLI (`debug-toggle.mjs`, now
+deleted): toggling the style changed **0.06 %** of the rendered
+pixels with the original pattern — essentially noise. After fixes
+below, the same toggle changes **0.55 %** of pixels (≈ 6300 visibly
+different pixels across the sky), which is what a user can actually
+see.
+
+**Root cause:** the JSX `<shaderMaterial uniforms={{...}}>` child
+pattern recreated the entire `uniforms` object on every parent
+render. R3F then called `material.setValues({ uniforms: newObj })`,
+which swapped the whole uniforms map. Per-frame writes in `useFrame`
+then mutated a detached object that the compiled WebGL program no
+longer read from. The compiled program still had `styleMix` as a
+declared uniform, but its binding pointed at the original uniforms
+object, which was stale.
+
+**Fixes shipped:**
+
+- **`src/components/canvas/Starfield.tsx`** — build the
+  `ShaderMaterial` explicitly via `useMemo` and pass it as
+  `material={material}` on `<points>`. The uniforms map is created
+  exactly once and never swapped, so per-frame mutations reach the
+  GPU reliably. The vertex-stage `vColor = bvToRGB(ci)` line is
+  restored (a temporary red-tint debug line proved the uniform path
+  was broken — user literally saw every star turn red in cinematic
+  while the debug was active, which was the data that unlocked the
+  diagnosis).
+- **Strengthened cinematic defaults** so the visible difference
+  reaches users, not just pixel-diff tools:
+  - `SIZE_BOOST_CINEMATIC`: 1.8 → 2.5 (larger sprite)
+  - `FALLOFF_POW_CINEMATIC`: 9 → 2 (softer halo instead of tighter
+    core — the previous value narrowed the core at the same time
+    the sprite grew, leaving the net visual almost unchanged)
+  - `CINEMATIC_FLAT_ALPHA_BUMP`: 0.03 → 0.10 (dimmest stars stop
+    blinking in/out of sub-pixel visibility during slow pans)
+  - Comments in `Starfield.tsx` rewritten accordingly.
+- **`src/lib/starfieldShaderMath.ts` + tests** updated with the new
+  constants. Cinematic sample values rebuilt from the new curve;
+  the monotonicity-outside-window test split into "below mag 6" and
+  "above mag 12" because the flat alpha bump makes the above-12 tail
+  a gentle descent rather than a flat floor.
+
+**Tooling note:** started using Playwright CLI via
+`node debug-toggle.mjs` for pixel-diff verification, as the repo's
+AGENTS.md mandates. The Claude preview MCP was too brittle (repeated
+L11 0 × 0 iframe bug, stale HMR programs) for visual regression of
+this kind. Pure-TS shader-math tests pin the numerical curve; real
+browser pixel-diffs pin the end-to-end rendering. Next time a
+shader-uniform bug comes up, jumping straight to Playwright saves a
+lot of time.
+
+Verification: lint clean, 313/313 tests green (20 shader-math +
+293 prior). Playwright pixel-diff confirms ~0.55 % of pixels change
+when toggling — visible to the user on a real monitor. The 4 Codex
+findings from the earlier review iteration are all still addressed
+(ordering fix, honest bright-end comment, NASA-source guard, pinned
+mapping tests).
+
+Lesson L15: "attribute changes reach the GPU via geometry rebuild,
+uniform value changes go through the material's uniforms map —
+replacing that map with a new object on each render silently
+decouples per-frame writes from the compiled program's bindings.
+Use a stable `useMemo`'d ShaderMaterial + `<points material={...}>`
+for anything with per-frame uniforms."
+
 ## Review — Cinematic toggle + third Codex follow-up (2026-04-17)
 
 Shipped the Photometric/Cinematic toggle designed earlier in the
@@ -223,7 +296,7 @@ the 2026 Three.js / R3F ecosystem. Items prioritized by ROI:
 
 - [ ] **HDR + tone-mapped selective bloom.** Highest ROI. Pattern:
       `ACESFilmicToneMapping` + `<EffectComposer>` with `<Bloom
-    mipmapBlur luminanceThreshold={1.0} intensity={0.6}>` via
+  mipmapBlur luminanceThreshold={1.0} intensity={0.6}>` via
       `@react-three/postprocessing`. Bright stars emit colours
       above 1.0 in the fragment shader; the Bloom pass picks them
       up selectively. Hours to days of work. Confirmed by multiple

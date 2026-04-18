@@ -269,3 +269,45 @@ smoothstep(9.5, 12.0, mag))` in `src/components/canvas/Starfield.tsx`
 — uses raw `mag`, not `compressedMag`. Regression pinned by
 `starfieldShaderMath.test.ts` "mag 7.5 strictly brighter than mag 12"
 test.
+
+### L15. `<shaderMaterial uniforms={{...}}>` as a JSX child silently breaks per-frame uniform writes
+
+**Context:** User reported toggling a shader-driven Settings control
+did nothing visually — flipping Photometric/Cinematic produced no
+observable change on the rendered sky. The UI state flipped, the
+store persisted, and `materialRef.current.uniforms.styleMix.value`
+read back as the expected `1`, but stars didn't change. A temporary
+red-tint debug in the vertex shader (`vColor = mix(bvToRGB(ci),
+vec3(1,0,0), styleMix)`) made the user see every star turn red — so
+the shader WAS reading styleMix — yet the _real_ cinematic math
+(sprite boost, flat alpha bump, compressed magnitude) had no visible
+effect. Root cause: `<shaderMaterial uniforms={{...}}>` as a JSX
+child passes a fresh uniforms object on every parent render. R3F's
+applyProps calls `material.setValues({ uniforms: newObj })`, which
+replaces the whole uniforms map — but the compiled WebGLProgram had
+already bound its uniform locations to the ORIGINAL object's
+`styleMix`, `particleSize`, etc. Per-frame writes via `useFrame`
+mutated values the GPU no longer read from. Playwright pixel-diff
+confirmed: 0.06 % of pixels changed when toggling (essentially
+noise) with the JSX-child pattern, 0.55 % after the fix.
+
+**Rule:** For any R3F ShaderMaterial whose uniforms are mutated per
+frame, build the material explicitly via `useMemo(() => new
+THREE.ShaderMaterial({...}), [deps])` and pass it as an instance
+prop: `<points material={material}>`. Do NOT use
+`<points><shaderMaterial uniforms={{...}}>...</shaderMaterial></points>`
+as the child pattern creates a new uniforms object on every render.
+The React Compiler "cannot modify" rule will flag `useFrame` writes
+into the memoised material — silence it with a scoped
+`/* eslint-disable react-hooks/immutability */` block since the
+mutation is intentional and scoped to per-frame GPU-bound values.
+
+**Tooling corollary:** the Claude preview MCP hides this class of
+bug under its L11 0 × 0-iframe cascade. For shader-uniform
+verification, run a pure-Playwright pixel-diff script via
+`node script.mjs` using the `playwright` npm module directly —
+`AGENTS.md` mandates this path anyway.
+
+**Code marker:** `const material = useMemo(() => new
+THREE.ShaderMaterial(...), [gl])` in
+`src/components/canvas/Starfield.tsx`.

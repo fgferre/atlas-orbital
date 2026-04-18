@@ -37,12 +37,18 @@ const COMPRESSION_SLOPE_PHOTOMETRIC = 1.0;
 const COMPRESSION_SLOPE_CINEMATIC = 0.4;
 
 const SIZE_BOOST_PHOTOMETRIC = 1.0;
-const SIZE_BOOST_CINEMATIC = 1.8;
+const SIZE_BOOST_CINEMATIC = 2.5;
 
+// In cinematic we *lower* the exponent so the fragment falloff is
+// softer, not sharper — a larger sprite with a flatter alpha curve
+// reads as a star with a visible halo rather than a tight dot, which
+// is the AAA "cinematic glow" look. pow(d, 2) gives the sprite ~25% α
+// at half-radius vs pow(d, 5)'s ~3%, so the halo actually survives
+// additive blending on dark sky.
 const FALLOFF_POW_PHOTOMETRIC = 5.0;
-const FALLOFF_POW_CINEMATIC = 9.0;
+const FALLOFF_POW_CINEMATIC = 2.0;
 
-const CINEMATIC_FLAT_ALPHA_BUMP = 0.03;
+const CINEMATIC_FLAT_ALPHA_BUMP = 0.1;
 
 const clamp = (value: number, lo: number, hi: number) =>
   Math.min(Math.max(value, lo), hi);

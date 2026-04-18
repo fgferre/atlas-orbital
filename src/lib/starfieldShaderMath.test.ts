@@ -57,13 +57,13 @@ describe("starfieldPointMetrics — cinematic (styleMix = 1)", () => {
     baseSize: number;
     vBrightness: number;
   }> = [
-    { mag: 3, compressedMag: 3, baseSize: 12.53, vBrightness: 0.431 },
-    { mag: 6, compressedMag: 6, baseSize: 3.15, vBrightness: 0.131 },
-    { mag: 7.5, compressedMag: 6.6, baseSize: 3.388, vBrightness: 0.226 },
-    { mag: 9, compressedMag: 7.2, baseSize: 2.81, vBrightness: 0.208 },
-    { mag: 11, compressedMag: 8, baseSize: 1.605, vBrightness: 0.113 },
-    { mag: 12, compressedMag: 8.4, baseSize: 1.5, vBrightness: 0.08 },
-    { mag: 20, compressedMag: 11.6, baseSize: 1.5, vBrightness: 0.08 },
+    { mag: 3, compressedMag: 3, baseSize: 12.53, vBrightness: 0.501 },
+    { mag: 6, compressedMag: 6, baseSize: 3.15, vBrightness: 0.201 },
+    { mag: 7.5, compressedMag: 6.6, baseSize: 3.388, vBrightness: 0.296 },
+    { mag: 9, compressedMag: 7.2, baseSize: 2.81, vBrightness: 0.278 },
+    { mag: 11, compressedMag: 8, baseSize: 1.605, vBrightness: 0.183 },
+    { mag: 12, compressedMag: 8.4, baseSize: 1.5, vBrightness: 0.133 },
+    { mag: 20, compressedMag: 11.6, baseSize: 1.5, vBrightness: 0.108 },
   ];
 
   it.each(cases)(
@@ -88,22 +88,26 @@ describe("starfieldPointMetrics — cinematic (styleMix = 1)", () => {
     expect(near).toBeGreaterThan(telescopic);
   });
 
-  it("is strictly monotonic outside the lift window (pure Pogson below mag 6, floor above mag 12)", () => {
+  it("is strictly monotonic outside the lift window (pure Pogson below mag 6, compressed Pogson above mag 12)", () => {
     // Inside the lift window (6 ≤ mag ≤ 12) the graduated smoothstep
-    // intentionally creates a local maximum around mag 7.5 — that is the
-    // whole point of the perceptual boost, present in both photometric
-    // and cinematic. Outside the window the curve must be monotonic in
-    // both modes; this test pins that invariant.
+    // intentionally creates a local maximum around mag 7.5 — that is
+    // the whole point of the perceptual boost, present in both
+    // photometric and cinematic. Outside the window the curve must be
+    // monotonic: below mag 6 the raw Pogson curve drives it, and above
+    // mag 12 the compressed Pogson + flat alpha bump is monotonically
+    // descending because compression of magnitude translates directly
+    // into a monotonically smaller flux ratio.
     let previousBelow = Infinity;
     for (let mag = -1; mag < 6; mag += 0.25) {
       const { vBrightness } = starfieldPointMetrics(mag, 1);
       expect(vBrightness).toBeLessThanOrEqual(previousBelow + 1e-6);
       previousBelow = vBrightness;
     }
-    const floorValue = starfieldPointMetrics(12, 1).vBrightness;
-    for (let mag = 12; mag <= 20; mag += 0.5) {
+    let previousAbove = starfieldPointMetrics(12, 1).vBrightness;
+    for (let mag = 12.25; mag <= 20; mag += 0.25) {
       const { vBrightness } = starfieldPointMetrics(mag, 1);
-      expect(vBrightness).toBeCloseTo(floorValue, 5);
+      expect(vBrightness).toBeLessThanOrEqual(previousAbove + 1e-6);
+      previousAbove = vBrightness;
     }
   });
 
@@ -117,18 +121,18 @@ describe("starfieldPointMetrics — cinematic (styleMix = 1)", () => {
     expect(atWindowPeak).toBeGreaterThan(atWindowOpen);
   });
 
-  it("boosts sprite size and sharpens the fragment falloff", () => {
+  it("boosts sprite size 2.5× and softens the fragment falloff for the halo look", () => {
     const result = starfieldPointMetrics(7.5, 1);
-    expect(result.sizeBoost).toBeCloseTo(1.8);
-    expect(result.falloffPow).toBeCloseTo(9);
+    expect(result.sizeBoost).toBeCloseTo(2.5);
+    expect(result.falloffPow).toBeCloseTo(2);
   });
 });
 
 describe("starfieldPointMetrics — intermediate styleMix", () => {
   it("linearly interpolates sizeBoost and falloffPow at 0.5", () => {
     const { sizeBoost, falloffPow } = starfieldPointMetrics(7.5, 0.5);
-    expect(sizeBoost).toBeCloseTo(1.4);
-    expect(falloffPow).toBeCloseTo(7);
+    expect(sizeBoost).toBeCloseTo(1.75);
+    expect(falloffPow).toBeCloseTo(3.5);
   });
 
   it("leaves the bright end (mag < 6) invariant under compression", () => {
