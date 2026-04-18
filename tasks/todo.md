@@ -555,7 +555,7 @@ como superfície de confiança para o runtime.
 - [x] **5.5.1 — Criado `src/lib/assetProcessing.ts`** com 5 helpers
       puros: `applyDepthSettings`, `disposeObject3D`,
       `normalizeToUnitSphereScale`, `cloneGlbSceneForRuntime(scene,
-  adjustMaterial?)`, `prepareObjMeshGeometry(geometry)`.
+adjustMaterial?)`, `prepareObjMeshGeometry(geometry)`.
       Construção de material (roughness, metalness, emissive,
       map-selection) fica per-component porque as duas superfícies
       intencionalmente divergem (estudo: 0.95 flat para
@@ -634,6 +634,118 @@ como superfície de confiança para o runtime.
 Verificação follow-up: lint clean, 358/358 (+1 new), preview asset
 study ok (Haumea GLB renderiza idêntico ao pré-guard por ser
 single-material — o guard é no-op no caso atual, por construção).
+
+#### Onda 6 — Extrair Planet.tsx + Scene.tsx (done, 2026-04-18)
+
+Maior refactor do plano. Delegado a 2 agentes general-purpose em
+paralelo (arquivos independentes) com restrições cirúrgicas: scratch
+vectors módulo-level preservados, `simulationClock.getNow()` dentro de
+`useFrame`, `eslint-disable` em `orbitPoints` deps mantido, gate
+`qualityProfile.name !== "constrained"` em PostProcessing preservado,
+padrão scene-env-intensity-ref inalterado, Ctrl+Shift+D debug preservado.
+
+**6.1 — `Planet.tsx` (1760 → 806 linhas)**
+Extraído em `src/components/canvas/planet/`:
+
+- `progradeArrow.ts` (28 l) — constantes + PROGRADE_ARROW_SHAPE +
+  PROGRADE_ARROW_EXTRUDE_SETTINGS (pure data, zero React).
+- `SunScreenFlare.tsx` (275 l) — componente SunScreenFlare + helpers
+  `createRadialGradientTexture` / `createStarburstTexture`.
+- `useOrbitalSalience.ts` (125 l) — hook consolidando `focusAncestorIds`,
+  `orbitSalience`, `assetPriority`, `baseTextureSalience` + o
+  `PARENT_BY_ID` map. Retorno via `useMemo` para stable identity.
+- `usePlanetAssets.ts` (226 l) — hook que resolve texture requests e
+  gerencia todos os `useDeferredTexture` (map, ring, cloud, night,
+  normal, roughness). Retorna assets + flags (`mapSalience`,
+  `shouldPinMap`, etc). `screenSalience` state + useFrame ficam em
+  `PlanetVisual` (acoplados à scale/camera readback).
+- `usePlanetMaterials.ts` (479 l) — hook construindo todos os materiais
+  (cloudMaterial, cloudShadowMaterial, atmosphereMaterial, planetMaterial
+  com Earth night-lights + ring-shadows, ringMaterial, ringGeometry) +
+  todos os dispose effects.
+- `PlanetOrbitLine.tsx` (29 l) — `forwardRef` do `<Line>` para o
+  `orbitLineRef` continuar mutável pelo parent useFrame.
+- `PlanetMotionOverlays.tsx` (48 l) — `forwardRef` do grupo da seta
+  prograde para parent useFrame continuar driving scale/position.
+
+Planet.tsx agora contém: `Planet` (composição), `PlanetVisual`
+(materials + JSX + useFrame de screen-salience/shader uniforms), e
+`PlanetVisualWrapper` (Suspense + ErrorBoundary). ~800 linhas restantes
+são JSX + useFrame (orbit fade + prograde physics + position update) +
+imports — honestamente irredutível sem mexer em comportamento.
+
+**6.2 — `Scene.tsx` (817 → 415 linhas)**
+Extraído em `src/components/canvas/scene/`:
+
+- `PostProcessingPipeline.tsx` (74 l) — export renomeado de
+  `PostProcessingEffects` → `PostProcessingPipeline` (sem consumer
+  externo). `memo` + 3 `useCallback` ref adapters preservados.
+  Interfaces `BloomController`, `HueSaturationController`,
+  `BrightnessContrastController` moveram junto.
+- `SceneLighting.tsx` (36 l) — os três lights (ambient, point,
+  SmartSunLight) em um componente passando refs.
+- `useVisualPresetLerp.ts` (148 l) — hook com o `useFrame` inteiro de
+  preset-lerping que morava em `SceneContent`. Mantém sceneRef pattern
+  para env-intensity. Exporta `DebugValues`.
+- `useSceneDebugControls.ts` (239 l) — hook owning todo o
+  `useControls` Leva + sync effect no debugMode. `console.info`/
+  `console.warn` preservados (Onda 0.7).
+
+`SceneContent` deletado — substituído por um `VisualPresetLerpBridge`
+trivial (6 linhas) porque `useFrame` precisa de componente dentro do
+`<Canvas>`. `CriticalSceneAssetsGate`, `DeferredTextureBudgetGate`,
+`DynamicZoom`, `NormalizedWheelZoom` ficaram inline por serem pequenos
+e acoplados à JSX tree do Scene (AGENTS.md #16 racionalização).
+
+**Verificação Onda 6:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 358/358 (sem testes novos — teste via preview
+  é mais eficaz para refactor estrutural UI-heavy; testes de hooks
+  vão na Onda 7 quando `.test.tsx` + jsdom estiverem wired).
+- `npm run build`: ✅ 8,12 s.
+- Preview: Sun renderiza (SunScreenFlare + flare sprites), sistema
+  solar overview com orbits + labels + starfield (PlanetOrbitLine),
+  Saturno focado com ring system + moons (ringMaterial + ringGeometry +
+  nested bodies), Earth focada com Moon visível (Earth night-lights
+  shader path). Zero regressão visual.
+
+**Invariants preservados (verificados por inspeção):**
+
+- `TMP_WORLD_POS`, `TMP_RING_INV_MATRIX`, `TMP_RING_SUN_LOCAL`
+  module-level em `Planet.tsx` (onde os dois hot-path `useFrame`
+  consomem).
+- `simulationClock.getNow()` dentro dos dois `useFrame` em `Planet.tsx`.
+- `eslint-disable-next-line react-hooks/exhaustive-deps` na array de
+  deps do `orbitPoints`; `displayedDatetime` continua fora do dep list.
+- Materials via `useMemo(() => new THREE.ShaderMaterial(...), [...])`
+  com identity estável (L15). Zero `<shaderMaterial uniforms={{...}}>`
+  JSX child pattern introduzido.
+- `ErrorBoundary` + `Suspense` wrappers em `PlanetVisualWrapper` para
+  ambos os branches (`PlanetModel` + `PlanetVisual`).
+- `assetPriority` + `baseTextureSalience` flow `Planet` →
+  `PlanetVisualWrapper` → `PlanetVisual`.
+- Cada `useStore((s) => s.X)` continua granular — zero compound
+  selectors introduzidos.
+- Cada `useEffect` cleanup disposing materials/geometries/textures
+  retido.
+- Cada `useMemo` dep array idêntico ao original.
+
+**Arquivos tocados (Onda 6):** 13:
+
+- Modificados: `src/components/canvas/Planet.tsx`,
+  `src/components/canvas/Scene.tsx`.
+- Novos em `src/components/canvas/planet/`: 7 arquivos.
+- Novos em `src/components/canvas/scene/`: 4 arquivos.
+
+**Deltas de tamanho:**
+
+- Planet.tsx: 1760 → 806 (−954 linhas).
+- Scene.tsx: 817 → 415 (−402 linhas).
+- Total adicionado em módulos novos: ~1210 (planet) + ~497 (scene) l.
+- Saldo net: +351 linhas (boilerplate inevitável de hook signatures +
+  stable-identity `useMemo`s). Trade aceitável: dois arquivos
+  gigantes com responsabilidades múltiplas viraram 11 módulos focados.
 
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 

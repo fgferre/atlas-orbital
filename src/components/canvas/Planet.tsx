@@ -1,32 +1,35 @@
 import { useRef, useMemo, Suspense, useEffect, useState } from "react";
-import { createPortal, useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { Line } from "@react-three/drei";
 import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import {
   resolveOrbitalDisplayPosition,
   getOrbitalDisplayOrbitPoints,
 } from "../../lib/orbital";
-import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
-import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
 import { getOrbitCacheKey, getOrbitSegments } from "../../lib/orbitQuality";
 import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
-import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
-import { resolveTextureRequest } from "../../lib/textureVariants";
-import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
+import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { PlanetModel } from "./PlanetModel";
-import {
-  createProceduralSurfaceTexture,
-  getSurfaceFillLight,
-  shouldRenderDirectSurfaceMap,
-} from "../../utils/proceduralSurface";
+import { createProceduralSurfaceTexture } from "../../utils/proceduralSurface";
+import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
+import type { Line2 } from "three-stdlib";
 
-const PARENT_BY_ID = Object.fromEntries(
-  SOLAR_SYSTEM_BODIES.map((body) => [body.id, body.parentId ?? null])
-);
+import { SunScreenFlare } from "./planet/SunScreenFlare";
+import {
+  PROGRADE_ARROW_BASE_WIDTH,
+  PROGRADE_ARROW_BASE_LENGTH,
+  PROGRADE_ARROW_BASE_DEPTH,
+} from "./planet/progradeArrow";
+import { useOrbitalSalience } from "./planet/useOrbitalSalience";
+import { usePlanetAssets } from "./planet/usePlanetAssets";
+import { usePlanetMaterials } from "./planet/usePlanetMaterials";
+import { PlanetOrbitLine } from "./planet/PlanetOrbitLine";
+import { PlanetMotionOverlays } from "./planet/PlanetMotionOverlays";
+
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
 
@@ -38,25 +41,6 @@ const MAX_ORBIT_CACHE_ENTRIES = 256;
 const TMP_WORLD_POS = new THREE.Vector3();
 const TMP_RING_INV_MATRIX = new THREE.Matrix4();
 const TMP_RING_SUN_LOCAL = new THREE.Vector3();
-
-// import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
-import {
-  atmosphereVertexShader,
-  atmosphereFragmentShader,
-} from "./shaders/atmosphereShader";
-import type { ResolvedQualityName } from "../../lib/qualityProfile";
-import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
-
-import {
-  planetShadowVertexPatch,
-  planetShadowFragmentPatch,
-  planetShadowEmissivePatch,
-} from "./shaders/planetShadowShader";
-import type { Line2 } from "three-stdlib";
-
-const PROGRADE_ARROW_BASE_WIDTH = 0.68;
-const PROGRADE_ARROW_BASE_LENGTH = 1.0;
-const PROGRADE_ARROW_BASE_DEPTH = 0.06;
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -84,299 +68,6 @@ function getOrbitDateBucket(body: CelestialBody, date: Date): string {
 
   return `${Math.floor(date.getTime() / (bucketDays * 86400000))}`;
 }
-
-function createRadialGradientTexture(size: number) {
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(
-    center,
-    center,
-    0,
-    center,
-    center,
-    center
-  );
-  gradient.addColorStop(0.0, "rgba(255, 255, 255, 1.0)");
-  gradient.addColorStop(0.12, "rgba(255, 255, 255, 0.85)");
-  gradient.addColorStop(0.32, "rgba(255, 255, 255, 0.25)");
-  gradient.addColorStop(1.0, "rgba(255, 255, 255, 0.0)");
-
-  ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function createStarburstTexture(size: number, rays: number) {
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-
-  const center = size / 2;
-  const radius = size * 0.48;
-
-  ctx.clearRect(0, 0, size, size);
-  ctx.translate(center, center);
-
-  ctx.globalCompositeOperation = "lighter";
-  ctx.lineCap = "round";
-
-  for (let i = 0; i < rays; i++) {
-    const a = (i / rays) * Math.PI * 2;
-    const w = i % 2 === 0 ? 5 : 2.5;
-    const inner = radius * 0.2;
-    const outer = radius;
-
-    const grad = ctx.createLinearGradient(
-      Math.cos(a) * inner,
-      Math.sin(a) * inner,
-      Math.cos(a) * outer,
-      Math.sin(a) * outer
-    );
-    grad.addColorStop(0.0, "rgba(255,255,255,0.0)");
-    grad.addColorStop(0.25, "rgba(255,255,255,0.35)");
-    grad.addColorStop(0.55, "rgba(255,255,255,0.15)");
-    grad.addColorStop(1.0, "rgba(255,255,255,0.0)");
-
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
-    ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
-    ctx.stroke();
-  }
-
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-const SunScreenFlare = ({
-  targetRef,
-  radiusKm,
-  color,
-}: {
-  targetRef: { current: THREE.Object3D | null };
-  radiusKm: number;
-  color: string;
-}) => {
-  const scene = useThree((s) => s.scene);
-  const scaleMode = useStore((state) => state.scaleMode);
-
-  const rootRef = useRef<THREE.Group>(null);
-
-  const coreMatRef = useRef<THREE.SpriteMaterial>(null);
-  const haloMatRef = useRef<THREE.SpriteMaterial>(null);
-  const raysMatRef = useRef<THREE.SpriteMaterial>(null);
-
-  const tmpWorld = useMemo(() => new THREE.Vector3(), []);
-  const tmpNdc = useMemo(() => new THREE.Vector3(), []);
-  const tmpTint = useMemo(() => new THREE.Color(), []);
-  const tmpTintCore = useMemo(() => new THREE.Color(), []);
-  const tmpTintHalo = useMemo(() => new THREE.Color(), []);
-  const warmColor = useMemo(() => new THREE.Color("#FFD88A"), []);
-
-  const textures = useMemo(() => {
-    const radial = createRadialGradientTexture(512);
-    const rays = createStarburstTexture(512, 14);
-    if (!radial || !rays) return null;
-    return { radial, rays };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      textures?.radial.dispose();
-      textures?.rays.dispose();
-    };
-  }, [textures]);
-
-  useFrame((state) => {
-    if (!textures) return;
-    if (!rootRef.current) return;
-    if (!targetRef.current) return;
-
-    if (!(state.camera instanceof THREE.PerspectiveCamera)) return;
-    const cam = state.camera;
-
-    targetRef.current.getWorldPosition(tmpWorld);
-
-    tmpNdc.copy(tmpWorld).project(cam);
-    const onScreen =
-      tmpNdc.z > -1 &&
-      tmpNdc.z < 1 &&
-      tmpNdc.x > -1.05 &&
-      tmpNdc.x < 1.05 &&
-      tmpNdc.y > -1.05 &&
-      tmpNdc.y < 1.05;
-
-    const distToCamera = cam.position.distanceTo(tmpWorld);
-    const fovVertRad = THREE.MathUtils.degToRad(cam.fov);
-    const worldPerPixelAtSun =
-      (2 * distToCamera * Math.tan(fovVertRad / 2)) /
-      Math.max(1, state.size.height);
-
-    const radiusWorld = AstroPhysics.resolveSemanticBodyRadius({
-      body: {
-        id: "sun-screen-flare",
-        type: "star",
-        name: { en: "Sun Screen Flare", pt: "Sun Screen Flare" },
-        radiusKm,
-        color,
-        orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
-        rotationPeriodHours: 0,
-        axialTilt: 0,
-        info: "",
-      },
-      scaleMode,
-    });
-
-    const radiusPx = radiusWorld / Math.max(1e-9, worldPerPixelAtSun);
-
-    // Fade in when the Sun is only a handful of pixels.
-    const appearAtPx = 12;
-    const fullAtPx = 3;
-    const t = THREE.MathUtils.clamp(
-      (appearAtPx - radiusPx) / (appearAtPx - fullAtPx),
-      0,
-      1
-    );
-    const strength = t * t * (3 - 2 * t);
-
-    const visible = onScreen && strength > 0.001;
-    rootRef.current.visible = visible;
-    if (!visible) return;
-
-    rootRef.current.position.copy(tmpWorld);
-
-    tmpTint.set(color).lerp(warmColor, 0.55);
-    tmpTintCore.copy(tmpTint).multiplyScalar(8.0);
-    tmpTintHalo.copy(tmpTint).multiplyScalar(2.6);
-
-    const corePx = 8;
-    const haloPx = 44;
-    const raysPx = 64;
-
-    const coreWorld = corePx * worldPerPixelAtSun;
-    const haloWorld = haloPx * worldPerPixelAtSun;
-    const raysWorld = raysPx * worldPerPixelAtSun;
-
-    const coreMat = coreMatRef.current;
-    const haloMat = haloMatRef.current;
-    const raysMat = raysMatRef.current;
-
-    if (coreMat) {
-      coreMat.color.copy(tmpTintCore);
-      coreMat.opacity = strength * 0.9;
-    }
-    if (haloMat) {
-      haloMat.color.copy(tmpTintHalo);
-      haloMat.opacity = strength * 0.58;
-    }
-    if (raysMat) {
-      raysMat.color.copy(tmpTintHalo);
-      raysMat.opacity = strength * 0.12;
-      raysMat.rotation = state.clock.getElapsedTime() * 0.04;
-    }
-
-    const coreSprite = rootRef.current.children[0] as THREE.Sprite | undefined;
-    const haloSprite = rootRef.current.children[1] as THREE.Sprite | undefined;
-    const raysSprite = rootRef.current.children[2] as THREE.Sprite | undefined;
-    coreSprite?.scale.set(coreWorld, coreWorld, 1);
-    haloSprite?.scale.set(haloWorld, haloWorld, 1);
-    raysSprite?.scale.set(raysWorld, raysWorld, 1);
-  });
-
-  if (!textures) return null;
-
-  return createPortal(
-    <group ref={rootRef} frustumCulled={false} renderOrder={5000}>
-      <sprite raycast={() => null} frustumCulled={false} renderOrder={5001}>
-        <spriteMaterial
-          ref={coreMatRef}
-          map={textures.radial}
-          transparent
-          opacity={0}
-          depthTest={false}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
-      </sprite>
-      <sprite raycast={() => null} frustumCulled={false} renderOrder={5002}>
-        <spriteMaterial
-          ref={haloMatRef}
-          map={textures.radial}
-          transparent
-          opacity={0}
-          depthTest={false}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
-      </sprite>
-      <sprite raycast={() => null} frustumCulled={false} renderOrder={5003}>
-        <spriteMaterial
-          ref={raysMatRef}
-          map={textures.rays}
-          transparent
-          opacity={0}
-          depthTest={false}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          toneMapped={false}
-        />
-      </sprite>
-    </group>,
-    scene
-  );
-};
-
-const PROGRADE_ARROW_SHAPE = (() => {
-  const s = new THREE.Shape();
-  s.moveTo(-0.18, 0.0);
-  s.lineTo(-0.18, 0.62);
-  s.lineTo(-0.34, 0.62);
-  s.lineTo(0.0, 1.0);
-  s.lineTo(0.34, 0.62);
-  s.lineTo(0.18, 0.62);
-  s.lineTo(0.18, 0.0);
-  s.lineTo(-0.18, 0.0);
-  return s;
-})();
-
-const PROGRADE_ARROW_EXTRUDE_SETTINGS: THREE.ExtrudeGeometryOptions = {
-  depth: PROGRADE_ARROW_BASE_DEPTH,
-  bevelEnabled: true,
-  bevelThickness: 0.012,
-  bevelSize: 0.012,
-  bevelSegments: 2,
-  curveSegments: 6,
-  steps: 1,
-};
 
 interface PlanetProps {
   body: CelestialBody;
@@ -427,134 +118,24 @@ const PlanetVisual = ({
   const scaleMode = useStore((state) => state.scaleMode);
   const [screenSalience, setScreenSalience] = useState(baseTextureSalience);
   const screenSalienceRef = useRef(baseTextureSalience);
-  const directSurfaceMapEnabled =
-    Boolean(body.textures?.map) &&
-    shouldRenderDirectSurfaceMap(body) &&
-    !(body.id === "sun" && sunRenderMode === "procedural");
-  const mapSalience = Math.max(baseTextureSalience, screenSalience);
-  const shouldPinMap =
-    assetPriority <= 1 || body.id === "sun" || focusId === body.id;
-  const shouldLoadMap =
-    body.id === "sun"
-      ? sunRenderMode !== "procedural"
-      : assetPriority <= 2 || mapSalience >= 0.35;
-  const shouldLoadSecondary =
-    assetPriority <= 1 || focusId === body.id || mapSalience >= 0.78;
 
-  const mapRequest = useMemo(() => {
-    if (!directSurfaceMapEnabled) {
-      return null;
-    }
-
-    return resolveTextureRequest(
-      body,
-      "map",
-      qualityProfileName,
-      mapSalience,
-      TEXTURE_VARIANT_MANIFEST
-    );
-  }, [body, directSurfaceMapEnabled, mapSalience, qualityProfileName]);
-
-  const ringRequest = useMemo(
-    () =>
-      resolveTextureRequest(
-        body,
-        "ring",
-        qualityProfileName,
-        mapSalience,
-        TEXTURE_VARIANT_MANIFEST
-      ),
-    [body, mapSalience, qualityProfileName]
-  );
-
-  const cloudRequest = useMemo(
-    () =>
-      resolveTextureRequest(
-        body,
-        "clouds",
-        qualityProfileName,
-        mapSalience,
-        TEXTURE_VARIANT_MANIFEST
-      ),
-    [body, mapSalience, qualityProfileName]
-  );
-
-  const nightRequest = useMemo(
-    () =>
-      resolveTextureRequest(
-        body,
-        "night",
-        qualityProfileName,
-        mapSalience,
-        TEXTURE_VARIANT_MANIFEST
-      ),
-    [body, mapSalience, qualityProfileName]
-  );
-
-  const normalRequest = useMemo(
-    () =>
-      resolveTextureRequest(
-        body,
-        "normal",
-        qualityProfileName,
-        mapSalience,
-        TEXTURE_VARIANT_MANIFEST
-      ),
-    [body, mapSalience, qualityProfileName]
-  );
-
-  const roughnessRequest = useMemo(
-    () =>
-      resolveTextureRequest(
-        body,
-        "roughness",
-        qualityProfileName,
-        mapSalience,
-        TEXTURE_VARIANT_MANIFEST
-      ),
-    [body, mapSalience, qualityProfileName]
-  );
-
-  const ringTextureLoaded = useDeferredTexture(ringRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
+  const {
+    textureRing,
+    textureClouds,
+    textureNight,
+    textureNormal,
+    textureRoughness,
+    surfaceMap,
+    surfaceFillLight,
+  } = usePlanetAssets({
+    body,
+    qualityProfileName,
+    sunRenderMode,
+    assetPriority,
+    baseTextureSalience,
+    focusId,
+    screenSalience,
   });
-  const cloudTextureLoaded = useDeferredTexture(cloudRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-  });
-  const bodyTextureLoaded = useDeferredTexture(mapRequest?.selectedPath, {
-    enabled: shouldLoadMap,
-    pin: shouldPinMap,
-  });
-  const nightTextureLoaded = useDeferredTexture(nightRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-  });
-  // Normal + roughness share the "secondary" gating because they only matter
-  // at close range. They need NoColorSpace so the GPU samples them linearly —
-  // sRGB decoding would corrupt the tangent-space normals and mis-scale roughness.
-  const normalTextureLoaded = useDeferredTexture(normalRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-    colorSpace: THREE.NoColorSpace,
-  });
-  const roughnessTextureLoaded = useDeferredTexture(
-    roughnessRequest.selectedPath,
-    {
-      enabled: shouldLoadSecondary,
-      pin: shouldPinMap,
-      colorSpace: THREE.NoColorSpace,
-    }
-  );
-
-  useEffect(() => {
-    if (assetPriority !== 1 || !mapRequest?.selectedPath) {
-      return;
-    }
-
-    void preloadDeferredTexture(mapRequest.selectedPath);
-  }, [assetPriority, mapRequest?.selectedPath]);
 
   // Calculate orientation quaternion based on IAU pole data
   const orientationQuaternion = useMemo(() => {
@@ -578,446 +159,30 @@ const PlanetVisual = ({
     }
   }, [body.poleRA, body.poleDec, body.axialTilt]);
 
-  const textureRing = ringTextureLoaded.texture ?? undefined;
-  const textureClouds = cloudTextureLoaded.texture ?? undefined;
-  const textureMap = directSurfaceMapEnabled
-    ? (bodyTextureLoaded.texture ?? undefined)
-    : undefined;
-  const textureNight = nightTextureLoaded.texture ?? undefined;
-  // PBR maps only apply when the albedo map is loaded — they describe the
-  // same surface, and a naked normal map over a procedural base looks broken.
-  const textureNormal = textureMap
-    ? (normalTextureLoaded.texture ?? undefined)
-    : undefined;
-  const textureRoughness = textureMap
-    ? (roughnessTextureLoaded.texture ?? undefined)
-    : undefined;
-  const proceduralSurfaceMap = useMemo(() => {
-    if (body.type === "star" || textureMap) return null;
-    return createProceduralSurfaceTexture(body);
-  }, [body, textureMap]);
-  const surfaceFillLight = useMemo(() => {
-    if (body.type === "star" || textureMap) return null;
-    return getSurfaceFillLight(body);
-  }, [body, textureMap]);
-  const surfaceMap = textureMap ?? proceduralSurfaceMap ?? undefined;
-
-  useEffect(() => {
-    return () => {
-      proceduralSurfaceMap?.dispose();
-    };
-  }, [proceduralSurfaceMap]);
-
-  // Cloud Material (PBR + Analytical Shadows)
-  const cloudMaterial = useMemo(() => {
-    if (!textureClouds) return null;
-    const mat = new THREE.MeshStandardMaterial({
-      map: textureClouds,
-      transparent: true,
-      blending: THREE.AdditiveBlending, // Reverted to Additive for visual look
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      roughness: 1.0,
-      metalness: 0.0,
-    });
-
-    mat.onBeforeCompile = (shader) => {
-      mat.userData.shader = shader;
-      // Sun is always at world origin — pass as world-space uniform, no CPU transform needed.
-      shader.uniforms.uSunPositionWorld = { value: new THREE.Vector3(0, 0, 0) };
-      shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
-
-      // Inject world-space varyings into vertex shader
-      shader.vertexShader = `
-        varying vec3 vCloudWorldPos;
-        varying vec3 vCloudWorldNormal;
-        ${shader.vertexShader}
-      `.replace(
-        "#include <begin_vertex>",
-        `
-        #include <begin_vertex>
-        vCloudWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
-        vCloudWorldNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
-        `
-      );
-
-      // Inject world-space declarations into fragment shader
-      shader.fragmentShader = `
-        uniform vec3 uSunPositionWorld;
-        varying vec3 vCloudWorldPos;
-        varying vec3 vCloudWorldNormal;
-        ${shader.fragmentShader}
-      `;
-
-      // Modulate cloud opacity/color based on world-space day/night
-      shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <color_fragment>",
-        `
-        #include <color_fragment>
-        vec3 cloudLightDir = normalize(uSunPositionWorld - vCloudWorldPos);
-        float cloudIntensity = dot(vCloudWorldNormal, cloudLightDir);
-        float cloudNightFactor = 1.0 - smoothstep(-0.2, 0.2, cloudIntensity);
-        // Darken clouds on the night side
-        diffuseColor.rgb *= mix(1.0, 0.05, cloudNightFactor);
-        `
-      );
-    };
-
-    return mat;
-  }, [textureClouds, ringShadowIntensity]);
-
-  // Shadow Caster Material (Custom Depth Material)
-  // This material is used ONLY for casting shadows from the clouds.
-  // It converts the black-and-white cloud texture into an alpha map for the shadow depth buffer.
-  const cloudShadowMaterial = useMemo(() => {
-    if (!textureClouds) return null;
-
-    // We use MeshDepthMaterial for the shadow map
-    const mat = new THREE.MeshDepthMaterial({
-      depthPacking: THREE.RGBADepthPacking,
-      map: textureClouds, // Use the cloud texture
-      alphaTest: 0.2, // Cutoff for shadows
-    });
-
-    // Custom shader to use luminance (brightness) as alpha
-    mat.onBeforeCompile = (shader) => {
-      shader.fragmentShader = `
-        uniform sampler2D map;
-        varying vec2 vUv;
-        ${shader.fragmentShader}
-      `.replace(
-        "#include <map_fragment>",
-        `
-        #ifdef USE_MAP
-          vec4 texColor = texture2D(map, vUv);
-          // Use luminance (brightness) as alpha
-          float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-          if (luminance < 0.2) discard; // Alpha test based on brightness
-        #endif
-        `
-      );
-    };
-    return mat;
-  }, [textureClouds]);
-
-  useEffect(() => {
-    return () => {
-      cloudMaterial?.dispose();
-    };
-  }, [cloudMaterial]);
-
-  useEffect(() => {
-    return () => {
-      cloudShadowMaterial?.dispose();
-    };
-  }, [cloudShadowMaterial]);
-
-  // Atmosphere Shader (Fresnel Glow)
-  const atmosphereMaterial = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        color: { value: new THREE.Color(0x00aaff) },
-        viewVector: { value: new THREE.Vector3(0, 0, 0) },
-      },
-      vertexShader: atmosphereVertexShader,
-      fragmentShader: atmosphereFragmentShader,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      side: THREE.BackSide, // Render on the inside of a slightly larger sphere
-      depthWrite: false,
-    });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      atmosphereMaterial?.dispose();
-    };
-  }, [atmosphereMaterial]);
-
-  // Analytical Ring Shadow Logic & Earth Night Lights
-  const planetMaterial = useMemo(() => {
-    // Use MeshBasicMaterial for stars (Sun) so they are not affected by lights/shadows
-    if (body.type === "star") {
-      const baseColor = new THREE.Color(body.color).multiplyScalar(sunEmissive);
-
-      if (sunRenderMode === "procedural") {
-        return new THREE.MeshBasicMaterial({
-          color: baseColor,
-          transparent: true,
-          opacity: 0,
-          depthWrite: false,
-          toneMapped: false,
-        });
-      }
-
-      const starParams: THREE.MeshBasicMaterialParameters = {
-        color: baseColor,
-        toneMapped: false, // Allow HDR values for Bloom
-      };
-
-      if (surfaceMap) {
-        starParams.map = surfaceMap;
-      }
-
-      return new THREE.MeshBasicMaterial(starParams);
-    }
-
-    const planetParams: THREE.MeshStandardMaterialParameters = {
-      color: surfaceMap ? "#ffffff" : body.color,
-      emissive: surfaceFillLight?.color ?? "#000",
-      emissiveMap: null,
-      emissiveIntensity: surfaceFillLight?.intensity ?? 0,
-      roughness: roughness,
-      metalness: metalness,
-    };
-
-    if (surfaceMap) {
-      planetParams.map = surfaceMap;
-    }
-
-    if (textureNormal) {
-      planetParams.normalMap = textureNormal;
-    }
-
-    if (textureRoughness) {
-      planetParams.roughnessMap = textureRoughness;
-    }
-
-    const mat = new THREE.MeshStandardMaterial(planetParams);
-
-    // Apply Earth day/night shader (takes priority over ring shadows)
-    if (body.id === "earth" && textureNight) {
-      mat.onBeforeCompile = (shader) => {
-        mat.userData.shader = shader;
-        shader.uniforms.tNight = { value: textureNight };
-        // Sun is always at world origin in this scene — no CPU transform needed.
-        shader.uniforms.uSunPositionWorld = {
-          value: new THREE.Vector3(0, 0, 0),
-        };
-        shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
-
-        // Inject varyings in vertex shader — world-space position and normal
-        shader.vertexShader = `
-          varying vec3 vWorldPos;
-          varying vec3 vWorldNormal;
-          varying vec2 vUv;
-          ${shader.vertexShader}
-        `.replace(
-          "#include <begin_vertex>",
-          `
-          #include <begin_vertex>
-          // Transform to world space so lighting is frame-independent
-          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
-          // Use inverse-transpose of modelMatrix for correct normal transform
-          vWorldNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
-          vUv = uv;
-          `
-        );
-
-        // Inject day texture handling in fragment shader
-        shader.fragmentShader = `
-          uniform sampler2D tNight;
-          uniform vec3 uSunPositionWorld;
-          uniform float uNightLightIntensity;
-          varying vec3 vWorldPos;
-          varying vec3 vWorldNormal;
-          varying vec2 vUv;
-          ${shader.fragmentShader}
-        `;
-
-        // Apply night lights to emissive channel
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <emissivemap_fragment>",
-          `
-          #include <emissivemap_fragment>
-
-          // Compute lighting in world space — both vectors are now in the same frame.
-          // Sun is at world origin; direction from fragment to Sun:
-          vec3 lightDir = normalize(uSunPositionWorld - vWorldPos);
-          float intensity = dot(vWorldNormal, lightDir);
-
-          // Night lights appear where intensity is low (terminator transition)
-          float nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity);
-
-          vec4 nightColor = texture2D(tNight, vUv);
-
-          // Add night lights to emissive
-          totalEmissiveRadiance += nightColor.rgb * nightFactor * uNightLightIntensity;
-          `
-        );
-      };
-    }
-    // Apply shaders: ring shadows for ringed planets (if not Earth)
-    else if (textureRing && body.ringSystem) {
-      const innerRadius = body.ringSystem.innerRadius;
-      const outerRadius = body.ringSystem.outerRadius;
-
-      mat.onBeforeCompile = (shader) => {
-        mat.userData.shader = shader;
-        shader.uniforms.tRing = { value: textureRing };
-        shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
-        shader.uniforms.uInnerRadius = { value: innerRadius };
-        shader.uniforms.uOuterRadius = { value: outerRadius };
-
-        shader.vertexShader = `
-          varying vec3 vPos;
-          varying vec3 vObjectNormal;
-          ${shader.vertexShader}
-        `.replace(
-          "#include <begin_vertex>",
-          `
-          #include <begin_vertex>
-          vPos = position;
-          vObjectNormal = normal;
-          `
-        );
-
-        shader.fragmentShader = `
-          uniform sampler2D tRing;
-          uniform vec3 uSunPosition;
-          uniform float uInnerRadius;
-          uniform float uOuterRadius;
-          varying vec3 vPos;
-          varying vec3 vObjectNormal;
-          ${shader.fragmentShader}
-        `.replace(
-          "#include <map_fragment>",
-          `
-          #include <map_fragment>
-
-          // Analytical Ring Shadow
-          // Ray from fragment (vPos) to Sun (uSunPosition)
-          vec3 lightDir = normalize(uSunPosition - vPos);
-
-          // Check if surface faces the sun (Day side)
-          // We only cast shadows on the lit side.
-          float sunDot = dot(normalize(vObjectNormal), lightDir);
-
-          // Smoothly fade out the shadow effect as we approach the terminator (day/night line)
-          // This prevents hard artifacts at the shadow edge near the dark side.
-          float terminatorFade = smoothstep(0.0, 0.2, sunDot);
-
-          if (terminatorFade > 0.0) {
-            // Intersect with Ring Plane (y=0)
-            // t = -origin.y / dir.y
-            float t = -vPos.y / lightDir.y;
-
-            // If t > 0, the ray hits the plane *towards* the sun (shadow caster)
-            if (t > 0.0) {
-              vec3 hitPos = vPos + lightDir * t;
-              float radius = length(hitPos.xz);
-
-              if (radius > uInnerRadius && radius < uOuterRadius) {
-                float u = (radius - uInnerRadius) / (uOuterRadius - uInnerRadius);
-                vec4 ringColor = texture2D(tRing, vec2(u, 0.5));
-
-                // Darken based on ring opacity and terminator fade
-                // 0.9 factor for max shadow density
-                diffuseColor.rgb *= (1.0 - ringColor.a * 0.9 * terminatorFade);
-              }
-            }
-          }
-          `
-        );
-      };
-    }
-
-    return mat;
-  }, [
-    surfaceMap,
+  const {
+    cloudMaterial,
+    cloudShadowMaterial,
+    atmosphereMaterial,
+    planetMaterial,
+    ringMaterial,
+    ringGeometry,
+  } = usePlanetMaterials({
+    body,
+    roughness,
+    metalness,
+    sunEmissive,
+    ringEmissive,
+    ringShadowIntensity,
+    nightLightIntensity,
+    sunRenderMode,
+    textureRing,
+    textureClouds,
     textureNight,
     textureNormal,
     textureRoughness,
-    textureRing,
-    body.id,
-    body.color,
-    body.type,
-    body.ringSystem,
-    roughness,
-    metalness,
-    sunRenderMode,
-    sunEmissive,
-    nightLightIntensity,
+    surfaceMap,
     surfaceFillLight,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      planetMaterial?.dispose();
-    };
-  }, [planetMaterial]);
-
-  // Analytical Planet Shadow on Rings Logic
-  const ringMaterial = useMemo(() => {
-    if (!textureRing) return null;
-
-    const mat = new THREE.MeshStandardMaterial({
-      map: textureRing,
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      emissive: 0xffffff,
-      emissiveMap: textureRing,
-      emissiveIntensity: ringEmissive,
-      roughness: 0.8,
-      metalness: 0.0,
-    });
-
-    mat.onBeforeCompile = (shader) => {
-      mat.userData.shader = shader;
-      shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
-      shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
-
-      // Inject uniforms and varying
-      shader.vertexShader = `
-        varying vec3 vPos;
-        ${shader.vertexShader}
-      `.replace("#include <begin_vertex>", planetShadowVertexPatch);
-
-      shader.fragmentShader = `
-        uniform vec3 uSunPosition;
-        uniform float uShadowIntensity;
-        varying vec3 vPos;
-        ${shader.fragmentShader}
-      `
-        .replace("#include <map_fragment>", planetShadowFragmentPatch)
-        .replace("#include <emissivemap_fragment>", planetShadowEmissivePatch);
-    };
-
-    return mat;
-  }, [textureRing, ringEmissive, ringShadowIntensity]);
-
-  useEffect(() => {
-    return () => {
-      ringMaterial?.dispose();
-    };
-  }, [ringMaterial]);
-
-  const ringGeometry = useMemo(() => {
-    if (!body.ringSystem) return null;
-
-    const innerRadius = body.ringSystem.innerRadius;
-    const outerRadius = body.ringSystem.outerRadius;
-    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 128);
-    const positions = geometry.attributes.position;
-    const uvs = geometry.attributes.uv;
-    const vertex = new THREE.Vector3();
-
-    for (let i = 0; i < positions.count; i++) {
-      vertex.fromBufferAttribute(positions, i);
-      const radius = Math.sqrt(vertex.x * vertex.x + vertex.y * vertex.y);
-      const u = (radius - innerRadius) / (outerRadius - innerRadius);
-      uvs.setXY(i, u, 0.5);
-    }
-
-    return geometry;
-  }, [body.ringSystem]);
-
-  useEffect(() => {
-    return () => {
-      ringGeometry?.dispose();
-    };
-  }, [ringGeometry]);
+  });
 
   const ringRef = useRef<THREE.Mesh>(null);
 
@@ -1338,100 +503,8 @@ export const Planet = ({
     return { main, halo };
   }, [body.color, vectorIntensity]);
 
-  const focusAncestorIds = useMemo(() => {
-    if (!focusId) return new Set<string>();
-
-    const ancestors = new Set<string>();
-    let curParentId = PARENT_BY_ID[focusId] ?? null;
-
-    while (curParentId) {
-      if (ancestors.has(curParentId)) break;
-      ancestors.add(curParentId);
-      curParentId = PARENT_BY_ID[curParentId] ?? null;
-    }
-
-    return ancestors;
-  }, [focusId]);
-
-  const orbitSalience = useMemo(() => {
-    if (!declutterOrbits) return 1;
-
-    // In overview, keep the scene clean by default.
-    if (!focusId) {
-      if (body.type === "planet" || body.type === "dwarf") return 1;
-      return 0;
-    }
-
-    if (body.id === focusId) return 1;
-
-    const focusBody = BODIES_BY_ID.get(focusId);
-    if (!focusBody) return 1;
-    const isSolarOverviewBody =
-      focusId === "sun" &&
-      !body.parentId &&
-      (body.type === "planet" || (body.type === "dwarf" && body.orbit.a <= 40));
-
-    // 1) Emphasize direct context: children and siblings.
-    if (isSolarOverviewBody) return 0.55;
-    if (body.parentId === focusId) return 0.55;
-    if (focusBody.parentId && body.parentId === focusBody.parentId) return 0.25;
-
-    // 2) Keep the ancestry chain visible (e.g., Moon -> Earth -> Sun).
-    if (focusAncestorIds.has(body.id)) return 0.45;
-
-    // 3) Keep major bodies faintly for global orientation.
-    if (body.type === "planet" || body.type === "dwarf") return 0.08;
-
-    return 0.02;
-  }, [
-    body.id,
-    body.orbit.a,
-    body.parentId,
-    body.type,
-    declutterOrbits,
-    focusAncestorIds,
-    focusId,
-  ]);
-
-  const assetPriority = useMemo(() => {
-    if (body.id === "sun") return 0;
-
-    if (!focusId) {
-      return body.type === "planet" || body.type === "dwarf" ? 1 : 2;
-    }
-
-    if (body.id === focusId) return 0;
-
-    const focusBody = BODIES_BY_ID.get(focusId);
-    if (!focusBody) return 1;
-    const isSolarOverviewBody =
-      focusId === "sun" &&
-      !body.parentId &&
-      (body.type === "planet" || (body.type === "dwarf" && body.orbit.a <= 40));
-
-    if (isSolarOverviewBody) return 1;
-    if (body.parentId === focusId) return 1;
-    if (focusBody.parentId && body.parentId === focusBody.parentId) return 1;
-    if (focusAncestorIds.has(body.id)) return 1;
-    if (body.type === "planet" || body.type === "dwarf") return 2;
-
-    return 3;
-  }, [
-    body.id,
-    body.orbit.a,
-    body.parentId,
-    body.type,
-    focusAncestorIds,
-    focusId,
-  ]);
-
-  const baseTextureSalience = useMemo(() => {
-    if (body.id === "sun") return 1;
-    if (assetPriority === 0) return 1;
-    if (assetPriority === 1) return 0.72;
-    if (assetPriority === 2) return 0.38;
-    return 0.14;
-  }, [assetPriority, body.id]);
+  const { orbitSalience, assetPriority, baseTextureSalience } =
+    useOrbitalSalience(body, focusId, declutterOrbits);
 
   const parentBody = useMemo(
     () => (body.parentId ? (BODIES_BY_ID.get(body.parentId) ?? null) : null),
@@ -1677,16 +750,12 @@ export const Planet = ({
   return (
     <>
       {showOrbits && orbitPoints && (
-        <Line
+        <PlanetOrbitLine
           ref={orbitLineRef}
           points={orbitPoints}
           color={body.color}
-          lineWidth={body.id === focusId ? 2.5 : 1.5} // Emphasize focused orbit
-          transparent
-          opacity={0.3 * orbitSalience}
-          depthTest={true}
-          depthWrite={false}
-          raycast={() => null}
+          isFocused={body.id === focusId}
+          orbitSalience={orbitSalience}
         />
       )}
 
@@ -1699,33 +768,10 @@ export const Planet = ({
           />
         )}
         {showProgradeVector && focusId === body.id && body.type !== "star" && (
-          <group ref={progradeRef} renderOrder={2000}>
-            <mesh raycast={() => null}>
-              <extrudeGeometry
-                args={[PROGRADE_ARROW_SHAPE, PROGRADE_ARROW_EXTRUDE_SETTINGS]}
-              />
-              <meshBasicMaterial
-                color={progradeColors.main}
-                transparent
-                opacity={0.95}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
-            <mesh scale={[1.12, 1.03, 1.55]} raycast={() => null}>
-              <extrudeGeometry
-                args={[PROGRADE_ARROW_SHAPE, PROGRADE_ARROW_EXTRUDE_SETTINGS]}
-              />
-              <meshBasicMaterial
-                color={progradeColors.halo}
-                transparent
-                opacity={0.24}
-                blending={THREE.AdditiveBlending}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
-          </group>
+          <PlanetMotionOverlays
+            ref={progradeRef}
+            progradeColors={progradeColors}
+          />
         )}
         <PlanetVisualWrapper
           body={body}
@@ -1742,7 +788,7 @@ export const Planet = ({
           baseTextureSalience={baseTextureSalience}
         />
 
-        {/* 
+        {/*
           Moons usually orbit the planet's equatorial plane (which is tilted).
           We apply the planet's axial tilt to the children container so the moons orbit the equator.
           EXCEPTION: Earth's Moon orbits the ecliptic (mostly), not Earth's equator.
