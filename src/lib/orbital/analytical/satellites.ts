@@ -91,6 +91,8 @@ const EPOCH_2025_JD = 2460676.5008931975;
  */
 const SATELLITES: Record<string, SatelliteEntry> = {
   // --- Martian ---
+  // Phobos: P=0.32 d. Mars J2 + tidal-decay drift; multi-epoch envelope
+  // 200° (see regression.test.ts MULTI_EPOCH_OVERRIDES).
   phobos: {
     parent: "mars",
     elements: {
@@ -103,6 +105,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 343.483363,
     },
   },
+  // Deimos: P=1.26 d. Mars J2 drift; multi-epoch envelope 20°.
   deimos: {
     parent: "mars",
     elements: {
@@ -117,6 +120,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Galilean ---
+  // Io: P=1.77 d. Laplace resonance + Jupiter J2; envelope 80°.
   io: {
     parent: "jupiter",
     elements: {
@@ -129,6 +133,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 77.16209,
     },
   },
+  // Europa: P=3.55 d. Laplace resonance + Jupiter J2; envelope 6.8°.
   europa: {
     parent: "jupiter",
     elements: {
@@ -141,6 +146,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 41.525546,
     },
   },
+  // Ganymede: P=7.15 d. Laplace resonance + Jupiter J2; envelope 1.8°.
   ganymede: {
     parent: "jupiter",
     elements: {
@@ -153,6 +159,8 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 355.419406,
     },
   },
+  // Callisto: P=16.69 d. Jupiter J2 + mutual Galilean perturbations
+  // (not Laplace-locked); envelope 3.8°.
   callisto: {
     parent: "jupiter",
     elements: {
@@ -167,6 +175,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Major Saturnian ---
+  // Mimas: P=0.94 d. Tethys 2:4 mean-motion resonance; envelope 54°.
   mimas: {
     parent: "saturn",
     elements: {
@@ -179,6 +188,8 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 338.697262,
     },
   },
+  // Enceladus: P=1.37 d. Dione 1:2 mean-motion resonance + tidal heating;
+  // envelope 150°.
   enceladus: {
     parent: "saturn",
     elements: {
@@ -191,6 +202,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 277.657121,
     },
   },
+  // Tethys: P=1.89 d. Mimas 2:4 mean-motion resonance; envelope 130°.
   tethys: {
     parent: "saturn",
     elements: {
@@ -203,6 +215,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 346.972498,
     },
   },
+  // Dione: P=2.74 d. Enceladus 1:2 mean-motion resonance; envelope 41°.
   dione: {
     parent: "saturn",
     elements: {
@@ -215,6 +228,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 59.177256,
     },
   },
+  // Rhea: P=4.52 d. Saturn J2 + Titan perturbation; envelope 2.4°.
   rhea: {
     parent: "saturn",
     elements: {
@@ -227,6 +241,8 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 329.872314,
     },
   },
+  // Titan: P=15.95 d. Solar perturbation + Hyperion 4:3 resonance;
+  // envelope 2.0°.
   titan: {
     parent: "saturn",
     elements: {
@@ -239,6 +255,8 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 32.218395,
     },
   },
+  // Iapetus: P=79.32 d. Saturn J2 + transitional Laplace-plane dynamics;
+  // envelope 1.9°.
   iapetus: {
     parent: "saturn",
     elements: {
@@ -253,6 +271,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Major Uranian ---
+  // Miranda: P=1.41 d. Uranus J2 at small semi-major axis; envelope 22°.
   miranda: {
     parent: "uranus",
     elements: {
@@ -265,6 +284,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 33.930746,
     },
   },
+  // Ariel: P=2.52 d. Uranus J2; envelope 1.2°.
   ariel: {
     parent: "uranus",
     elements: {
@@ -277,6 +297,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 0.202294,
     },
   },
+  // Umbriel: P=4.14 d. Uranus J2; envelope 4.4°.
   umbriel: {
     parent: "uranus",
     elements: {
@@ -289,6 +310,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 350.206625,
     },
   },
+  // Titania: P=8.71 d. Uranus J2; envelope 1.0°.
   titania: {
     parent: "uranus",
     elements: {
@@ -301,6 +323,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 15.613765,
     },
   },
+  // Oberon: P=13.46 d. Uranus J2; envelope 2.0°.
   oberon: {
     parent: "uranus",
     elements: {

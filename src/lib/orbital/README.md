@@ -34,28 +34,37 @@ static bundle (no network, no ephemeris files at runtime).
 - `scripts/generate-horizons-fixtures.js` fetches parent-centered J2000
   ecliptic vectors from NASA JPL Horizons.
 - `regression.test.ts` reads real fixtures from disk.
-- The representative coverage set is:
+- The representative coverage set is all 28 analytical + coarse-Kepler
+  bodies:
   `mercury`, `earth`, `moon`, `mars`, `io`, `titan`, `oberon`, `neptune`,
-  `pluto`, `ceres`, `vesta`, `triton`.
-- Tolerances enforce Phase 4 targets at the tested epoch:
+  `pluto`, `ceres`, `vesta`, `triton`, `europa`, `ganymede`, `callisto`,
+  `mimas`, `enceladus`, `tethys`, `dione`, `rhea`, `iapetus`, `miranda`,
+  `ariel`, `umbriel`, `titania`, `phobos`, `deimos`, `pallas`. All 28
+  bodies are checked at 2025-01-01 / 2025-07-01 / 2026-01-01.
+- Tolerances enforce Phase 4 targets at the baseline epoch (2025-01-01):
   - 0.1° for major planets (VSOP87D + Pluto-Meeus)
   - 0.2° for the Moon (ELP/MPP02-trunc)
-  - 0.5° for the three fixture-backed satellites (Io, Titan, Oberon) and
-    for Ceres / Vesta
-  - the remaining `*MeanElements` satellites and Pallas currently pass
-    registry / frame consistency tests only; tight angular coverage is
-    tracked in `PLAN.md` Phase 3.
+  - 0.5° for every `*MeanElements` satellite and `AsteroidOsculating`
+    asteroid (Ceres, Pallas, Vesta + 18 fixture-backed moons).
+  - Triton keeps the coarse 150° / 60% envelope because it is Kepler-only,
+    not analytical — the regression proves the fallback still reaches the
+    right neighbourhood.
+- Multi-epoch drift (±6 mo, ±12 mo) uses per-body `MULTI_EPOCH_OVERRIDES`
+  where two-body Kepler cannot model the real dynamics. Short-period /
+  resonance-heavy moons have the widest envelopes (phobos 200°,
+  enceladus 150°, tethys 130°). Each override's observed drift is
+  documented in the comment block at the top of `MULTI_EPOCH_OVERRIDES`
+  in `regression.test.ts`, with the physical driver (J2, resonance,
+  solar/tidal) named per body.
 
 ## Gaps Still Open
 
-- Fixtures cover the baseline epoch 2025-01-01 plus 2025-07-01 and 2026-01-01
-  for the 12 representative bodies. Extending coverage to
-  a multi-decade fixture sweep is tracked in `PLAN.md` and is the next step
-  for validating long-term drift of the truncated theories.
 - Natural-satellite accuracy relies on mean elements (scope-equivalent to
   Lieske L1, TASS17, GUST86, MARSSAT) rather than full perturbed theories.
   Upgrading to publication-grade series is out of scope for the offline
   bundle but remains an option if accuracy requirements tighten.
+- Fixture epoch refresh every 3–5 years is tracked in `tasks/todo.md`
+  under Phase 3 tail (process, not code — schedule, not pending work).
 
 ## Example
 

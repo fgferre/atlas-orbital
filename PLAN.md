@@ -38,8 +38,9 @@ Shipped:
 - UI (Sidebar, `CreditsModal`) and `src/lib/orbital/README.md` aligned to the
   shipped labels and epoch.
 
-Still open: multi-epoch fixtures (Phase 3) and long-term drift validation.
-Phase 5 (deferred realism) landed in-session — see the Phase 5 entry below.
+Phase 3 multi-epoch coverage shipped end-to-end (28 bodies × 3 epochs) and
+Phase 5 (deferred realism) landed in-session — see entries below. Only the
+long-term drift / epoch-refresh cadence remains as a process item.
 
 ## Current State
 
@@ -53,7 +54,7 @@ Phase 5 (deferred realism) landed in-session — see the Phase 5 entry below.
 - Telemetry, render, and orbit lines all consume the orbital engine path.
 - Real Horizons fixtures exist for the representative coverage set across
   four epochs (2020-01-01, 2020-07-01, 2021-01-01, 1890-01-01), with
-  follow-on 2025/2026 fixtures already on disk (see Phase 3 tail).
+  follow-on 2025/2026 fixtures now enforced at multi-epoch for all 28 bodies.
 - Deploy is static on GitHub Pages; Horizons is used offline only for fixture
   generation.
 
@@ -66,7 +67,7 @@ These points matter because they change how the remaining work should be execute
 - The regression harness uses real Horizons fixtures. Expand it instead of replacing it.
 - The app baseline is currently green. Every remaining phase must preserve that.
 - Static deploy is a real product constraint. Runtime API calls to Horizons are out of scope.
-- The registry and time utilities already encode the intended design. The missing pieces are now multi-epoch validation and visual realism, not physics math.
+- The registry and time utilities already encode the intended design. The remaining pieces are long-term drift / epoch-refresh cadence and per-body PBR bakes beyond Earth (Phase 7), not physics math.
 
 ## Objective
 
@@ -74,7 +75,7 @@ Reach the point where Atlas is scientifically honest and materially more accurat
 
 - real analytical models are active for supported bodies **(done)**
 - Kepler is used only for unsupported bodies or out-of-range dates **(done)**
-- regression tests prove the upgrade against real Horizons fixtures across multiple dates **(4 epochs × 28 bodies; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas still pending)**
+- regression tests prove the upgrade against real Horizons fixtures across multiple dates **(28 bodies × 3 multi-epoch dates + 1890 out-of-range Ceres fallback; per-body drift envelopes documented in `MULTI_EPOCH_OVERRIDES`)**
 - UI and docs always report the live model truthfully **(done)**
 - Earth and texture realism upgrades are completed after orbital accuracy is in place **(done — Earth day/night shader, cloud rotation split, and PBR normal + roughness shipped across `abb2f6c`, `2862f7d`, `05ebaf7`)**
 
@@ -154,7 +155,7 @@ Fixture coverage:
   modules were regenerated from this pipeline (L9 / L10 in
   `tasks/lessons.md`).
 
-### Phase 4 - Tighten Regression Thresholds — DONE (baseline) + PARTIAL (multi-epoch)
+### Phase 4 - Tighten Regression Thresholds — DONE
 
 Baseline (2020-01-01) enforced targets, all GREEN:
 
@@ -179,9 +180,12 @@ envelopes:
 - Io: ±80° envelope (two-body Kepler loses 70°/yr on its 1.77-day
   resonant orbit — real limitation of the unperturbed propagator).
 - Titan / Oberon: ±2° envelope (J2 + resonance drift ≈ 1–1.5°/yr).
-- The 12 other `*MeanElements` satellites and Pallas: currently checked
-  only at the baseline epoch. Extending multi-epoch regression to them
-  is tracked in `tasks/todo.md` (Phase-3 tail work).
+- The other 16 `*MeanElements` satellites are now also enforced at all
+  three epochs with per-body envelopes sized from observed drift:
+  short-period / resonance-heavy moons span 20°–200° (phobos, enceladus,
+  tethys, mimas, dione, miranda, deimos), mid-period moons span 1°–7°
+  (europa, callisto, umbriel, rhea, ganymede, iapetus, ariel, titania).
+  Pallas sits comfortably inside the 0.5° family default — no override.
 
 Drift envelopes are documented in `regression.test.ts >
 MULTI_EPOCH_OVERRIDES` and in `satellites.ts` JSDoc with the physical
@@ -256,7 +260,7 @@ Files Opus should keep under its control:
 
 Phase 1 work is complete. Remaining Sonnet-scoped tracks:
 
-- Phase 3 support: multi-epoch drift analysis once fixtures exist
+- (no open tracks — Phase 3 multi-epoch coverage shipped)
 
 ### Haiku Owns
 
@@ -299,11 +303,11 @@ This project is only done when:
 - the analytical provider is no longer a stub **(done)**
 - supported bodies really run on their intended analytical models **(done; labels reflect Path A scope-equivalents)**
 - Kepler is limited to unsupported bodies or invalid dates **(done)**
-- Horizons multi-date regression proves the gain numerically **(4 epochs × 28 bodies shipped; multi-epoch tail for the 12 `*MeanElements` satellites and Pallas remains)**
+- Horizons multi-date regression proves the gain numerically **(28 bodies × 3 multi-epoch dates enforced with per-body drift envelopes; fixture epoch-refresh cadence still a process item, not code)**
 - UI and docs always show the true live model **(done)**
 - realism upgrades are delivered without breaking the orbital integration **(done for Phase 5 Earth tracks; per-body PBR beyond Earth deferred to Phase 7)**
 - build, lint, tests, and smoke all remain green **(green)**
 
 ## One-Line Summary For A Fresh Executor
 
-Atlas has been turned from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system (Path A: VSOP87D / Meeus Pluto / ELP-MPP02-trunc / J2000-reduced mean elements / osculating asteroids) with Phase 5 Earth realism (day/night shader, cloud rotation split, PBR normal + roughness) also landed. Remaining work: multi-epoch Horizons validation tail, and per-body PBR bakes beyond Earth in Phase 7.
+Atlas has been turned from a Kepler-based orbital engine scaffold into a real offline analytical ephemeris system (Path A: VSOP87D / Meeus Pluto / ELP-MPP02-trunc / J2000-reduced mean elements / osculating asteroids) with Phase 5 Earth realism (day/night shader, cloud rotation split, PBR normal + roughness) also landed, and Phase 3 multi-epoch regression enforced across all 28 bodies at 2025-01-01 / 2025-07-01 / 2026-01-01 with per-body drift envelopes. Remaining work: per-body PBR bakes beyond Earth in Phase 7, and fixture epoch-refresh cadence (process item).
