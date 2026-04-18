@@ -13,7 +13,7 @@ import { preloadDeferredTexture } from "../../lib/deferredTextureCache";
 import { getOrbitCacheKey, getOrbitSegments } from "../../lib/orbitQuality";
 import { useStore } from "../../store";
 import { ErrorBoundary } from "../utils/ErrorBoundary";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { resolveTextureRequest } from "../../lib/textureVariants";
 import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { PlanetModel } from "./PlanetModel";
@@ -23,12 +23,16 @@ import {
   shouldRenderDirectSurfaceMap,
 } from "../../utils/proceduralSurface";
 
-const BODIES_BY_ID = new Map(SOLAR_SYSTEM_BODIES.map((b) => [b.id, b]));
 const PARENT_BY_ID = Object.fromEntries(
   SOLAR_SYSTEM_BODIES.map((body) => [body.id, body.parentId ?? null])
 );
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
+
+// Module-level scratch vector reused across hot-path useFrame blocks.
+// Safe because useFrame runs synchronously per frame in the same thread,
+// and every read is immediately preceded by getWorldPosition(TMP_WORLD_POS).
+const TMP_WORLD_POS = new THREE.Vector3();
 
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
@@ -1023,7 +1027,7 @@ const PlanetVisual = ({
     groupRef.current.scale.set(semanticRadius, semanticRadius, semanticRadius);
 
     if (camera instanceof THREE.PerspectiveCamera) {
-      const worldPos = new THREE.Vector3();
+      const worldPos = TMP_WORLD_POS;
       groupRef.current.getWorldPosition(worldPos);
       const distance = camera.position.distanceTo(worldPos);
       const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
@@ -1496,7 +1500,7 @@ export const Planet = ({
     // 2. Adaptive fade for ALL bodies based on camera distance (both modes)
     if (orbitLineRef.current) {
       // For moons (geocentric), we need world position. For planets, group position is world position.
-      const worldPos = new THREE.Vector3();
+      const worldPos = TMP_WORLD_POS;
       groupRef.current.getWorldPosition(worldPos);
       const distance = camera.position.distanceTo(worldPos);
 
@@ -1564,7 +1568,7 @@ export const Planet = ({
       progradeRef.current.visible = isActive;
 
       if (isActive) {
-        const worldPos = new THREE.Vector3();
+        const worldPos = TMP_WORLD_POS;
         groupRef.current.getWorldPosition(worldPos);
 
         // Pick a delta that corresponds to ~0.1° of mean anomaly (clamped).

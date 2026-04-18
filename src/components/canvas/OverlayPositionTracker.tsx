@@ -88,7 +88,6 @@ export const OverlayPositionTracker = () => {
       if (body.type === "dwarf" && !visibility.dwarfs) return;
       if (body.type === "moon" && !visibility.moons) return;
       if (body.type === "asteroid" && !visibility.asteroids) return;
-      if (body.type === "comet" && !visibility.comets) return;
       if (body.type === "tno" && !visibility.tnos) return;
 
       const mesh = scene.getObjectByName(body.id);

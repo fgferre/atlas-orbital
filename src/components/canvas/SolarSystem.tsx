@@ -54,7 +54,6 @@ export const SolarSystem = ({
       else if (body.type === "dwarf") isVisible = visibility.dwarfs;
       else if (body.type === "moon") isVisible = visibility.moons;
       else if (body.type === "asteroid") isVisible = visibility.asteroids;
-      else if (body.type === "comet") isVisible = visibility.comets;
       else if (body.type === "tno") isVisible = visibility.tnos;
 
       // Always show the Sun (star)

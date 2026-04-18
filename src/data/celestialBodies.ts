@@ -1947,3 +1947,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
   },
 ];
+
+export const BODIES_BY_ID: ReadonlyMap<string, CelestialBody> = new Map(
+  SOLAR_SYSTEM_BODIES.map((body) => [body.id, body])
+);

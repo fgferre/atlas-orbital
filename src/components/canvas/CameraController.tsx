@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { useStore } from "../../store";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import {
   PrivilegedPosition,
@@ -106,7 +106,7 @@ export const CameraController = () => {
     const controlsInstance = controlsRef.current;
     if (!focusId || !cameraInstance || !controlsInstance) return;
 
-    const bodyData = SOLAR_SYSTEM_BODIES.find((body) => body.id === focusId);
+    const bodyData = BODIES_BY_ID.get(focusId);
     if (!bodyData) return;
 
     const isSameFocus = prevFocusRef.current === focusId;
@@ -268,7 +268,7 @@ export const CameraController = () => {
     const controlsInstance = controlsRef.current;
     if (!focusId || !cameraInstance || !controlsInstance) return;
 
-    const bodyData = SOLAR_SYSTEM_BODIES.find((body) => body.id === focusId);
+    const bodyData = BODIES_BY_ID.get(focusId);
     if (!bodyData) return;
 
     const targetRadius = getBodyRadius(bodyData);

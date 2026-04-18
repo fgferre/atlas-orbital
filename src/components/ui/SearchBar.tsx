@@ -10,7 +10,7 @@ import {
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { searchBodies } from "../../lib/bodySearch";
@@ -55,9 +55,7 @@ export const SearchBar = ({
   const quickTargets = useMemo(
     () =>
       SEARCH_QUICK_TARGETS.flatMap(({ id, label }) => {
-        const body = SOLAR_SYSTEM_BODIES.find(
-          (candidate) => candidate.id === id
-        );
+        const body = BODIES_BY_ID.get(id);
 
         return body ? [{ id, label }] : [];
       }),

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { useStore } from "../../store";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import {
@@ -20,7 +20,7 @@ export const Sidebar = () => {
   const selectedId = useStore((state) => state.selectedId);
   const setSelectedId = useStore((state) => state.setSelectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
-  const b = SOLAR_SYSTEM_BODIES.find((x) => x.id === selectedId);
+  const b = selectedId ? BODIES_BY_ID.get(selectedId) : undefined;
   const orbitalCalculation = useOrbitalCalculation(
     selectedId ?? "sun",
     b?.parentId
@@ -35,7 +35,7 @@ export const Sidebar = () => {
 
     let parentMass = 1.989e30; // Default Sun
     if (b.parentId) {
-      const parent = SOLAR_SYSTEM_BODIES.find((p) => p.id === b.parentId);
+      const parent = b.parentId ? BODIES_BY_ID.get(b.parentId) : undefined;
       if (parent) parentMass = AstroPhysics.parseScientificValue(parent.mass);
     }
 
@@ -71,8 +71,7 @@ export const Sidebar = () => {
   // Even if no body is selected, we render the container but translate it off-screen
   // This allows for smooth CSS transitions
   const isVisible = !!b;
-  const parentBody =
-    b?.parentId && SOLAR_SYSTEM_BODIES.find((body) => body.id === b.parentId);
+  const parentBody = b?.parentId ? BODIES_BY_ID.get(b.parentId) : undefined;
   const panelClassName = isMobile
     ? `fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] h-[min(58dvh,34rem)] w-auto ${
         isVisible

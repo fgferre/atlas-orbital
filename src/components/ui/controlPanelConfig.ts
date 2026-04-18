@@ -17,8 +17,7 @@ export type VisibilityCategory =
   | "moons"
   | "dwarfs"
   | "asteroids"
-  | "tnos"
-  | "comets";
+  | "tnos";
 
 export const RIGHT_CONTROL_BUTTONS = [
   { id: "search", label: "Search" },
@@ -122,7 +121,6 @@ export const OVERLAY_FILTER_OPTIONS = [
   { id: "dwarfs", label: "Dwarfs" },
   { id: "asteroids", label: "Asteroids" },
   { id: "tnos", label: "TNOs" },
-  { id: "comets", label: "Comets" },
 ] as const satisfies ReadonlyArray<{
   id: VisibilityCategory;
   label: string;

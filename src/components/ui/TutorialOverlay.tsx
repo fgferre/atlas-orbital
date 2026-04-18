@@ -87,7 +87,6 @@ const TUTORIAL_STEPS: TutorialStep[] = [
           <li>
             • Project keeps Replay Tutorial, Mission Report, and Debug Menu
           </li>
-          <li>• Comets remain visible as a first-class overlay category</li>
         </ul>
       </>
     ),

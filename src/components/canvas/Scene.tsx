@@ -26,7 +26,7 @@ import {
   VISUAL_PRESETS,
   getPresetForContext,
 } from "../../config/visualPresets";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import {
   resolveDeferredTextureBudget,
@@ -130,7 +130,7 @@ const SceneContent = ({
   useFrame(() => {
     // 1. Auto-select preset
     if (autoPresetEnabled && focusId) {
-      const focusedBody = SOLAR_SYSTEM_BODIES.find((b) => b.id === focusId);
+      const focusedBody = BODIES_BY_ID.get(focusId);
       if (focusedBody) {
         // Default to 0 if orbit is missing (e.g. Sun)
         const distanceFromSun = focusedBody.orbit ? focusedBody.orbit.a : 0;
@@ -405,10 +405,7 @@ export const Scene = () => {
     }),
     []
   );
-  const sunBody = useMemo(
-    () => SOLAR_SYSTEM_BODIES.find((body) => body.id === "sun") ?? null,
-    []
-  );
+  const sunBody = useMemo(() => BODIES_BY_ID.get("sun") ?? null, []);
   const sunVisualRadiusWorld = useMemo(() => {
     if (!sunBody) {
       return 0;
@@ -596,11 +593,10 @@ export const Scene = () => {
         navigator.clipboard
           .writeText(json)
           .then(() => {
-            alert("Settings copied to clipboard!");
+            console.info("[debug] Settings copied to clipboard");
           })
           .catch((err) => {
-            console.error("Failed to copy: ", err);
-            alert("Failed to copy settings. Check console.");
+            console.error("[debug] Failed to copy settings:", err);
           });
       }),
     }),
@@ -611,11 +607,10 @@ export const Scene = () => {
           if (cam) {
             const pos = `new THREE.Vector3(${cam.position.x.toFixed(0)}, ${cam.position.y.toFixed(0)}, ${cam.position.z.toFixed(0)})`;
             navigator.clipboard.writeText(pos).then(() => {
-              console.log("Camera position copied:", pos);
-              alert(`Copied: ${pos}`);
+              console.info("[debug] Camera position copied:", pos);
             });
           } else {
-            alert("Camera not available");
+            console.warn("[debug] Camera not available");
           }
         }),
         "Log Camera Info": button(() => {
@@ -802,12 +797,14 @@ export const Scene = () => {
         <DynamicZoom controlsRef={controlsRef} />
         <NormalizedWheelZoom controlsRef={controlsRef} />
 
-        <PostProcessingEffects
-          bloomRef={bloomRef}
-          hueSatRef={hueSatRef}
-          brightnessRef={brightnessRef}
-          bloomEnabled={qualityProfile.bloomEnabled}
-        />
+        {qualityProfile.name !== "constrained" && (
+          <PostProcessingEffects
+            bloomRef={bloomRef}
+            hueSatRef={hueSatRef}
+            brightnessRef={brightnessRef}
+            bloomEnabled={qualityProfile.bloomEnabled}
+          />
+        )}
         <DeferredTextureBudgetGate profileName={qualityProfile.name} />
         <CriticalSceneAssetsGate />
         <SceneReadyChecker />

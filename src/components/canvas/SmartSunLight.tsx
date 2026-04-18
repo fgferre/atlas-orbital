@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import { useStore } from "../../store";
 import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
@@ -36,8 +36,7 @@ export const SmartSunLight = forwardRef<
 
     // 1. Identify Target
     const trackedBodyId = !focusId || focusId === "sun" ? "earth" : focusId;
-    const trackedBody =
-      SOLAR_SYSTEM_BODIES.find((body) => body.id === trackedBodyId) ?? null;
+    const trackedBody = BODIES_BY_ID.get(trackedBodyId) ?? null;
     const targetObj = scene.getObjectByName(trackedBodyId);
 
     if (!targetObj || !trackedBody) return;

@@ -53,7 +53,6 @@ interface AppState {
     dwarfs: boolean;
     moons: boolean;
     asteroids: boolean;
-    comets: boolean;
     tnos: boolean;
   };
   showTutorial: boolean;
@@ -193,7 +192,6 @@ export const useStore = create<AppState>((set) => ({
     dwarfs: true,
     moons: true,
     asteroids: true,
-    comets: true,
     tnos: true,
   },
   showTutorial:
@@ -345,13 +343,10 @@ export const useStore = create<AppState>((set) => ({
     })),
   closeTutorial: (status = "completed") => {
     localStorage.setItem("tutorialStatus", status);
-    // Also keep the legacy key for backward compatibility if needed, or just rely on new one
-    localStorage.setItem("hasSeenTutorial", "true");
     set({ showTutorial: false, tutorialCompletionStatus: status });
   },
   completeTutorial: () => {
     localStorage.setItem("tutorialStatus", "completed");
-    localStorage.setItem("hasSeenTutorial", "true");
     set({
       showTutorial: false,
       tutorialCompletionStatus: "completed",

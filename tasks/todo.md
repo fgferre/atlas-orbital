@@ -1,12 +1,79 @@
 # Atlas Orbital — Active Todo
 
-Updated: 2026-04-17
+Updated: 2026-04-18
 
 This file is the single running todo list for the orbital-realism initiative.
 It complements the long-form plan in `PLAN.md` (strategy) and
 `tasks/lessons.md` (accumulated mistakes and corrections).
 
 ## Active
+
+### Project-wide critical review — 2026-04-18 (started)
+
+Plan at `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v3).
+Two independent Codex reviews + 3 Explore agents + direct code read. 11 ondas
+ordenadas por ROI. Nenhuma quebra de UX ao longo do caminho.
+
+Deliberately **not** in scope (absorbed from Codex): WebGPU, path aliases,
+`celestialBodies.ts` schema, features visuais (HDR/bloom/lens flare), pixel-diff
+automatizado, reabilitar filtro de cometas até que um corpo `type:"comet"`
+exista de fato.
+
+#### Onda 0 — Quick wins (done, 2026-04-18)
+
+- [x] **0.1** — `store.ts:347-354`: removidas escritas da chave legada
+      `hasSeenTutorial` (nunca lida no código).
+- [x] **0.2** — `Scene.tsx:805`: wrap do `<PostProcessingEffects />` com
+      `qualityProfile.name !== "constrained"`. EffectComposer + ToneMapping +
+      HueSaturation + BrightnessContrast agora não montam no tier constrained.
+      SceneContent já tinha null-checks nos refs (não precisou mudar).
+- [x] **0.3** — `celestialBodies.ts`: adicionado export
+      `BODIES_BY_ID: ReadonlyMap<string, CelestialBody>`. Migrados 10 call
+      sites em runtime (`Scene.tsx:133,409`, `CameraController.tsx:109,271`,
+      `InitialCameraAnimation.tsx:88`, `SmartSunLight.tsx:40`,
+      `SearchBar.tsx:58`, `Sidebar.tsx:23,38,75`, `Planet.tsx:1356,1394,1426`).
+      Bonus: eliminada duplicação de `BODIES_BY_ID` que `Planet.tsx:26` tinha
+      local — agora consome o canônico. Testes (4 call sites) mantidos como
+      `.find()` (não são hot path; AGENTS.md #3).
+- [x] **0.4** — `Planet.tsx`: alocações `new THREE.Vector3()` em useFrame
+      (linhas 1026, 1499, 1567) substituídas por uma constante módulo-level
+      `TMP_WORLD_POS` reutilizada. Comentário explica porque é seguro (todas
+      as leituras são precedidas imediatamente por `getWorldPosition(TMP_WORLD_POS)`
+      dentro do mesmo tick síncrono do useFrame).
+- [x] **0.5** — `.husky/pre-commit` ganhou `npm run lint` após `lint-staged`.
+      Agora ESLint é gate efetivo de commit.
+- [x] **0.6** — Removido filtro de cometas que ficou morto:
+      `controlPanelConfig.ts` (union + inventory entry), `store.ts` (campo
+      visibility.comets + default), `SolarSystem.tsx:57` (branch),
+      `OverlayPositionTracker.tsx:91` (branch), `TutorialOverlay.tsx:90`
+      (mensagem ao usuário que era falsa). Tests atualizados: `store.test.ts`
+      toca `asteroids` em vez de `comets`; `controlPanelConfig.test.ts`
+      renomeado e atualizado para refletir inventory sem "Comets". Type
+      literal `"comet"` preservado em `astrophysics.ts` e `orbital/types.ts`
+      para facilitar re-adição quando um cometa real chegar.
+- [x] **0.7** — `Scene.tsx:598-619`: 4 `alert()` em botões Leva de debug
+      substituídos por `console.info("[debug] …")` ou `console.warn`. Alerts
+      bloqueavam a thread de UI; console.info preserva feedback para devs
+      e não degrada a UX de não-debug (o painel Leva já é oculto quando
+      `debugMode === false`). Leva vai virar lazy-load na Onda 9.
+
+**Verificação Onda 0:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 308/308 verdes (mesma contagem — 1 teste renomeado,
+  1 assertion reapontada para `asteroids`).
+- `npm run build`: ✅ 9,94 s, sem erros novos. Warnings de chunk > 500 kB
+  (`index` 2.66 MB, `proceduralSurface` 608 kB, `Scene` 469 kB) são os
+  previstos — serão tratados na Onda 9 (chunking + lazy Leva + lazy
+  AssetStudyApp + lazy proceduralSurface).
+
+**Arquivos tocados (Onda 0):** 14 arquivos. Diff pequeno por item; escopo
+cirúrgico em cada mudança (AGENTS.md #3).
+
+Follow-up Codex review (incorporado): `SmartSunLight.tsx:40` — removido
+guard `trackedBodyId ?` (dead branch — `trackedBodyId` é sempre truthy por
+causa do `"earth"` default da linha 38). Simplificação pura, sem mudança
+de semântica.
 
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 

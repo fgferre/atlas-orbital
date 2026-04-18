@@ -63,9 +63,9 @@ describe("store phase 4 regression guards", () => {
     expect(useStore.getState().sunRenderMode).toBe("procedural");
     expect(localStorageMock.getItem("sunRenderMode")).toBe("procedural");
 
-    expect(useStore.getState().visibility.comets).toBe(true);
-    useStore.getState().toggleVisibility("comets");
-    expect(useStore.getState().visibility.comets).toBe(false);
+    expect(useStore.getState().visibility.asteroids).toBe(true);
+    useStore.getState().toggleVisibility("asteroids");
+    expect(useStore.getState().visibility.asteroids).toBe(false);
 
     expect(useStore.getState().showLabels).toBe(true);
     useStore.getState().toggleLabels();

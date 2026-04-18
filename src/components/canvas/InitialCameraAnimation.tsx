@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import { PrivilegedPosition } from "../../lib/camera";
 import { useStore } from "../../store";
@@ -84,8 +84,7 @@ export const InitialCameraAnimation = () => {
 
   const resolveIntroEndPosition = useCallback(() => {
     const perspectiveCamera = cameraRef.current as THREE.PerspectiveCamera;
-    const sunBody =
-      SOLAR_SYSTEM_BODIES.find((body) => body.id === "sun") ?? null;
+    const sunBody = BODIES_BY_ID.get("sun") ?? null;
 
     if (!(perspectiveCamera instanceof THREE.PerspectiveCamera) || !sunBody) {
       return INTRO_END_DIRECTION.clone().multiplyScalar(

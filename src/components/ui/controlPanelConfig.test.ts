@@ -61,14 +61,13 @@ describe("controlPanelConfig", () => {
     ]);
   });
 
-  it("keeps comets and guide overlays in the inventory", () => {
+  it("keeps category and guide overlays in the inventory", () => {
     expect(OVERLAY_FILTER_OPTIONS.map((option) => option.label)).toEqual([
       "Planets",
       "Moons",
       "Dwarfs",
       "Asteroids",
       "TNOs",
-      "Comets",
     ]);
     expect(OVERLAY_GUIDE_OPTIONS.map((option) => option.label)).toEqual([
       "Icons",
