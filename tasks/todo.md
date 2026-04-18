@@ -145,6 +145,86 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — Honest NASA port (2026-04-17)
+
+Previous "calibration pass" over-corrected and made the sky "timid
+and depopulated". User pushed back: "something's very different in
+the datasets that compensates for this — you're not doing a good
+review of NASA Eyes' code vs ours, or you're inferring things."
+Fair hit.
+
+This commit does the side-by-side diff I should have done the first
+time:
+
+**NASA shader** (src/components/canvas/shaders/nasaStarShaders.ts):
+
+    gl_PointSize = clamp(brightness * 4 * particleSize, 5, 50);
+    fColor.a = clamp(brightness * particleSize, 0.05, 1);
+
+**My shader, previous commit**:
+
+    baseSize = clamp(brightness * 1.5, 2, 12);      // clamp BEFORE ×particleSize
+    gl_PointSize = baseSize * particleSize * pixelRatio;  // ALSO multiplies by pixelRatio (duplicate DPR)
+    vBrightness = clamp(brightness * 0.08, 0.12, 1); // coefficient 0.08, not particleSize
+
+Three bugs:
+
+1. **Clamp before `× particleSize`**. NASA clamps the final pixel
+   value `brightness × 4 × particleSize` to `[5, 50]`. I was clamping
+   `brightness × 1.5` to `[2, 12]` and _then_ multiplying by
+   particleSize (~0.7), so the final range became ~`[1.5, 8.4]`.
+   Stars could drop to sub-pixel instead of hitting NASA's 5 px floor.
+2. **Duplicate DPR application**. `particleSize` uniform already
+   includes devicePixelRatio (`sqrt(max(w,h) × DPR) / 60`); I was
+   multiplying by a separate `pixelRatio` uniform on top of it.
+   Retina displays got 2× the intended scaling. Added a comment on
+   the `particleSize` uniform declaration so no-one repeats this.
+3. **Alpha coefficient 0.08 instead of `× particleSize`**. NASA's
+   alpha formula is `brightness × particleSize`, which makes every
+   star brighter than mag ~5 saturate at alpha = 1. My coefficient
+   0.08 crushed mag 4 to α 0.32 and mag 6 to α 0.08 (floor). The
+   mid-faint band went invisible.
+
+Changes this commit:
+
+- `src/components/canvas/Starfield.tsx` — restored NASA's exact
+  formula: `gl_PointSize = clamp(brightness × 4 × particleSize, 5, 50)`
+  and `vBrightness = clamp(brightness × particleSize, 0.05, 1)`.
+  Dropped the `pixelRatio` uniform entirely (no longer needed).
+  Fragment `pow(d, 5)` restored (the pow(8) tweak only made sense
+  under the wrong tiny-sprite calibration).
+- `src/lib/starfieldShaderMath.ts` — helper now takes `particleSize`
+  as a parameter and returns the final `gl_PointSize` and
+  `vBrightness` values _after_ the NASA-order clamps. 13 sample
+  points hand-verified against the GLSL; the previous 9 sample
+  points (from the over-corrected pass) are gone.
+
+Expected sizes at a typical `particleSize = 0.75`:
+
+| mag           | gl_PointSize | vBrightness  |
+| ------------- | ------------ | ------------ |
+| -1.5 (Sirius) | 41.4         | 1.0          |
+| 0 (Vega)      | 33.1         | 1.0          |
+| 2             | 22.2         | 1.0          |
+| 4             | 11.9         | 1.0          |
+| 5             | 7.5          | 1.0          |
+| 6             | 5 (floor)    | 1.0          |
+| 7             | 5            | 0.50         |
+| 8             | 5            | 0.22         |
+| 10+           | 5            | 0.05 (floor) |
+
+That restores the dense NASA sky: every naked-eye star (mag ≤ 6)
+saturates at α 1.0 on a ≥ 5 px sprite, and the faint-telescopic
+tail fades gracefully instead of dropping off a cliff.
+
+Lesson L17 rewritten to capture the three-way bug: porting a curve
+means porting _where the clamps apply_, not just the formula. The
+diff I should have done the first time is now the code marker.
+
+Verification: lint clean, 308/308 tests green. User to confirm in
+browser (Playwright verification remains blocked by R3F render-loop
+conflicts with screenshot stability heuristics).
+
 ## Review — NASA calibration pass (2026-04-17)
 
 User reported the NASA-style curve from the previous commit still

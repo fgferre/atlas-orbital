@@ -53,7 +53,10 @@ const vertexShader = /* glsl */ `
   attribute float mag;
   attribute float ci;
 
-  uniform float pixelRatio;
+  // particleSize already bakes devicePixelRatio in (set by useFrame
+  // to sqrt(max(w,h) * DPR) / 60, matching NASA Eyes' own derivation).
+  // Do NOT multiply by a separate pixelRatio uniform — that caused a
+  // double-DPR bug on retina displays.
   uniform float particleSize;
   uniform float yearsSinceJ2000;
 
@@ -89,26 +92,25 @@ const vertexShader = /* glsl */ `
     vec4 viewPosition = modelViewMatrix * vec4(animatedPos, 1.0);
     gl_Position = projectionMatrix * viewPosition;
 
-    // NASA Eyes–style transfer curve: Pogson flux compressed
-    // logarithmically (Fechner's law), then mapped to sprite size and
-    // alpha. The constants are calibrated against NASA Eyes' actual
-    // output at solar-system-viewing distances — see the long comment
-    // in src/lib/starfieldShaderMath.ts for the derivation.
+    // NASA Eyes–style transfer curve. We run the SAME post-log-
+    // compression pipeline as nasaStarShaders.ts, just driving the
+    // flux from HYG's apparent magnitude instead of NASA's absMag +
+    // inverse-square (mathematically equivalent for a solar-system
+    // observer because the distance term cancels: apparent magnitude
+    // IS flux-at-Earth in magnitudes). The 250 multiplier collapses
+    // NASA's absMag·1e4 pipeline to an apparent-mag equivalent.
     //
-    // The 250× multiplier inside log(1 + flux · 250) is what makes
-    // this match NASA rather than blow stars up into fuzzy discs: at
-    // apparent mag 0 (Vega) brightness ≈ 11, mag 4 ≈ 4, mag 6 ≈ 1.4,
-    // mag 8+ approaches the floor. The size coefficient (1.5) and
-    // small clamp range ([2, 12] px) keep even the brightest stars as
-    // crystalline points rather than big softglow blobs, which is how
-    // the naked eye actually reads the night sky.
+    // Both the size and alpha formulas mirror NASA exactly, including
+    // the [5, 50] size clamp AFTER the particleSize multiplication
+    // (so the clamps are on the final-pixel range, not on a
+    // pre-viewport quantity) and alpha = brightness * particleSize
+    // (not a separate 0.08 coefficient — that was the mistake that
+    // crushed mid-faint stars in the previous calibration).
     float flux = pow(10.0, -mag * 0.4);
     float brightness = 2.0 * log(1.0 + flux * 250.0);
 
-    float baseSize = clamp(brightness * 1.5, 2.0, 12.0);
-    gl_PointSize = baseSize * particleSize * pixelRatio;
-
-    vBrightness = clamp(brightness * 0.08, 0.12, 1.0);
+    gl_PointSize = clamp(brightness * 4.0 * particleSize, 5.0, 50.0);
+    vBrightness = clamp(brightness * particleSize, 0.05, 1.0);
     vColor = bvToRGB(ci);
   }
 `;
@@ -120,13 +122,12 @@ const fragmentShader = /* glsl */ `
   varying float vBrightness;
 
   void main() {
-    // Sharper radial falloff (pow 8 instead of NASA's original pow 5):
-    // on the smaller 2–12 px sprites the bright core needs a steeper
-    // curve to stay tight. With pow(5) on these sprite sizes the star
-    // reads as a fuzzy disc; pow(8) keeps the centre bright and fades
-    // aggressively, giving the crystalline naked-eye-point look.
+    // NASA's exact pow(d, 5) radial falloff. Previously bumped to
+    // pow(d, 8) to keep small sprites crisp, but the sprites were
+    // only small because the size calibration was wrong. With the
+    // proper [5, 50] NASA clamp restored, pow(5) is the right shape.
     float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float alpha = pow(d, 8.0);
+    float alpha = pow(d, 5.0);
     gl_FragColor = vec4(vColor, alpha * vBrightness);
   }
 `;
@@ -185,7 +186,7 @@ export const Starfield = () => {
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
-  const { gl, size } = useThree();
+  const { size } = useThree();
   const pointsRef = useRef<THREE.Points>(null);
 
   // Build the ShaderMaterial once and pass it as an instance to the
@@ -202,7 +203,6 @@ export const Starfield = () => {
       vertexShader,
       fragmentShader,
       uniforms: {
-        pixelRatio: { value: gl.getPixelRatio() },
         particleSize: { value: 1.0 },
         yearsSinceJ2000: { value: 0.0 },
       },
@@ -210,7 +210,7 @@ export const Starfield = () => {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
-  }, [gl]);
+  }, []);
 
   // Memoise the tier-bound loader / cache getter so
   // `useStarfieldCatalog`'s effect only re-runs when the device tier

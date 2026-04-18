@@ -391,6 +391,17 @@ the reference" are two different claims.
 
 **Code marker:** the constants block at the top of
 `src/lib/starfieldShaderMath.ts` — log scale 250, size coefficient
-1.5, clamp [2, 12] px — is the post-calibration settings. The
-previous `5000` / `3` / `[4, 40]` block produced the fuzzy-disc
-regression.
+4, clamp `[5, 50]` px, alpha coefficient = particleSize (not a
+fixed 0.08) — matches NASA's nasaStarShaders.ts exactly.
+
+**Second-order lesson from the same session:** my first
+"calibration" pass got the transfer-curve constant right (250) but
+also mistuned the size multiplier (→ 1.5), the clamp range
+(→ `[2, 12]`), and the alpha formula (→ fixed coefficient 0.08).
+Each of those was a guess rather than a direct port. Result: the
+sky went from "too big and round" straight to "timid and
+depopulated" — overshooting in the opposite direction. The honest
+port should apply NASA's exact formula including _where the clamp
+lives_ and _what the alpha is proportional to_, not just the
+log-compression shape. When porting, diff the two shaders line by
+line and port the structure, not just the values.
