@@ -189,7 +189,6 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
 }
 
 export const Starfield = () => {
-  const scaleMode = useStore((state) => state.scaleMode);
   const datetime = useStore((state) => state.datetime);
   const qualityMode = useStore((state) => state.qualityMode);
   const qualityProfile = useQualityProfile(qualityMode);
@@ -258,13 +257,14 @@ export const Starfield = () => {
       velocities[i] *= DISTANCE_SCALE;
     }
 
-    // In didactic mode the legacy preset nudged point sizes up by 1.5×.
-    // Retain that behaviour by piggy-backing on the magnitude attribute —
-    // shifting mag down makes the Pogson curve produce larger sizes.
-    const didacticBias = scaleMode === "didactic" ? -0.9 : 0;
-    const biasedMag = new Float32Array(count);
+    // Magnitudes pass through unmodified: the starfield reads the same in
+    // didactic and realistic scale modes. An earlier version biased mag
+    // down by 0.9 in didactic to mimic the legacy tycho2 preset's larger
+    // dots, but the user explicitly wanted the sky to stay visually
+    // consistent while the solar-system scale changes.
+    const magArray = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      biasedMag[i] = magnitudes[i] + didacticBias;
+      magArray[i] = magnitudes[i];
     }
 
     const geom = new THREE.BufferGeometry();
@@ -273,11 +273,11 @@ export const Starfield = () => {
       new THREE.BufferAttribute(scaledPositions, 3)
     );
     geom.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-    geom.setAttribute("mag", new THREE.BufferAttribute(biasedMag, 1));
+    geom.setAttribute("mag", new THREE.BufferAttribute(magArray, 1));
     geom.setAttribute("ci", new THREE.BufferAttribute(colorIndices, 1));
 
     return geom;
-  }, [catalog, scaleMode]);
+  }, [catalog]);
 
   // Viewport-adaptive sizing so a window resize does not change the
   // visual density of the sky. yearsSinceJ2000 is the simulation-time
