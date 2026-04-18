@@ -32,6 +32,17 @@ export default defineConfig({
           ) {
             return "three-vendor";
           }
+          // `astronomia` (VSOP87 planetary theory + ELP lunar theory +
+          // Pluto/Meeus) is pulled eagerly by `src/main.tsx` →
+          // `initializeOrbitalEngine()`. The package ships the VSOP87D
+          // coefficient tables as separate data modules (vsop87Dmercury,
+          // vsop87Dearth, etc) which together dominate the residual
+          // `index` chunk. Isolating them into their own long-term-
+          // cacheable chunk (`astronomy`) leaves `index` for app-level
+          // code only.
+          if (id.includes("/astronomia/")) {
+            return "astronomy";
+          }
           if (id.includes("framer-motion")) return "animation";
           if (id.includes("zustand")) return "state";
         },
