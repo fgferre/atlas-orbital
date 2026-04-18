@@ -34,7 +34,7 @@ interface NASAStarfieldProps {
 }
 
 export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
-  const { size } = useThree();
+  const { gl, size } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
   const stars = useStarfieldCatalog<NASAStar[]>({
@@ -97,12 +97,15 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
 
     // =========================================================================
     // VIEWPORT-ADAPTIVE SIZING (NASA's prepareForRender)
-    // particleSize scales with viewport size for consistent appearance
-    // Formula: sqrt(max(width, height) * devicePixelRatio) / 60
+    // particleSize scales with viewport size for consistent appearance.
+    // Formula: sqrt(max(width, height) * DPR) / 60 using the renderer's
+    // effective DPR (gl.getPixelRatio()) so the clamp applied by
+    // qualityProfile.dprMax in Scene.tsx is respected — otherwise
+    // sprites oversize by sqrt(DPR_window / DPR_renderer).
     // =========================================================================
+    const effectiveDpr = gl.getPixelRatio();
     const viewportScale =
-      Math.sqrt(Math.max(size.width, size.height) * window.devicePixelRatio) /
-      60;
+      Math.sqrt(Math.max(size.width, size.height) * effectiveDpr) / 60;
 
     materialRef.current.uniforms.particleSize.value =
       particleSize * viewportScale;

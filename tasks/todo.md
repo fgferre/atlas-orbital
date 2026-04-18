@@ -145,6 +145,59 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — Codex follow-up on honest port (2026-04-17)
+
+Codex reviewed commit `3675322` and caught three things I had
+missed. All valid, all fixed in this commit.
+
+1. **DPR blindside.** My `particleSize` calculation used
+   `window.devicePixelRatio`, but `Scene.tsx` clamps the renderer
+   DPR via `qualityProfile.dprMax`. On a DPR-3 display under the
+   constrained profile (dprMax = 1) the window DPR is 3 but the
+   renderer draws into a DPR-1 buffer — my sprites were sized √3
+   larger than they should have been relative to the actual buffer.
+   Fix: read `gl.getPixelRatio()` inside useFrame. Applied to both
+   `src/components/canvas/Starfield.tsx` and
+   `src/components/canvas/NASAStarfield.tsx` (same bug was in the
+   reference renderer too).
+
+2. **Unqualified "match NASA" claim.** My Pogson-based equivalence
+   (`C = 250` replacing NASA's `absMag + inverse-square` pipeline)
+   is exact only for an observer local to the solar system. The
+   app's Scene.tsx permits zooming well beyond that. Codex
+   quantified: ~1.75 % divergence at 1000 AU for Proxima, less for
+   farther stars. The practical zoom range keeps the error under
+   ~2 %, but the claim had to be qualified. Added that qualification
+   to the shader doc comment and to L17.
+
+3. **Stale documentation.** Several spots in `tasks/lessons.md`
+   referenced old state:
+   - L15 code marker still said `useMemo(..., [gl])` — the deps are
+     now `[]` after dropping the `pixelRatio` uniform.
+   - L16 code marker still said `flux * 5000` and "13 tests" —
+     current is `flux * 250` and 15 tests.
+   - L17 only listed 3 divergences from NASA when in fact there
+     were 7. Rewrote the lesson with the full list so the size
+     multiplier, clamp range, alpha floor, fragment exponent, and
+     the above DPR blindside are all documented.
+   - `Starfield.tsx` module header still described the renderer as
+     "Pogson-style size scaling" — rewrote to reflect the
+     NASA-log-compressed curve it actually runs.
+
+Codex also noted that `NASAStarfield.tsx` still uses the
+`<shaderMaterial uniforms={{...}}>` JSX-child pattern flagged in
+L15. That pattern is real, but NASAStarfield doesn't mutate
+uniforms per-frame beyond `particleSize` — the bug L15 warns about
+(GPU bindings pointing at a replaced uniforms object) fires when
+per-frame mutations are routed through the stale reference. Since
+NASAStarfield only writes `particleSize` and it's the same key
+that re-renders in the prop, this is latent rather than active.
+Deferred — will fix when we refactor NASAStarfield (it is a
+comparison reference and not on the hot path anymore).
+
+Verification: lint clean, 308/308 tests green. User to confirm
+visually in the browser.
+
 ## Review — Honest NASA port (2026-04-17)
 
 Previous "calibration pass" over-corrected and made the sky "timid

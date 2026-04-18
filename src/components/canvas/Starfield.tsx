@@ -3,22 +3,26 @@
  *
  * Consumes the compact binary catalog produced by `scripts/build-hyg-binary.js`
  * (parsed into `HygCatalogData` by `src/utils/hygBinary.ts`) and renders it
- * as a single `Points` primitive with a custom shader. The shader carries
- * three upgrades over the legacy "tycho2" path:
+ * as a single `Points` primitive with a custom shader.
  *
- *   • real B-V colour (blue/white/yellow/orange/red) derived per star
- *     instead of a single Sun-like default;
- *   • Pogson-style size scaling so each magnitude step changes the rendered
- *     glow by a geometrically consistent factor;
- *   • proper motion: pmra / pmdec are converted once on parse into a
- *     3D velocity vector (parsecs/year) and the vertex shader displaces the
- *     star by `velocity * yearsSinceJ2000` so the rendered sky drifts with
- *     the simulation time — visible when exploring decades or centuries.
+ *   • Real B-V colour (blue/white/yellow/orange/red) derived per star
+ *     instead of a single Sun-like default.
+ *   • NASA Eyes–style log-compressed transfer curve: Pogson flux →
+ *     `2·log(1 + flux·250)` brightness → sprite size and alpha with
+ *     NASA's own clamp structure. See `./shaders/nasaStarShaders.ts`
+ *     for the reference implementation this port mirrors. The 250 here
+ *     collapses NASA's absMag + inverse-square pipeline for a solar-
+ *     system-local observer — the equivalence is not exact when the
+ *     camera sits >1000 AU from the Sun (tasks/lessons.md L17), but
+ *     the deviation stays under ~2 % across the practical zoom range.
+ *   • Proper motion: pmra / pmdec are converted on parse into a 3D
+ *     velocity vector (parsecs/year); the vertex shader displaces the
+ *     star by `velocity * yearsSinceJ2000` so the sky drifts with the
+ *     simulation time — visible when exploring decades or centuries.
  *
- * The star positions in HYG are in equatorial J2000 parsecs. The scene is
- * ecliptic, so the Points node is tilted by the J2000 obliquity (~23.4°)
- * exactly as the legacy renderer did, keeping constellations in their
- * expected places.
+ * Star positions are equatorial J2000 parsecs. The scene is ecliptic,
+ * so the Points node is tilted by the J2000 obliquity (~23.4°) to keep
+ * constellations in their expected places.
  */
 
 import * as THREE from "three";
@@ -186,7 +190,7 @@ export const Starfield = () => {
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
-  const { size } = useThree();
+  const { gl, size } = useThree();
   const pointsRef = useRef<THREE.Points>(null);
 
   // Build the ShaderMaterial once and pass it as an instance to the
@@ -278,9 +282,14 @@ export const Starfield = () => {
   /* eslint-disable react-hooks/immutability */
   useFrame(() => {
     const matUniforms = material.uniforms;
+    // Use the renderer's effective pixel ratio (clamped by qualityProfile
+    // .dprMax in Scene.tsx) rather than window.devicePixelRatio. On a
+    // DPR-3 display with the constrained profile (dprMax 1), the renderer
+    // draws into a DPR-1 buffer — scaling the sprites by the full window
+    // DPR would oversize them by sqrt(3).
+    const effectiveDpr = gl.getPixelRatio();
     const viewportScale =
-      Math.sqrt(Math.max(size.width, size.height) * window.devicePixelRatio) /
-      60;
+      Math.sqrt(Math.max(size.width, size.height) * effectiveDpr) / 60;
     matUniforms.particleSize.value = viewportScale;
 
     const years = (datetime.getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;

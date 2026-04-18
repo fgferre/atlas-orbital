@@ -309,8 +309,10 @@ verification, run a pure-Playwright pixel-diff script via
 `AGENTS.md` mandates this path anyway.
 
 **Code marker:** `const material = useMemo(() => new
-THREE.ShaderMaterial(...), [gl])` in
-`src/components/canvas/Starfield.tsx`.
+THREE.ShaderMaterial(...), [])` in
+`src/components/canvas/Starfield.tsx` (deps list is empty — the
+material captures no reactive inputs at construction time; the per-
+frame values flow via the mutable uniforms map inside `useFrame`).
 
 ### L16. Log compression (Fechner) beats Pogson + clamps for "realistic + dense" star rendering
 
@@ -341,10 +343,12 @@ log compression (NASA Eyes, most modern space visualisers),
 matching that shape is usually the shortest path to a result users
 actually recognise as "realistic".
 
-**Code marker:** `brightness = 2·log(1 + flux·5000)` in
+**Code marker:** `brightness = 2·log(1 + flux·250)` in
 `src/components/canvas/Starfield.tsx` vertex shader; mirrored in
-`src/lib/starfieldShaderMath.ts` with 13 unit tests pinning the
-full curve end to end.
+`src/lib/starfieldShaderMath.ts` with 15 unit tests pinning the
+full curve end to end. The `250` is the apparent-mag equivalent of
+NASA's absMag + inverse-square constant for a solar-system-local
+observer — see L17 for the derivation and the caveat.
 
 **Tooling corollary:** Playwright's `page.screenshot` with
 R3F's continuous render loop is fragile — the "wait for stable"
@@ -389,19 +393,60 @@ for sample magnitudes, and calibrate your port until those match —
 _then_ confirm the visual. "Math ported correctly" and "looks like
 the reference" are two different claims.
 
+**Full list of divergences** between the pre-3675322 HYG shader and
+`nasaStarShaders.ts`, each of which had to be fixed individually:
+
+1. Size multiplier: `brightness * 1.5` vs NASA's `brightness * 4.0`.
+2. Size clamp range: `[2, 12]` vs NASA's `[5, 50]`.
+3. Clamp order: mine clamped _before_ `× particleSize`; NASA clamps
+   _after_. With `particleSize ≈ 0.75` that shifts the effective
+   range by another factor, so the two are not interchangeable.
+4. Alpha formula: fixed coefficient `0.08` vs NASA's
+   `brightness * particleSize`. With `particleSize ≈ 0.75` the NASA
+   alpha hits ceiling 1.0 at `brightness ≥ 1.33`, so every star
+   brighter than ~mag 6 saturates.
+5. Alpha floor: `0.12` vs NASA's `0.05`.
+6. Fragment falloff: `pow(d, 8)` vs NASA's `pow(d, 5)`.
+7. A separate `pixelRatio` uniform multiplier on top of
+   `particleSize`, even though `particleSize` already bakes DPR in.
+
+An earlier draft of this lesson only called out (3), (4), and (7).
+That undercount was itself a blindside — when listing "what you
+fixed", list everything, not just the structural highlights.
+
+**Second-order lesson:** my first "calibration" pass got the
+transfer-curve constant right (250) but also mistuned the size
+multiplier and clamp range — guesses rather than direct ports.
+Result: the sky went from "too big and round" straight to "timid
+and depopulated". The honest port applies NASA's exact formula
+including _where the clamp lives_, _what the alpha is proportional
+to_, _the fragment exponent_, and _which DPR value feeds the
+viewport scale_. Diff the two shaders line by line and port the
+structure, not just the values.
+
+**Third-order lesson on the equivalence claim:** "port of NASA" is
+honest _for an observer local to the solar system_. At camera
+distances ≫ 1 AU from the Sun the NASA formula's
+`length(viewPosition)` varies meaningfully between stars at different
+catalogue distances, while my fixed-C apparent-magnitude formula
+does not. Worst-case numerical divergence I verified: ~1.75 % at
+1000 AU for Proxima Centauri (1.3 pc); the error shrinks for more
+distant stars and nearer cameras. Call this out in the shader doc
+comment instead of claiming unqualified match.
+
+**DPR blindside that slipped through the first honest port:** I
+used `window.devicePixelRatio` in `viewportScale`, but Scene.tsx
+clamps the renderer DPR via `qualityProfile.dprMax`. On a DPR-3
+display with the constrained profile (dprMax 1), window DPR is 3
+but the renderer draws at 1 — my sprites were sized for 3 while
+the buffer only had 1, making them √3 larger than intended.
+Fix: use `gl.getPixelRatio()`, which returns the clamped effective
+DPR. Same fix applied to `NASAStarfield.tsx`, which had the same
+bug — the reference renderer in the repo was subtly wrong too.
+
 **Code marker:** the constants block at the top of
 `src/lib/starfieldShaderMath.ts` — log scale 250, size coefficient
 4, clamp `[5, 50]` px, alpha coefficient = particleSize (not a
-fixed 0.08) — matches NASA's nasaStarShaders.ts exactly.
-
-**Second-order lesson from the same session:** my first
-"calibration" pass got the transfer-curve constant right (250) but
-also mistuned the size multiplier (→ 1.5), the clamp range
-(→ `[2, 12]`), and the alpha formula (→ fixed coefficient 0.08).
-Each of those was a guess rather than a direct port. Result: the
-sky went from "too big and round" straight to "timid and
-depopulated" — overshooting in the opposite direction. The honest
-port should apply NASA's exact formula including _where the clamp
-lives_ and _what the alpha is proportional to_, not just the
-log-compression shape. When porting, diff the two shaders line by
-line and port the structure, not just the values.
+fixed 0.08) — matches NASA's nasaStarShaders.ts exactly. DPR source
+is `gl.getPixelRatio()` in both `Starfield.tsx` and
+`NASAStarfield.tsx`'s `useFrame`.
