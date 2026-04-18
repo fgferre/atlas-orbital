@@ -857,6 +857,79 @@ dismissBootSplash(), [])`. Loader.tsx intocado (migra numa passe de
 4 commits atômicos: `5c39c0b` (8.0), `806b21f` (10), `36bb99e` (8),
 `0d2e0f2` (9a).
 
+#### Batch 2026-04-18 — Ondas 9c + 9b + 7 (paralelo)
+
+Segundo batch paralelo: 1 inline (9c astronomia chunk) + 2 agentes
+general-purpose (9b WebP, 7 Playwright + component tests).
+
+**Onda 9c — astronomia chunk (done inline, `356106b`)**
+Onda 9a deixou `index` em 1.98 MB; o resíduo era `astronomia`
+(VSOP87D + ELP + Pluto-Meeus), eagerly puxado via `main.tsx →
+initializeOrbitalEngine()`. Adicionado
+`if (id.includes("/astronomia/")) return "astronomy"` ao `manualChunks`.
+Delta build: `index` 1 982 kB → **117 kB** (−94%). Chunk `astronomy`
+(1 864 kB) agora é long-term cacheable — planetary theory raramente
+bumpa. Net bytes unchanged, cache hit em visitas recorrentes melhora
+drasticamente. Mantido eager para não criar race em `Planet.tsx`
+useFrame.
+
+**Onda 9b — WebP pipeline (done Agente A, `891744a`)**
+
+- `scripts/optimize-textures.js` (novo) — CLI sharp com `quality: 88`,
+  mtime-skip, pessimization guard (auto-descart se `.webp` > source).
+- 3 texturas convertidas (−40 MB total):
+  - Oberon PNG 37.75 MB → 1.27 MB (−96.6%)
+  - Mercury JPG 14.34 MB → 12.06 MB (−15.9%)
+  - Moon JPG 14.33 MB → 11.58 MB (−19.2%)
+- Enceladus + Tethys descartados pelo guard: sources já são JPG
+  agressivamente comprimidos (16k/13k-wide apesar do prefixo
+  `2k_`/`4k_`). Fallback JPG preservado, silencioso.
+- Estratégia diferente do brief: as 5 texturas alvo **não** passam
+  por `assetManifest.ts` — o caminho real é `textureVariants.ts`
+  via `resolveTextureRequest()`. Agente adicionou helper
+  `preferWebPAsset(path)` em `textureVariants.ts` com detect WebP
+  uma vez + swap só para basenames em `WEBP_AVAILABLE_BASENAMES`
+  (oberon, mercury, moon). Decisão correta vs. brief.
+- 5 unit tests cobrindo pass-through, rewrite, unsupported-browser
+  fallback.
+- npm script: `textures:optimize`.
+- Preview confirmado: 3× `.webp` requests 200, visual parity em
+  Mercury.
+- Caveat: `WEBP_AVAILABLE_BASENAMES` precisa ficar em sync com o
+  que o script produz. Documentado nos 2 arquivos.
+
+**Onda 7 — testes componente + Playwright (done Agente B, `6f57cbe`)**
+
+- Vitest Option A (per-file pragma): `include` widened para
+  `src/**/*.test.{ts,tsx}`; novos `.test.tsx` opt-in via
+  `// @vitest-environment jsdom`. Config global (node) intocada.
+- 3 component tests (`LayersPanel`, `SearchBar`, `Timeline`) —
+  3 cases cada, 9 novos. Stub `window.matchMedia` (jsdom ausente).
+- `playwright.config.ts` novo: `webServer: "npm run preview:test"`
+  em porta 4174 (`--strictPort`); `reuseExistingServer` local;
+  chromium only.
+- `e2e/helpers.ts` porta helpers do legacy
+  `scripts/phase4-regression.spec.js` (deixado em place).
+- 4 specs: `boot` (full), `focus` (full — SearchBar → Mars →
+  sidebar "MARS"), `quality` + `postprocessing` (`.skip()` + TODO
+  porque falta hook de store/URL param pra driver deterministic).
+- Dev deps novas: `@testing-library/react/jest-dom/user-event`,
+  `jsdom`.
+- `npm run test:e2e` verde standalone: 2 passed / 2 skipped em 52s.
+
+**Verificação combinada:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ **387/387** (373 pré + 9 component + 5 webp).
+- `npm run build`: ✅ 10,1 s. `index` 117 kB (−94%), `astronomy`
+  1 864 kB, `three-vendor` 1 257 kB.
+- `npx playwright test`: 2 passed / 2 skipped / 52s.
+- Preview runtime: canvas sized, splash dismissed, `leva=0` elements,
+  WebPs servidos (3× 200, sizes coerentes), zero console errors.
+
+**Arquivos tocados (batch):** 3 modificados + 13 novos = 16 arquivos.
+3 commits atômicos: `356106b` (9c), `891744a` (9b), `6f57cbe` (7).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the
