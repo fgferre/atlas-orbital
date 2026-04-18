@@ -55,7 +55,11 @@ function App() {
   return (
     <div className="w-full h-full bg-black relative">
       <Loader />
-      <Suspense fallback={<Loader />}>
+      {/* fallback={null} — <Loader /> above is already the singleton boot
+          overlay that owns splash handoff + progress timers. Mounting a
+          second Loader here while the Scene chunk resolves would
+          duplicate those effects on the boot hot path. */}
+      <Suspense fallback={null}>
         <Scene />
       </Suspense>
       <Suspense fallback={null}>
