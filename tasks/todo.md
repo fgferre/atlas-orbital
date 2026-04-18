@@ -544,6 +544,66 @@ sobre `[gl, size]`); consumidores invocam per-frame dentro de
 `useFrame`, lendo `gl.getPixelRatio()` ao vivo — paridade exata com o
 comportamento pré-extração. Testes e preview HYG+NASA verdes.
 
+#### Onda 5.5 — Deduplicar pipeline de modelos (done, 2026-04-18)
+
+Contexto Codex #2: `PlanetModel.tsx` (runtime) e `AssetStudyApp.tsx`
+(superfície de estudo) replicavam clone + normalização + UV esférico +
+`mergeVertices` + dispose + material-prep. Drift silencioso entre os
+dois é o pior lugar para divergência — o estudo existe precisamente
+como superfície de confiança para o runtime.
+
+- [x] **5.5.1 — Criado `src/lib/assetProcessing.ts`** com 5 helpers
+      puros: `applyDepthSettings`, `disposeObject3D`,
+      `normalizeToUnitSphereScale`, `cloneGlbSceneForRuntime(scene,
+    adjustMaterial?)`, `prepareObjMeshGeometry(geometry)`.
+      Construção de material (roughness, metalness, emissive,
+      map-selection) fica per-component porque as duas superfícies
+      intencionalmente divergem (estudo: 0.95 flat para
+      reprodutibilidade; runtime: body-specific + emissive fill
+      lights). Visitor callback no clone GLB é invocado per-material
+      (não per-mesh) para cobrir `material[]` transparentemente.
+- [x] **5.5.2 — `PlanetModel.tsx` refatorado:** `GLBModel` usa
+      `cloneGlbSceneForRuntime(scene, visitor)` substituindo o traverse
+      manual + `applyStandardSurfaceSettings`. `OBJModel` usa
+      `prepareObjMeshGeometry(geometry)` no lugar do
+      `mergeVertices(ensureSphericalUvProjection(g.clone()))` +
+      `computeVertexNormals`. Ambos consomem
+      `normalizeToUnitSphereScale` em vez da math Box3 inline.
+      `applyDepthSettings` e `disposeObject3D` trocados pelos shared.
+- [x] **5.5.3 — `AssetStudyApp.tsx` refatorado:** mesma substituição
+      exata nos três componentes (`StudyGlbBody`, `StudyObjBody`).
+      Bonus: `BODIES_BY_ID` local (construído inline) foi trocado pelo
+      canônico de `src/data/celestialBodies.ts` (já usado pelo resto
+      do runtime desde Onda 0.3), eliminando mais uma duplicação.
+- [x] **5.5.4 — Testes unitários:** `src/lib/assetProcessing.test.ts`
+      com 17 casos cobrindo: - `applyDepthSettings` — material simples + array. - `disposeObject3D` — dispose de geometry/material único, array
+      de materiais, ignora non-mesh. - `normalizeToUnitSphereScale` — box 4³ → 0.5, box 2×1×0.5 → 1,
+      grupo vazio → 1 (fallback). - `prepareObjMeshGeometry` — retorna instância nova (não muta),
+      popula UV quando ausente, recomputa normais. - `cloneGlbSceneForRuntime` — clona geometry + material,
+      castShadow/receiveShadow, depth settings, visitor chamado
+      per-material com mesh owner, normalization scale derivado do
+      clone, material arrays.
+
+**Verificação Onda 5.5:**
+
+- `npm run lint`: ✅ clean.
+- `npm run test:run`: ✅ 357/357 (+17 new).
+- `npm run build`: ✅ 8,08 s.
+- Preview runtime (`/atlas-orbital/`): Solar System + HYG renderizando
+  sem erros; Sun + label visíveis.
+- Preview asset study (`/atlas-orbital/?study=asset-review`): 13
+  canvases mountados, Pallas (OBJ) renderizando com shape procedural
+  correto (UV esférica + normals suaves); Haumea (GLB) renderizando com
+  elipsoide elongado + texture map + shadows.
+- Zero regressão visual: antes/depois identity-preserving para ambas
+  as superfícies (mesma math, mesmo resultado; apenas fatorado).
+
+**Arquivos tocados (Onda 5.5):** 4:
+`src/lib/assetProcessing.ts` (novo),
+`src/lib/assetProcessing.test.ts` (novo),
+`src/components/canvas/PlanetModel.tsx`,
+`src/components/ui/AssetStudyApp.tsx`.
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the

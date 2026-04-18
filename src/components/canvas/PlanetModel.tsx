@@ -3,7 +3,6 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
@@ -11,58 +10,18 @@ import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { simulationClock } from "../../lib/simulationClock";
 import { resolveTextureRequest } from "../../lib/textureVariants";
 import { useStore } from "../../store";
-import { ensureSphericalUvProjection } from "../../utils/sphericalUv";
+import {
+  applyDepthSettings,
+  cloneGlbSceneForRuntime,
+  disposeObject3D,
+  normalizeToUnitSphereScale,
+  prepareObjMeshGeometry,
+} from "../../lib/assetProcessing";
 import {
   createProceduralSurfaceTexture,
   getSurfaceFillLight,
   shouldRenderDirectSurfaceMap,
 } from "../../utils/proceduralSurface";
-
-const applyDepthSettings = (material: THREE.Material | THREE.Material[]) => {
-  const materials = Array.isArray(material) ? material : [material];
-
-  for (const currentMaterial of materials) {
-    currentMaterial.depthWrite = true;
-    currentMaterial.depthTest = true;
-  }
-};
-
-const applyStandardSurfaceSettings = (
-  material: THREE.Material | THREE.Material[],
-  roughness?: number,
-  metalness?: number
-) => {
-  const materials = Array.isArray(material) ? material : [material];
-
-  for (const currentMaterial of materials) {
-    applyDepthSettings(currentMaterial);
-
-    if (
-      currentMaterial instanceof THREE.MeshStandardMaterial ||
-      currentMaterial instanceof THREE.MeshPhysicalMaterial
-    ) {
-      if (roughness !== undefined) currentMaterial.roughness = roughness;
-      if (metalness !== undefined) currentMaterial.metalness = metalness;
-    }
-  }
-};
-
-const disposeObjectResources = (object: THREE.Object3D) => {
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) {
-      return;
-    }
-
-    child.geometry?.dispose();
-
-    if (Array.isArray(child.material)) {
-      child.material.forEach((material) => material.dispose());
-      return;
-    }
-
-    child.material?.dispose();
-  });
-};
 
 interface PlanetModelProps {
   body: CelestialBody;
@@ -90,38 +49,23 @@ const GLBModel = ({
 }) => {
   const { scene } = useGLTF(path);
 
-  const { cloned, normalizationScale } = useMemo(() => {
-    const c = scene.clone();
-    c.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.geometry = child.geometry.clone();
-        child.material = Array.isArray(child.material)
-          ? child.material.map((material) => material.clone())
-          : child.material.clone();
-        child.castShadow = true;
-        child.receiveShadow = true;
-        applyStandardSurfaceSettings(child.material, roughness, metalness);
-      }
-    });
-
-    // Normalize size to radius 1 (diameter 2)
-    const box = new THREE.Box3().setFromObject(c);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    let normScale = 1;
-    if (maxDim > 0) {
-      // We want the model to fit within a sphere of radius 1 (diameter 2)
-      normScale = 2 / maxDim;
-    }
-
-    return { cloned: c, normalizationScale: normScale };
-  }, [scene, roughness, metalness]);
+  const { cloned, normalizationScale } = useMemo(
+    () =>
+      cloneGlbSceneForRuntime(scene, (material) => {
+        if (
+          material instanceof THREE.MeshStandardMaterial ||
+          material instanceof THREE.MeshPhysicalMaterial
+        ) {
+          if (roughness !== undefined) material.roughness = roughness;
+          if (metalness !== undefined) material.metalness = metalness;
+        }
+      }),
+    [scene, roughness, metalness]
+  );
 
   useEffect(() => {
     return () => {
-      disposeObjectResources(cloned);
+      disposeObject3D(cloned);
     };
   }, [cloned]);
 
@@ -177,49 +121,33 @@ const OBJModel = ({
   const { cloned, normalizationScale } = useMemo(() => {
     const c = obj.clone();
     c.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.geometry = mergeVertices(
-          ensureSphericalUvProjection(child.geometry.clone())
-        );
-        child.geometry.computeVertexNormals();
-        child.castShadow = true;
-        child.receiveShadow = true;
+      if (!(child instanceof THREE.Mesh)) return;
+      child.geometry = prepareObjMeshGeometry(child.geometry);
+      child.castShadow = true;
+      child.receiveShadow = true;
 
-        const materialParams: THREE.MeshStandardMaterialParameters = {
-          roughness: roughness ?? 1,
-          metalness: metalness ?? 0,
-          color: surfaceTexture ? 0xffffff : body.color,
-          emissive: surfaceFillLight?.color ?? "#000",
-          emissiveIntensity: surfaceFillLight?.intensity ?? 0,
-        };
+      const materialParams: THREE.MeshStandardMaterialParameters = {
+        roughness: roughness ?? 1,
+        metalness: metalness ?? 0,
+        color: surfaceTexture ? 0xffffff : body.color,
+        emissive: surfaceFillLight?.color ?? "#000",
+        emissiveIntensity: surfaceFillLight?.intensity ?? 0,
+      };
 
-        if (surfaceTexture) {
-          materialParams.map = surfaceTexture;
-        }
-
-        child.material = new THREE.MeshStandardMaterial(materialParams);
-
-        applyDepthSettings(child.material);
+      if (surfaceTexture) {
+        materialParams.map = surfaceTexture;
       }
+
+      child.material = new THREE.MeshStandardMaterial(materialParams);
+      applyDepthSettings(child.material);
     });
 
-    // Normalize size to radius 1 (diameter 2)
-    const box = new THREE.Box3().setFromObject(c);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    let normScale = 1;
-    if (maxDim > 0) {
-      normScale = 2 / maxDim;
-    }
-
-    return { cloned: c, normalizationScale: normScale };
+    return { cloned: c, normalizationScale: normalizeToUnitSphereScale(c) };
   }, [obj, surfaceTexture, surfaceFillLight, roughness, metalness, body.color]);
 
   useEffect(() => {
     return () => {
-      disposeObjectResources(cloned);
+      disposeObject3D(cloned);
     };
   }, [cloned]);
 

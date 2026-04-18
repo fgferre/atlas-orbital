@@ -3,9 +3,8 @@ import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { useDeferredTexture } from "../../hooks/useDeferredTexture";
-import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { BODIES_BY_ID } from "../../data/celestialBodies";
 import {
   ASSET_STUDY_MATRIX,
   getAssetStudyEntries,
@@ -18,11 +17,13 @@ import {
   type VisualAssetManifestEntry,
 } from "../../data/assetManifest";
 import { createProceduralSurfaceTexture } from "../../utils/proceduralSurface";
-import { ensureSphericalUvProjection } from "../../utils/sphericalUv";
-
-const BODIES_BY_ID = new Map(
-  SOLAR_SYSTEM_BODIES.map((body) => [body.id, body])
-);
+import {
+  applyDepthSettings,
+  cloneGlbSceneForRuntime,
+  disposeObject3D,
+  normalizeToUnitSphereScale,
+  prepareObjMeshGeometry,
+} from "../../lib/assetProcessing";
 
 const formatBytes = (bytes: number) => {
   if (bytes >= 1024 * 1024) {
@@ -32,32 +33,6 @@ const formatBytes = (bytes: number) => {
     return `${(bytes / 1024).toFixed(1)} KiB`;
   }
   return `${bytes} B`;
-};
-
-const applyDepthSettings = (material: THREE.Material | THREE.Material[]) => {
-  const materials = Array.isArray(material) ? material : [material];
-
-  for (const currentMaterial of materials) {
-    currentMaterial.depthWrite = true;
-    currentMaterial.depthTest = true;
-  }
-};
-
-const disposeObjectResources = (object: THREE.Object3D) => {
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) {
-      return;
-    }
-
-    child.geometry?.dispose();
-
-    if (Array.isArray(child.material)) {
-      child.material.forEach((material) => material.dispose());
-      return;
-    }
-
-    child.material?.dispose();
-  });
 };
 
 const getBody = (bodyId: string) => {
@@ -116,45 +91,24 @@ const StudyGlbBody = ({
 
   const { scene } = useGLTF(toPublicAssetUrl(modelAsset.filePath));
 
-  const { cloned, normalizationScale } = useMemo(() => {
-    const clone = scene.clone();
-    clone.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) {
-        return;
-      }
-
-      child.geometry = child.geometry.clone();
-      child.material = Array.isArray(child.material)
-        ? child.material.map((material) => material.clone())
-        : child.material.clone();
-      child.castShadow = true;
-      child.receiveShadow = true;
-      applyDepthSettings(child.material);
-
-      if (
-        child.material instanceof THREE.MeshStandardMaterial ||
-        child.material instanceof THREE.MeshPhysicalMaterial
-      ) {
-        child.material.roughness = 0.9;
-        child.material.metalness = 0.02;
-        child.material.color ??= new THREE.Color(body.color);
-      }
-    });
-
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    return {
-      cloned: clone,
-      normalizationScale: maxDim > 0 ? 2 / maxDim : 1,
-    };
-  }, [body.color, scene]);
+  const { cloned, normalizationScale } = useMemo(
+    () =>
+      cloneGlbSceneForRuntime(scene, (material) => {
+        if (
+          material instanceof THREE.MeshStandardMaterial ||
+          material instanceof THREE.MeshPhysicalMaterial
+        ) {
+          material.roughness = 0.9;
+          material.metalness = 0.02;
+          material.color ??= new THREE.Color(body.color);
+        }
+      }),
+    [body.color, scene]
+  );
 
   useEffect(() => {
     return () => {
-      disposeObjectResources(cloned);
+      disposeObject3D(cloned);
     };
   }, [cloned]);
 
@@ -189,14 +143,8 @@ const StudyObjBody = ({
   const { cloned, normalizationScale } = useMemo(() => {
     const clone = obj.clone();
     clone.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) {
-        return;
-      }
-
-      child.geometry = mergeVertices(
-        ensureSphericalUvProjection(child.geometry.clone())
-      );
-      child.geometry.computeVertexNormals();
+      if (!(child instanceof THREE.Mesh)) return;
+      child.geometry = prepareObjMeshGeometry(child.geometry);
       child.castShadow = true;
       child.receiveShadow = true;
 
@@ -210,20 +158,15 @@ const StudyObjBody = ({
       applyDepthSettings(child.material);
     });
 
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
     return {
       cloned: clone,
-      normalizationScale: maxDim > 0 ? 2 / maxDim : 1,
+      normalizationScale: normalizeToUnitSphereScale(clone),
     };
   }, [body.color, obj, surfaceTexture]);
 
   useEffect(() => {
     return () => {
-      disposeObjectResources(cloned);
+      disposeObject3D(cloned);
     };
   }, [cloned]);
 
