@@ -1,6 +1,7 @@
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -30,12 +31,21 @@ import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { EclipticGrid } from "./EclipticGrid";
-import { ProceduralSun3D } from "./ProceduralSun3D";
 import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
 
-import { Leva } from "leva";
+// Lazy: procedural shader module only loads when sun render mode is "procedural".
+// Photo-mode users (majority) never download the shader chunk.
+const ProceduralSun3D = lazy(() =>
+  import("./ProceduralSun3D").then((m) => ({ default: m.ProceduralSun3D }))
+);
+
+// Lazy: Leva is a debug-only chrome panel. We gate behind `debugMode` so
+// non-debug users never download the chunk at all. `useControls`/`folder`/
+// `button` (hook API) are imported synchronously where needed — only the
+// UI panel component is lazy.
+const Leva = lazy(() => import("leva").then((m) => ({ default: m.Leva })));
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   ORBIT_MOUSE_BUTTONS,
@@ -314,7 +324,11 @@ export const Scene = () => {
 
   return (
     <>
-      <Leva theme={{ sizes: { rootWidth: "350px" } }} hidden={!debugMode} />
+      {debugMode && (
+        <Suspense fallback={null}>
+          <Leva theme={{ sizes: { rootWidth: "350px" } }} hidden={!debugMode} />
+        </Suspense>
+      )}
       <Canvas
         shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
@@ -374,10 +388,12 @@ export const Scene = () => {
           />
         </Suspense>
         {resolvedSunRenderMode === "procedural" && (
-          <ProceduralSun3D
-            qualityProfileName={qualityProfile.name}
-            sunVisualRadiusWorld={sunVisualRadiusWorld}
-          />
+          <Suspense fallback={null}>
+            <ProceduralSun3D
+              qualityProfileName={qualityProfile.name}
+              sunVisualRadiusWorld={sunVisualRadiusWorld}
+            />
+          </Suspense>
         )}
         <OverlayPositionTracker />
         <CameraController />
