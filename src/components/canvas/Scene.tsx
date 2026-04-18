@@ -322,8 +322,20 @@ export const Scene = () => {
     brightness,
   };
 
+  // Observable marker for the Onda 0.2 gate: EffectComposer + ToneMapping +
+  // HueSaturation + BrightnessContrast do not mount on the `constrained`
+  // tier (full-screen GPU passes hurt weak hardware). This hidden element
+  // lets `e2e/postprocessing.spec.ts` assert the gate without reaching
+  // into R3F internals.
+  const postProcessingActive = qualityProfile.name !== "constrained";
+
   return (
     <>
+      <div
+        hidden
+        aria-hidden="true"
+        data-postprocessing={postProcessingActive ? "active" : "inactive"}
+      />
       {/* <Leva /> must stay mounted even when debugMode is false: Leva's
           `useControls` (called unconditionally by `useSceneDebugControls`
           below) auto-inserts a panel into document.body if no <Leva />
@@ -419,7 +431,7 @@ export const Scene = () => {
         <DynamicZoom controlsRef={controlsRef} />
         <NormalizedWheelZoom controlsRef={controlsRef} />
 
-        {qualityProfile.name !== "constrained" && (
+        {postProcessingActive && (
           <PostProcessingPipeline
             bloomRef={bloomRef}
             hueSatRef={hueSatRef}
