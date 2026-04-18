@@ -57,6 +57,20 @@ export interface ResolvedQualityProfile {
   environmentResolution: number;
   bloomEnabled: boolean;
   bloomIntensityMultiplier: number;
+  /**
+   * Multiplier applied to each starfield fragment's RGB output to lift
+   * bright catalogue stars above the selective-bloom `luminanceThreshold`
+   * (1.0) while leaving the faint tail below it. Landed in Wave α
+   * Commit 2 (R1 #1B) alongside the HDR pipeline contract.
+   *
+   * Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0
+   * — constrained keeps 1.0 because `bloomEnabled: false` on that tier
+   * makes the gain cosmetic (faint stars in LDR range = no visible shift).
+   * Commit 3 moves these values into the graphics resolver's
+   * `PRESET_DEFAULTS`; this field stays on `ResolvedQualityProfile` as
+   * the compat-shim projection so consumers keep a single read.
+   */
+  vfxHdrGain: number;
 }
 
 export const QUALITY_PROFILE_ORDER: ResolvedQualityName[] = [
@@ -75,6 +89,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 256,
     bloomEnabled: true,
     bloomIntensityMultiplier: 1,
+    vfxHdrGain: 2.0,
   },
   high: {
     name: "high",
@@ -84,6 +99,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 256,
     bloomEnabled: true,
     bloomIntensityMultiplier: 1,
+    vfxHdrGain: 1.8,
   },
   balanced: {
     name: "balanced",
@@ -93,6 +109,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 128,
     bloomEnabled: true,
     bloomIntensityMultiplier: 0.75,
+    vfxHdrGain: 1.5,
   },
   constrained: {
     name: "constrained",
@@ -102,6 +119,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 64,
     bloomEnabled: false,
     bloomIntensityMultiplier: 0,
+    vfxHdrGain: 1.0,
   },
 };
 

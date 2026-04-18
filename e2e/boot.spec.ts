@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   freezeSimulation,
   pageHasSizedCanvas,
+  screenshotWithRetry,
   visitAtlasAndWaitForReady,
 } from "./helpers";
 
@@ -61,9 +62,16 @@ test.describe("boot", () => {
   test("boot visual identity (frozen sim)", async ({ page }) => {
     await freezeSimulation(page);
     await visitAtlasAndWaitForReady(page);
-    // Let useVisualPresetLerp converge (~60 frames at factor 0.05).
-    await page.waitForTimeout(2000);
-    const screenshot = await page.screenshot({ animations: "disabled" });
+    // Wait 3.5 s: the 2 s useVisualPresetLerp convergence PLUS enough
+    // headroom for the AgX composer's first Bloom downsample pyramid
+    // and tone-mapping LUT upload to settle. Shorter waits tripped an
+    // intermittent "Protocol error (Page.captureScreenshot): Unable to
+    // capture screenshot" from Chromium — the pipeline was mid-
+    // allocation when the capture fired.
+    await page.waitForTimeout(3500);
+    const screenshot = await screenshotWithRetry(page, {
+      animations: "disabled",
+    });
     expect(screenshot).toMatchSnapshot("boot-frozen.png", {
       maxDiffPixelRatio: 0.01,
     });

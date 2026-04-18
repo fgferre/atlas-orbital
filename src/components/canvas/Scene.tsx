@@ -264,7 +264,16 @@ export const Scene = () => {
   );
   const handleCanvasCreated = useCallback(
     ({ gl }: { gl: THREE.WebGLRenderer }) => {
-      gl.toneMapping = THREE.ReinhardToneMapping;
+      // R1 #1A (Wave α Commit 2): the postprocessing composer is the
+      // single authority on tone mapping — keep the renderer linear so
+      // bloom operates on real HDR luminance instead of a Reinhard-
+      // compressed buffer. The `<ToneMapping mode={ToneMappingMode.AGX}>`
+      // pass in `PostProcessingPipeline.tsx` runs LAST in the effect
+      // chain. Output color space is set explicitly (the default at
+      // three r181 is SRGBColorSpace, but we pin it so a future default
+      // shift doesn't silently change our gamma contract).
+      gl.toneMapping = THREE.NoToneMapping;
+      gl.outputColorSpace = THREE.SRGBColorSpace;
     },
     []
   );

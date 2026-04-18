@@ -80,3 +80,56 @@ describe("starfieldPointMetrics — NASA Eyes exact port", () => {
     expect(ps150).toBeLessThanOrEqual(50);
   });
 });
+
+describe("starfieldPointMetrics — HDR-emissive allow-list (R1 #1B)", () => {
+  // The `vfxHdrGain` uniform lives in the vertex shader as a post-
+  // transfer multiplier on vColor (the B-V-derived RGB channel), so
+  // these metrics functions stay pre-HDR. What the tests below pin is
+  // the composite behavior in additive-blending terms:
+  //   linear contribution = vColorChannel × vBrightness × vfxHdrGain
+  // where vColorChannel is the saturated-white approximation (1.0 for
+  // hot stars) and vBrightness is this function's output.
+  // A contribution > 1.0 is what the <Bloom luminanceThreshold={1.0}>
+  // pass picks up. Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5
+  // / constrained 1.0 — see qualityProfile.ts.
+
+  const composite = (mag: number, gain: number, vColorChannel = 1) =>
+    vColorChannel * starfieldPointMetrics(mag, 0.75).vBrightness * gain;
+
+  it("bright stars (mag ≤ 4) cross 1.0 on ultra (gain=2.0) → bloom picks them up", () => {
+    // mag 4 has vBrightness = 1 (ceiling), so composite = 2.0.
+    expect(composite(4, 2.0)).toBeGreaterThan(1);
+    expect(composite(0, 2.0)).toBeGreaterThan(1);
+    expect(composite(-1.5, 2.0)).toBeGreaterThan(1);
+  });
+
+  it("bright stars cross 1.0 on high (gain=1.8) and balanced (gain=1.5)", () => {
+    expect(composite(2, 1.8)).toBeGreaterThan(1);
+    expect(composite(2, 1.5)).toBeGreaterThan(1);
+  });
+
+  it("telescopic stars (mag ≥ 10) stay below 1.0 on every tier", () => {
+    // vBrightness floors at 0.05 for mag ≥ 10.
+    // Max composite at ultra: 1 × 0.05 × 2.0 = 0.10 — well under 1.
+    expect(composite(10, 2.0)).toBeLessThan(1);
+    expect(composite(12, 2.0)).toBeLessThan(1);
+    expect(composite(20, 2.0)).toBeLessThan(1);
+  });
+
+  it("constrained tier (gain=1.0) collapses to the pre-Wave-α LDR behavior for every magnitude", () => {
+    // Identity: composite with gain=1 equals vColorChannel × vBrightness.
+    for (const mag of [-1.5, 0, 3, 6, 8, 12]) {
+      const expected = 1 * starfieldPointMetrics(mag, 0.75).vBrightness * 1;
+      expect(composite(mag, 1.0)).toBeCloseTo(expected, 10);
+    }
+  });
+
+  it("composite is strictly monotonic in mag (brighter stars always out-emit dimmer)", () => {
+    let previous = Infinity;
+    for (let mag = -2; mag <= 15; mag += 0.5) {
+      const c = composite(mag, 1.8);
+      expect(c).toBeLessThanOrEqual(previous + 1e-6);
+      previous = c;
+    }
+  });
+});

@@ -26,6 +26,31 @@ export const freezeSimulation = async (page: Page) => {
 };
 
 /**
+ * Captures a page screenshot with retries. Wave α's HDR pipeline
+ * (AgX ToneMapping + Bloom mipmap pyramid on ultra tier) occasionally
+ * tripped Chromium's `Page.captureScreenshot` protocol with "Unable
+ * to capture screenshot" even after a multi-second settle — the
+ * failure is not deterministic, and a second attempt a couple seconds
+ * later reliably succeeds. We prefer that over loosening the gate to
+ * a worthless tolerance.
+ */
+export const screenshotWithRetry = async (
+  page: Page,
+  options: Parameters<Page["screenshot"]>[0] = {}
+): Promise<Buffer> => {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await page.screenshot(options);
+    } catch (err) {
+      lastErr = err;
+      await page.waitForTimeout(2000);
+    }
+  }
+  throw lastErr;
+};
+
+/**
  * Resolves to `true` when at least one `<canvas>` element exists and has
  * been sized (width and height > 10) — the cheapest visible proof that the
  * three.js renderer has mounted a real framebuffer.

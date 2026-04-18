@@ -28,6 +28,8 @@ import {
 } from "./shaders/nasaStarShaders";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 import { useStarfieldParticleSize } from "./useStarfieldParticleSize";
+import { useStore } from "../../store";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
 
 interface NASAStarfieldProps {
   /** Base particle size multiplier (default: 1.0) */
@@ -36,6 +38,8 @@ interface NASAStarfieldProps {
 
 export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
   const pointsRef = useRef<THREE.Points>(null);
+  const qualityMode = useStore((state) => state.qualityMode);
+  const qualityProfile = useQualityProfile(qualityMode);
   const stars = useStarfieldCatalog<NASAStar[]>({
     source: "nasa",
     loadCatalog: loadNASAStarCatalog,
@@ -101,6 +105,9 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
         fragmentShader: nasaStarFragmentShader,
         uniforms: {
           particleSize: { value: particleSize },
+          // R1 #1B seed: 1.0 = identity. Overwritten every frame below
+          // from the current tier's `qualityProfile.vfxHdrGain`.
+          vfxHdrGain: { value: 1.0 },
         },
         transparent: true,
         depthWrite: false,
@@ -118,8 +125,14 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
   // (like the original NASA Eyes app screenshots show). `getViewportScale`
   // is invoked per-frame so a DPR change driven by `<Canvas dpr>` lands
   // immediately without waiting for an unrelated rerender.
+  //
+  // `vfxHdrGain` is mutated through the memoised material's uniforms
+  // map (L15 literal — the JSX-child `<shaderMaterial uniforms={...}>`
+  // pattern silently drops per-frame writes because R3F replaces the
+  // map the compiled WebGLProgram was bound to).
   useFrame(() => {
     material.uniforms.particleSize.value = particleSize * getViewportScale();
+    material.uniforms.vfxHdrGain.value = qualityProfile.vfxHdrGain;
   });
 
   if (!geometry) {

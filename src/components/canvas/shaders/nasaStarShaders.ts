@@ -16,6 +16,11 @@ export const nasaStarVertexShader = `
   attribute vec4 starColor;
   varying vec4 fColor;
   uniform float particleSize;
+  // R1 #1B (Wave α Commit 2): HDR-linear multiplier baked into
+  // fColor.rgb so bright NASA-catalogue stars cross the selective-
+  // bloom threshold (1.0). Tier defaults on qualityProfile.vfxHdrGain;
+  // set per-frame from the memoised material's uniforms map (L15).
+  uniform float vfxHdrGain;
 
   // NASA's flux formula (luminosity adjusted for our scale)
   float absoluteMagnitudeToFlux(float absoluteMagnitude, float distance) {
@@ -44,6 +49,13 @@ export const nasaStarVertexShader = `
     // Ours: calibrated for our scale (km * KM_TO_PARSEC * DISTANCE_SCALE)
     float nearFade = clamp((distance - 6.684e6) / 6.016e7, 0.0, 1.0);
     fColor.a = mix(0.0, fColor.a, nearFade);
+
+    // HDR gain applied AFTER the near-fade alpha shaping so camera-
+    // close stars still fade out gracefully in LDR regardless of gain.
+    // Baking into .rgb (not .a) keeps the additive-blending math
+    // (src.rgb * src.a + dst.rgb) pushing bright stars above 1.0
+    // while faint stars stay below (§1.3 HDR-emissive allow-list).
+    fColor.rgb *= vfxHdrGain;
   }
 `;
 

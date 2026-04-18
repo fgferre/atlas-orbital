@@ -65,6 +65,13 @@ const vertexShader = /* glsl */ `
   // double-DPR bug on retina displays.
   uniform float particleSize;
   uniform float yearsSinceJ2000;
+  // R1 #1B (Wave α Commit 2): HDR-linear multiplier baked into vColor
+  // so bright catalogue stars cross the selective-bloom threshold
+  // (1.0 after the §1.1 pipeline contract). Tier defaults live on
+  // qualityProfile.vfxHdrGain. Declared in the vertex stage only —
+  // multiplied into the per-star varying below so the fragment shader
+  // stays uniform-free.
+  uniform float vfxHdrGain;
 
   varying vec3 vColor;
   varying float vBrightness;
@@ -117,7 +124,12 @@ const vertexShader = /* glsl */ `
 
     gl_PointSize = clamp(brightness * 4.0 * particleSize, 5.0, 50.0);
     vBrightness = clamp(brightness * particleSize, 0.05, 1.0);
-    vColor = bvToRGB(ci);
+    // Bake vfxHdrGain into vColor (post-B-V). For gain > 1 the
+    // per-channel value can exceed 1.0 and, combined with additive
+    // blending (src.rgb * src.a + dst.rgb), the brightest stars cross
+    // the 1.0 threshold the Bloom luminanceThreshold=1.0 pass watches.
+    // Faint stars with small vBrightness stay below.
+    vColor = bvToRGB(ci) * vfxHdrGain;
   }
 `;
 
@@ -213,6 +225,10 @@ export const Starfield = () => {
       uniforms: {
         particleSize: { value: 1.0 },
         yearsSinceJ2000: { value: 0.0 },
+        // Seeded from the current tier in useFrame below — this initial
+        // value is a safe default (1.0 = no HDR lift) until the first
+        // frame writes the tier-keyed gain.
+        vfxHdrGain: { value: 1.0 },
       },
       transparent: true,
       depthWrite: false,
@@ -296,6 +312,13 @@ export const Starfield = () => {
       (simulationClock.getNow().getTime() - J2000_EPOCH_MS) /
       MS_PER_JULIAN_YEAR;
     matUniforms.yearsSinceJ2000.value = years;
+
+    // R1 #1B — tier-keyed HDR gain, routed through the memoised
+    // material's uniforms map (L15 literal: if we re-created the
+    // uniforms object every render via `<shaderMaterial uniforms={...}>`,
+    // the compiled WebGLProgram would stay bound to the original map
+    // and per-frame writes would miss the GPU).
+    matUniforms.vfxHdrGain.value = qualityProfile.vfxHdrGain;
   });
   /* eslint-enable react-hooks/immutability */
 
