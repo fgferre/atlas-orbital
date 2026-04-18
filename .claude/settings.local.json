@@ -3,7 +3,10 @@
     "allow": [
       "Bash(powershell -Command \"(Get-Content ''c:\\Users\\fgfer\\OneDrive\\Documents\\GitHub\\atlas-orbital\\src\\data\\tycho2-processed.json'' | Measure-Object -Character).Characters\")",
       "Bash(npx tsc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node --experimental-strip-types scripts/measure-multi-epoch-drift.ts)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)"
     ],
     "deny": [],
     "ask": []

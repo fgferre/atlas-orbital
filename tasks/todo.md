@@ -1869,3 +1869,39 @@ Verification status: `npm run lint` clean, `npm run test:run` at
 287/287 green across 30 test files, `npm run build` ~9 s — as of the
 10-commit session that closed at `ae2a2a3`. Subsequent sessions pushed
 this to 293/293 across 30 files (current as of `aef03b8`).
+
+---
+
+### Research — Lighting & VFX AAA roadmap (2026-04-18)
+
+Research + architecture session, **zero production code changed**.
+Three markdown deliverables produced (the factual foundation for all
+future visual work; downstream sessions execute against these):
+
+- [tasks/lighting-audit-current.md](./lighting-audit-current.md) — exhaustive
+  file:line inventory of every light, material, post pass, starfield
+  shader, orbit/halo/cloud path, quality-profile gate, and asset slot.
+  Flags the latent double-tone-map in `Scene.tsx:267` vs
+  `PostProcessingPipeline.tsx:68`.
+- [tasks/lighting-aaa-benchmark.md](./lighting-aaa-benchmark.md) —
+  ~70-URL benchmark covering AAA space games (Elite Dangerous, Star
+  Citizen, Starfield, NMS, Universe Sandbox 2, SpaceEngine, Celestia,
+  KSP2, EVE) and the 2026 R3F ecosystem (drei / postprocessing /
+  realism-effects / n8ao / `@takram/three-atmosphere` / ektogamat /
+  sbcode TSL). Claims with thin sourcing marked `[unverified]`.
+- [tasks/lighting-backlog.md](./lighting-backlog.md) — **primary
+  deliverable**. 13 items ranked by ROI, each with 7 honest fields
+  (summary / visual impact / implementation sketch / dependencies /
+  risks / LOC-sessions / gating). Opens with **Rendering Invariants**
+  (tone-mapping authority, exposure authority, HDR-emissive contract,
+  backdrop-vs-IBL separation) and **Settings model** (preset ↔ custom
+  coexistence, graded control states). Includes dependency matrix
+  and cross-reference to the prior AAA rendering backlog block in this
+  file (~:1567-1599).
+
+Plan file: `~/.claude/plans/come-a-atlas-orbital-replicated-candle.md`.
+Codex review integrated before finalizing the plan (7 architectural
+contributions: pipeline authority contract, item split for HDR/star
+recalibration, settings-model extension vs green-field infra, Milky Way
+reclassified as experimental/backdrop-only, atmosphere schema as data-
+model work, graded control states, dependency-surface precision).
