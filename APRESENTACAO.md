@@ -10,14 +10,14 @@ Prepare-se para explorar o cosmos como nunca antes. **Atlas Orbital** não é ap
 
 ### **Mecânica Orbital Autêntica**
 
-Cada planeta, lua e asteroide segue um modelo orbital inspirado no universo real. Não estamos falando de animações pré-programadas — o Atlas Orbital calcula posições em tempo real usando as **equações de Kepler**, uma aproximação clássica adequada para visualização didática.
+Cada planeta, lua e asteroide segue um modelo orbital analítico calibrado. O Atlas Orbital combina **teorias por família** — VSOP87D para os oito planetas, Pluto-Meeus (Capítulo 37) para Plutão, ELP/MPP02-trunc para a Lua, e propagação Kepleriana de elementos osculantes derivados de fixtures JPL Horizons para as demais luas e asteroides.
 
 **O que isso significa?**
 
-- Se você avançar o tempo, os planetas seguem trajetórias coerentes com o modelo orbital adotado pelo projeto
-- Usamos o método **Newton-Raphson** (5 iterações) para resolver equações orbitais com precisão matemática
-- Todos os 7 elementos orbitais são calculados: semi-eixo maior, excentricidade, inclinação, longitude do nó ascendente, argumento do periélio, anomalia média e movimento médio
-- Ressonâncias orbitais reais são preservadas (como a famosa ressonância 1:2:4 entre Io, Europa e Ganimedes — as luas de Júpiter que "dançam" em sincronia)
+- Posições recalculadas em tempo real a partir da série analítica de cada corpo, não animações pré-programadas.
+- Pipeline de regressão valida os 28 corpos principais contra JPL Horizons em 4 épocas, com tolerâncias por família (≤ 0,1°/0,2°/0,5°) registradas em `src/lib/orbital/regression.test.ts`.
+- Elementos orbitais clássicos (a, e, i, Ω, ω, M, n) são tratados por cada provider conforme convenção da teoria que o origina.
+- Ressonâncias orbitais reais aparecem como consequência da precisão das séries (ex.: a ressonância 1:2:4 entre Io, Europa e Ganimedes — as luas de Júpiter que "dançam" em sincronia).
 
 ### **70+ Objetos Celestes com Dados Reais**
 
@@ -45,13 +45,13 @@ Cada corpo celeste inclui:
 
 Usamos as **melhores imagens disponíveis da NASA** — as mesmas que cientistas e agências espaciais utilizam:
 
-- **Sol, Terra, Marte, Júpiter, Saturno, Lua, Plutão** e fundo estelar da Via Láctea: todas em resolução **8K** (8192×4096 pixels)
-- **Texturas 4K** para luas e planetas menores, incluindo dados da missão **NASA GEMINI** para Europa
-- Mapas especiais: **Terra de noite** mostrando luzes das cidades, **camadas de nuvens**, **transparência dos anéis de Saturno**
+- Texturas 8K (8192×4096 pixels) para **Sol, Mercúrio, Vênus, Terra, Lua, Marte, Júpiter, Saturno, Urano, Plutão** e para o fundo estelar da Via Láctea.
+- Mapas 4K/2K para corpos menores (luas de Marte, luas galileanas, luas principais de Saturno, Netuno, asteroides) — tier escolhido conforme salência em tela e perfil de qualidade do dispositivo.
+- Mapas especiais: **Terra de noite** mostrando luzes das cidades, **camadas de nuvens**, **transparência dos anéis de Saturno**, além de normal/roughness maps PBR para a Terra.
 
-### **Campo Estelar Realista: 117.931 Estrelas Reais do Catálogo HYG**
+### **Campo Estelar Realista: Catálogo HYG v4.2 em Tiers Adaptativos**
 
-Enquanto outros simuladores usam texturas 2D de fundo com estrelas falsas, o **Atlas Orbital renderiza mais de 117 mil estrelas reais** com posições, cores e brilhos astronômicos autênticos.
+Enquanto outros simuladores usam texturas 2D de fundo com estrelas falsas, o **Atlas Orbital renderiza estrelas reais do catálogo HYG** — até ~109.400 delas no tier `ultra`, com posições, cores e brilhos astronômicos autênticos. O runtime seleciona automaticamente um tier compatível com o hardware e a banda (subsets menores para dispositivos com pouca memória ou rede lenta).
 
 **Dados do Catálogo HYG v4.2** (HYpparcos + Yale + Gliese)
 
@@ -127,13 +127,12 @@ Sistema de shaders customizado com 3 técnicas científicas:
 
 **Pipeline de Processamento de Dados**
 
-Script Node.js personalizado que:
+Scripts Node.js dedicados que:
 
-- Lê o arquivo CSV HYG v4.2 (119.000+ estrelas)
-- Filtra por magnitude ≤ 12.0 para manter densidade visual ideal
-- Calcula paralaxe a partir de distância quando necessário
-- Remove estrelas com coordenadas inválidas
-- Gera JSON otimizado com 117.931 estrelas (~14.6 MB)
+- Lêem o arquivo CSV HYG v4.2 (119.000+ estrelas brutas).
+- Sanitizam entradas inválidas (coordenadas não-finitas, paralaxe zero) e derivam paralaxe a partir de distância quando necessário.
+- Emitem **binários gzipados por tier** em `public/data/hyg-stars/` (ex.: `hyg-v1-full.bin.gz` ~1,77 MB com ~109.400 estrelas). Os tiers `low`/`medium`/`high` servem subsets menores (500 / 10k / 50k) para dispositivos constrained/balanced.
+- São reproduzíveis via `npm run download:hyg` + `npm run build:hyg`.
 
 **Resultado Visual**
 
@@ -256,13 +255,13 @@ Diferente de outros simuladores que usam sombras "assadas" (pré-calculadas), o 
 - Eficiente para a CPU enquanto usa o poder da GPU
 - Comportamento correto de sombras independente de onde você está
 
-### **Gerenciamento de 40+ Ordens de Magnitude**
+### **Gerenciamento de Escalas Extremas**
 
-O desafio mais difícil em simulações espaciais: como mostrar algo de **1 metro** e algo de **1 bilhão de quilômetros** na mesma cena?
+O desafio mais difícil em simulações espaciais: como mostrar algo da ordem de quilômetros e algo da ordem de bilhões de quilômetros na mesma cena sem perder detalhe?
 
-- Algoritmos de **Power-Scaled Coordinates (PSC)**
-- Estratégias de **floating-origin** (origem flutuante)
-- Zoom em tempo real sem perder precisão
+- Buffer de profundidade logarítmico do WebGL para distâncias dinâmicas muito amplas.
+- Câmera com clamps de `near`/`far` adaptativos ao corpo focado (ajustados em `CameraController` conforme o raio do alvo).
+- Dois modos de escala intercambiáveis (didático × realista) para cobrir a faixa de leitura desejada sem trocar de cena.
 
 ### **Precisão de Vírgula Flutuante**
 
@@ -302,7 +301,7 @@ O desafio mais difícil em simulações espaciais: como mostrar algo de **1 metr
 
 O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
-✅ **Rigor Científico** (dados astronômicos documentados, física orbital simplificada, precisão matemática compatível com o modelo)
+✅ **Rigor Científico** (dados astronômicos documentados, teorias analíticas por família — VSOP87D / Pluto-Meeus / ELP-MPP02 / Kepler osculante — validadas contra JPL Horizons)
 ✅ **Beleza Visual** (texturas 8K, shaders customizados, renderização PBR)
 ✅ **Acessibilidade** (roda no navegador, sem instalação, interface intuitiva)
 ✅ **Performance** (renderização WebGL otimizada, carregamento eficiente, perfis de qualidade)
@@ -313,10 +312,10 @@ O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
 ### **Rigor Científico:**
 
-- Mecânica orbital Kepleriana com elementos simplificados do projeto
-- Constantes físicas e propriedades documentadas no repositório
-- Tratamento adequado de ressonâncias orbitais e dinâmica de marés
-- 117.931 estrelas reais do catálogo HYG (Hipparcos/Yale/Gliese)
+- Mecânica orbital analítica por família (VSOP87D, Pluto-Meeus, ELP-MPP02-trunc, Kepler de elementos osculantes) com regressão contra JPL Horizons em 28 corpos × 4 épocas.
+- Constantes físicas e propriedades documentadas no repositório.
+- Ressonâncias orbitais emergem naturalmente da precisão das séries.
+- Catálogo HYG v4.2 (Hipparcos/Yale/Gliese) em tiers — até ~109.400 estrelas no tier `ultra`.
 
 ### **Excelência Visual:**
 
@@ -356,7 +355,7 @@ O que torna o Atlas Orbital especial é que ele **NÃO COMPROMETE**:
 
 **Sem instalação. Sem cadastro. Apenas pura exploração científica.**
 
-Navegue pelo Sistema Solar com um modelo orbital didático inspirado em dados reais. Veja a Terra de uma perspectiva rara. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e suas 5 luas. Avance o tempo e veja os planetas dançarem em suas órbitas simuladas. Contemple 117 mil estrelas reais posicionadas a partir do catálogo HYG processado para o app.
+Navegue pelo Sistema Solar com um motor orbital analítico calibrado contra dados reais. Veja a Terra de uma perspectiva rara. Testemunhe a majestade dos anéis de Saturno com sombras calculadas em tempo real. Viaje até Plutão e suas 5 luas. Avance o tempo e veja os planetas dançarem em suas órbitas reais. Contemple dezenas de milhares de estrelas reais posicionadas a partir do catálogo HYG v4.2, com o tier escolhido automaticamente conforme o seu dispositivo.
 
 **Atlas Orbital: O Cosmos ao alcance de um clique.**
 

@@ -75,6 +75,63 @@ guard `trackedBodyId ?` (dead branch — `trackedBodyId` é sempre truthy por
 causa do `"earth"` default da linha 38). Simplificação pura, sem mudança
 de semântica.
 
+Shipped em `73bb472` ("chore(onda-0): quick wins across store, scene, data
+and tooling").
+
+#### Onda 0.5 — Alinhamento de documentação (done, 2026-04-18)
+
+- [x] **0.5.1** — `APRESENTACAO.md`: 8 edits surgicais.
+  - L13: "equações de Kepler" → teorias analíticas por família (VSOP87D
+    para 8 planetas, Pluto-Meeus para Plutão, ELP/MPP02-trunc para a
+    Lua, Kepler osculante derivado de fixtures Horizons para demais).
+  - L18: "Newton-Raphson (5 iterações)" removido — substituído por
+    descrição honesta da regressão contra Horizons (28 corpos × 4
+    épocas, tolerâncias por família).
+  - L48: bloco de texturas 8K atualizado — agora lista apenas corpos com
+    8K real no disco (Sol, Mercúrio, Vênus, Terra, Lua, Marte, Júpiter,
+    Saturno, Urano, Plutão, Via Láctea). Removido "NASA GEMINI"
+    unverified.
+  - L52+54: "117.931 Estrelas" → "até ~109.400 estrelas no tier ultra"
+    - explicação do tier automático.
+  - L131-136 (pipeline): era "JSON otimizado com 117.931 estrelas ~14.6
+    MB" — substituído por descrição real: binários gzipados por tier em
+    `public/data/hyg-stars/` via `npm run download:hyg` +
+    `npm run build:hyg`.
+  - L259-266: bloco "Power-Scaled Coordinates (PSC) + floating-origin"
+    era fabricação — nenhum dos dois existe no código (grep confirma
+    zero matches). Substituído por descrição honesta: log-depth buffer
+    do WebGL + near/far adaptativos em `CameraController` + dois modos
+    de escala.
+  - L305, 316, 319, 359: resumos "Kepleriana" / "117 mil estrelas" /
+    "117.931" consolidados no vocabulário correto (analítica por
+    família; HYG v4.2 em tiers).
+  - Verificação: grep por "117.931", "Newton-Raphson", "Power-Scaled",
+    "floating-origin", "117 mil" = 0 matches restantes. "Kepler" só
+    aparece em contextos corretos (Kepler osculante, propagação
+    Kepleriana de elementos).
+
+- [x] **0.5.2** — `README.md` reescrito: stack R19+R3F+TS nomeada, seção
+      "Orbital mechanics" aponta para `src/lib/orbital/` com regressão;
+      seção "Star catalogs" documenta HYG default (scripts `download:hyg` + `build:hyg`) e NASA Eyes como opcional; seções de
+      dev/testing/preview atualizadas.
+
+- [x] **0.5.3** — `HANDOFF.md`: adicionado bloco "Status update —
+      2026-04-18" logo após a Purpose section. Corrige em prosa as 5
+      principais claims stale (tycho2-processed.bin deletado,
+      process-hyg.js deletado, "simplified keplerian elements" → VSOP87D
+      e cia, 5 Newton-Raphson iter → solveKeplerRad 12 iter/1e-12, "full
+      NASA/JPL-grade ephemerides" reafirmado como rejeitado com a nuance
+      correta). Corpo histórico preservado abaixo — HANDOFF por design
+      é registro; só adicionamos o delta.
+
+**Verificação Onda 0.5:** mudanças apenas de conteúdo. Cross-check: grep
+em `APRESENTACAO.md` por termos proibidos = 0 matches. README e HANDOFF
+leem-se coerentes com `registry.ts`, `starfield.ts`, `assetManifest.ts` e
+`tasks/lessons.md`. Sem impacto em lint/test/build (docs only).
+
+**Arquivos tocados (Onda 0.5):** 3 (APRESENTACAO.md, README.md,
+HANDOFF.md) + tasks/todo.md.
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the

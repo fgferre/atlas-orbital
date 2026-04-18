@@ -1,12 +1,23 @@
 # Atlas Orbital Handoff
 
-Last updated: 2026-04-13
+Last updated: 2026-04-18 (status block added; body below preserved for historical context)
 
 ## Purpose
 
 This file is the canonical handoff for starting a new Codex conversation on this repository without relying on prior thread memory.
 
 The goal is to preserve validated context, prevent repeated false assumptions, and give the next conversation a low-noise starting point.
+
+## Status update — 2026-04-18
+
+The sections further down predate the HYG migration and the analytical-ephemeris work. Corrections to the most load-bearing claims:
+
+- **Starfield pipeline.** The legacy `src/data/tycho2-processed.bin` and `scripts/process-hyg.js` referenced below were deleted during the HYG-E cleanup (see `tasks/todo.md`). Runtime now loads tiered gzipped binaries from `public/data/hyg-stars/` (low/medium/high/full, max ~109.400 stars). Format lives in `src/utils/hygBinary.ts`. `CreditsModal` was updated to name HYG v4.2 correctly.
+- **Orbital engine.** "Simplified keplerian elements" is no longer the whole story. The runtime uses analytical theories per family — VSOP87D for the 8 planets, Pluto-Meeus for Pluto, ELP/MPP02-trunc for the Moon, and Kepler propagation of osculating elements (derived from JPL Horizons fixtures at 2025-01-01 in TDB scale) for the remaining moons and asteroids. The "5 Newton-Raphson iterations" claim is obsolete: the active solver is `solveKeplerRad` in `src/lib/orbital/analytical/coordUtils.ts` (12 iterations, 1e-12 convergence). Regression suite in `src/lib/orbital/regression.test.ts` pins 28 bodies × 4 epochs against Horizons.
+- **"Current runtime uses full NASA/JPL-grade ephemerides"** — still rejected as stated. The runtime uses **analytical approximations validated against Horizons**, not live Horizons or SPICE propagation.
+- **Documentation drift.** `APRESENTACAO.md` was tightened in 2026-04-18 (Onda 0.5 of the current plan): Kepler-only claim, "117.931 stars" fixed number, fabricated PSC/floating-origin, and the 8K texture list are now corrected. `README.md` was rewritten to match today's pipeline.
+- **Active saneamento plan.** See `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v3). Onda 0 (quick wins) and Onda 0.5 (docs) are done as of 2026-04-18. Next up: Onda 1 (decouple simulation tick from React store).
+- **Performance facts still apply.** `Planet.tsx` useFrame still calls `resolveOrbitalDisplayPosition` per frame; the engine has an internal cache (`engine.ts:30`, bucket ~0,864 s, TTL 1 s) that is not yet fully exploited. Onda 1 addresses the upstream cause (`Timeline.tsx:198` writing `datetime` per frame to the store); Onda 3 instruments and measures the cache hit rate.
 
 ## Repository
 
