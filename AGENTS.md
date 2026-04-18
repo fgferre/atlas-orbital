@@ -20,19 +20,23 @@
 16. Rationalization: Avoid over-engineering. Ensure technical decisions are rational, sustainable, and the simplest possible way to achieve the goal.
 17. Clean Code Architecture: Ensure meaningful naming, SRP (Single Responsibility), and DRY (Don't Repeat Yourself) are applied to every module.
 
-## Playwright CLI Rules
+## Browser automation
 
-You must ALWAYS use the Playwright CLI via terminal to interact with the browser, generate tests, or run tests.
+Two paths are available; pick the one that fits the task:
 
-Preferred commands:
+- **Playwright CLI** (`npx playwright test`, `npx playwright codegen <url>`, etc.) —
+  the canonical path for CI-ready test suites, pixel-diff baselines, and any
+  verification that must be reproducible headlessly. All specs under `e2e/`
+  are authored here.
+- **Claude Preview / browser MCP** — allowed for interactive iteration
+  (quick visual checks, on-the-fly screenshots, console inspection while
+  editing). Mind the operational caveats in `tasks/lessons.md` (HMR
+  accumulation across many in-session edits can require a
+  `preview_stop` + `preview_start` cycle to clear the R3F canvas state).
 
-- `npx playwright codegen https://site.com` → to record actions
-- `npx playwright test` → to run tests
-- `npx playwright test my-test.spec.ts --headed` → to see the browser
-- `npx playwright-cli open https://site.com --headed` → if using the specialized playwright-cli
+Both are legitimate. Don't spend test-runner time on things a one-off
+screenshot would answer, and don't ship a pixel-diff regression gate via
+a manual MCP snapshot — each tool has its lane.
 
-Never use Playwright MCP tools or other Browser subagents when CLI alternatives are available.
-Always prefer terminal-based commands with `npx playwright` or `npx playwright-cli`.
-This saves significant tokens by avoiding frequent full page snapshots.
-
-When generating tests, outline the flow first, then use the CLI to help create the implementation.
+When generating tests, outline the flow first, then use the CLI to help
+create the implementation.

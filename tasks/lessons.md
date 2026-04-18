@@ -188,6 +188,13 @@ not an app bug. `preview_stop` followed by `preview_start` gives a
 clean state; the app itself was fine. Do not spend time bisecting
 runtime code when the logs already named the failure mode.
 
+**Policy note (2026-04-18 Wave α):** the Claude Preview MCP is an
+allowed tool for interactive iteration per the updated `AGENTS.md`
+"Browser automation" section. The HMR-cascade caveat above still
+applies — flush with `preview_stop` + `preview_start` if the canvas
+gets wedged. CI-grade pixel-diff baselines still live in Playwright
+specs (`e2e/*.spec.ts`), not MCP snapshots.
+
 **Code marker:** no code change. Operational only.
 
 ### L12. Don't bundle two changes behind one "fix" — prove each addresses the reported cause
@@ -302,11 +309,12 @@ into the memoised material — silence it with a scoped
 `/* eslint-disable react-hooks/immutability */` block since the
 mutation is intentional and scoped to per-frame GPU-bound values.
 
-**Tooling corollary:** the Claude preview MCP hides this class of
-bug under its L11 0 × 0-iframe cascade. For shader-uniform
-verification, run a pure-Playwright pixel-diff script via
-`node script.mjs` using the `playwright` npm module directly —
-`AGENTS.md` mandates this path anyway.
+**Tooling corollary:** shader-uniform regressions are easiest to
+catch with a Playwright pixel-diff (canvas over time, two toggles
+compared). The Claude Preview MCP can confirm the bug visually but
+is less rigorous — prefer `node script.mjs` using the `playwright`
+npm module directly for any gate, and keep MCP snapshots for
+interactive "did this obviously change" checks.
 
 **Code marker:** `const material = useMemo(() => new
 THREE.ShaderMaterial(...), [])` in
