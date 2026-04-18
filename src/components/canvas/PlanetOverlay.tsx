@@ -40,11 +40,18 @@ export const PlanetOverlay = memo(() => {
             />
           )}
 
-          {/* Planet Label — also a button so keyboard navigation works end to end. */}
+          {/* Planet Label — also a button for mouse users, but skipped
+              from the Tab order when the icon is present (which is
+              always, per OverlayPositionTracker's collision rules —
+              label implies icon). This avoids two tab stops + two
+              identical "Focus <name>" announcements per body for
+              keyboard + screen-reader users. The visible text already
+              provides the accessible name, so we drop the redundant
+              `aria-label`. */}
           {showLabels && item.showLabel && (
             <button
               type="button"
-              aria-label={`Focus ${item.name}`}
+              tabIndex={showIcons && item.showIcon ? -1 : 0}
               className="absolute text-gray-300 text-xs font-semibold uppercase tracking-wide pointer-events-auto cursor-pointer transition-colors hover:text-nasa-accent drop-shadow-md whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent bg-transparent border-0 p-0"
               style={{
                 left: `${item.x}px`,

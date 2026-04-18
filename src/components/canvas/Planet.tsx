@@ -30,10 +30,14 @@ const PARENT_BY_ID = Object.fromEntries(
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
 
-// Module-level scratch vector reused across hot-path useFrame blocks.
-// Safe because useFrame runs synchronously per frame in the same thread,
-// and every read is immediately preceded by getWorldPosition(TMP_WORLD_POS).
+// Module-level scratch vectors/matrices reused across hot-path useFrame
+// blocks. Safe because useFrame runs synchronously per frame in the
+// same thread, and every read is immediately preceded by a write into
+// the same scratch (e.g. `getWorldPosition(TMP_WORLD_POS)` before
+// reading, `.set(0,0,0).applyMatrix4(...)` before consuming, etc.).
 const TMP_WORLD_POS = new THREE.Vector3();
+const TMP_RING_INV_MATRIX = new THREE.Matrix4();
+const TMP_RING_SUN_LOCAL = new THREE.Vector3();
 
 // import { cloudVertexShader, cloudFragmentShader } from "./shaders/cloudShader";
 import {
@@ -1082,16 +1086,14 @@ const PlanetVisual = ({
         ringMaterial.userData.shader &&
         ringRef.current
       ) {
-        const sunWorldPos = new THREE.Vector3(0, 0, 0);
-        const ringWorldMatrix = ringRef.current.matrixWorld;
-        const inverseRingMatrix = new THREE.Matrix4()
-          .copy(ringWorldMatrix)
-          .invert();
-        const sunLocalPosRing = sunWorldPos
-          .clone()
-          .applyMatrix4(inverseRingMatrix);
+        // The Sun sits at world-space (0,0,0) in this scene, so the
+        // sun's position in ring-local space is simply the inverse ring
+        // world matrix applied to the world origin — no dedicated
+        // world-position Vector3 required.
+        TMP_RING_INV_MATRIX.copy(ringRef.current.matrixWorld).invert();
+        TMP_RING_SUN_LOCAL.set(0, 0, 0).applyMatrix4(TMP_RING_INV_MATRIX);
         const parallelSunLocalPosRing =
-          AstroPhysics.resolveParallelLightReferencePoint(sunLocalPosRing);
+          AstroPhysics.resolveParallelLightReferencePoint(TMP_RING_SUN_LOCAL);
 
         ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
           parallelSunLocalPosRing
