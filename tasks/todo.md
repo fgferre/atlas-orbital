@@ -473,6 +473,65 @@ tutorialCompletionStatus: "completed" }, version: 0 }` e o state
 
 **Arquivos tocados (Onda 4):** 2: `src/store.ts`, `src/store.test.ts`.
 
+#### Onda 5 — Starfield: L15 latente + dedup mínimo (done, 2026-04-18)
+
+Escopo decidido conforme AGENTS.md #3/#16: dois passos cirúrgicos em
+vez dos três planejados. O 5.2 (“StarfieldPoints base wrapper”) foi
+avaliado e descartado — os dois componentes têm sets de atributos e
+uniformes suficientemente diferentes (HYG: `mag`+`ci`+`velocity` com
+proper motion animada por `yearsSinceJ2000`; NASA: `starColor` vec4
+empacotando absMag em `.a` sem proper motion, com `nearFade`) para
+que um wrapper comum fosse um pass-through de ~30 linhas sem
+compartilhar nenhuma lógica real. Documentado aqui para evitar re-
+entrar na mesma ideia.
+
+- [x] **5.1 — L15 aplicado em `NASAStarfield.tsx`.** Este era o único
+      consumidor restante do padrão `<shaderMaterial uniforms={{...}}>`
+      como child JSX (Starfield.tsx já havia sido corrigido em sessões
+      anteriores conforme `tasks/lessons.md` L15). Trocado por
+      `useMemo(() => new THREE.ShaderMaterial({...}), [])` + `material`
+      prop no `<points>`. `materialRef` eliminado em favor do identity
+      estável do objeto memoizado. Mutation per-frame da
+      `particleSize.value` agora aterrissa na mesma `uniforms` map que
+      o `WebGLProgram` compilado está bindado.
+- [x] **5.3 — Hook compartilhado `useStarfieldParticleSize`.** Extraída
+      a fórmula NASA Eyes (`sqrt(max(w,h) * DPR) / 60` usando
+      `gl.getPixelRatio()` — não `window.devicePixelRatio`) para
+      `src/components/canvas/useStarfieldParticleSize.ts`. Ambos
+      `Starfield.tsx` e `NASAStarfield.tsx` consomem. Retorna um número
+      recomputado a cada render (estável entre renders, reavaliado no
+      resize via `useThree((s) => s.size)`). Consumidores fecham sobre
+      ele dentro de `useFrame` e mutam `particleSize.value`.
+  - Seletores específicos em `useThree` (`(s) => s.gl`, `(s) => s.size`)
+    em vez de desestruturação do objeto completo, para evitar que o
+    hook force re-render em mudanças irrelevantes.
+  - Comentário extenso no módulo explicando por que é `gl.getPixelRatio()`
+    e não `window.devicePixelRatio` — evita regressão futura do bug de
+    DPR duplo em displays retina com profile constrained.
+
+**Verificação Onda 5:**
+
+- `npm run lint`: ✅ clean (disable de `react-hooks/immutability`
+  em `NASAStarfield.tsx` foi removido depois que o ESLint confirmou
+  que não era mais necessário com o material fora do padrão JSX).
+- `npm run test:run`: ✅ 340/340 (sem novos testes; `starfieldShaderMath.test.ts`
+  continua cobrindo a curva de transferência, que é o contrato real
+  do shader; a mecânica React/Three do componente não muda).
+- `npm run build`: ✅ 8,58 s, sem novos warnings.
+- Preview HYG: sky renderiza com B-V coloring idêntico; cruzes de
+  referência visíveis.
+- Preview NASA: sky renderiza com sprites de tamanho variado; nenhum
+  erro de console; Sun centrado, starfield estável em zoom.
+- Regressão L15: uniforms de `NASAStarfield` mutados no `useFrame` agora
+  aterrissam no mesmo objeto que o GPU amostra (antes, cada render
+  recriava o `{ particleSize: { value } }` literal no JSX; R3F
+  reassign-ava e as escritas per-frame caíam num objeto órfão).
+
+**Arquivos tocados (Onda 5):** 3:
+`src/components/canvas/NASAStarfield.tsx`,
+`src/components/canvas/Starfield.tsx`,
+`src/components/canvas/useStarfieldParticleSize.ts` (novo).
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the

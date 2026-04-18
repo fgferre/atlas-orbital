@@ -16,7 +16,7 @@
 
 import * as THREE from "three";
 import { useMemo, useRef } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import {
   getCachedNASAStarCatalog,
   loadNASAStarCatalog,
@@ -27,6 +27,7 @@ import {
   nasaStarFragmentShader,
 } from "./shaders/nasaStarShaders";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
+import { useStarfieldParticleSize } from "./useStarfieldParticleSize";
 
 interface NASAStarfieldProps {
   /** Base particle size multiplier (default: 1.0) */
@@ -34,8 +35,6 @@ interface NASAStarfieldProps {
 }
 
 export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
-  const { gl, size } = useThree();
-  const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
   const stars = useStarfieldCatalog<NASAStar[]>({
     source: "nasa",
@@ -88,27 +87,37 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     return geom;
   }, [stars]);
 
-  // Update uniforms each frame
+  // Build the ShaderMaterial once. See Starfield.tsx + tasks/lessons.md
+  // L15: passing `<shaderMaterial uniforms={{...}}>` as a JSX child
+  // rebuilds the uniforms object on every render; R3F reconciliation
+  // then replaces the map the compiled WebGLProgram was bound to and
+  // per-frame mutations land on an orphan object the GPU no longer
+  // reads. Keeping the material reference stable and mutating uniforms
+  // through it is the intended path.
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: nasaStarVertexShader,
+        fragmentShader: nasaStarFragmentShader,
+        uniforms: {
+          particleSize: { value: particleSize },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    // particleSize is a prop default (1.0) — the useFrame below owns the
+    // authoritative value each frame. No dep needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const viewportScale = useStarfieldParticleSize();
+
+  // NO camera-following — allows zoom out to see starfield from outside
+  // (like the original NASA Eyes app screenshots show).
   useFrame(() => {
-    if (!materialRef.current) return;
-
-    // NO camera-following - allows zoom out to see starfield from outside
-    // (like the original NASA Eyes app screenshots show)
-
-    // =========================================================================
-    // VIEWPORT-ADAPTIVE SIZING (NASA's prepareForRender)
-    // particleSize scales with viewport size for consistent appearance.
-    // Formula: sqrt(max(width, height) * DPR) / 60 using the renderer's
-    // effective DPR (gl.getPixelRatio()) so the clamp applied by
-    // qualityProfile.dprMax in Scene.tsx is respected — otherwise
-    // sprites oversize by sqrt(DPR_window / DPR_renderer).
-    // =========================================================================
-    const effectiveDpr = gl.getPixelRatio();
-    const viewportScale =
-      Math.sqrt(Math.max(size.width, size.height) * effectiveDpr) / 60;
-
-    materialRef.current.uniforms.particleSize.value =
-      particleSize * viewportScale;
+    material.uniforms.particleSize.value = particleSize * viewportScale;
   });
 
   if (!geometry) {
@@ -119,20 +128,9 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     <points
       ref={pointsRef}
       geometry={geometry}
+      material={material}
       raycast={() => null}
       renderOrder={-2}
-    >
-      <shaderMaterial
-        ref={materialRef}
-        vertexShader={nasaStarVertexShader}
-        fragmentShader={nasaStarFragmentShader}
-        uniforms={{
-          particleSize: { value: particleSize },
-        }}
-        transparent={true}
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
+    />
   );
 };

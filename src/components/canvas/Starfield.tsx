@@ -27,7 +27,7 @@
 
 import * as THREE from "three";
 import { useCallback, useMemo, useRef } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { simulationClock } from "../../lib/simulationClock";
 import {
@@ -38,6 +38,7 @@ import {
 } from "../../lib/starfield";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
+import { useStarfieldParticleSize } from "./useStarfieldParticleSize";
 
 // 1 parsec expressed in the scene's unit system (matches the legacy
 // tycho2 path and NASA starfield; keeps the relative scale of the sky
@@ -194,7 +195,6 @@ export const Starfield = () => {
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
-  const { gl, size } = useThree();
   const pointsRef = useRef<THREE.Points>(null);
 
   // Build the ShaderMaterial once and pass it as an instance to the
@@ -283,17 +283,10 @@ export const Starfield = () => {
   // offset in Julian years the shader uses to animate proper motion.
   // Both live on the memoised material's uniforms map — mutating those
   // values is the intended per-frame path (see the memo comment above).
+  const viewportScale = useStarfieldParticleSize();
   /* eslint-disable react-hooks/immutability */
   useFrame(() => {
     const matUniforms = material.uniforms;
-    // Use the renderer's effective pixel ratio (clamped by qualityProfile
-    // .dprMax in Scene.tsx) rather than window.devicePixelRatio. On a
-    // DPR-3 display with the constrained profile (dprMax 1), the renderer
-    // draws into a DPR-1 buffer — scaling the sprites by the full window
-    // DPR would oversize them by sqrt(3).
-    const effectiveDpr = gl.getPixelRatio();
-    const viewportScale =
-      Math.sqrt(Math.max(size.width, size.height) * effectiveDpr) / 60;
     matUniforms.particleSize.value = viewportScale;
 
     const years =
