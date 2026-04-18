@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "preview:test": "vite preview --host 127.0.0.1 --port 4174",
+    "preview:test": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "format": "prettier --write .",
     "prepare": "husky",
     "download:nasa-stars": "node scripts/download-nasa-stars.js",

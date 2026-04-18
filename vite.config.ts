@@ -40,7 +40,10 @@ export default defineConfig({
           // `index` chunk. Isolating them into their own long-term-
           // cacheable chunk (`astronomy`) leaves `index` for app-level
           // code only.
-          if (id.includes("/astronomia/")) {
+          // Anchor to the package boundary so an unrelated path segment
+          // named `astronomia` (unlikely but possible in nested monorepo
+          // checkouts) doesn't accidentally claim other modules.
+          if (id.includes("/node_modules/astronomia/")) {
             return "astronomy";
           }
           if (id.includes("framer-motion")) return "animation";
