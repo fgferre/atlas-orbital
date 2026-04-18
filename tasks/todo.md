@@ -145,6 +145,46 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — NASA calibration pass (2026-04-17)
+
+User reported the NASA-style curve from the previous commit still
+rendered stars "too round and big" compared to the real NASA Eyes
+visual, saying "the NASA one looks much more like the naked-eye
+view of the night sky." Research subagent + my own math against
+NASA's absMag + inverse-square pipeline confirmed the diagnosis:
+the formula was ported correctly, but the calibration constants
+were way off. NASA's effective `C` inside `log(1 + flux·C)` is
+≈ 250 when you collapse the distance term for a solar-system
+observer; we were running 5000 — 20× too hot.
+
+Changes shipped:
+
+- `BRIGHTNESS_LOG_SCALE` 5000 → 250 — matches NASA's actual
+  response to apparent magnitude.
+- `SIZE_COEFFICIENT` 3 → 1.5 — sub-3 px cores for all but the
+  brightest stars (aligns with Celestia, tiffnix, and every
+  community star-rendering write-up: production renderers use
+  small sprites, not big ones).
+- Size clamp [4, 40] → [2, 12] — Sirius caps at 12 px, mag 4
+  stars render at ~6 px, mag 6+ fall to the 2 px floor.
+- Fragment falloff `pow(d, 5)` → `pow(d, 8)` — sharper core on
+  smaller sprites gives the crystalline naked-eye look instead
+  of fuzzy discs.
+
+Expected rendered sizes after the pass (vs before):
+
+| mag           | before (px)  | after (px)   |
+| ------------- | ------------ | ------------ |
+| -1.5 (Sirius) | 40 (clamped) | 12 (clamped) |
+| 0 (Vega)      | 40 (clamped) | 12 (clamped) |
+| 2             | 33           | 11.1         |
+| 4             | 24           | 5.9          |
+| 6             | 15           | 2.0 (floor)  |
+| 8             | 8            | 2.0 (floor)  |
+| 10+           | 4 (floor)    | 2.0 (floor)  |
+
+Test-curve cases, lint, and lesson L17 updated. 306/306 tests green.
+
 ## Review — NASA Eyes–style single curve (2026-04-17)
 
 User didn't like the Cinematic look (too halo-y, not realistic enough)

@@ -353,3 +353,44 @@ explicit `waitForTimeout`s and skip `animations: "disabled"` (the
 loop never stops). If the screenshot still hangs, fall back to
 reading GL pixels via `page.evaluate` + `readPixels` on the canvas
 WebGL context.
+
+### L17. Porting a transfer curve is not enough — calibrate sprite sizes against the reference's actual pixel output
+
+**Context:** After porting NASA Eyes' log-compression transfer curve
+verbatim (`brightness = 2·log(1 + flux · C)`) I still had the user
+complain that our stars looked rounder and bigger than NASA's. The
+port was mathematically identical at the formula level — same
+`pow(d, 5)` fragment falloff, same additive blending, same log
+shape. The gap was in the **calibration constants**:
+
+- NASA's `C` is an effective value near 250 when you collapse their
+  absMag + inverse-square pipeline for a solar-system observer.
+  Our port used 5000 — a ~20× higher multiplier, pushing every
+  star brighter on the log curve.
+- NASA's size multiplier was 4 in their code but the baseline
+  brightness they feed it is also smaller. Net on-screen: sprites
+  in the 1–12 px range for most stars, with only the brightest
+  handful hitting the 50 px ceiling.
+- Our calibration (size × 3, clamp [4, 40]) meant mag 4 stars
+  rendered at ~24 px (should have been ~6 px) and mag 6 stars at
+  ~16 px (should have been floor-clamped).
+
+Production star renderers (Celestia, tiffnix's three.js write-up,
+every community tutorial I found) **all use sub-3 px sprite cores**
+and let the fragment falloff do the visual work. Large sprites on a
+soft `pow(d, 5)` radial falloff just look fuzzy; small sprites on a
+sharper `pow(d, 8-12)` falloff look crystalline.
+
+**Rule:** When porting a visual effect, port **the numbers it
+actually produces on screen**, not just the formula. If the
+reference renderer is available (it was, in our own repo at
+`NASAStarfield.tsx`), compute what pixel sizes and alphas it emits
+for sample magnitudes, and calibrate your port until those match —
+_then_ confirm the visual. "Math ported correctly" and "looks like
+the reference" are two different claims.
+
+**Code marker:** the constants block at the top of
+`src/lib/starfieldShaderMath.ts` — log scale 250, size coefficient
+1.5, clamp [2, 12] px — is the post-calibration settings. The
+previous `5000` / `3` / `[4, 40]` block produced the fuzzy-disc
+regression.

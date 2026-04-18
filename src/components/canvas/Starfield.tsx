@@ -89,34 +89,23 @@ const vertexShader = /* glsl */ `
     vec4 viewPosition = modelViewMatrix * vec4(animatedPos, 1.0);
     gl_Position = projectionMatrix * viewPosition;
 
-    // NASA Eyes–style transfer curve: physical flux compressed
-    // logarithmically, then mapped to sprite size and alpha with floors.
-    // Why log(1 + flux) instead of Pogson sqrt:
-    //   - Eye response to light is logarithmic (Fechner's law). Mapping
-    //     size/alpha linearly against a log compression matches how the
-    //     sky visually reads at the eyepiece.
-    //   - Bright stars (mag ≤ 2) stop blowing out into 60-px blobs —
-    //     log saturates smoothly without a hard ceiling needing to do
-    //     the work.
-    //   - Faint stars (mag 6-12) land in a usable range after the log
-    //     compression, so a modest 4 px / 0.12 α floor keeps them
-    //     visibly present without flattening ordering (log preserves
-    //     rank order by construction).
-    //   - Deep survey tail (mag > 14) still floors to 4 px but the log
-    //     has already pushed them toward the same value, so the floor
-    //     is a thin clamp rather than a haze.
-    // The multiplier (5000) is tuned so a typical naked-eye star (mag 4)
-    // produces brightness ≈ 11.2, Sirius (mag -1.5) ≈ 21.0 (clamped by
-    // the 40-px size ceiling), and mag 12 ≈ 0.3 (pushed to floor).
+    // NASA Eyes–style transfer curve: Pogson flux compressed
+    // logarithmically (Fechner's law), then mapped to sprite size and
+    // alpha. The constants are calibrated against NASA Eyes' actual
+    // output at solar-system-viewing distances — see the long comment
+    // in src/lib/starfieldShaderMath.ts for the derivation.
+    //
+    // The 250× multiplier inside log(1 + flux · 250) is what makes
+    // this match NASA rather than blow stars up into fuzzy discs: at
+    // apparent mag 0 (Vega) brightness ≈ 11, mag 4 ≈ 4, mag 6 ≈ 1.4,
+    // mag 8+ approaches the floor. The size coefficient (1.5) and
+    // small clamp range ([2, 12] px) keep even the brightest stars as
+    // crystalline points rather than big softglow blobs, which is how
+    // the naked eye actually reads the night sky.
     float flux = pow(10.0, -mag * 0.4);
-    float brightness = 2.0 * log(1.0 + flux * 5000.0);
+    float brightness = 2.0 * log(1.0 + flux * 250.0);
 
-    // Size and alpha are both proportional to the same log-compressed
-    // brightness. The 4-px floor is the critical density lever — it
-    // ensures faint stars sample multiple fragments and do not flicker
-    // on camera motion, matching NASA Eyes's visual density without a
-    // haze-producing α clamp.
-    float baseSize = clamp(brightness * 3.0, 4.0, 40.0);
+    float baseSize = clamp(brightness * 1.5, 2.0, 12.0);
     gl_PointSize = baseSize * particleSize * pixelRatio;
 
     vBrightness = clamp(brightness * 0.08, 0.12, 1.0);
@@ -131,11 +120,13 @@ const fragmentShader = /* glsl */ `
   varying float vBrightness;
 
   void main() {
-    // NASA Eyes uses a tight pow(d, 5) dot — no halo, no bloom. Stars
-    // read as crisp points of light rather than diffuse glows, which is
-    // what "realistic" means against the black sky.
+    // Sharper radial falloff (pow 8 instead of NASA's original pow 5):
+    // on the smaller 2–12 px sprites the bright core needs a steeper
+    // curve to stay tight. With pow(5) on these sprite sizes the star
+    // reads as a fuzzy disc; pow(8) keeps the centre bright and fades
+    // aggressively, giving the crystalline naked-eye-point look.
     float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float alpha = pow(d, 5.0);
+    float alpha = pow(d, 8.0);
     gl_FragColor = vec4(vColor, alpha * vBrightness);
   }
 `;
