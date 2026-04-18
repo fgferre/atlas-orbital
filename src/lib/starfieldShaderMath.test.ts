@@ -1,147 +1,74 @@
 import { describe, expect, it } from "vitest";
 
-import { smoothstep, starfieldPointMetrics } from "./starfieldShaderMath";
+import { starfieldPointMetrics } from "./starfieldShaderMath";
 
 const approxEq = (actual: number, expected: number, tol = 1e-3) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
 };
 
-describe("smoothstep", () => {
-  it("returns 0 below the lower edge and 1 above the upper edge", () => {
-    expect(smoothstep(1, 2, 0)).toBe(0);
-    expect(smoothstep(1, 2, 3)).toBe(1);
-  });
-
-  it("hits the 0.5 midpoint at the interval centre", () => {
-    approxEq(smoothstep(0, 1, 0.5), 0.5);
-  });
-
-  it("matches GLSL Hermite values at a few sample points", () => {
-    approxEq(smoothstep(6, 7.5, 6.6), 0.352);
-    approxEq(smoothstep(9.5, 12, 10), 0.104);
-    approxEq(smoothstep(9.5, 12, 11), 0.648);
-  });
-});
-
-describe("starfieldPointMetrics — photometric identity (styleMix = 0)", () => {
-  it("leaves magnitude uncompressed", () => {
-    const { compressedMag } = starfieldPointMetrics(12, 0);
-    expect(compressedMag).toBe(12);
-  });
-
-  it("keeps sizeBoost and fragment falloff on the original Pogson values", () => {
-    const { sizeBoost, falloffPow } = starfieldPointMetrics(7.5, 0);
-    expect(sizeBoost).toBe(1);
-    expect(falloffPow).toBe(5);
-  });
-
-  it("applies no flat alpha bump", () => {
-    // A mag-20 star rides the Pogson floor in photometric mode and lands
-    // exactly at the 0.08 clamp (no +styleMix * 0.03 extra).
-    const { vBrightness } = starfieldPointMetrics(20, 0);
-    approxEq(vBrightness, 0.08);
-  });
-
-  it("preserves the graduated lift at the naked-eye→binocular band", () => {
-    // Mag 7.5 sits at the window peak regardless of styleMix, because the
-    // lift uses raw mag. baseSize = sqrtFlux * 2.5 + 1 lift px.
-    const { baseSize } = starfieldPointMetrics(7.5, 0);
-    approxEq(baseSize, 2.578, 0.01);
-  });
-});
-
-describe("starfieldPointMetrics — cinematic (styleMix = 1)", () => {
+describe("starfieldPointMetrics — NASA-style log-compressed curve", () => {
   const cases: Array<{
     mag: number;
-    compressedMag: number;
     baseSize: number;
     vBrightness: number;
   }> = [
-    { mag: 3, compressedMag: 3, baseSize: 12.53, vBrightness: 0.501 },
-    { mag: 6, compressedMag: 6, baseSize: 3.15, vBrightness: 0.201 },
-    { mag: 7.5, compressedMag: 6.6, baseSize: 3.388, vBrightness: 0.296 },
-    { mag: 9, compressedMag: 7.2, baseSize: 2.81, vBrightness: 0.278 },
-    { mag: 11, compressedMag: 8, baseSize: 1.605, vBrightness: 0.183 },
-    { mag: 12, compressedMag: 8.4, baseSize: 1.5, vBrightness: 0.133 },
-    { mag: 20, compressedMag: 11.6, baseSize: 1.5, vBrightness: 0.108 },
+    // Sirius-bright: clamped at the 40 px ceiling.
+    { mag: -1.5, baseSize: 40, vBrightness: 1 },
+    // Vega-bright: still at the ceiling because log(1 + 5000·1) ≈ 17.
+    { mag: 0, baseSize: 40, vBrightness: 1 },
+    // Ursa Major / Orion bright stars: mid-range of the curve.
+    { mag: 3, baseSize: 34.54, vBrightness: 0.921 },
+    // Sun-like naked-eye: comfortably within the alpha ceiling.
+    { mag: 5, baseSize: 23.59, vBrightness: 0.629 },
+    // Naked-eye limit in realistic mode.
+    { mag: 6.5, baseSize: 15.63, vBrightness: 0.417 },
+    // Binocular: still well above the floor.
+    { mag: 8, baseSize: 8.55, vBrightness: 0.228 },
+    // Approaching the floor: size clamps, alpha clamps.
+    { mag: 10, baseSize: 4, vBrightness: 0.12 },
+    // Deep tail: floor.
+    { mag: 12, baseSize: 4, vBrightness: 0.12 },
+    { mag: 20, baseSize: 4, vBrightness: 0.12 },
   ];
 
   it.each(cases)(
-    "matches the hand-verified cinematic curve at mag $mag",
-    ({ mag, compressedMag, baseSize, vBrightness }) => {
-      const result = starfieldPointMetrics(mag, 1);
-      approxEq(result.compressedMag, compressedMag, 1e-6);
+    "matches the hand-verified NASA-style curve at mag $mag",
+    ({ mag, baseSize, vBrightness }) => {
+      const result = starfieldPointMetrics(mag);
       approxEq(result.baseSize, baseSize, 0.02);
       approxEq(result.vBrightness, vBrightness, 0.005);
     }
   );
 
-  it("keeps mag 7.5 strictly brighter than mag 12 (Codex Finding 1 regression)", () => {
-    // The original bug: running the lift on `compressedMag` instead of
-    // raw `mag` let the window's plateau collide with telescopic stars
-    // (raw mag ~12 lands at compressed 8.4, inside the peak) while
-    // binocular stars (raw mag 7.5 → compressed 6.6) sat on the ramp.
-    // That inverted cosmic ordering at a 4-mag gap. Any future refactor
-    // that reintroduces the bug fails this assertion fast.
-    const near = starfieldPointMetrics(7.5, 1).vBrightness;
-    const telescopic = starfieldPointMetrics(12, 1).vBrightness;
-    expect(near).toBeGreaterThan(telescopic);
-  });
-
-  it("is strictly monotonic outside the lift window (pure Pogson below mag 6, compressed Pogson above mag 12)", () => {
-    // Inside the lift window (6 ≤ mag ≤ 12) the graduated smoothstep
-    // intentionally creates a local maximum around mag 7.5 — that is
-    // the whole point of the perceptual boost, present in both
-    // photometric and cinematic. Outside the window the curve must be
-    // monotonic: below mag 6 the raw Pogson curve drives it, and above
-    // mag 12 the compressed Pogson + flat alpha bump is monotonically
-    // descending because compression of magnitude translates directly
-    // into a monotonically smaller flux ratio.
-    let previousBelow = Infinity;
-    for (let mag = -1; mag < 6; mag += 0.25) {
-      const { vBrightness } = starfieldPointMetrics(mag, 1);
-      expect(vBrightness).toBeLessThanOrEqual(previousBelow + 1e-6);
-      previousBelow = vBrightness;
-    }
-    let previousAbove = starfieldPointMetrics(12, 1).vBrightness;
-    for (let mag = 12.25; mag <= 20; mag += 0.25) {
-      const { vBrightness } = starfieldPointMetrics(mag, 1);
-      expect(vBrightness).toBeLessThanOrEqual(previousAbove + 1e-6);
-      previousAbove = vBrightness;
+  it("is strictly monotonic: brighter magnitudes produce larger sprites and higher alpha", () => {
+    // Unlike the previous two-stage curve this one has no perceptual
+    // hump — log(1 + flux·C) is strictly increasing in flux, so
+    // reversing the magnitude axis gives a strictly decreasing size.
+    // Outside the clamps we get equality (ceiling/floor); inside, the
+    // curve is strictly monotonic.
+    let previousSize = Infinity;
+    let previousAlpha = Infinity;
+    for (let mag = -2; mag <= 20; mag += 0.25) {
+      const { baseSize, vBrightness } = starfieldPointMetrics(mag);
+      expect(baseSize).toBeLessThanOrEqual(previousSize + 1e-6);
+      expect(vBrightness).toBeLessThanOrEqual(previousAlpha + 1e-6);
+      previousSize = baseSize;
+      previousAlpha = vBrightness;
     }
   });
 
-  it("documents the intentional lift hump: mag 7.5 > mag 6", () => {
-    // Lift boosts faint-to-mid stars above what raw Pogson would give
-    // them. This produces a local maximum at mag 7.5 that sits higher
-    // than mag 6 in both modes — the visible "density" the user
-    // perceives. If this ever reverses, the lift has been gutted.
-    const atWindowOpen = starfieldPointMetrics(6, 1).vBrightness;
-    const atWindowPeak = starfieldPointMetrics(7.5, 1).vBrightness;
-    expect(atWindowPeak).toBeGreaterThan(atWindowOpen);
+  it("has a 4 px size floor and 0.12 alpha floor so faint stars stay visible", () => {
+    // These floors are the density lever — NASA Eyes uses similar
+    // minimums so survey-depth stars (mag 10+) remain perceptible
+    // multi-fragment sprites rather than sub-pixel ghosts.
+    const mag15 = starfieldPointMetrics(15);
+    expect(mag15.baseSize).toBe(4);
+    expect(mag15.vBrightness).toBeCloseTo(0.12);
   });
 
-  it("boosts sprite size 2.5× and softens the fragment falloff for the halo look", () => {
-    const result = starfieldPointMetrics(7.5, 1);
-    expect(result.sizeBoost).toBeCloseTo(2.5);
-    expect(result.falloffPow).toBeCloseTo(2);
-  });
-});
-
-describe("starfieldPointMetrics — intermediate styleMix", () => {
-  it("linearly interpolates sizeBoost and falloffPow at 0.5", () => {
-    const { sizeBoost, falloffPow } = starfieldPointMetrics(7.5, 0.5);
-    expect(sizeBoost).toBeCloseTo(1.75);
-    expect(falloffPow).toBeCloseTo(3.5);
-  });
-
-  it("leaves the bright end (mag < 6) invariant under compression", () => {
-    const photometric = starfieldPointMetrics(3, 0);
-    const cinematic = starfieldPointMetrics(3, 1);
-    // compressedMag equals raw mag in both cases, so sqrtFlux and baseSize
-    // only differ via the flat alpha bump and the sprite/falloff effects
-    // that live outside baseSize.
-    expect(cinematic.compressedMag).toBe(photometric.compressedMag);
-    approxEq(cinematic.baseSize, photometric.baseSize, 1e-6);
+  it("clamps the bright end at 40 px size / 1.0 alpha", () => {
+    const sirius = starfieldPointMetrics(-1.46);
+    expect(sirius.baseSize).toBe(40);
+    expect(sirius.vBrightness).toBe(1);
   });
 });

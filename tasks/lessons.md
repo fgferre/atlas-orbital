@@ -311,3 +311,45 @@ verification, run a pure-Playwright pixel-diff script via
 **Code marker:** `const material = useMemo(() => new
 THREE.ShaderMaterial(...), [gl])` in
 `src/components/canvas/Starfield.tsx`.
+
+### L16. Log compression (Fechner) beats Pogson + clamps for "realistic + dense" star rendering
+
+**Context:** After two rounds of tuning (raising Pogson clamps, then
+adding smoothstep lifts, then introducing a Photometric/Cinematic
+toggle), the user's feedback was still "I don't like the result — I
+want realistic + dense, like NASA Eyes". The repo already had a
+reference NASA Eyes renderer (`NASAStarfield.tsx`) using a
+fundamentally different curve: `brightness = 2·log(1 + flux·C)` —
+a single log-compression step that maps flux to both size and alpha.
+
+The lesson I kept missing: **Pogson magnitude is a physics convention,
+not a display convention.** The eye integrates light logarithmically
+(Fechner's law), which is why magnitudes are logarithmic in the first
+place. So the "correct" display transform is NOT another Pogson-shaped
+curve with clamps on top — it's one log step that's already the
+eye-response shape, then linear scaling into screen units. No
+two-stage "realistic vs cinematic" binary, no smoothstep lift, no
+separate Pogson for size and Pogson for alpha.
+
+**Rule:** When mapping a physics-derived photometric quantity to a
+display, prefer a single monotonic log-compressed curve over any
+stack of Pogson + clamps + perceptual lifts. Log(1 + flux·C) in
+particular naturally saturates bright stars, preserves rank order
+everywhere, and gives a usable value for every magnitude that a
+small floor keeps visibly on screen. If the reference renderer uses
+log compression (NASA Eyes, most modern space visualisers),
+matching that shape is usually the shortest path to a result users
+actually recognise as "realistic".
+
+**Code marker:** `brightness = 2·log(1 + flux·5000)` in
+`src/components/canvas/Starfield.tsx` vertex shader; mirrored in
+`src/lib/starfieldShaderMath.ts` with 13 unit tests pinning the
+full curve end to end.
+
+**Tooling corollary:** Playwright's `page.screenshot` with
+R3F's continuous render loop is fragile — the "wait for stable"
+heuristic often times out. For R3F visual checks, prefer short
+explicit `waitForTimeout`s and skip `animations: "disabled"` (the
+loop never stops). If the screenshot still hangs, fall back to
+reading GL pixels via `page.evaluate` + `readPixels` on the canvas
+WebGL context.

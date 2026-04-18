@@ -20,7 +20,6 @@ interface AppState {
   showIcons: boolean;
   showStarfield: boolean;
   starfieldSource: StarfieldSource;
-  starfieldStyle: "photometric" | "cinematic";
   starfieldProviderStates: Record<StarfieldSource, StarfieldProviderState>;
   /**
    * Currently hovered HYG-named star, or null when the pointer is not
@@ -90,7 +89,6 @@ interface AppState {
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
   setStarfieldSource: (source: StarfieldSource) => void;
-  setStarfieldStyle: (style: "photometric" | "cinematic") => void;
   setHoveredStar: (next: HoveredStarInfo | null) => void;
   setStarfieldProviderState: (
     source: StarfieldSource,
@@ -117,7 +115,6 @@ interface AppState {
 
 const QUALITY_MODE_STORAGE_KEY = "qualityMode";
 const SUN_RENDER_MODE_STORAGE_KEY = "sunRenderMode";
-const STARFIELD_STYLE_STORAGE_KEY = "starfieldStyle";
 
 const canUseLocalStorage = () =>
   typeof localStorage !== "undefined" &&
@@ -141,19 +138,6 @@ const getInitialQualityMode = (): QualityMode => {
   }
 
   return "auto";
-};
-
-const getInitialStarfieldStyle = (): "photometric" | "cinematic" => {
-  if (!canUseLocalStorage()) {
-    return "cinematic";
-  }
-
-  const storedValue = localStorage.getItem(STARFIELD_STYLE_STORAGE_KEY);
-  if (storedValue === "photometric" || storedValue === "cinematic") {
-    return storedValue;
-  }
-
-  return "cinematic";
 };
 
 const getInitialSunRenderMode = (): SunRenderMode => {
@@ -198,7 +182,6 @@ export const useStore = create<AppState>((set) => ({
       : createDefaultViewportFramingState(),
   showStarfield: true,
   starfieldSource: "hyg",
-  starfieldStyle: getInitialStarfieldStyle(),
   starfieldProviderStates: {
     hyg: { status: "idle", error: null },
     nasa: { status: "idle", error: null },
@@ -280,15 +263,6 @@ export const useStore = create<AppState>((set) => ({
     set((state) =>
       state.starfieldSource === starfieldSource ? state : { starfieldSource }
     ),
-  setStarfieldStyle: (starfieldStyle) => {
-    if (canUseLocalStorage()) {
-      localStorage.setItem(STARFIELD_STYLE_STORAGE_KEY, starfieldStyle);
-    }
-
-    set((state) =>
-      state.starfieldStyle === starfieldStyle ? state : { starfieldStyle }
-    );
-  },
   setHoveredStar: (hoveredStar) =>
     set((state) =>
       state.hoveredStar === hoveredStar ? state : { hoveredStar }

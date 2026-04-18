@@ -56,11 +56,6 @@ const vertexShader = /* glsl */ `
   uniform float pixelRatio;
   uniform float particleSize;
   uniform float yearsSinceJ2000;
-  // styleMix: 0 = photometric (Pogson-accurate), 1 = cinematic (compresses
-  // the faint tail, enlarges sprites, sharpens the fragment falloff so dim
-  // stars stop flickering on camera motion at the cost of strict photometric
-  // ordering). Interpolated linearly so intermediate values stay valid.
-  uniform float styleMix;
 
   varying vec3 vColor;
   varying float vBrightness;
@@ -94,77 +89,37 @@ const vertexShader = /* glsl */ `
     vec4 viewPosition = modelViewMatrix * vec4(animatedPos, 1.0);
     gl_Position = projectionMatrix * viewPosition;
 
-    // Pogson-style size: flux ratio relative to the naked-eye limit
-    // (mag 6.5). Each 5 magnitudes brighter = 100× flux = ~2.5× apparent
-    // area on screen. Square-root the flux so rendered glow *area*, not
-    // diameter, scales with brightness — this matches how stars visibly
-    // pile up around the bright end of the sky.
-    //
-    // A bare Pogson curve with a 1.5 px / 0.08 α floor is fotometrically
-    // honest but visually conservative: stars at mag ≥ 7 collapse onto
-    // the floor as sparse sub-pixel-ish dots, and the naked-eye-to-
-    // binocular band (the mass of balanced/high tiers) loses presence.
-    // Adding a *hard* floor (e.g. 2.5 px / 0.20 α globally) fixes that
-    // by flattening magnitude ordering across most of the catalogue,
-    // which is worse — mag 12 survey stars end up at the same size as
-    // mag 7 binocular stars, and the full tier turns into a haze.
-    //
-    // Instead we add a graduated smoothstep "lift" concentrated on the
-    // naked-eye→binocular window (≈ mag 6→9 in shader space), fading
-    // back to zero by mag ~12 so the telescopic tail of the full tier
-    // stays ghostly. Bright stars (mag < 6) are untouched;
-    // faint-mid stars get up to +1 px / +0.12 α; very faint stars go
-    // back to the raw floor. This preserves ordering end-to-end while
-    // adding real presence where the eye expects it.
-    // Cinematic magnitude compression: pull the faint tail toward the
-    // naked-eye anchor. Monotonic by construction — bright end (mag < 6)
-    // passes through unchanged; each unit of mag above 6 shrinks by the
-    // factor mix(1.0, 0.4, styleMix), so mag 20 lands at shader-mag 11.6
-    // under full cinematic. Ordering is preserved, but the Pogson curve
-    // now sees a tighter range and gives meaningful flux to stars the
-    // eye would otherwise lose.
-    float compressedMag = mag < 6.0
-      ? mag
-      : 6.0 + (mag - 6.0) * mix(1.0, 0.4, styleMix);
+    // NASA Eyes–style transfer curve: physical flux compressed
+    // logarithmically, then mapped to sprite size and alpha with floors.
+    // Why log(1 + flux) instead of Pogson sqrt:
+    //   - Eye response to light is logarithmic (Fechner's law). Mapping
+    //     size/alpha linearly against a log compression matches how the
+    //     sky visually reads at the eyepiece.
+    //   - Bright stars (mag ≤ 2) stop blowing out into 60-px blobs —
+    //     log saturates smoothly without a hard ceiling needing to do
+    //     the work.
+    //   - Faint stars (mag 6-12) land in a usable range after the log
+    //     compression, so a modest 4 px / 0.12 α floor keeps them
+    //     visibly present without flattening ordering (log preserves
+    //     rank order by construction).
+    //   - Deep survey tail (mag > 14) still floors to 4 px but the log
+    //     has already pushed them toward the same value, so the floor
+    //     is a thin clamp rather than a haze.
+    // The multiplier (5000) is tuned so a typical naked-eye star (mag 4)
+    // produces brightness ≈ 11.2, Sirius (mag -1.5) ≈ 21.0 (clamped by
+    // the 40-px size ceiling), and mag 12 ≈ 0.3 (pushed to floor).
+    float flux = pow(10.0, -mag * 0.4);
+    float brightness = 2.0 * log(1.0 + flux * 5000.0);
 
-    // Pogson-style size on the (possibly compressed) magnitude. Bright
-    // stars (mag < 6) are invariant under styleMix for the flux
-    // calculation; compression is gated off in that range.
-    float fluxRatio = pow(10.0, (6.5 - compressedMag) * 0.4);
-    float sqrtFlux = sqrt(fluxRatio);
+    // Size and alpha are both proportional to the same log-compressed
+    // brightness. The 4-px floor is the critical density lever — it
+    // ensures faint stars sample multiple fragments and do not flicker
+    // on camera motion, matching NASA Eyes's visual density without a
+    // haze-producing α clamp.
+    float baseSize = clamp(brightness * 3.0, 4.0, 40.0);
+    gl_PointSize = baseSize * particleSize * pixelRatio;
 
-    // Graduated smoothstep lift: adds presence to the naked-eye→binocular
-    // window without flattening the rest of the catalogue. The lift MUST
-    // be driven by the raw (uncompressed) mag, not the compressed value —
-    // otherwise cinematic's compression shifts the window so that deep
-    // telescopic stars (raw mag ~12) land at the lift's peak while
-    // binocular stars (raw mag ~7.5) only see the ramp. That inverts
-    // magnitude ordering in the vBrightness output, which is exactly the
-    // "haze of faint stars brighter than mid-faint stars" bug that the
-    // perceptual design is supposed to avoid.
-    float faintLift = smoothstep(6.0, 7.5, mag) *
-                      (1.0 - smoothstep(9.5, 12.0, mag));
-
-    // Sprite enlargement in cinematic mode. Applied globally so every
-    // star feels "present" — 2.5× the sprite size at full cinematic,
-    // combined with the softer fragment falloff below, gives the
-    // visible halo that the "AAA glow" look needs. Photometric mode
-    // (styleMix = 0) keeps the original sprite exactly.
-    float sizeBoost = mix(1.0, 2.5, styleMix);
-
-    float baseSize = clamp(sqrtFlux * 2.5 + faintLift * 1.0, 1.5, 60.0);
-    gl_PointSize = baseSize * sizeBoost * particleSize * pixelRatio;
-
-    // Base alpha rides the Pogson curve with a small lift in the faint
-    // window. Cinematic mode adds a flat +0.10 α bump so the dimmest
-    // stars stop pulsing in and out of sub-pixel visibility during
-    // camera motion. Bright stars also gain +0.10 (intentional
-    // perceptual lift — the "cinematic" label is honest about this).
-    vBrightness = clamp(
-      sqrtFlux * 0.08 + faintLift * 0.12 + styleMix * 0.1,
-      0.08,
-      1.0
-    );
+    vBrightness = clamp(brightness * 0.08, 0.12, 1.0);
     vColor = bvToRGB(ci);
   }
 `;
@@ -172,21 +127,15 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   precision highp float;
 
-  uniform float styleMix;
-
   varying vec3 vColor;
   varying float vBrightness;
 
   void main() {
-    // Soft glow: radial falloff inside the point sprite. In cinematic
-    // mode the falloff exponent *drops* from 5 → 2, making the halo
-    // much softer and wider. Combined with the vertex-stage 2.5×
-    // sprite enlargement this gives a visible glowing halo around
-    // each star (additive-blended against black sky); photometric
-    // mode keeps the sharper pow(d, 5) dot.
+    // NASA Eyes uses a tight pow(d, 5) dot — no halo, no bloom. Stars
+    // read as crisp points of light rather than diffuse glows, which is
+    // what "realistic" means against the black sky.
     float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float falloffPow = mix(5.0, 2.0, styleMix);
-    float alpha = pow(d, falloffPow);
+    float alpha = pow(d, 5.0);
     gl_FragColor = vec4(vColor, alpha * vBrightness);
   }
 `;
@@ -243,7 +192,6 @@ export const Starfield = () => {
   const scaleMode = useStore((state) => state.scaleMode);
   const datetime = useStore((state) => state.datetime);
   const qualityMode = useStore((state) => state.qualityMode);
-  const starfieldStyle = useStore((state) => state.starfieldStyle);
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
@@ -251,17 +199,14 @@ export const Starfield = () => {
   const pointsRef = useRef<THREE.Points>(null);
 
   // Build the ShaderMaterial once and pass it as an instance to the
-  // <points> element. An earlier version used `<shaderMaterial
+  // <points> element. An earlier iteration used `<shaderMaterial
   // uniforms={{...}}>` as a JSX child, but each render created a new
-  // `uniforms` object that R3F assigned onto the material — which
-  // replaces the uniform map the compiled WebGLProgram was bound to.
-  // Per-frame mutations then wrote into an object the GPU no longer
-  // read from, so the Cinematic toggle produced no visible change
-  // (verified by pixel-diff: 0.06% pixels changed with the JSX child
-  // pattern, 0.55% with this explicit-instance pattern).
-  // The `eslint-disable-next-line` silences the React Compiler rule
-  // that treats useMemo outputs as immutable; the mutation is
-  // intentional and scoped to per-frame uniform values.
+  // `uniforms` object that R3F assigned onto the material, replacing
+  // the uniform map the compiled WebGLProgram was bound to. Per-frame
+  // mutations then wrote into an object the GPU no longer read from
+  // (tasks/lessons.md L15). Keep the useMemo'd material reference
+  // stable so per-frame uniform mutations land on the slots the GPU
+  // actually samples.
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
       vertexShader,
@@ -270,7 +215,6 @@ export const Starfield = () => {
         pixelRatio: { value: gl.getPixelRatio() },
         particleSize: { value: 1.0 },
         yearsSinceJ2000: { value: 0.0 },
-        styleMix: { value: 0 },
       },
       transparent: true,
       depthWrite: false,
@@ -338,9 +282,8 @@ export const Starfield = () => {
   // Viewport-adaptive sizing so a window resize does not change the
   // visual density of the sky. yearsSinceJ2000 is the simulation-time
   // offset in Julian years the shader uses to animate proper motion.
-  // styleMix tracks the Photometric/Cinematic toggle. All three live
-  // on the memoised material's uniforms map — mutating those values
-  // is the intended per-frame path (see the memo comment above).
+  // Both live on the memoised material's uniforms map — mutating those
+  // values is the intended per-frame path (see the memo comment above).
   /* eslint-disable react-hooks/immutability */
   useFrame(() => {
     const matUniforms = material.uniforms;
@@ -351,8 +294,6 @@ export const Starfield = () => {
 
     const years = (datetime.getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;
     matUniforms.yearsSinceJ2000.value = years;
-
-    matUniforms.styleMix.value = starfieldStyle === "cinematic" ? 1 : 0;
   });
   /* eslint-enable react-hooks/immutability */
 

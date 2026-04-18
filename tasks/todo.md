@@ -145,6 +145,86 @@ All five sub-phases shipped:
 preview:test` is running first. Either document the two-step flow
       or add a wrapper npm script that starts and tears down the preview.
 
+## Review — NASA Eyes–style single curve (2026-04-17)
+
+User didn't like the Cinematic look (too halo-y, not realistic enough)
+and asked explicitly: "most realistic possible, but with density,
+like NASA Eyes on the Solar System does it". We already have the
+NASA Eyes renderer in-repo as a comparison reference, so the answer
+was to port NASA's transfer curve to the HYG path rather than
+continue tuning the Photometric/Cinematic dial.
+
+**How NASA Eyes does it** (see `src/components/canvas/shaders/nasaStarShaders.ts`):
+
+- Logarithmic brightness compression: `brightness = 2·log(1 + flux·C)`.
+  Matches the eye's response (Fechner's law), so bright stars saturate
+  gently and faint stars stay usable instead of collapsing.
+- Size and alpha both scale with the SAME log-compressed brightness
+  (no separate curves) — ordering is preserved by construction.
+- Floors at ~5 px / 0.05 α so the faint tail stays visibly present
+  but does not flatten into haze.
+- Sharp `pow(d, 5)` fragment falloff — crisp dots, no halo, no bloom.
+
+**What we shipped:**
+
+- **`src/components/canvas/Starfield.tsx`** — replaced the whole
+  Photometric/Cinematic transfer machinery with one NASA-style
+  curve:
+  - `flux = 10^(-mag·0.4)` (Pogson apparent-mag flux, ratio form)
+  - `brightness = 2·log(1 + flux·5000)` (Fechner log compression)
+  - `baseSize = clamp(brightness·3, 4, 40)`
+  - `vBrightness = clamp(brightness·0.08, 0.12, 1)`
+  - `alpha = pow(d, 5)` in the fragment — sharp dot, no halo
+- **`src/lib/starfieldShaderMath.ts`** — TS mirror rewritten to
+  match the single curve. No `styleMix` / compression / lift
+  window any more. 13 unit tests cover bright-end clamp, faint-tail
+  floor, strict monotonicity end to end (log is monotonic by
+  construction — no more "hump" to defend), and 9 hand-verified
+  sample points across mag −1.5 → 20.
+- **`src/store.ts`** — removed `starfieldStyle` field, setter, and
+  localStorage key (`starfieldStyle`). State surface shrinks back
+  to where it was before the Cinematic experiment.
+- **`src/components/ui/LayersPanel.tsx`** — removed the Starfield
+  Style subsection. The panel is back to Starfield Source + Scale
+  Mode + Quality + Sun Render.
+- **`src/components/ui/controlPanelConfig.ts`** — removed
+  `SCENE_STARFIELD_STYLE_OPTIONS`.
+
+**Why this is better than Cinematic:**
+
+- Realistic by construction: NASA Eyes uses this exact shape; the
+  sky reads like their renderer does.
+- Dense by construction: the 4 px / 0.12 α floor keeps every
+  surviving HYG star on screen without a haze-inducing hard
+  floor at the top of the alpha curve.
+- No toggle complexity: one curve, no per-profile branching, no
+  mode-specific maths. The previous Photometric/Cinematic split
+  was trying to solve two problems (honesty + density) with a
+  binary switch; log compression solves both at once.
+- Preserves our catalog advantages: B-V colour, proper motion,
+  tier selection all still apply on top.
+
+**Why we dropped the Cinematic mode entirely rather than keeping
+it as an option:**
+
+- User feedback was "didn't like the result". Shipping an option
+  the user actively rejected is not a "give them a choice" win —
+  it's surface area.
+- The NASA curve already behaves like what the user actually wants
+  when thinking of "realistic + dense". No second mode to toggle.
+- Less code (~100 lines removed) means one fewer surface for
+  future reviewers to audit.
+
+**Tooling note:** visual verification via Playwright CLI kept
+hanging on screenshot capture — R3F's continuous render loop
+conflicts with Playwright's "stable" heuristic. Unit tests pin the
+math; end-to-end "does this look right" now requires the user or a
+headed browser. `tasks/lessons.md` gains a note on this.
+
+Verification: `npm run lint` clean, `npm run test:run` 305/305
+green (8 cinematic-era tests deleted, 13 new single-curve tests
+added).
+
 ## Review — cinematic actually visible now (2026-04-17)
 
 User reported that flipping Photometric/Cinematic did nothing on
@@ -296,7 +376,7 @@ the 2026 Three.js / R3F ecosystem. Items prioritized by ROI:
 
 - [ ] **HDR + tone-mapped selective bloom.** Highest ROI. Pattern:
       `ACESFilmicToneMapping` + `<EffectComposer>` with `<Bloom
-  mipmapBlur luminanceThreshold={1.0} intensity={0.6}>` via
+mipmapBlur luminanceThreshold={1.0} intensity={0.6}>` via
       `@react-three/postprocessing`. Bright stars emit colours
       above 1.0 in the fragment shader; the Bloom pass picks them
       up selectively. Hours to days of work. Confirmed by multiple
