@@ -14,6 +14,7 @@
  * the Kepler fallback, exactly as the engine expects.
  */
 
+import * as THREE from "three";
 import type {
   OrbitalProvider,
   OrbitalCalculationContext,
@@ -23,6 +24,7 @@ import type {
 } from "./types";
 import { keplerProvider } from "./keplerProvider";
 import { hasAnalyticalEphemeris, getOrbitalMetadata } from "./registry";
+import { dateToTDB } from "./time";
 import {
   isVsop87Planet,
   calculateVsop87Position,
@@ -35,6 +37,12 @@ import {
   calculateAsteroidPosition,
   getAsteroidOsculatingElements,
 } from "./analytical";
+import {
+  MU_SUN_AU3_PER_DAY2,
+  MU_EARTH_MOON_AU3_PER_DAY2,
+  osculatingElementsFromState,
+  threeJs2Ecliptic,
+} from "./analytical/coordUtils";
 
 type ProviderBranch =
   | "vsop87"
@@ -161,6 +169,14 @@ export class AnalyticalProvider implements OrbitalProvider {
     const model: AnalyticalModel = metadata?.primaryModel ?? "Kepler";
 
     let position;
+    // Osculating elements are only populated when they're essentially free
+    // (direct fixture-table lookup). VSOP87D / Pluto-Meeus / ELP/MPP02-trunc
+    // would each cost three extra series evaluations to derive an osculating
+    // ellipse — and no caller of `calculatePosition` uses `result.elements`
+    // on the hot path. Consumers that need elements (orbit-line renderer,
+    // telemetry) call `getOsculatingElements` explicitly, which does the
+    // derivation lazily and memoizes through the engine.
+    let elements: OsculatingElements | undefined;
     switch (branch) {
       case "vsop87":
         position = calculateVsop87Position(bodyId as never, jdTDB);
@@ -173,23 +189,13 @@ export class AnalyticalProvider implements OrbitalProvider {
         break;
       case "satellite":
         position = calculateSatellitePosition(bodyId, jdTDB);
+        elements = getSatelliteOsculatingElements(bodyId, jdTDB) ?? undefined;
         break;
       case "asteroid":
         position = calculateAsteroidPosition(bodyId, jdTDB);
+        elements = getAsteroidOsculatingElements(bodyId, jdTDB) ?? undefined;
         break;
     }
-
-    // Osculating elements drive the rendered orbit line. Prefer the
-    // fixture-derived analytical elements (satellites.ts / asteroids.ts) so
-    // the line's plane and apsides actually match the live analytical
-    // position. Fall back to the Kepler provider only when the analytical
-    // branch does not maintain its own element block (VSOP87D planets,
-    // Pluto-Meeus, ELP/MPP02-trunc Moon — their orbits are still well
-    // represented by the registry's reference ellipse at this scale).
-    const elements =
-      this.lookupAnalyticalElements(bodyId, jdTDB) ??
-      keplerProvider.getOsculatingElements(bodyId, context.date) ??
-      undefined;
 
     return {
       position,
@@ -204,21 +210,38 @@ export class AnalyticalProvider implements OrbitalProvider {
 
   /**
    * Osculating elements for the requested date. Returns analytical elements
-   * when the body is in our fixture-derived tables; otherwise falls back to
-   * the registered Keplerian reference ellipse.
+   * when the body is in our fixture-derived tables (satellites, asteroids)
+   * **or** when derivable from the live series via RV→COE (VSOP87D, Pluto,
+   * Moon); otherwise falls back to the registered Keplerian reference
+   * ellipse.
+   *
+   * Uses `dateToTDB(date)` to stay phase-consistent with
+   * `calculatePosition` — without it the ~70 s TDB-UT offset would shift
+   * M enough to move the orbit line off the rendered body position in
+   * the alignment invariant (a few km for fast movers).
    */
   getOsculatingElements(bodyId: string, date: Date): OsculatingElements | null {
-    // No jdTDB here; approximate with UT JD for the secondary element
-    // lookup. The absolute epoch mismatch is sub-second and only shifts M
-    // by a negligible amount for the bodies that consume this path.
-    const jdUT = 2440587.5 + date.getTime() / 86_400_000;
+    const jdTDB = dateToTDB(date);
     return (
-      this.lookupAnalyticalElements(bodyId, jdUT) ??
+      this.lookupAnalyticalElements(bodyId, jdTDB) ??
       keplerProvider.getOsculatingElements(bodyId, date)
     );
   }
 
-  /** Internal: analytical-only element lookup, returns null when absent. */
+  /** Internal: analytical-only element lookup, returns null when absent.
+   *
+   * For satellites and asteroids this reads fixture-derived blocks that
+   * are consistent with the live position by construction.
+   *
+   * For VSOP87D planets, Pluto-Meeus and the ELP/MPP02 Moon, no element
+   * block is maintained — those theories only publish positions. We
+   * therefore derive the instantaneous **osculating** ellipse at `jdTDB`
+   * by evaluating r(t) twice (central finite-difference, ±60 s) to
+   * recover the velocity, then inverting the two-body state (r, v, μ)
+   * into classical elements via `osculatingElementsFromState`. The
+   * resulting ellipse passes through r(t) by definition, which is the
+   * invariant the orbit-line renderer relies on.
+   */
   private lookupAnalyticalElements(
     bodyId: string,
     jdTDB: number
@@ -229,8 +252,68 @@ export class AnalyticalProvider implements OrbitalProvider {
     if (isAnalyticalAsteroid(bodyId)) {
       return getAsteroidOsculatingElements(bodyId, jdTDB);
     }
+    if (isVsop87Planet(bodyId)) {
+      return deriveOsculatingFromSeries(
+        (jd) => calculateVsop87Position(bodyId, jd),
+        jdTDB,
+        MU_SUN_AU3_PER_DAY2
+      );
+    }
+    if (bodyId === "pluto") {
+      return deriveOsculatingFromSeries(
+        (jd) => calculatePlutoPosition(jd),
+        jdTDB,
+        MU_SUN_AU3_PER_DAY2
+      );
+    }
+    if (bodyId === "moon") {
+      return deriveOsculatingFromSeries(
+        (jd) => calculateMoonPosition(jd),
+        jdTDB,
+        MU_EARTH_MOON_AU3_PER_DAY2
+      );
+    }
     return null;
   }
+}
+
+/**
+ * Central finite-difference (±60 s) over a provider's position function to
+ * produce the instantaneous osculating state (r, v) in ecliptic J2000, then
+ * invert to classical elements. 60 s is short enough to keep the velocity
+ * truncation error well below arcsec-level over one orbital period yet long
+ * enough to dominate any round-off from the series evaluation.
+ *
+ * Providers return positions in the engine's three.js Y-up frame; we
+ * unwrap back to ecliptic (`threeJs2Ecliptic`) before inversion so the
+ * recovered Ω/ω/i live in the same frame as `elementsToCartesian` expects.
+ */
+const FINITE_DIFF_HALF_STEP_DAYS = 30 / 86400; // ±30 s → 60 s total span
+function deriveOsculatingFromSeries(
+  positionAtThreeJs: (jdTDB: number) => THREE.Vector3,
+  jdTDB: number,
+  muAU3PerDay2: number
+): OsculatingElements {
+  const rMinusThree = positionAtThreeJs(jdTDB - FINITE_DIFF_HALF_STEP_DAYS);
+  const rPlusThree = positionAtThreeJs(jdTDB + FINITE_DIFF_HALF_STEP_DAYS);
+  const rNowThree = positionAtThreeJs(jdTDB);
+
+  const rNowEcl = threeJs2Ecliptic(rNowThree);
+  const rMinusEcl = threeJs2Ecliptic(rMinusThree);
+  const rPlusEcl = threeJs2Ecliptic(rPlusThree);
+  const invSpan = 1 / (2 * FINITE_DIFF_HALF_STEP_DAYS);
+  const vEcl = new THREE.Vector3(
+    (rPlusEcl.x - rMinusEcl.x) * invSpan,
+    (rPlusEcl.y - rMinusEcl.y) * invSpan,
+    (rPlusEcl.z - rMinusEcl.z) * invSpan
+  );
+
+  return osculatingElementsFromState({
+    rEclAU: rNowEcl,
+    vEclAUperDay: vEcl,
+    muAU3PerDay2,
+    jdTDB,
+  });
 }
 
 /** Singleton used by the engine. */

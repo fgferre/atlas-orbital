@@ -20,11 +20,17 @@
 
 import * as THREE from "three";
 import type { OsculatingElements } from "../types";
-import { elementsToCartesian, ecliptic2ThreeJs, mod2Pi } from "./coordUtils";
+import {
+  elementsToCartesian,
+  ecliptic2ThreeJs,
+  mod2Pi,
+  MU_SUN_AU3_PER_DAY2,
+} from "./coordUtils";
 
 const D2R = Math.PI / 180;
-const K2 = 0.01720209895 ** 2; // heliocentric gravitational parameter, AU^3/day^2
-const MU_SUN = 1.0 * K2;
+// Heliocentric μ☉ shared with the rest of the engine. Kept as a local alias
+// to avoid churn in the call sites below.
+const MU_SUN = MU_SUN_AU3_PER_DAY2;
 // 2025-01-01T00:00:00Z UT expressed in TDB Julian Date (see satellites.ts
 // for the rationale; keeps the epoch aligned with the engine's jdTDB input).
 const EPOCH_2025_JD = 2460676.5008931975;

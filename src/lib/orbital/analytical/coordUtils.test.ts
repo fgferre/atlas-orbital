@@ -3,10 +3,14 @@ import * as THREE from "three";
 import {
   sphericalEclipticToCartesian,
   ecliptic2ThreeJs,
+  threeJs2Ecliptic,
   solveKeplerRad,
   perifocalToEcliptic,
   elementsToCartesian,
   mod2Pi,
+  osculatingElementsFromState,
+  MU_SUN_AU3_PER_DAY2,
+  MU_EARTH_MOON_AU3_PER_DAY2,
   AU_KM,
 } from "./coordUtils";
 
@@ -153,5 +157,142 @@ describe("coordUtils / frame helpers", () => {
     expect(v.x).toBe(1);
     expect(v.y).toBe(3);
     expect(v.z).toBe(-2);
+  });
+
+  it("threeJs2Ecliptic is the inverse of ecliptic2ThreeJs", () => {
+    for (const sample of [
+      new THREE.Vector3(1, 2, 3),
+      new THREE.Vector3(-0.5, 7.1, -2.2),
+      new THREE.Vector3(0, 0, 0),
+    ]) {
+      const round = threeJs2Ecliptic(ecliptic2ThreeJs(sample));
+      expect(round.x).toBeCloseTo(sample.x, 12);
+      expect(round.y).toBeCloseTo(sample.y, 12);
+      expect(round.z).toBeCloseTo(sample.z, 12);
+    }
+  });
+});
+
+describe("coordUtils / μ constants", () => {
+  it("MU_SUN matches k² to the Gaussian convention", () => {
+    // k = 0.01720209895 rad/day → k² = μ☉ in AU³/day².
+    expect(MU_SUN_AU3_PER_DAY2).toBeCloseTo(2.9591220828559115e-4, 18);
+  });
+
+  it("MU_EARTH_MOON recovers the anomalistic month via Kepler III", () => {
+    // n = sqrt(μ/a³); T = 2π/n. With a = 0.002569555 AU (Moon mean
+    // distance) and μ_earth+moon the period must land near 27.32 sidereal
+    // days (geocentric two-body approximation).
+    const a = 0.002569555;
+    const n = Math.sqrt(MU_EARTH_MOON_AU3_PER_DAY2 / a ** 3);
+    const Tdays = (2 * Math.PI) / n;
+    expect(Tdays).toBeGreaterThan(27.2);
+    expect(Tdays).toBeLessThan(27.5);
+  });
+});
+
+describe("coordUtils / osculatingElementsFromState", () => {
+  // Round-trip: build an analytical ellipse → propagate to r, v →
+  // invert → the recovered elements must match the originals.
+  const reference = {
+    a: 1.23,
+    e: 0.18,
+    i: 17.4,
+    O: 132.7,
+    w: 48.3,
+    M: 215.9,
+  };
+  const D2R = Math.PI / 180;
+
+  function buildState(mu: number, Mdeg: number) {
+    // Use elementsToCartesian to get r; derive v from the vis-viva-aware
+    // perifocal velocity and rotate with the same perifocalToEcliptic.
+    const MRad = mod2Pi(Mdeg * D2R);
+    const E = solveKeplerRad(MRad, reference.e);
+    const cosE = Math.cos(E);
+    const sinE = Math.sin(E);
+    const a = reference.a;
+    const e = reference.e;
+    const b = a * Math.sqrt(1 - e * e);
+
+    // Perifocal r
+    const xp = a * (cosE - e);
+    const yp = b * sinE;
+
+    // Ė = n / (1 − e·cos E), with n = sqrt(μ/a³)
+    const n = Math.sqrt(mu / (a * a * a));
+    const EDot = n / (1 - e * cosE);
+    const xpDot = -a * sinE * EDot;
+    const ypDot = b * cosE * EDot;
+
+    const r = perifocalToEcliptic(
+      xp,
+      yp,
+      reference.O * D2R,
+      reference.w * D2R,
+      reference.i * D2R
+    );
+    const v = perifocalToEcliptic(
+      xpDot,
+      ypDot,
+      reference.O * D2R,
+      reference.w * D2R,
+      reference.i * D2R
+    );
+    return { r, v };
+  }
+
+  it("round-trips heliocentric elements (μ☉) to ≤ 1e-10", () => {
+    const { r, v } = buildState(MU_SUN_AU3_PER_DAY2, reference.M);
+    const elements = osculatingElementsFromState({
+      rEclAU: r,
+      vEclAUperDay: v,
+      muAU3PerDay2: MU_SUN_AU3_PER_DAY2,
+      jdTDB: 2460676.5,
+    });
+    expect(elements.a).toBeCloseTo(reference.a, 10);
+    expect(elements.e).toBeCloseTo(reference.e, 10);
+    expect(elements.i).toBeCloseTo(reference.i, 10);
+    expect(elements.O).toBeCloseTo(reference.O, 10);
+    expect(elements.w).toBeCloseTo(reference.w, 10);
+    expect(elements.M).toBeCloseTo(reference.M, 10);
+    expect(elements.epoch).toBe(2460676.5);
+  });
+
+  it("round-trips geocentric elements (μ_earth-moon) to ≤ 1e-10", () => {
+    const { r, v } = buildState(MU_EARTH_MOON_AU3_PER_DAY2, reference.M);
+    const elements = osculatingElementsFromState({
+      rEclAU: r,
+      vEclAUperDay: v,
+      muAU3PerDay2: MU_EARTH_MOON_AU3_PER_DAY2,
+      jdTDB: 2460676.5,
+    });
+    expect(elements.a).toBeCloseTo(reference.a, 10);
+    expect(elements.e).toBeCloseTo(reference.e, 10);
+    expect(elements.i).toBeCloseTo(reference.i, 10);
+    expect(elements.O).toBeCloseTo(reference.O, 10);
+    expect(elements.w).toBeCloseTo(reference.w, 10);
+    expect(elements.M).toBeCloseTo(reference.M, 10);
+  });
+
+  it("regenerates r exactly when fed through elementsToCartesian", () => {
+    // The key invariant for the orbit-line path: the recovered ellipse
+    // must pass through the original r at its M.
+    const { r, v } = buildState(MU_SUN_AU3_PER_DAY2, reference.M);
+    const elements = osculatingElementsFromState({
+      rEclAU: r,
+      vEclAUperDay: v,
+      muAU3PerDay2: MU_SUN_AU3_PER_DAY2,
+      jdTDB: 2460676.5,
+    });
+    const reconstructed = elementsToCartesian({
+      aLinear: elements.a,
+      e: elements.e,
+      iRad: elements.i * D2R,
+      OmegaRad: mod2Pi(elements.O * D2R),
+      omegaRad: mod2Pi(elements.w * D2R),
+      MRad: mod2Pi(elements.M * D2R),
+    });
+    expect(reconstructed.distanceTo(r)).toBeLessThan(1e-12);
   });
 });
