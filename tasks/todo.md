@@ -360,6 +360,14 @@ o cache já estaria performando bem.
   - Antes do 3.4: `hitRate=98.1% (hits=2288 miss=44 bypass=61) size=1628`.
   - Depois do 3.4: `hitRate=98.3% (hits=2552 miss=44 bypass=67) size=880`.
   - Overlay continua em `0 emit / 54 frames / 1s` (Onda 2 ainda vale).
+  - **Caveat (Codex follow-up 2026-04-18):** o `size` é o total do Map,
+    não o número de entries vivas — o engine só evicta lazy no read e
+    nem mesmo varre na miss. Crescimento monotônico por sessão. A queda
+    1628 → 880 é confounded por `preview_stop/start` entre as medições
+    (nova sessão, menos tempo acumulado), e não pode ser atribuída ao
+    3.4. O ganho real do 3.4 está no React (memo não invalida a 4 Hz),
+    não no `size` do cache. Hit rate (98.1 → 98.3%) é mais
+    significativo. Eviction policy (TTL sweep / LRU) ficou em backlog.
 - [x] **3.3** — **NÃO ship**. Codex #1 já previa: criar um cache
       paralelo seria duplicação. A medição confirma — ~44 misses/s é
       exatamente 1 miss por bucket transition por corpo, esperado do

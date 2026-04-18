@@ -16,10 +16,14 @@
  * - `bypass`: calls that never touched the cache (currently just the
  *   Sun special case). Useful to sanity-check volume without
  *   polluting the hit rate.
- * - `size`: number of live entries in the cache map at sampling time
- *   (no TTL sweep — entries age out lazily on next read). Grows at
- *   ~bodies × new-buckets-per-second and self-limits because the
- *   engine keys bucket-quantized JDs.
+ * - `size`: TOTAL number of entries in the engine's internal `Map`
+ *   at sampling time. This is NOT a live-entry count: the cache only
+ *   evicts lazily on a read that hits an expired entry (and only the
+ *   single offending entry, not a broader sweep). In a long idle
+ *   session `size` grows monotonically by ~bodies × new-buckets-per-
+ *   second. That growth is bounded by the 0.864 s bucket width but
+ *   is not self-limiting — a proper TTL sweep / LRU is tracked as
+ *   follow-up work.
  */
 
 import { useEffect } from "react";

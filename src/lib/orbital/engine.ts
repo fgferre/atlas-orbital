@@ -328,9 +328,25 @@ export class OrbitalEngine {
   }
 
   /**
-   * Get cache statistics. `hitRate` is computed over cacheable calls
-   * only (bypassed calls, currently just the Sun special case, are
-   * counted separately in `bypassed`).
+   * Get cache statistics — cheap, counter-only snapshot.
+   *
+   * - `hits`, `misses`, `bypassed`: counters since the last
+   *   `resetCacheStats()` (or since instance creation). `hitRate` is
+   *   computed over cacheable calls only; bypassed calls (currently
+   *   just the Sun special case) are reported separately.
+   * - `size`: TOTAL number of entries in the internal `Map`, NOT a
+   *   count of "live" (non-expired) entries. The cache only evicts
+   *   lazily on a read that hits an expired entry (and even then only
+   *   replaces that one entry), so `size` grows monotonically with
+   *   the number of distinct (bodyId, quantizedJD) buckets the app
+   *   has ever queried. For long sessions this is a known limitation
+   *   — a proper TTL sweep / LRU policy is tracked as follow-up work.
+   *
+   * O(1) to call. For the expanded entries listing (key + age per
+   * live entry), use `getCacheEntries()` — that one is O(n) and was
+   * split out of `getCacheStats()` on 2026-04-18 after a Codex
+   * finding that the reporter was paying for it every second even
+   * though it only consumed the counters.
    */
   getCacheStats(): {
     size: number;
@@ -338,15 +354,7 @@ export class OrbitalEngine {
     misses: number;
     bypassed: number;
     hitRate: number;
-    entries: Array<{ key: string; age: number }>;
   } {
-    const now = Date.now();
-    const entries = Array.from(this.positionCache.entries()).map(
-      ([key, entry]) => ({
-        key,
-        age: now - entry.timestamp,
-      })
-    );
     const totalCacheable = this.cacheHits + this.cacheMisses;
     const hitRate = totalCacheable === 0 ? 0 : this.cacheHits / totalCacheable;
 
@@ -356,8 +364,19 @@ export class OrbitalEngine {
       misses: this.cacheMisses,
       bypassed: this.cacheBypassed,
       hitRate,
-      entries,
     };
+  }
+
+  /**
+   * Snapshot of the cache entries with their ages in milliseconds.
+   * O(n) — only call from debug tooling, not from a render loop.
+   */
+  getCacheEntries(): Array<{ key: string; age: number }> {
+    const now = Date.now();
+    return Array.from(this.positionCache.entries()).map(([key, entry]) => ({
+      key,
+      age: now - entry.timestamp,
+    }));
   }
 
   /**
