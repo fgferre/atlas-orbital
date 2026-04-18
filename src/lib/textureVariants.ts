@@ -42,6 +42,77 @@ export interface ResolvedTextureRequest {
 
 const EMPTY_MANIFEST: TextureVariantManifest = {};
 
+/**
+ * Filenames (without extension) of source textures that have a
+ * sibling `.webp` on disk. Keep this list in lockstep with
+ * `scripts/optimize-textures.js` — if a conversion is discarded or a
+ * new asset is added, update both sides.
+ *
+ * The match is exact-basename; callers pass a full URL path and the
+ * helper extracts the basename before looking up.
+ */
+const WEBP_AVAILABLE_BASENAMES: ReadonlySet<string> = new Set([
+  "4k_oberon",
+  "8k_mercury",
+  "8k_moon",
+]);
+
+/**
+ * Runtime WebP support detection. Evaluated lazily once per module
+ * load and cached. Returns `false` on non-DOM environments (SSR,
+ * Node test runners without jsdom) so the runtime pipeline is
+ * unchanged there.
+ */
+let cachedWebPSupport: boolean | null = null;
+export const detectWebPSupport = (): boolean => {
+  if (cachedWebPSupport !== null) return cachedWebPSupport;
+  if (typeof document === "undefined") {
+    cachedWebPSupport = false;
+    return cachedWebPSupport;
+  }
+  try {
+    const canvas = document.createElement("canvas");
+    cachedWebPSupport =
+      typeof canvas.toDataURL === "function" &&
+      canvas.toDataURL("image/webp").indexOf("data:image/webp") === 0;
+  } catch {
+    cachedWebPSupport = false;
+  }
+  return cachedWebPSupport;
+};
+
+/** Test hook: reset the memoised WebP-support result. */
+export const __resetWebPSupportCache = () => {
+  cachedWebPSupport = null;
+};
+
+const getPathBasename = (texturePath: string): string => {
+  const withoutQuery = texturePath.split("?")[0];
+  const withoutHash = withoutQuery.split("#")[0];
+  const fileName =
+    withoutHash.slice(withoutHash.lastIndexOf("/") + 1) || withoutHash;
+  const extIndex = fileName.lastIndexOf(".");
+  return extIndex >= 0 ? fileName.slice(0, extIndex) : fileName;
+};
+
+/**
+ * Rewrite a texture path to its `.webp` sibling when the browser
+ * supports WebP and the sibling exists on disk. Returns the input
+ * unchanged when either condition fails, so this is a safe no-op
+ * for all textures not covered by `WEBP_AVAILABLE_BASENAMES`.
+ */
+export const preferWebPAsset = (texturePath: string | null): string | null => {
+  if (!texturePath) return texturePath;
+  if (!detectWebPSupport()) return texturePath;
+
+  const baseName = getPathBasename(texturePath);
+  if (!WEBP_AVAILABLE_BASENAMES.has(baseName)) return texturePath;
+
+  const lastSlash = texturePath.lastIndexOf("/");
+  const dir = lastSlash >= 0 ? texturePath.slice(0, lastSlash + 1) : "";
+  return `${dir}${baseName}.webp`;
+};
+
 const PROFILE_PREFERENCES: Record<TextureQualityProfile, TextureTier[]> = {
   ultra: ["8k", "4k", "2k"],
   high: ["4k", "2k", "8k"],
@@ -178,7 +249,7 @@ export const resolveTextureRequest = (
       profile,
       salience: clamp01(salience),
       canonicalPath,
-      selectedPath: preferredVariant.selectedPath,
+      selectedPath: preferWebPAsset(preferredVariant.selectedPath),
       selectedTier: preferredVariant.selectedTier,
       source: selectedFromCanonical ? "canonical" : "manifest",
       isBootAsset: preferredVariant.selectedTier === "boot",
@@ -193,7 +264,7 @@ export const resolveTextureRequest = (
       profile,
       salience: clamp01(salience),
       canonicalPath,
-      selectedPath: canonicalPath,
+      selectedPath: preferWebPAsset(canonicalPath),
       selectedTier: "canonical",
       source: "canonical",
       isBootAsset: false,
@@ -208,7 +279,7 @@ export const resolveTextureRequest = (
       profile,
       salience: clamp01(salience),
       canonicalPath: null,
-      selectedPath: availablePaths.boot,
+      selectedPath: preferWebPAsset(availablePaths.boot),
       selectedTier: "boot",
       source: "manifest",
       isBootAsset: true,

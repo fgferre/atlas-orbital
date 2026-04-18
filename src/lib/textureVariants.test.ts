@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CelestialBody } from "../lib/astrophysics";
 import {
+  __resetWebPSupportCache,
+  preferWebPAsset,
   resolveTextureRequest,
   type TextureVariantManifest,
 } from "./textureVariants";
@@ -183,5 +186,78 @@ describe("resolveTextureRequest", () => {
       expect(resolved.source).toBe("manifest");
       expect(resolved.isBootAsset).toBe(true);
     }
+  });
+});
+
+describe("preferWebPAsset", () => {
+  beforeEach(() => {
+    __resetWebPSupportCache();
+  });
+
+  afterEach(() => {
+    __resetWebPSupportCache();
+    vi.restoreAllMocks();
+  });
+
+  const stubWebPSupport = (supported: boolean) => {
+    // Override the canvas prototype rather than spying on
+    // `document.createElement`. jsdom hands back a canvas whose
+    // `toDataURL` returns a "data:," sentinel; we replace the method
+    // with a deterministic fake. `vi.spyOn` on a prototype method is
+    // auto-restored by `vi.restoreAllMocks()`.
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(() =>
+      supported
+        ? "data:image/webp;base64,UklGRg=="
+        : "data:image/png;base64,iVBORw0KGgo="
+    );
+  };
+
+  it("returns the input unchanged when the basename has no .webp sibling", () => {
+    stubWebPSupport(true);
+    expect(preferWebPAsset("/textures/4k_triton.png")).toBe(
+      "/textures/4k_triton.png"
+    );
+  });
+
+  it("rewrites to .webp when the browser supports it and a sibling exists", () => {
+    stubWebPSupport(true);
+    expect(preferWebPAsset("/textures/4k_oberon.png")).toBe(
+      "/textures/4k_oberon.webp"
+    );
+    expect(preferWebPAsset("/textures/8k_moon.jpg")).toBe(
+      "/textures/8k_moon.webp"
+    );
+  });
+
+  it("keeps the original path when the browser does not support WebP", () => {
+    stubWebPSupport(false);
+    expect(preferWebPAsset("/textures/4k_oberon.png")).toBe(
+      "/textures/4k_oberon.png"
+    );
+  });
+
+  it("passes null through unchanged", () => {
+    stubWebPSupport(true);
+    expect(preferWebPAsset(null)).toBeNull();
+  });
+
+  it("routes through resolveTextureRequest's selectedPath", () => {
+    stubWebPSupport(true);
+    const body = {
+      id: "oberon",
+      type: "moon",
+      name: { en: "OBERON", pt: "OBERON" },
+      radiusKm: 1,
+      color: "#ffffff",
+      orbit: { a: 1, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 1 },
+      rotationPeriodHours: 24,
+      axialTilt: 0,
+      info: "test",
+      textures: { map: "/textures/4k_oberon.png" },
+    } as unknown as CelestialBody;
+
+    const resolved = resolveTextureRequest(body, "map", "high");
+    expect(resolved.selectedPath).toBe("/textures/4k_oberon.webp");
+    expect(resolved.canonicalPath).toBe("/textures/4k_oberon.png");
   });
 });

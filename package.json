@@ -16,6 +16,7 @@
     "download:hyg": "node scripts/download-hyg.js",
     "build:hyg": "node --experimental-strip-types scripts/build-hyg-binary.js",
     "bake:earth-pbr": "node scripts/bake-earth-pbr.js",
+    "textures:optimize": "node scripts/optimize-textures.js --all",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
