@@ -283,11 +283,14 @@ export const Starfield = () => {
   // offset in Julian years the shader uses to animate proper motion.
   // Both live on the memoised material's uniforms map — mutating those
   // values is the intended per-frame path (see the memo comment above).
-  const viewportScale = useStarfieldParticleSize();
+  // `getViewportScale` is a getter invoked per-frame so DPR changes
+  // driven by `<Canvas dpr>` land immediately; see
+  // `useStarfieldParticleSize` for the full reasoning.
+  const getViewportScale = useStarfieldParticleSize();
   /* eslint-disable react-hooks/immutability */
   useFrame(() => {
     const matUniforms = material.uniforms;
-    matUniforms.particleSize.value = viewportScale;
+    matUniforms.particleSize.value = getViewportScale();
 
     const years =
       (simulationClock.getNow().getTime() - J2000_EPOCH_MS) /

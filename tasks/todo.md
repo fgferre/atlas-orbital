@@ -532,6 +532,18 @@ entrar na mesma ideia.
 `src/components/canvas/Starfield.tsx`,
 `src/components/canvas/useStarfieldParticleSize.ts` (novo).
 
+**Codex follow-up (Média) — DPR reactivity hole:** Codex apontou que a
+primeira versão do hook cristalizava o `viewportScale` em tempo de
+render, assinando só `state.gl` e `state.size`. Mas `<Canvas dpr={...}>`
+em `Scene.tsx:392` dispara transições de DPR mutando `gl.setPixelRatio()`
+sem mudar a identidade de `gl` nem `size` — em profile transitions
+(auto → ultra, re-classificação) os sprites ficariam descalibrados até
+algum re-render alheio invalidar o hook. O hook foi reescrito para
+retornar um **callback** `() => number` (com `useCallback` estável
+sobre `[gl, size]`); consumidores invocam per-frame dentro de
+`useFrame`, lendo `gl.getPixelRatio()` ao vivo — paridade exata com o
+comportamento pré-extração. Testes e preview HYG+NASA verdes.
+
 ### HYG v4.2 density restoration — 2026-04-17 session (done)
 
 User reports the new HYG preset looks dramatically less dense than the

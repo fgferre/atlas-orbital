@@ -112,12 +112,14 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     []
   );
 
-  const viewportScale = useStarfieldParticleSize();
+  const getViewportScale = useStarfieldParticleSize();
 
   // NO camera-following — allows zoom out to see starfield from outside
-  // (like the original NASA Eyes app screenshots show).
+  // (like the original NASA Eyes app screenshots show). `getViewportScale`
+  // is invoked per-frame so a DPR change driven by `<Canvas dpr>` lands
+  // immediately without waiting for an unrelated rerender.
   useFrame(() => {
-    material.uniforms.particleSize.value = particleSize * viewportScale;
+    material.uniforms.particleSize.value = particleSize * getViewportScale();
   });
 
   if (!geometry) {
