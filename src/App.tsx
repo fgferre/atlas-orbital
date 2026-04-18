@@ -44,6 +44,8 @@ function App() {
 
   if (isAssetStudyMode) {
     return (
+      // fallback={null} — asset-study route is a full-page takeover; the Loader
+      // component isn't mounted here, so a spinner would flash over a blank page.
       <Suspense fallback={null}>
         <AssetStudyApp />
       </Suspense>
@@ -53,19 +55,35 @@ function App() {
   return (
     <div className="w-full h-full bg-black relative">
       <Loader />
-      <Suspense fallback={null}>
+      <Suspense fallback={<Loader />}>
         <Scene />
       </Suspense>
       <Suspense fallback={null}>
+        {/* fallback={null} — Overlay is the full chrome (top bar, controls);
+            a skeleton would flash more than the real UI appearing. */}
         <Overlay />
       </Suspense>
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+          </div>
+        }
+      >
         <TutorialOverlay />
       </Suspense>
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+          </div>
+        }
+      >
         <CreditsModal />
       </Suspense>
       <Suspense fallback={null}>
+        {/* fallback={null} — tooltip is hidden until hover; a skeleton would
+            flash in empty space before any hover even happens. */}
         <StarHoverTooltip />
       </Suspense>
     </div>

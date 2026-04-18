@@ -21,10 +21,9 @@ export const Sidebar = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
   const b = selectedId ? BODIES_BY_ID.get(selectedId) : undefined;
-  const orbitalCalculation = useOrbitalCalculation(
-    selectedId ?? "sun",
-    b?.parentId
-  );
+  const orbitalResult = useOrbitalCalculation(selectedId ?? "sun", b?.parentId);
+  const orbitalCalculation =
+    orbitalResult.state === "ready" ? orbitalResult.data : null;
 
   // Real-time Calculations
   const stats = useMemo(() => {
