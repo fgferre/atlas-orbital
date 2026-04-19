@@ -185,7 +185,7 @@ export const SearchBar = ({
 
   const panelClassName = isMobile
     ? "fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[max(0.2rem,env(safe-area-inset-left))] right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50"
-    : "absolute right-0 top-1/2 z-50 -translate-y-1/2";
+    : "absolute right-0 top-0 z-50";
 
   const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center gap-1.5 overflow-hidden px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
     isMobile
@@ -433,7 +433,10 @@ export const SearchBar = ({
                 </button>
               </div>
             ) : (
-              <div className="relative flex items-center">
+              // Menu structure v3.1 filing-cabinet model: top-align handle
+              // and panel body so the "tab" sits at the very top of the
+              // Search paper (stagger index 0 in the full rail stack).
+              <div className="relative flex items-start">
                 <button
                   ref={buttonRef}
                   type="button"

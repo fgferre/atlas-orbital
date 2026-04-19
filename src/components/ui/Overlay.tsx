@@ -89,7 +89,7 @@ export const Overlay = () => {
         className={`pointer-events-none absolute z-40 ${
           isMobile
             ? "bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[max(0.2rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+4.75rem)]"
-            : "right-[max(0.2rem,env(safe-area-inset-right))] top-1/2 -translate-y-1/2"
+            : "right-[max(0.75rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+0.75rem)]"
         }`}
       >
         <div

@@ -133,7 +133,7 @@ export const LayersPanel = ({
 
   const panelClassName = isMobile
     ? "fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[2.8rem] right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50"
-    : "absolute right-0 z-50 flex -translate-y-1/2 items-center";
+    : "absolute right-0 top-0 z-50 flex items-start";
 
   const openPanelCopy = openPanel ? PANEL_COPY[openPanel] : null;
   const controlButtons = RIGHT_CONTROL_BUTTONS.filter(
@@ -147,11 +147,17 @@ export const LayersPanel = ({
     openPanel && openPanelCopy
       ? controlButtons.findIndex((button) => button.id === openPanel)
       : -1;
-  const openPanelOffsetStyle =
+  // Menu structure v3.1 filing-cabinet model: all 4 "papers" share a
+  // common top anchor at the viewport's top-safe edge. LayersPanel
+  // itself sits naturally below SearchBar in the flex-col (86px =
+  // SearchBar closed tab 5rem + gap 6px), so its open-panel wrapper
+  // has to climb back up by that amount to reach the shared top anchor.
+  // The staggered handle Y uses `openPanelIndex + 1` to account for
+  // Search being stack-index 0 (handled by SearchBar itself).
+  const openPanelWrapperStyle = !isMobile ? { top: "-5.375rem" } : undefined;
+  const openPanelHandleOffset =
     !isMobile && openPanelIndex >= 0
-      ? {
-          top: `${openPanelIndex * 88 + 40}px`,
-        }
+      ? { marginTop: `${(openPanelIndex + 1) * 88}px` }
       : undefined;
   const mobileClosedTabClassName =
     "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 -translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
@@ -393,7 +399,7 @@ export const LayersPanel = ({
           <motion.div
             key={openPanel}
             className={panelClassName}
-            style={openPanelOffsetStyle}
+            style={openPanelWrapperStyle}
             initial={{
               opacity: 0,
               x: isMobile ? -56 : "calc(100% - 2.5rem)",
@@ -412,7 +418,7 @@ export const LayersPanel = ({
                 {panelContent}
               </div>
             ) : (
-              <div className="relative flex items-center">
+              <div className="relative flex items-start">
                 {openPanelButton && (
                   <button
                     type="button"
@@ -422,6 +428,7 @@ export const LayersPanel = ({
                     aria-expanded={true}
                     aria-controls={`atlas-${openPanel}-panel`}
                     className={desktopOpenTabClassName}
+                    style={openPanelHandleOffset}
                   >
                     <RailButtonIcon panelId={openPanelButton.id} />
                     <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
