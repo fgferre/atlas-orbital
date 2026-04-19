@@ -75,10 +75,6 @@ export const Overlay = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-    // `requestPanel` closes over `setPanelState` which is stable, and
-    // `setShortcutsModalOpen` is a store ref — effect does not need
-    // to re-subscribe on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setShortcutsModalOpen]);
 
   return (
