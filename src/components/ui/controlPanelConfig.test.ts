@@ -5,7 +5,6 @@ import {
   OVERLAY_GUIDE_OPTIONS,
   RIGHT_CONTROL_BUTTONS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
-  SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
   SEARCH_QUICK_TARGETS,
@@ -15,13 +14,11 @@ import {
 
 describe("controlPanelConfig", () => {
   it("keeps the explicit right-side tool order intact", () => {
-    // Wave α Commit 3 (R2 Wave 1): Display + A11y slotted between
-    // Overlay and Project — the tweak-then-forget surfaces sit left
-    // of the document-scoped Project panel.
+    // Menu structure v3.1 PR 2: Scene + Overlay consolidated into View.
+    // Project still sits at tail; PR 3 demotes it into the Gear popover.
     expect(RIGHT_CONTROL_BUTTONS.map((button) => button.label)).toEqual([
       "Search",
-      "Scene",
-      "Overlay",
+      "View",
       "Display",
       "Access",
       "Project",
@@ -50,16 +47,6 @@ describe("controlPanelConfig", () => {
     ]);
   });
 
-  it("keeps all required quality options available", () => {
-    expect(SCENE_QUALITY_OPTIONS.map((option) => option.label)).toEqual([
-      "Auto",
-      "Ultra",
-      "High",
-      "Balanced",
-      "Saver",
-    ]);
-  });
-
   it("keeps category and guide overlays in the inventory", () => {
     expect(OVERLAY_FILTER_OPTIONS.map((option) => option.label)).toEqual([
       "Planets",
@@ -81,16 +68,16 @@ describe("controlPanelConfig", () => {
   it("queues panel swaps instead of replacing them abruptly", () => {
     expect(
       resolveRightControlPanelRequest(
-        { activePanel: "scene", queuedPanel: null },
-        "overlay"
+        { activePanel: "view", queuedPanel: null },
+        "display"
       )
     ).toEqual({
       activePanel: null,
-      queuedPanel: "overlay",
+      queuedPanel: "display",
     });
     expect(
       resolveRightControlPanelRequest(
-        { activePanel: null, queuedPanel: "overlay" },
+        { activePanel: null, queuedPanel: "display" },
         "project"
       )
     ).toEqual({
@@ -111,11 +98,11 @@ describe("controlPanelConfig", () => {
     });
     expect(
       resolveRightControlPanelExit({
-        activePanel: "overlay",
+        activePanel: "view",
         queuedPanel: "project",
       })
     ).toEqual({
-      activePanel: "overlay",
+      activePanel: "view",
       queuedPanel: "project",
     });
   });

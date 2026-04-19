@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
 import {
@@ -16,6 +15,7 @@ import {
 } from "./controlPanelConfig";
 import { DisplayPanel } from "./DisplayPanel";
 import { A11yPanel } from "./A11yPanel";
+import { Accordion } from "./primitives/Accordion";
 
 interface LayersPanelProps {
   activePanel: RightControlPanelId | null;
@@ -24,13 +24,9 @@ interface LayersPanelProps {
 }
 
 const PANEL_COPY = {
-  scene: {
-    title: "Scene",
-    meta: "render controls",
-  },
-  overlay: {
-    title: "Overlay",
-    meta: "scientific guides",
+  view: {
+    title: "View",
+    meta: "bodies, guides, world",
   },
   display: {
     title: "Display",
@@ -46,6 +42,12 @@ const PANEL_COPY = {
   },
 } as const;
 
+// Menu structure v3.1 §5.5 — one-time transition hint. Persists via
+// localStorage under a versioned key so future hints (v2, v3, …) can
+// ship without colliding with prior dismissals, and without touching
+// the Zustand store (zero migration scope).
+const HINT_STORAGE_KEY = "atlas-restructure-hint-v1:dismissed";
+
 export const LayersPanel = ({
   activePanel,
   setActivePanel,
@@ -56,8 +58,7 @@ export const LayersPanel = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const isMobile = useMediaQuery("(max-width: 767px)");
   const openPanel =
-    activePanel === "scene" ||
-    activePanel === "overlay" ||
+    activePanel === "view" ||
     activePanel === "display" ||
     activePanel === "a11y" ||
     activePanel === "project"
@@ -80,13 +81,6 @@ export const LayersPanel = ({
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
-  // Wave α UX follow-up: the Scene panel no longer carries its own
-  // Quality control group — the Display panel is canonical. We only
-  // read `graphicsAutoMode` (to label Auto vs manual) + the derived
-  // `qualityProfile.name` (to surface the current tier). The setters
-  // and raw preset/autoMode flags are dropped from this surface.
-  const qualityMode = useStore((state) => state.qualityMode);
-  const graphicsAutoMode = useStore((state) => state.graphicsAutoMode);
   const showStarfield = useStore((state) => state.showStarfield);
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
   const starfieldSource = useStore((state) => state.starfieldSource);
@@ -100,7 +94,6 @@ export const LayersPanel = ({
   const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const reopenTutorial = useStore((state) => state.reopenTutorial);
   const toggleCredits = useStore((state) => state.toggleCredits);
-  const qualityProfile = useQualityProfile(qualityMode);
   const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
 
   const starfieldStatusMessage = useMemo(() => {
@@ -184,102 +177,35 @@ export const LayersPanel = ({
     : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4";
 
   const panelSections =
-    openPanel === "scene" ? (
+    openPanel === "view" ? (
       <div className="space-y-3">
-        <SectionLabel>Scene</SectionLabel>
-        <Toggle
-          label="Starfield"
-          checked={showStarfield}
-          onChange={toggleShowStarfield}
-        />
+        <RestructureHint />
 
-        <div className="space-y-3 border border-white/5 bg-black/20 p-3">
+        <Accordion label="World" defaultOpen={!isMobile}>
           <div>
-            <SubsectionLabel>Starfield Source</SubsectionLabel>
+            <SubsectionLabel>Scale Mode</SubsectionLabel>
             <div
               role="group"
-              aria-label="Starfield source"
+              aria-label="Scale mode"
               className="grid grid-cols-2 gap-2"
             >
-              {SCENE_SOURCE_OPTIONS.map((option) => (
+              {SCENE_SCALE_OPTIONS.map((option) => (
                 <ChoiceButton
                   key={option.id}
                   label={option.label}
-                  isActive={starfieldSource === option.id}
-                  onClick={() => setStarfieldSource(option.id)}
+                  isActive={scaleMode === option.id}
+                  onClick={() => scaleMode !== option.id && toggleScaleMode()}
                 />
               ))}
             </div>
+            <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-white/55">
+              <div>{`Didactic: Compressed distances and exaggerated sizes for whole-system reading.`}</div>
+              <div>{`Realistic: Physical scale to preserve spatial emptiness.`}</div>
+            </div>
           </div>
+        </Accordion>
 
-          <div
-            aria-live="polite"
-            className={`text-[11px] leading-relaxed ${
-              activeStarfieldProviderState.status === "error"
-                ? "text-amber-300"
-                : "text-white/55"
-            }`}
-          >
-            {showStarfield
-              ? starfieldStatusMessage
-              : `Background stars hidden. Re-enable Starfield to compare ${STARFIELD_SOURCE_LABELS.hyg} and ${STARFIELD_SOURCE_LABELS.nasa}.`}
-          </div>
-        </div>
-
-        <div>
-          <SubsectionLabel>Scale Mode</SubsectionLabel>
-          <div
-            role="group"
-            aria-label="Scale mode"
-            className="grid grid-cols-2 gap-2"
-          >
-            {SCENE_SCALE_OPTIONS.map((option) => (
-              <ChoiceButton
-                key={option.id}
-                label={option.label}
-                isActive={scaleMode === option.id}
-                onClick={() => scaleMode !== option.id && toggleScaleMode()}
-              />
-            ))}
-          </div>
-          <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-white/55">
-            <div>{`Didactic: Compressed distances and exaggerated sizes for whole-system reading.`}</div>
-            <div>{`Realistic: Physical scale to preserve spatial emptiness.`}</div>
-          </div>
-        </div>
-
-        <div>
-          <SubsectionLabel>Quality</SubsectionLabel>
-          {/* Wave α UX fix: the Scene panel no longer carries a Quality
-              control group. The Display panel is the canonical
-              surface for graphics tier + all per-feature tuning, and
-              keeping a parallel dropdown here was a source of
-              confusion (duplicate state, market non-standard).
-              Subsection kept as a pointer so users with muscle
-              memory find their way. Current tier is surfaced inline
-              so they can verify Sun Render's "Auto" target. */}
-          <div className="border border-white/5 bg-black/20 px-3 py-2.5 text-[11px] leading-relaxed text-white/55">
-            Graphics quality + tuning live in the{" "}
-            <span className="text-nasa-accent">Display</span> panel.
-            {graphicsAutoMode ? (
-              <div className="mt-1 text-white/70">
-                Currently running on{" "}
-                <span className="text-white">{qualityProfile.name}</span>{" "}
-                (auto-detect).
-              </div>
-            ) : (
-              <div className="mt-1 text-white/70">
-                Currently running on{" "}
-                <span className="text-white">{qualityProfile.name}</span>.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    ) : openPanel === "overlay" ? (
-      <>
-        <div className="space-y-3">
-          <SectionLabel>Categories</SectionLabel>
+        <Accordion label="Bodies" defaultOpen={!isMobile}>
           <div
             role="group"
             aria-label="Body visibility filters"
@@ -294,34 +220,84 @@ export const LayersPanel = ({
               />
             ))}
           </div>
-        </div>
+        </Accordion>
 
-        <div className="space-y-3">
-          <SectionLabel>Guides & Overlays</SectionLabel>
-          <Toggle label="Icons" checked={showIcons} onChange={toggleIcons} />
-          <Toggle label="Labels" checked={showLabels} onChange={toggleLabels} />
-          <Toggle label="Orbits" checked={showOrbits} onChange={toggleOrbits} />
-          {showOrbits && (
-            <div className="border-l border-white/10 pl-3">
-              <Toggle
-                label="Context Orbits"
-                checked={declutterOrbits}
-                onChange={toggleDeclutterOrbits}
-              />
+        <Accordion label="Guides" defaultOpen={!isMobile}>
+          <div className="space-y-3">
+            <Toggle label="Icons" checked={showIcons} onChange={toggleIcons} />
+            <Toggle
+              label="Labels"
+              checked={showLabels}
+              onChange={toggleLabels}
+            />
+            <Toggle
+              label="Orbits"
+              checked={showOrbits}
+              onChange={toggleOrbits}
+            />
+            {showOrbits && (
+              <div className="border-l border-white/10 pl-3">
+                <Toggle
+                  label="Context Orbits"
+                  checked={declutterOrbits}
+                  onChange={toggleDeclutterOrbits}
+                />
+              </div>
+            )}
+            <Toggle
+              label="Ecliptic Grid"
+              checked={showEclipticGrid}
+              onChange={toggleEclipticGrid}
+            />
+            <Toggle
+              label="Prograde Vector"
+              checked={showProgradeVector}
+              onChange={toggleProgradeVector}
+            />
+          </div>
+        </Accordion>
+
+        <Accordion label="Backdrop" defaultOpen={!isMobile}>
+          <div className="space-y-3">
+            <Toggle
+              label="Starfield"
+              checked={showStarfield}
+              onChange={toggleShowStarfield}
+            />
+            <div className="space-y-3 border border-white/5 bg-black/20 p-3">
+              <div>
+                <SubsectionLabel>Starfield Source</SubsectionLabel>
+                <div
+                  role="group"
+                  aria-label="Starfield source"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {SCENE_SOURCE_OPTIONS.map((option) => (
+                    <ChoiceButton
+                      key={option.id}
+                      label={option.label}
+                      isActive={starfieldSource === option.id}
+                      onClick={() => setStarfieldSource(option.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div
+                aria-live="polite"
+                className={`text-[11px] leading-relaxed ${
+                  activeStarfieldProviderState.status === "error"
+                    ? "text-amber-300"
+                    : "text-white/55"
+                }`}
+              >
+                {showStarfield
+                  ? starfieldStatusMessage
+                  : `Background stars hidden. Re-enable Starfield to compare ${STARFIELD_SOURCE_LABELS.hyg} and ${STARFIELD_SOURCE_LABELS.nasa}.`}
+              </div>
             </div>
-          )}
-          <Toggle
-            label="Ecliptic Grid"
-            checked={showEclipticGrid}
-            onChange={toggleEclipticGrid}
-          />
-          <Toggle
-            label="Prograde Vector"
-            checked={showProgradeVector}
-            onChange={toggleProgradeVector}
-          />
-        </div>
-      </>
+          </div>
+        </Accordion>
+      </div>
     ) : openPanel === "display" ? (
       <DisplayPanel />
     ) : openPanel === "a11y" ? (
@@ -524,7 +500,7 @@ const RailButtonIcon = ({
 }: {
   panelId: Exclude<RightControlPanelId, "search">;
 }) => {
-  if (panelId === "scene") {
+  if (panelId === "view") {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -544,36 +520,6 @@ const RailButtonIcon = ({
           strokeLinecap="round"
           strokeLinejoin="round"
           d="M12 14.25A2.25 2.25 0 1 0 12 9.75a2.25 2.25 0 0 0 0 4.5Z"
-        />
-      </svg>
-    );
-  }
-
-  if (panelId === "overlay") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        className="h-4 w-4"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 4.5 4.5 8.25 12 12l7.5-3.75L12 4.5Z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4.5 12 12 15.75 19.5 12"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4.5 15.75 12 19.5l7.5-3.75"
         />
       </svg>
     );
@@ -639,6 +585,48 @@ const RailButtonIcon = ({
         d="M4.5 4.5h.75v.75H4.5Zm0 5.25h.75v.75H4.5Zm0 5.25h.75v.75H4.5Z"
       />
     </svg>
+  );
+};
+
+const RestructureHint = () => {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(HINT_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed) return null;
+
+  const handleDismiss = () => {
+    try {
+      window.localStorage.setItem(HINT_STORAGE_KEY, "true");
+    } catch {
+      /* localStorage unavailable (quota, privacy mode) — fail silently */
+    }
+    setDismissed(true);
+  };
+
+  return (
+    <div
+      data-testid="restructure-hint"
+      className="relative border border-nasa-accent/30 bg-nasa-accent/5 px-3 py-2.5 pr-9"
+    >
+      <div className="text-[11px] leading-relaxed text-white/70">
+        Quality & render settings moved to{" "}
+        <span className="text-nasa-accent">Display</span>.
+      </div>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label="Dismiss restructure hint"
+        className="absolute right-2 top-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-white/55 transition-colors hover:border-nasa-accent/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
+      >
+        ✕
+      </button>
+    </div>
   );
 };
 

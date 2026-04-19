@@ -80,13 +80,12 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         </p>
         <ul className="space-y-1">
           <li>
-            • Scene keeps Starfield, {STARFIELD_SOURCE_LABELS.hyg},{" "}
-            {STARFIELD_SOURCE_LABELS.nasa}, scale, and quality
+            • View — bodies, guides, starfield ({STARFIELD_SOURCE_LABELS.hyg}/
+            {STARFIELD_SOURCE_LABELS.nasa}), and scale mode
           </li>
-          <li>• Overlay keeps Icons, Labels, Orbits, and category filters</li>
-          <li>
-            • Project keeps Replay Tutorial, Mission Report, and Debug Menu
-          </li>
+          <li>• Display — graphics quality and per-feature tuning</li>
+          <li>• Access — motion and UI scale</li>
+          <li>• Project — Replay Tutorial, Mission Report, and Debug</li>
         </ul>
       </>
     ),

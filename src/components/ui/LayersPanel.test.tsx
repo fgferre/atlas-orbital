@@ -46,12 +46,10 @@ describe("LayersPanel", () => {
     resetStore();
   });
 
-  it("renders the overlay category toggles when the overlay panel is active", () => {
+  it("renders the body category toggles when the view panel is active", () => {
     const setActivePanel = vi.fn();
 
-    render(
-      <LayersPanel activePanel="overlay" setActivePanel={setActivePanel} />
-    );
+    render(<LayersPanel activePanel="view" setActivePanel={setActivePanel} />);
 
     expect(
       screen.getByRole("button", { name: /asteroids/i })
@@ -64,9 +62,7 @@ describe("LayersPanel", () => {
   it("flips visibility.asteroids in the store when the Asteroids toggle is clicked", () => {
     const setActivePanel = vi.fn();
 
-    render(
-      <LayersPanel activePanel="overlay" setActivePanel={setActivePanel} />
-    );
+    render(<LayersPanel activePanel="view" setActivePanel={setActivePanel} />);
 
     expect(useStore.getState().visibility.asteroids).toBe(true);
 
@@ -80,15 +76,13 @@ describe("LayersPanel", () => {
   it("invokes setActivePanel with null when the Close control is used", () => {
     const setActivePanel = vi.fn();
 
-    render(
-      <LayersPanel activePanel="overlay" setActivePanel={setActivePanel} />
-    );
+    render(<LayersPanel activePanel="view" setActivePanel={setActivePanel} />);
 
-    // Two controls both carry aria-label "Close overlay panel": the
+    // Two controls both carry aria-label "Close view panel": the
     // desktop rail tab and the explicit Close button in the header.
     // The header button is the one whose visible text is "Close".
     const closeButtons = screen.getAllByRole("button", {
-      name: /close overlay panel/i,
+      name: /close view panel/i,
     });
     const headerCloseButton = closeButtons.find(
       (node) => node.textContent?.trim().toLowerCase() === "close"

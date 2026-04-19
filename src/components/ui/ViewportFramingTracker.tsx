@@ -36,12 +36,7 @@ const queryPanelElement = (activePanel: RightControlPanelId | null) => {
       ? [`atlas-${activePanel}-panel`]
       : activePanel === "search"
         ? ["atlas-search-panel"]
-        : [
-            "atlas-search-panel",
-            "atlas-scene-panel",
-            "atlas-overlay-panel",
-            "atlas-project-panel",
-          ];
+        : ["atlas-search-panel", "atlas-view-panel", "atlas-project-panel"];
 
   for (const panelId of panelIds) {
     const panel = document.getElementById(panelId);

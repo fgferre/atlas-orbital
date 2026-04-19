@@ -1,4 +1,3 @@
-import type { QualityMode } from "../../lib/qualityProfile";
 import {
   STARFIELD_SOURCE_LABELS,
   type StarfieldSource,
@@ -6,8 +5,7 @@ import {
 
 export type RightControlPanelId =
   | "search"
-  | "scene"
-  | "overlay"
+  | "view"
   | "display"
   | "a11y"
   | "project";
@@ -33,8 +31,10 @@ export type VisibilityCategory =
 // silently re-order this list.
 export const RIGHT_CONTROL_BUTTONS = [
   { id: "search", label: "Search" },
-  { id: "scene", label: "Scene" },
-  { id: "overlay", label: "Overlay" },
+  // "View" consolidates the former Scene + Overlay tabs (menu-structure-v3
+  // §4.3). Covers world mode, body visibility, guides, and backdrop under
+  // one coherent surface.
+  { id: "view", label: "View" },
   { id: "display", label: "Display" },
   // "Access" instead of "Accessibility" — the vertical rail button
   // caps at roughly 7 characters before truncation; "Access" reads
@@ -120,14 +120,6 @@ export const SCENE_SCALE_OPTIONS = [
   { id: "didactic", label: "Didactic" },
   { id: "realistic", label: "Realistic" },
 ] as const;
-
-export const SCENE_QUALITY_OPTIONS = [
-  { id: "auto", label: "Auto" },
-  { id: "ultra", label: "Ultra" },
-  { id: "high", label: "High" },
-  { id: "balanced", label: "Balanced" },
-  { id: "constrained", label: "Saver" },
-] as const satisfies ReadonlyArray<{ id: QualityMode; label: string }>;
 
 export const OVERLAY_FILTER_OPTIONS = [
   { id: "planets", label: "Planets" },
