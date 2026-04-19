@@ -346,27 +346,27 @@ Entries here record decisions that changed after §1-12 were written. Any deferr
 
 **Template per entry:**
 
-| Field         | Value                                      |
-| ------------- | ------------------------------------------ |
-| Date          | ISO date                                   |
-| Source        | Codex review / Opus review / User decision |
-| Status        | resolved / superseded / dropped            |
-| Owning commit | short SHA (or `n/a` if not yet executed)   |
-| Summary       | one-line description                       |
+| Field         | Value                                         |
+| ------------- | --------------------------------------------- |
+| Date          | ISO date                                      |
+| Source        | Codex review / Opus review / User decision    |
+| Status        | resolved / superseded / dropped               |
+| Owning commit | short SHA (or `n/a` if not yet executed)      |
+| Decision      | one-line imperative statement of what changed |
 
-Rationale and process notes go in prose below the table.
+Rationale and process notes go in prose below the table. Split the two when the process lesson matters separately from the product decision.
 
 ---
 
 ### Display preset chip retired
 
-| Field         | Value                                  |
-| ------------- | -------------------------------------- |
-| Date          | 2026-04-19                             |
-| Source        | Codex review (PR 1)                    |
-| Status        | resolved                               |
-| Owning commit | `d847ea8`                              |
-| Summary       | Chip removed from Display panel header |
+| Field         | Value                           |
+| ------------- | ------------------------------- |
+| Date          | 2026-04-19                      |
+| Source        | Codex review (PR 1)             |
+| Status        | resolved                        |
+| Owning commit | `d847ea8`                       |
+| Decision      | Retire the Display preset chip. |
 
 **Rationale**: introduced in PR 1 as transitional wayfinding from the Scene Quality signpost to Display. Post-PR 2 (Scene consolidated into View), the role is moot — the Preset subsection already communicates the active preset through the highlighted button, Custom mode has a dedicated badge + "Reset to {customBase}" button, and the one-time View hint handles stale muscle memory.
 

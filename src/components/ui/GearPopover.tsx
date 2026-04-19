@@ -84,7 +84,13 @@ export const GearPopover = () => {
       {gearOpen && (
         <motion.div
           ref={containerRef}
-          role={isMobile ? "dialog" : "menu"}
+          // Menu structure v3.1 §4.7 + Codex PR 3 review: `role="dialog"`
+          // on both breakpoints. `role="menu"` would contract for
+          // menuitem children + arrow-key roving focus, which we don't
+          // implement — a11y would be told "menu" but get dialog-like
+          // tab navigation. `aria-modal` flips true only on the mobile
+          // sheet where the popover covers its origin.
+          role="dialog"
           aria-modal={isMobile ? true : undefined}
           aria-label="Settings menu"
           data-testid="gear-popover"

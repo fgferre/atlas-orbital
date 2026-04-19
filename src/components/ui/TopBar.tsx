@@ -22,6 +22,19 @@ export const TopBar = () => {
         target?.isContentEditable;
       if (isTyping) return;
 
+      // Menu structure v3.1 §5.6 + Codex PR 3 review: navigation
+      // hotkeys honor the same blocking-overlay guard as the global
+      // /, ? handlers in Overlay. Firing focus/back behind a modal
+      // leaves the user in a different camera state when the overlay
+      // closes — coherent guard across all global hotkeys avoids that.
+      const state = useStore.getState();
+      const blockingOverlay =
+        state.showTutorial ||
+        state.showCredits ||
+        state.gearOpen ||
+        state.shortcutsModalOpen;
+      if (blockingOverlay) return;
+
       if (e.key.toLowerCase() === "h") {
         e.preventDefault();
         focusHome();
@@ -43,19 +56,31 @@ export const TopBar = () => {
       className="pointer-events-none absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] z-30"
     >
       <div className="command-shell tech-corners ghost-border pointer-events-auto flex items-center gap-2 px-2.5 py-2 sm:px-3">
-        <div className="flex min-w-[9rem] items-center gap-2 border border-white/8 bg-black/15 px-2.5 py-2 sm:min-w-[10rem]">
+        {/* Menu structure v3.1 §4.1 mobile layout: brand collapses to
+            the glyph only at narrow widths so the cluster leaves room
+            for Back + Home + Menu without two-line wrapping. */}
+        <div
+          className={`flex items-center border border-white/8 bg-black/15 ${
+            isMobile
+              ? "p-1.5"
+              : "min-w-[9rem] gap-2 px-2.5 py-2 sm:min-w-[10rem]"
+          }`}
+          aria-label={isMobile ? "Atlas Orbital" : undefined}
+        >
           <div className="flex h-6 w-6 items-center justify-center border border-nasa-accent/35 bg-nasa-accent/10 shadow-[0_0_12px_rgba(0,240,255,0.12)]">
             <div className="h-1.5 w-1.5 bg-nasa-accent shadow-[0_0_8px_rgba(0,240,255,0.45)]"></div>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-[10px] font-bold tracking-[0.2em] text-white sm:text-[11px]">
-              <span className="font-orbitron">ATLAS </span>
-              <span className="font-orbitron text-nasa-accent">ORBITAL</span>
-            </h1>
-            <div className="mt-0.5 text-[8px] font-orbitron uppercase tracking-[0.18em] text-nasa-accent/80">
-              System Online
+          {!isMobile && (
+            <div className="min-w-0">
+              <h1 className="text-[10px] font-bold tracking-[0.2em] text-white sm:text-[11px]">
+                <span className="font-orbitron">ATLAS </span>
+                <span className="font-orbitron text-nasa-accent">ORBITAL</span>
+              </h1>
+              <div className="mt-0.5 text-[8px] font-orbitron uppercase tracking-[0.18em] text-nasa-accent/80">
+                System Online
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="flex items-stretch gap-1.5">

@@ -10,7 +10,10 @@ interface ShortcutRow {
 }
 
 const SHORTCUTS: ShortcutRow[] = [
-  { keys: "/", action: "Focus Search" },
+  // Menu structure v3.1 §5.6 + Codex PR 3 review: surface both
+  // bindings the handler accepts — Ctrl+K is the AAA-standard
+  // command-palette accelerator that power users reach for first.
+  { keys: "/ or Ctrl + K", action: "Focus Search" },
   { keys: "H", action: "Focus home (Sun)" },
   { keys: "Alt + ←", action: "Focus back" },
   { keys: "Ctrl + Shift + T", action: "Replay tutorial" },
