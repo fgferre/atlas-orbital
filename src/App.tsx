@@ -1,5 +1,6 @@
 import { Loader } from "./components/ui/Loader";
 import { Suspense, lazy, useEffect } from "react";
+import { MotionConfig } from "framer-motion";
 import { useStore } from "./store";
 
 const Scene = lazy(() =>
@@ -56,6 +57,26 @@ function App() {
     );
   }, [uiScale]);
 
+  // Codex 2nd-round P2a fix: make `accessibility.reducedMotion` an
+  // actual runtime behavior switch, not just a stored boolean.
+  //
+  // - `MotionConfig` below propagates `reducedMotion` to every
+  //   `<motion.*>` / `AnimatePresence` descendant (Framer honors it
+  //   for JS-driven transitions, which the OS media query alone
+  //   cannot reach). `"always"` = app respects the toggle; `"user"`
+  //   = fall back to the OS `prefers-reduced-motion` match.
+  // - `document.documentElement.dataset.reducedMotion` makes the
+  //   same state visible to CSS so the rule block in `index.css`
+  //   can short-circuit transitions even when the OS media query
+  //   isn't set.
+  const reducedMotion = useStore((state) => state.accessibility.reducedMotion);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.reducedMotion = reducedMotion
+      ? "true"
+      : "false";
+  }, [reducedMotion]);
+
   const isAssetStudyMode =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("study") === "asset-review";
@@ -71,44 +92,46 @@ function App() {
   }
 
   return (
-    <div className="w-full h-full bg-black relative">
-      <Loader />
-      {/* fallback={null} — <Loader /> above is already the singleton boot
+    <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}>
+      <div className="w-full h-full bg-black relative">
+        <Loader />
+        {/* fallback={null} — <Loader /> above is already the singleton boot
           overlay that owns splash handoff + progress timers. Mounting a
           second Loader here while the Scene chunk resolves would
           duplicate those effects on the boot hot path. */}
-      <Suspense fallback={null}>
-        <Scene />
-      </Suspense>
-      <Suspense fallback={null}>
-        {/* fallback={null} — Overlay is the full chrome (top bar, controls);
+        <Suspense fallback={null}>
+          <Scene />
+        </Suspense>
+        <Suspense fallback={null}>
+          {/* fallback={null} — Overlay is the full chrome (top bar, controls);
             a skeleton would flash more than the real UI appearing. */}
-        <Overlay />
-      </Suspense>
-      <Suspense
-        fallback={
-          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-            <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
-          </div>
-        }
-      >
-        <TutorialOverlay />
-      </Suspense>
-      <Suspense
-        fallback={
-          <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-            <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
-          </div>
-        }
-      >
-        <CreditsModal />
-      </Suspense>
-      <Suspense fallback={null}>
-        {/* fallback={null} — tooltip is hidden until hover; a skeleton would
+          <Overlay />
+        </Suspense>
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+              <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+            </div>
+          }
+        >
+          <TutorialOverlay />
+        </Suspense>
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+              <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+            </div>
+          }
+        >
+          <CreditsModal />
+        </Suspense>
+        <Suspense fallback={null}>
+          {/* fallback={null} — tooltip is hidden until hover; a skeleton would
             flash in empty space before any hover even happens. */}
-        <StarHoverTooltip />
-      </Suspense>
-    </div>
+          <StarHoverTooltip />
+        </Suspense>
+      </div>
+    </MotionConfig>
   );
 }
 

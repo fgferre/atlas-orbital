@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { starfieldPointMetrics } from "./starfieldShaderMath";
+import { getResolvedQualityProfileOptions } from "./qualityProfile";
 
 const approxEq = (actual: number, expected: number, tol = 1e-3) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
@@ -90,44 +91,71 @@ describe("starfieldPointMetrics — HDR-emissive allow-list (R1 #1B)", () => {
   // where vColorChannel is the saturated-white approximation (1.0 for
   // hot stars) and vBrightness is this function's output.
   // A contribution > 1.0 is what the <Bloom luminanceThreshold={1.0}>
-  // pass picks up. Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5
-  // / constrained 1.0 — see qualityProfile.ts.
+  // pass picks up.
+  //
+  // Tier defaults are read from `qualityProfile.getResolvedQualityProfileOptions()`
+  // at test-time so the suite stays in sync with whatever values
+  // `qualityProfile.ts` ships — earlier revisions hardcoded numbers
+  // that drifted out of step with the runtime after a tuning pass.
+
+  const QP = getResolvedQualityProfileOptions();
+  const ULTRA_GAIN = QP.ultra.vfxHdrGain;
+  const HIGH_GAIN = QP.high.vfxHdrGain;
+  const BALANCED_GAIN = QP.balanced.vfxHdrGain;
+  const CONSTRAINED_GAIN = QP.constrained.vfxHdrGain;
 
   const composite = (mag: number, gain: number, vColorChannel = 1) =>
     vColorChannel * starfieldPointMetrics(mag, 0.75).vBrightness * gain;
 
-  it("bright stars (mag ≤ 4) cross 1.0 on ultra (gain=2.0) → bloom picks them up", () => {
-    // mag 4 has vBrightness = 1 (ceiling), so composite = 2.0.
-    expect(composite(4, 2.0)).toBeGreaterThan(1);
-    expect(composite(0, 2.0)).toBeGreaterThan(1);
-    expect(composite(-1.5, 2.0)).toBeGreaterThan(1);
+  it("advertised tier-default gains are in the expected order and magnitudes", () => {
+    // Pins the monotonic tier order — a future tuning can raise/lower
+    // numbers, but the ordering (ultra > high > balanced > constrained)
+    // is the contract the Display panel's preset dropdown advertises.
+    expect(ULTRA_GAIN).toBeGreaterThan(HIGH_GAIN);
+    expect(HIGH_GAIN).toBeGreaterThan(BALANCED_GAIN);
+    expect(BALANCED_GAIN).toBeGreaterThan(CONSTRAINED_GAIN);
+    // Constrained stays at identity — bloom is disabled on that tier
+    // so the gain only affects the LDR shader output, and an HDR lift
+    // would drift the look without benefit.
+    expect(CONSTRAINED_GAIN).toBe(1.0);
   });
 
-  it("bright stars cross 1.0 on high (gain=1.8) and balanced (gain=1.5)", () => {
-    expect(composite(2, 1.8)).toBeGreaterThan(1);
-    expect(composite(2, 1.5)).toBeGreaterThan(1);
+  it("bright stars (mag ≤ 4) cross 1.0 on ultra → bloom picks them up", () => {
+    // mag 4 has vBrightness = 1 (ceiling), so composite = ULTRA_GAIN.
+    // As long as the tier's gain stays > 1, this holds.
+    expect(composite(4, ULTRA_GAIN)).toBeGreaterThan(1);
+    expect(composite(0, ULTRA_GAIN)).toBeGreaterThan(1);
+    expect(composite(-1.5, ULTRA_GAIN)).toBeGreaterThan(1);
+  });
+
+  it("bright stars cross 1.0 on high and balanced", () => {
+    expect(composite(2, HIGH_GAIN)).toBeGreaterThan(1);
+    expect(composite(2, BALANCED_GAIN)).toBeGreaterThan(1);
   });
 
   it("telescopic stars (mag ≥ 10) stay below 1.0 on every tier", () => {
-    // vBrightness floors at 0.05 for mag ≥ 10.
-    // Max composite at ultra: 1 × 0.05 × 2.0 = 0.10 — well under 1.
-    expect(composite(10, 2.0)).toBeLessThan(1);
-    expect(composite(12, 2.0)).toBeLessThan(1);
-    expect(composite(20, 2.0)).toBeLessThan(1);
+    // vBrightness floors at 0.05 for mag ≥ 10. Max composite at ultra
+    // = 1 × 0.05 × ULTRA_GAIN. As long as ULTRA_GAIN stays below 20,
+    // the mag-10+ tail cannot bloom.
+    expect(ULTRA_GAIN).toBeLessThan(20);
+    expect(composite(10, ULTRA_GAIN)).toBeLessThan(1);
+    expect(composite(12, ULTRA_GAIN)).toBeLessThan(1);
+    expect(composite(20, ULTRA_GAIN)).toBeLessThan(1);
   });
 
-  it("constrained tier (gain=1.0) collapses to the pre-Wave-α LDR behavior for every magnitude", () => {
+  it("constrained tier collapses to the pre-Wave-α LDR behavior for every magnitude", () => {
     // Identity: composite with gain=1 equals vColorChannel × vBrightness.
+    expect(CONSTRAINED_GAIN).toBe(1.0);
     for (const mag of [-1.5, 0, 3, 6, 8, 12]) {
       const expected = 1 * starfieldPointMetrics(mag, 0.75).vBrightness * 1;
-      expect(composite(mag, 1.0)).toBeCloseTo(expected, 10);
+      expect(composite(mag, CONSTRAINED_GAIN)).toBeCloseTo(expected, 10);
     }
   });
 
   it("composite is strictly monotonic in mag (brighter stars always out-emit dimmer)", () => {
     let previous = Infinity;
     for (let mag = -2; mag <= 15; mag += 0.5) {
-      const c = composite(mag, 1.8);
+      const c = composite(mag, HIGH_GAIN);
       expect(c).toBeLessThanOrEqual(previous + 1e-6);
       previous = c;
     }

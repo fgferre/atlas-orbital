@@ -327,3 +327,20 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Codex 2nd-round P2a: mirror of the OS media query driven by the
+   in-app `accessibility.reducedMotion` toggle. `App.tsx` writes
+   `data-reduced-motion` on the <html> element whenever the store
+   value changes; this block lets a user who has NOT set OS-level
+   reduced motion still force CSS animations / transitions to the
+   near-zero floor from the Accessibility panel. Framer-motion
+   animations are separately handled by `<MotionConfig
+   reducedMotion={...}>` in App.tsx. */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}

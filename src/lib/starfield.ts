@@ -146,37 +146,30 @@ const DEFAULT_HYG_TIER: HygTier = "full";
 
 /**
  * Map the resolved device quality profile to the HYG tier file the
- * browser should fetch. The legacy tycho2 renderer always loaded
- * ~118 000 stars, and the pre-fix `balanced → medium` (10 000)
- * mapping made the sky look dramatically thinner than users expected
- * — the primary cause of the density complaint. The current mapping:
+ * browser should fetch. Wave α's UX pass bound each of the four
+ * Display-panel presets to a distinct on-disk HYG binary so preset
+ * clicks produce a visible density change (the earlier
+ * `balanced → high` collapse made Medium and High render identically).
+ *
+ * Current mapping:
  *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / 3G)
- *   balanced    → high   (~810 KB,   ~50 000 stars — mixed hardware;
- *                         recovers tycho2-era density on any broadband
- *                         link without forcing the 109 k decode cost)
- *   high        → high   (~810 KB,   ~50 000 stars — keeps a distinct
- *                         LOD step between balanced and ultra so
- *                         flipping Quality to Ultra still earns real
- *                         extra density, not identical rendering)
+ *   balanced    → medium (~250 KB,  ~10 000 stars — gives Medium a
+ *                         distinct density from High; keeps load
+ *                         cost moderate for mid-range hardware)
+ *   high        → high   (~810 KB,   ~50 000 stars — broadband
+ *                         default; recovers tycho2-era density
+ *                         without forcing the 109 k decode cost)
  *   ultra       → full   (~1.77 MB, ~109 400 stars — opt-in ceiling;
  *                         every surviving HYG row after the offline
  *                         filter removes the Sun / invalid rows /
  *                         distance-sentinel entries)
- * Perceived density is driven mostly by the shader transfer curve
- * (see Starfield.tsx), not the raw tier count above ~50k — pairing
- * the tier remap with a graduated faint-star lift is what restores
- * the tycho2 visual feel.
- * The `medium` tier binary is still produced by the offline pipeline
- * and remains addressable for anyone overriding the default at runtime.
+ *
+ * Perceived density is driven partly by the shader transfer curve
+ * (see Starfield.tsx) — the graduated faint-star lift (§L13) pairs
+ * with this tier selection to keep the sky looking consistent across
+ * presets.
  */
 export function hygTierForQuality(name: ResolvedQualityName): HygTier {
-  // Wave α UX fix: the four graphics tiers now map to four DISTINCT
-  // HYG binaries. Previously `balanced` collapsed to `high`, so users
-  // clicking through Medium ↔ High in the Display panel saw no star
-  // density change (both tiers loaded the same ~27k catalogue). The
-  // `medium` HYG binary existed on disk but was unused. Binding
-  // balanced→medium gives each preset a visibly different density,
-  // matching the user expectation that preset clicks touch stars too.
   switch (name) {
     case "constrained":
       return "low";
