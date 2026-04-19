@@ -124,17 +124,37 @@ export const CameraController = () => {
 
     const isSameFocus = prevFocusRef.current === focusId;
     const isModeSwitch = isSameFocus && prevScaleModeRef.current !== scaleMode;
+    const framingSignatureChanged =
+      prevCameraFramingSignatureRef.current !== cameraFramingSignature;
+    const viewportSizeChanged =
+      prevViewportSizeRef.current.width !== size.width ||
+      prevViewportSizeRef.current.height !== size.height;
     const isLayoutReframe =
       isSameFocus &&
       prevScaleModeRef.current === scaleMode &&
-      (prevCameraFramingSignatureRef.current !== cameraFramingSignature ||
-        prevViewportSizeRef.current.width !== size.width ||
-        prevViewportSizeRef.current.height !== size.height);
+      (framingSignatureChanged || viewportSizeChanged);
 
     prevFocusRef.current = focusId;
     prevScaleModeRef.current = scaleMode;
     prevCameraFramingSignatureRef.current = cameraFramingSignature;
     prevViewportSizeRef.current = { width: size.width, height: size.height };
+
+    // Wave α UX fix: skip the 520 ms privileged-position reposition
+    // when the ONLY thing that changed is the camera-framing
+    // signature (fit insets + composition offsets). Opening or
+    // closing a side panel shifts `viewportFraming.fitInsets` —
+    // which flipped this effect into `isLayoutReframe = true` and
+    // snapped the camera back to the privileged angle every panel
+    // interaction. That's the "anoying reset" the user reported.
+    //
+    // Genuine window resize (`viewportSizeChanged`) still triggers
+    // the reframe, because the camera's privileged-position math
+    // can legitimately need updating when the backing framebuffer
+    // changes dimensions. Focus / scale-mode transitions also keep
+    // going through the full reframe below.
+    if (isLayoutReframe && framingSignatureChanged && !viewportSizeChanged) {
+      return;
+    }
 
     const setupCamera = () => {
       const targetMesh = scene.getObjectByName(focusId);
