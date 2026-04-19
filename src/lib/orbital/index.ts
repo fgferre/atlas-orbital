@@ -86,3 +86,10 @@ export {
   resolveOrbitalDisplayPosition,
   getOrbitalDisplayOrbitPoints,
 } from "./integration";
+
+// Heliocentric composition (for consumers that need physical AU distance
+// independent of render-space remapping)
+export {
+  resolveHeliocentricPositionAU,
+  resolveHeliocentricDistanceAU,
+} from "./heliocentric";

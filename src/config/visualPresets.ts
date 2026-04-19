@@ -17,18 +17,28 @@
  * - PLANET_ORBIT (camera 200–2000): balanced default — the values that felt
  *   right under AgX across the representative-views iteration.
  *
- * - INNER_SYSTEM (distanceFromSun < 500, not orbiting a body): Sun and the
- *   four terrestrials dominate the frame. Slightly higher saturation for
- *   warmer Mercury/Venus/Mars tones; a touch more direct-sun intensity.
+ * - INNER_SYSTEM (distanceFromSun < 3.5 AU, not orbiting a body): Sun and
+ *   the four terrestrials + main-belt asteroids dominate the frame.
+ *   Slightly higher saturation for warmer Mercury/Venus/Mars tones; a
+ *   touch more direct-sun intensity.
  *
- * - OUTER_SYSTEM (500 ≤ distanceFromSun < 3000): ice-giant region. Cooler,
- *   less saturated; slightly dimmer direct sun to read as physically
- *   further from the illuminant.
+ * - OUTER_SYSTEM (3.5 AU ≤ distanceFromSun < 50 AU): gas/ice-giant region
+ *   through Pluto and the near Kuiper belt. Cooler, less saturated;
+ *   slightly dimmer direct sun to read as physically further from the
+ *   illuminant.
  *
- * - DEEP_SPACE (distanceFromSun ≥ 3000, Kuiper + beyond): moody/clinical.
- *   Slightly more bloom so remaining bright stars feel like the only
- *   sources in frame; contrast up a touch for that empty-space feel;
- *   saturation low (no nearby colored bodies to support richer mids).
+ * - DEEP_SPACE (distanceFromSun ≥ 50 AU): scattered disk + Sedna-like
+ *   orbits. Moody/clinical. Slightly more bloom so remaining bright
+ *   stars feel like the only sources in frame; contrast up a touch for
+ *   that empty-space feel; saturation low (no nearby colored bodies to
+ *   support richer mids).
+ *
+ * `distanceFromSun` is the body's physical heliocentric distance in AU.
+ * For bodies with a parentId the engine returns parent-centered
+ * positions, so the consumer (`useVisualPresetLerp`) composes the chain
+ * via `resolveHeliocentricDistanceAU`. Thresholds are tuned to the real
+ * dataset — the prior 500 / 3000 numbers left every body except Sedna in
+ * INNER_SYSTEM and meant DEEP_SPACE never triggered.
  */
 
 export type VisualPresetType =
@@ -130,16 +140,17 @@ export function getPresetForContext(
   distanceFromSun: number,
   cameraDistance: number
 ): VisualPresetType {
-  // 1 AU = ~150,000,000 km. In our scale, 1 AU might be represented differently.
-  // Assuming standard AU units or similar scale.
-  // Prioritize camera distance to body first.
+  // `distanceFromSun` is physical heliocentric distance in AU;
+  // `cameraDistance` is OrbitControls.getDistance(), which is in the
+  // render-space units that OrbitControls owns (separate from AU).
+  // Camera-proximity beats system region so focused-body framing wins.
 
   if (cameraDistance < 200) return "CLOSE_FLYBY"; // Very close to a body
   if (cameraDistance < 2000) return "PLANET_ORBIT"; // Orbiting a body
 
-  // If not close to a specific body, check solar system region
-  if (distanceFromSun < 500) return "INNER_SYSTEM"; // Inner solar system (Mercury to Mars)
-  if (distanceFromSun < 3000) return "OUTER_SYSTEM"; // Outer solar system (Jupiter to Neptune)
+  // No close body — classify by where in the system we are.
+  if (distanceFromSun < 3.5) return "INNER_SYSTEM"; // Mercury → main belt
+  if (distanceFromSun < 50) return "OUTER_SYSTEM"; // Jupiter → near Kuiper
 
-  return "DEEP_SPACE"; // Kuiper belt and beyond
+  return "DEEP_SPACE"; // Scattered disk, Sedna-likes, beyond
 }

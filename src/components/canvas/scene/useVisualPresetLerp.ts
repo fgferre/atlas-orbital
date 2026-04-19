@@ -7,6 +7,8 @@ import {
   getPresetForContext,
 } from "../../../config/visualPresets";
 import { BODIES_BY_ID } from "../../../data/celestialBodies";
+import { resolveHeliocentricDistanceAU } from "../../../lib/orbital";
+import { simulationClock } from "../../../lib/simulationClock";
 import { useStore } from "../../../store";
 import type {
   BloomController,
@@ -71,8 +73,16 @@ export const useVisualPresetLerp = ({
     if (autoPresetEnabled && focusId) {
       const focusedBody = BODIES_BY_ID.get(focusId);
       if (focusedBody) {
-        // Default to 0 if orbit is missing (e.g. Sun)
-        const distanceFromSun = focusedBody.orbit ? focusedBody.orbit.a : 0;
+        // True heliocentric distance in AU. Using `orbit.a` here was
+        // wrong for any body with a parentId (Europa's `orbit.a` is
+        // 0.0045 AU to Jupiter, not ~5.2 AU to the Sun), which made the
+        // preset classifier misroute satellites — 22 bodies in the
+        // current dataset. The composer walks parentId up to the Sun,
+        // staying in physical AU regardless of didactic remapping (L18
+        // applies — imperative read inside useFrame, no React subscribe).
+        const distanceFromSun = focusedBody.orbit
+          ? resolveHeliocentricDistanceAU(focusId, simulationClock.getNow())
+          : 0;
         // Approximate camera distance using OrbitControls distance if available, else placeholder
         const cameraDistance = controlsRef.current?.getDistance() ?? 1000;
 
