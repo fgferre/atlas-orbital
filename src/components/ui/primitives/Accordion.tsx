@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 interface AccordionProps {
   label: string;
@@ -12,6 +12,16 @@ export const Accordion = ({
   children,
 }: AccordionProps) => {
   const [open, setOpen] = useState(defaultOpen);
+
+  // Re-sync with defaultOpen when it changes (e.g., viewport flips
+  // between mobile and desktop mid-session). Menu structure v3.1 §4.3
+  // treats "desktop all-open / mobile all-collapsed" as a hard UX
+  // contract — breakpoint change re-applies it even if the panel is
+  // already mounted. Manual toggles during a stable breakpoint remain
+  // sticky because the effect only fires on defaultOpen changes.
+  useEffect(() => {
+    setOpen(defaultOpen);
+  }, [defaultOpen]);
 
   return (
     <div

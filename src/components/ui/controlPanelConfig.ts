@@ -22,13 +22,13 @@ export type VisibilityCategory =
   | "asteroids"
   | "tnos";
 
-// Wave α Commit 3 (R2 Wave 1) rail ordering:
-//   search | scene | overlay | display | a11y | project
+// Menu structure v3.1 rail ordering (PR 2 state):
+//   search | view | display | a11y | project
 //
-// Display + A11y sit left of Project because they're session-scoped
-// (tweak-then-forget) rather than document-scoped (project name, epoch
-// range). Design §1 rationale kept inline so future additions don't
-// silently re-order this list.
+// Scene + Overlay consolidated into View; Project demote to the Gear
+// popover lands in PR 3. Display + A11y sit left of Project because
+// they're session-scoped (tweak-then-forget) rather than document-scoped
+// (project name, epoch range).
 export const RIGHT_CONTROL_BUTTONS = [
   { id: "search", label: "Search" },
   // "View" consolidates the former Scene + Overlay tabs (menu-structure-v3
