@@ -37,12 +37,12 @@ Not in scope here: adding new graphics features. Those are wave-scoped PRs.
 
 ### Tier 2 — Rail panels
 
-| Tab     | Panel header            | Content                                                                                                                               |
-| ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Search  | "Search"                | unchanged from current `SearchBar.tsx`                                                                                                |
-| View    | "View"                  | `World` · `Bodies` · `Guides` · `Backdrop` (accordion subsections)                                                                    |
-| Display | "Display" + preset chip | `Rendering` · `Post-Processing` · `Camera Effects` (hidden) · `Atmosphere & Sun` · `Textures & LoD` (hidden) · `Performance` (hidden) |
-| Access  | "Accessibility"         | `Reduced Motion` · `UI Scale` · grayed-in-place rows for Wave 4 activation                                                            |
+| Tab     | Panel header    | Content                                                                                                                               |
+| ------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Search  | "Search"        | unchanged from current `SearchBar.tsx`                                                                                                |
+| View    | "View"          | `World` · `Bodies` · `Guides` · `Backdrop` (accordion subsections)                                                                    |
+| Display | "Display"       | `Rendering` · `Post-Processing` · `Camera Effects` (hidden) · `Atmosphere & Sun` · `Textures & LoD` (hidden) · `Performance` (hidden) |
+| Access  | "Accessibility" | `Reduced Motion` · `UI Scale` · grayed-in-place rows for Wave 4 activation                                                            |
 
 ### Tier 3 — Gear popover
 
@@ -281,7 +281,7 @@ No subsection is exposed with empty content. The "no `coming soon` headers" rule
 - `src/components/ui/TopBar.tsx` — add `[⚙]` button (right) and conditional focus chip. Height and general layout preserved (no full-width expansion).
 - `src/components/ui/Overlay.tsx` — wire `GearPopover` open/close state (separate from `RightControlPanelId`).
 - `src/components/ui/TutorialOverlay.tsx` — rewrite step 6 (Control Stack) only. Remove `Ctrl+Shift+D` line from step 8.
-- `src/components/ui/DisplayPanel.tsx` — add preset chip to header.
+- `src/components/ui/DisplayPanel.tsx` — no structural change in the remaining restructure scope. A preset chip shipped in PR 1 was retired in a post-PR-2 follow-up; see §13.
 - `src/components/ui/ViewportFramingTracker.tsx` — update panel id fallback list (line 40-44): remove `"atlas-overlay-panel"` and `"atlas-project-panel"`; add `"atlas-view-panel"`.
 - `src/components/ui/A11yPanel.tsx` — no change required.
 - `src/components/ui/SearchBar.tsx` — no structural change. May add `data-tutorial-target` stability check if not already on a stable element.
@@ -342,4 +342,32 @@ None of these block merging the restructure.
 
 ## 13. Resolved decisions (post-spec)
 
-- **Display preset chip retired.** Introduced in PR 1 as transitional wayfinding for users carrying muscle memory from the Scene Quality signpost. Removed in a follow-up after PR 2 because (1) Scene no longer exists so the wayfinding role is moot; (2) the Preset subsection already communicates the active preset through the highlighted button; (3) Custom mode has a dedicated badge + "Reset to X" button that covers that edge. The redundancy was flagged by Codex in the PR 1 review and deferred to PR 2 via chat; it was not promoted to §12, which is the process failure that let it survive the merge. Going forward: any deferred Codex item must land here or in the active scope immediately — chat acknowledgments are not tracking.
+Entries here record decisions that changed after §1-12 were written. Any deferred review item (Codex, Opus, user) that does not land in an active PR scope must be registered here immediately — chat acknowledgments do not count as tracking.
+
+**Template per entry:**
+
+| Field         | Value                                      |
+| ------------- | ------------------------------------------ |
+| Date          | ISO date                                   |
+| Source        | Codex review / Opus review / User decision |
+| Status        | resolved / superseded / dropped            |
+| Owning commit | short SHA (or `n/a` if not yet executed)   |
+| Summary       | one-line description                       |
+
+Rationale and process notes go in prose below the table.
+
+---
+
+### Display preset chip retired
+
+| Field         | Value                                  |
+| ------------- | -------------------------------------- |
+| Date          | 2026-04-19                             |
+| Source        | Codex review (PR 1)                    |
+| Status        | resolved                               |
+| Owning commit | `d847ea8`                              |
+| Summary       | Chip removed from Display panel header |
+
+**Rationale**: introduced in PR 1 as transitional wayfinding from the Scene Quality signpost to Display. Post-PR 2 (Scene consolidated into View), the role is moot — the Preset subsection already communicates the active preset through the highlighted button, Custom mode has a dedicated badge + "Reset to {customBase}" button, and the one-time View hint handles stale muscle memory.
+
+**Process note**: the redundancy was flagged in the PR 1 Codex review and deferred to PR 2 via chat; it was not promoted to §12 or §13, which is the process failure that let it survive the merge. The §13 template above is the corrective control — future deferred items land here or in an active PR scope immediately.
