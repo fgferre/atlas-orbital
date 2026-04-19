@@ -87,24 +87,29 @@ ambientIntensity, sunIntensity, shadowIntensity, envMapIntensity,
 guideIntensity, vectorIntensity.
 ```
 
-**All 5 presets currently hold identical numeric values** — file-level TODO
-at `visualPresets.ts:7-27` flags the intended per-context differentiation
-(inner vs outer system, close flyby vs deep space, etc.) as unfinished
-work.
+**Per-preset differentiation shipped** in commits `51c911d` (AgX base
+recalibration) + `ce66ff3` (per-context deltas). Values below are the
+current `PLANET_ORBIT` baseline; other presets compose deltas on top
+(CLOSE_FLYBY drops bloom + lifts ambient, INNER warms saturation, OUTER
+cools it, DEEP_SPACE lifts bloom + contrast). See the file header
+narrative in `visualPresets.ts` for the per-context intent.
 
-Reference values (every preset, as shipped today):
+Reference values (PLANET_ORBIT baseline, post-AgX recalibration):
 
 ```
-bloomIntensity 0.6, bloomThreshold 0.78, bloomRadius 0.3,
-saturation 0.29, contrast 0.42, brightness 0.0,
+bloomIntensity 1.0, bloomThreshold 1.0, bloomRadius 0.3,
+saturation 0.18, contrast 0.30, brightness 0.0,
 ambientIntensity 0.035, sunIntensity 0.4, shadowIntensity 1.5,
 envMapIntensity 1.9, guideIntensity ~1.0, vectorIntensity 1.0.
 ```
 
-`getPresetForContext(distanceFromSun, cameraDistance)` at
-`visualPresets.ts:124-140` picks a preset from camera + sun distance
-thresholds (< 200 → CLOSE_FLYBY, < 2000 → PLANET_ORBIT, then sun-distance
-bands).
+`getPresetForContext(distanceFromSun, cameraDistance)` at the bottom of
+`visualPresets.ts` picks a preset from camera + sun distance thresholds
+(< 200 → CLOSE_FLYBY, < 2000 → PLANET_ORBIT, then heliocentric AU
+bands: < 3.5 AU → INNER_SYSTEM, < 50 AU → OUTER_SYSTEM, else
+DEEP_SPACE). `distanceFromSun` is resolved as true heliocentric AU via
+`resolveHeliocentricDistanceAU` (parent composition for satellites),
+not `focusedBody.orbit.a`.
 
 ### 3b. `useVisualPresetLerp`
 
@@ -272,10 +277,12 @@ fields currently persisted beyond `qualityMode`.
 8. **HYG transfer curve constant 250** —
    `src/components/canvas/Starfield.tsx:14` in the Pogson log-compression
    formula. Calibrated against NASA Eyes per L17 but not user-controllable.
-9. **Visual-preset placeholder parity** — `visualPresets.ts:51-122`, all 5
-   presets hold identical values (TODO at line 7). The infrastructure for
-   per-context differentiation is live; the numeric differentiation is
-   not.
+9. **Visual-preset differentiation shipped** — `visualPresets.ts` now
+   carries distinct numeric values per context (commits `51c911d` +
+   `ce66ff3`). The auto-selector resolves `distanceFromSun` via
+   `resolveHeliocentricDistanceAU`, composing parent chains for the 22
+   satellites in the dataset so moons no longer misroute to
+   INNER_SYSTEM.
 10. **Antialias granularity** — `qualityProfile.antialias` is a boolean
     gate on WebGL context creation (`Scene.tsx:226`). No FXAA / SMAA /
     MSAA level choice; no post-process AA path.

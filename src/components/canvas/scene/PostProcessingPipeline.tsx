@@ -66,14 +66,15 @@ export const PostProcessingPipeline = memo(
     //      list). That's why Bloom is first and tone mapping comes
     //      AFTER it.
     //   2. HueSaturation + BrightnessContrast's `saturation`, `contrast`,
-    //      `brightness` values in `config/visualPresets.ts` (0.29 /
-    //      0.42 / 0) were tuned for a post-tone-map LDR buffer —
-    //      applying them in HDR space washes highlights and crushes
-    //      shadows. Commit 2 shipped with those effects BEFORE tone
-    //      mapping and the result was the "cores esmaecidas + sol
-    //      negro" regression (Codex P1.3). Moving ToneMapping
-    //      between Bloom and the grades restores LDR semantics for the
-    //      user-facing knobs.
+    //      `brightness` values in `config/visualPresets.ts` (per-preset,
+    //      PLANET_ORBIT at 0.18 / 0.30 / 0 after the AgX recalibration;
+    //      see commits 51c911d + ce66ff3) were tuned for a post-tone-
+    //      map LDR buffer — applying them in HDR space washes highlights
+    //      and crushes shadows. Commit 2 of the original Wave α shipped
+    //      with those effects BEFORE tone mapping and the result was
+    //      the "cores esmaecidas + sol negro" regression (Codex P1.3).
+    //      Moving ToneMapping between Bloom and the grades restores LDR
+    //      semantics for the user-facing knobs.
     //
     // Deviates from tasks/prompt-wave-alpha.md's literal "tone mapping
     // runs LAST". The correctness intent from R1 #1A §1.1 was "bloom

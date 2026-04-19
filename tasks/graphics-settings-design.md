@@ -102,9 +102,9 @@ Every row tagged exactly one of:
 | Bloom Threshold        | slider 0–1 step 0.02                            | 0.78 absolute             | H     | `VISUAL_PRESETS.bloomThreshold` (absolute override)       |
 | Tone Mapping           | dropdown (AgX / ACES / Reinhard / Cineon)       | AgX                       | H     | `PostProcessingPipeline` tone-effect operator ¹           |
 | Exposure               | slider 0–2 step 0.05                            | 1.0                       | F ²   | Deferred to Wave η.6 (adaptive exposure)                  |
-| Contrast               | slider −1..1 step 0.05                          | 0.42                      | H     | `VISUAL_PRESETS.contrast` + `contrastDelta`               |
+| Contrast               | slider −1..1 step 0.05                          | 0.30                      | H     | `VISUAL_PRESETS.contrast` + `contrastDelta`               |
 | Brightness             | slider −1..1 step 0.05                          | 0.0                       | H     | `VISUAL_PRESETS.brightness` + `brightnessDelta`           |
-| Saturation             | slider 0–1 step 0.05                            | 0.29                      | H     | `VISUAL_PRESETS.saturation` × `saturationMul`             |
+| Saturation             | slider 0–1 step 0.05                            | 0.18                      | H     | `VISUAL_PRESETS.saturation` × `saturationMul`             |
 | Ambient Light          | slider 0–1 step 0.01                            | 0.035                     | H     | `VISUAL_PRESETS.ambientIntensity` × `ambientIntensityMul` |
 | Sun Brightness (Point) | slider 0–5 step 0.1                             | 0.4                       | H     | `VISUAL_PRESETS.sunIntensity` × `sunIntensityMul`         |
 | Shadow Light (Dir)     | slider 0–5 step 0.1                             | 1.5                       | H     | `VISUAL_PRESETS.shadowIntensity` × `shadowIntensityMul`   |
