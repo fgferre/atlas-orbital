@@ -3,12 +3,7 @@ import {
   type StarfieldSource,
 } from "../../lib/starfield";
 
-export type RightControlPanelId =
-  | "search"
-  | "view"
-  | "display"
-  | "a11y"
-  | "project";
+export type RightControlPanelId = "search" | "view" | "display" | "a11y";
 
 export interface RightControlPanelState {
   activePanel: RightControlPanelId | null;
@@ -22,13 +17,13 @@ export type VisibilityCategory =
   | "asteroids"
   | "tnos";
 
-// Menu structure v3.1 rail ordering (PR 2 state):
-//   search | view | display | a11y | project
+// Menu structure v3.1 rail ordering (PR 3 state):
+//   search | view | display | a11y
 //
-// Scene + Overlay consolidated into View; Project demote to the Gear
-// popover lands in PR 3. Display + A11y sit left of Project because
-// they're session-scoped (tweak-then-forget) rather than document-scoped
-// (project name, epoch range).
+// Project tab was demoted to the Gear popover (Help/About/Developer
+// sections) because its items are session-episodic (tutorial replay,
+// mission report, debug logging) and didn't warrant permanent rail
+// real estate. See tasks/menu-structure-v3.md §4.7.
 export const RIGHT_CONTROL_BUTTONS = [
   { id: "search", label: "Search" },
   // "View" consolidates the former Scene + Overlay tabs (menu-structure-v3
@@ -43,7 +38,6 @@ export const RIGHT_CONTROL_BUTTONS = [
   // panel header (PANEL_COPY.a11y.title in LayersPanel.tsx) spells
   // it out in full.
   { id: "a11y", label: "Access" },
-  { id: "project", label: "Project" },
 ] as const satisfies ReadonlyArray<{
   id: RightControlPanelId;
   label: string;

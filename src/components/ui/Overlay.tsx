@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useStore } from "../../store";
+import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { Sidebar } from "./Sidebar";
 import { LayersPanel } from "./LayersPanel";
 import { Timeline } from "./Timeline";
@@ -21,6 +23,7 @@ export const Overlay = () => {
   });
   const isMobile = useMediaQuery("(max-width: 767px)");
   const activePanel = panelState.activePanel;
+  const setShortcutsModalOpen = useStore((s) => s.setShortcutsModalOpen);
 
   const requestPanel = (panel: RightControlPanelId | null) => {
     setPanelState((current) => resolveRightControlPanelRequest(current, panel));
@@ -29,6 +32,54 @@ export const Overlay = () => {
   const handlePanelExitComplete = () => {
     setPanelState((current) => resolveRightControlPanelExit(current));
   };
+
+  // Menu structure v3.1 §5.6 global hotkeys. Guards per Codex PR 2
+  // review:
+  //   1. Skip if the user is typing in an input/textarea/contentEditable
+  //      (same pattern as TopBar's H / Alt+←).
+  //   2. Skip if any blocking overlay is open (tutorial, credits, gear,
+  //      shortcuts) so `/` or `?` don't pop another layer on top.
+  //   3. `/` must go through the same panel state machine (`requestPanel`)
+  //      as clicking the rail tab, preserving exit animation ordering.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+      if (isTyping) return;
+
+      const state = useStore.getState();
+      const blockingOverlay =
+        state.showTutorial ||
+        state.showCredits ||
+        state.gearOpen ||
+        state.shortcutsModalOpen;
+      if (blockingOverlay) return;
+
+      const isSearchKey =
+        event.key === "/" || (event.ctrlKey && event.key.toLowerCase() === "k");
+
+      if (isSearchKey) {
+        event.preventDefault();
+        requestPanel("search");
+        return;
+      }
+
+      if (event.key === "?") {
+        event.preventDefault();
+        setShortcutsModalOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // `requestPanel` closes over `setPanelState` which is stable, and
+    // `setShortcutsModalOpen` is a store ref — effect does not need
+    // to re-subscribe on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setShortcutsModalOpen]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -64,6 +115,8 @@ export const Overlay = () => {
           />
         </div>
       </div>
+
+      <KeyboardShortcutsModal />
 
       <div
         aria-hidden="true"

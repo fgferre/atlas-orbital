@@ -1,10 +1,17 @@
 import { useEffect, type ReactNode } from "react";
+
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
+import { FocusChip } from "./FocusChip";
+import { GearPopover } from "./GearPopover";
 
 export const TopBar = () => {
   const focusHome = useStore((state) => state.focusHome);
   const focusBack = useStore((state) => state.focusBack);
   const canFocusBack = useStore((state) => state.focusHistory.length > 0);
+  const gearOpen = useStore((state) => state.gearOpen);
+  const setGearOpen = useStore((state) => state.setGearOpen);
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -70,6 +77,28 @@ export const TopBar = () => {
             <path d="M12 3l9 8h-3v10H6V11H3l9-8z" />
           </TopBarButton>
         </div>
+
+        {/* FocusChip: desktop-only conditional breadcrumb when Sidebar
+            is closed but camera is still focused on a body (§4.1 + §5.1). */}
+        {!isMobile && <FocusChip />}
+
+        {/* Gear button + popover: relative wrapper anchors the popover
+            via `absolute` positioning on desktop. Mobile popover uses
+            `fixed` so it slides down as a sheet regardless of anchor. */}
+        <div className="relative flex items-stretch">
+          <TopBarButton
+            label="Menu"
+            title="Settings menu"
+            ariaLabel={gearOpen ? "Close settings menu" : "Open settings menu"}
+            onClick={() => setGearOpen(!gearOpen)}
+            dataAttributes={{ "data-gear-trigger": "true" }}
+            ariaExpanded={gearOpen}
+          >
+            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </TopBarButton>
+          <GearPopover />
+        </div>
       </div>
     </div>
   );
@@ -82,6 +111,8 @@ const TopBarButton = ({
   disabled = false,
   onClick,
   children,
+  dataAttributes,
+  ariaExpanded,
 }: {
   label: string;
   title: string;
@@ -89,6 +120,8 @@ const TopBarButton = ({
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
+  dataAttributes?: Record<string, string>;
+  ariaExpanded?: boolean;
 }) => (
   <button
     type="button"
@@ -96,6 +129,8 @@ const TopBarButton = ({
     disabled={disabled}
     title={title}
     aria-label={ariaLabel}
+    aria-expanded={ariaExpanded}
+    {...(dataAttributes ?? {})}
     className="flex min-w-[3.6rem] flex-col items-center justify-center gap-1 border border-white/10 bg-white/[0.03] px-2 py-1.5 text-[8px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[border-color,color,background-color,box-shadow] hover:border-nasa-accent/40 hover:bg-nasa-accent/8 hover:text-white hover:shadow-[0_0_12px_rgba(0,240,255,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:text-nasa-accent touch-manipulation sm:min-w-[4rem]"
   >
     <svg

@@ -166,6 +166,21 @@ interface AppState {
   setIsIntroAnimating: (animating: boolean) => void;
   debugMode: boolean;
   toggleDebugMode: () => void;
+  /**
+   * Menu structure v3.1 PR 3: UI state for the Gear popover anchored
+   * on the TopBar `[⚙]` button. Lives outside `RightControlPanelId`
+   * so Gear can coexist with a rail panel — they're non-competing
+   * concerns (gear = meta/help, rail = task-time controls).
+   */
+  gearOpen: boolean;
+  setGearOpen: (open: boolean) => void;
+  /**
+   * Menu structure v3.1 PR 3: UI state for the KeyboardShortcutsModal.
+   * Independent of `gearOpen` — can be triggered either by the `?`
+   * hotkey or from Gear > Help.
+   */
+  shortcutsModalOpen: boolean;
+  setShortcutsModalOpen: (open: boolean) => void;
 }
 
 // ─── Persist configuration ──────────────────────────────────────────────────
@@ -517,6 +532,11 @@ export const useStore = create<AppState>()(
         ),
       debugMode: false,
       toggleDebugMode: () => set((state) => ({ debugMode: !state.debugMode })),
+      gearOpen: false,
+      setGearOpen: (gearOpen) => set({ gearOpen }),
+      shortcutsModalOpen: false,
+      setShortcutsModalOpen: (shortcutsModalOpen) =>
+        set({ shortcutsModalOpen }),
     }),
     {
       name: PERSIST_KEY,

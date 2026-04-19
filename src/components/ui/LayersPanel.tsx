@@ -36,10 +36,6 @@ const PANEL_COPY = {
     title: "Accessibility",
     meta: "motion & scale",
   },
-  project: {
-    title: "Project",
-    meta: "ops & help",
-  },
 } as const;
 
 // Menu structure v3.1 §5.5 — one-time transition hint. Persists via
@@ -60,8 +56,7 @@ export const LayersPanel = ({
   const openPanel =
     activePanel === "view" ||
     activePanel === "display" ||
-    activePanel === "a11y" ||
-    activePanel === "project"
+    activePanel === "a11y"
       ? activePanel
       : null;
 
@@ -90,10 +85,6 @@ export const LayersPanel = ({
   );
   const visibility = useStore((state) => state.visibility);
   const toggleVisibility = useStore((state) => state.toggleVisibility);
-  const debugMode = useStore((state) => state.debugMode);
-  const toggleDebugMode = useStore((state) => state.toggleDebugMode);
-  const reopenTutorial = useStore((state) => state.reopenTutorial);
-  const toggleCredits = useStore((state) => state.toggleCredits);
   const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
 
   const starfieldStatusMessage = useMemo(() => {
@@ -302,53 +293,6 @@ export const LayersPanel = ({
       <DisplayPanel />
     ) : openPanel === "a11y" ? (
       <A11yPanel />
-    ) : openPanel === "project" ? (
-      <div className="space-y-3">
-        <SectionLabel>Project</SectionLabel>
-        <button
-          type="button"
-          onClick={reopenTutorial}
-          className="w-full border border-white/10 px-3 py-3 text-left text-[11px] font-orbitron uppercase tracking-[0.16em] text-white transition-[border-color,color,background-color] hover:border-nasa-accent hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
-        >
-          Replay Tutorial
-        </button>
-        <div className="-mt-1 text-[11px] text-white/45">
-          Shortcut: Ctrl + Shift + T
-        </div>
-        <button
-          type="button"
-          onClick={toggleCredits}
-          className="flex w-full items-center justify-center gap-2 border border-white/10 px-3 py-3 text-[11px] font-orbitron uppercase tracking-[0.16em] text-white transition-[border-color,color,background-color] hover:border-nasa-accent hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
-        >
-          <span>Mission Report</span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-3 w-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </button>
-        <Toggle
-          label="Debug Logging"
-          checked={debugMode}
-          onChange={toggleDebugMode}
-        />
-        <div className="-mt-1 text-right text-[11px] text-white/45">
-          Orbital engine + overlay counters — console only.
-        </div>
-        <div className="text-center text-[11px] text-white/45">
-          v0.1.0 | Atlas Orbital
-        </div>
-      </div>
     ) : null;
 
   const panelContent =
@@ -564,28 +508,8 @@ const RailButtonIcon = ({
     );
   }
 
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M7.5 4.5h9m-9 5.25h9m-9 5.25h5.25"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4.5 4.5h.75v.75H4.5Zm0 5.25h.75v.75H4.5Zm0 5.25h.75v.75H4.5Z"
-      />
-    </svg>
-  );
+  // Exhaustive: RightControlPanelId minus "search" is view | display | a11y.
+  return null;
 };
 
 const RestructureHint = () => {
@@ -629,12 +553,6 @@ const RestructureHint = () => {
     </div>
   );
 };
-
-const SectionLabel = ({ children }: { children: string }) => (
-  <div className="border-b border-nasa-accent/25 pb-2 text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
-    {children}
-  </div>
-);
 
 const SubsectionLabel = ({ children }: { children: string }) => (
   <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-white/55">

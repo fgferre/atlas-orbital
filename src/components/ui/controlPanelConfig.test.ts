@@ -14,14 +14,13 @@ import {
 
 describe("controlPanelConfig", () => {
   it("keeps the explicit right-side tool order intact", () => {
-    // Menu structure v3.1 PR 2: Scene + Overlay consolidated into View.
-    // Project still sits at tail; PR 3 demotes it into the Gear popover.
+    // Menu structure v3.1 PR 3: Project demoted to the Gear popover.
+    // Rail is now Search + View + Display + Access only.
     expect(RIGHT_CONTROL_BUTTONS.map((button) => button.label)).toEqual([
       "Search",
       "View",
       "Display",
       "Access",
-      "Project",
     ]);
   });
 
@@ -78,11 +77,11 @@ describe("controlPanelConfig", () => {
     expect(
       resolveRightControlPanelRequest(
         { activePanel: null, queuedPanel: "display" },
-        "project"
+        "a11y"
       )
     ).toEqual({
       activePanel: null,
-      queuedPanel: "project",
+      queuedPanel: "a11y",
     });
   });
 
@@ -99,11 +98,11 @@ describe("controlPanelConfig", () => {
     expect(
       resolveRightControlPanelExit({
         activePanel: "view",
-        queuedPanel: "project",
+        queuedPanel: "a11y",
       })
     ).toEqual({
       activePanel: "view",
-      queuedPanel: "project",
+      queuedPanel: "a11y",
     });
   });
 
