@@ -1,29 +1,34 @@
 /**
  * Visual Presets System
  *
- * NOTA: Atualmente todos os presets possuem valores idênticos como placeholder.
- * O sistema está preparado para diferenciação futura baseada em contexto.
+ * The 5 presets carry context-tuned grading + lighting values that
+ * `useVisualPresetLerp` smooth-interpolates between as `getPresetForContext`
+ * re-classifies the camera. All values here are POST-AgX: grading sits on
+ * the LDR buffer after tone mapping (see `PostProcessingPipeline.tsx` chain
+ * comment for the correctness constraint).
  *
- * TODO: Implementar diferenciação entre presets para melhorar UX contextual:
+ * Per-preset intent:
  *
- * Sugestões de diferenciação:
- * - DEEP_SPACE: Maior bloom (0.8), mais contraste (0.5), menos saturação (0.2)
- *   → Para visualização de objetos distantes no cinturão de Kuiper
+ * - CLOSE_FLYBY (camera < 200 from a body): surface-detail mode. Bloom
+ *   knocked down so planet textures aren't washed by star halos; slight
+ *   brightness + ambient bump for dark-side readability when the terminator
+ *   crosses the frame; softer shadows so craters/clouds don't crush.
  *
- * - PLANET_ORBIT: Valores balanceados (atuais)
- *   → Para órbita ao redor de planetas principais
+ * - PLANET_ORBIT (camera 200–2000): balanced default — the values that felt
+ *   right under AgX across the representative-views iteration.
  *
- * - CLOSE_FLYBY: Menos bloom (0.4), mais detalhe, maior brilho (0.1)
- *   → Para aproximação de superfícies planetárias
+ * - INNER_SYSTEM (distanceFromSun < 500, not orbiting a body): Sun and the
+ *   four terrestrials dominate the frame. Slightly higher saturation for
+ *   warmer Mercury/Venus/Mars tones; a touch more direct-sun intensity.
  *
- * - INNER_SYSTEM: Mais saturação (0.4), cores quentes, maior intensidade solar
- *   → Para sistema solar interno (Mercúrio a Marte)
+ * - OUTER_SYSTEM (500 ≤ distanceFromSun < 3000): ice-giant region. Cooler,
+ *   less saturated; slightly dimmer direct sun to read as physically
+ *   further from the illuminant.
  *
- * - OUTER_SYSTEM: Menos saturação (0.2), cores frias, menor intensidade solar
- *   → Para sistema solar externo (Júpiter a Netuno)
- *
- * A função getPresetForContext() já implementa a lógica de seleção automática
- * baseada em distância do Sol e distância da câmera.
+ * - DEEP_SPACE (distanceFromSun ≥ 3000, Kuiper + beyond): moody/clinical.
+ *   Slightly more bloom so remaining bright stars feel like the only
+ *   sources in frame; contrast up a touch for that empty-space feel;
+ *   saturation low (no nearby colored bodies to support richer mids).
  */
 
 export type VisualPresetType =
@@ -50,14 +55,14 @@ export interface VisualPreset {
 
 export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
   DEEP_SPACE: {
-    bloomIntensity: 1.0,
+    bloomIntensity: 1.1,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
-    saturation: 0.18,
-    contrast: 0.3,
+    saturation: 0.16,
+    contrast: 0.33,
     brightness: 0.0,
-    ambientIntensity: 0.035,
-    sunIntensity: 0.4,
+    ambientIntensity: 0.03,
+    sunIntensity: 0.35,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 0.85,
@@ -78,16 +83,16 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   CLOSE_FLYBY: {
-    bloomIntensity: 1.0,
+    bloomIntensity: 0.75,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.18,
-    contrast: 0.3,
-    brightness: 0.0,
-    ambientIntensity: 0.035,
+    contrast: 0.28,
+    brightness: 0.02,
+    ambientIntensity: 0.05,
     sunIntensity: 0.4,
-    shadowIntensity: 1.5,
-    envMapIntensity: 1.9,
+    shadowIntensity: 1.3,
+    envMapIntensity: 2.1,
     guideIntensity: 0.7,
     vectorIntensity: 1.0,
   },
@@ -95,11 +100,11 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     bloomIntensity: 1.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
-    saturation: 0.18,
+    saturation: 0.22,
     contrast: 0.3,
     brightness: 0.0,
     ambientIntensity: 0.035,
-    sunIntensity: 0.4,
+    sunIntensity: 0.45,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 1.0,
@@ -109,11 +114,11 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     bloomIntensity: 1.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
-    saturation: 0.18,
-    contrast: 0.3,
+    saturation: 0.15,
+    contrast: 0.32,
     brightness: 0.0,
     ambientIntensity: 0.035,
-    sunIntensity: 0.4,
+    sunIntensity: 0.35,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 0.95,
