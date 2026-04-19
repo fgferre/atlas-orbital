@@ -35,7 +35,6 @@
     "@types/three": "^0.181.0",
     "astronomia": "^4.2.0",
     "framer-motion": "^12.23.24",
-    "leva": "^0.10.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.181.2",

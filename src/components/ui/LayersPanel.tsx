@@ -391,12 +391,12 @@ export const LayersPanel = ({
           </svg>
         </button>
         <Toggle
-          label="Debug Menu"
+          label="Debug Logging"
           checked={debugMode}
           onChange={toggleDebugMode}
         />
         <div className="-mt-1 text-right text-[11px] text-white/45">
-          Shortcut: Ctrl + Shift + D
+          Orbital engine + overlay counters — console only.
         </div>
         <div className="text-center text-[11px] text-white/45">
           v0.1.0 | Atlas Orbital

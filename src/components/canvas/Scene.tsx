@@ -41,16 +41,6 @@ const ProceduralSun3D = lazy(() =>
   import("./ProceduralSun3D").then((m) => ({ default: m.ProceduralSun3D }))
 );
 
-// Leva is wrapped in `React.lazy` so its render path only fires the first
-// time the UI actually needs to paint the debug panel. It is NOT a network-
-// level split: `useSceneDebugControls` imports `useControls`/`folder`/
-// `button` statically from "leva" (hooks must be stable), which forces the
-// bundler to fold the whole Leva module into the Scene chunk. Bundler
-// emits a "leva is dynamically and statically imported" advisory noting
-// the dynamic import cannot isolate the module — expected. The render-
-// tree cost for non-debug users is still eliminated by the `hidden` prop
-// + the conditional `useControls` sync path.
-const Leva = lazy(() => import("leva").then((m) => ({ default: m.Leva })));
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   ORBIT_MOUSE_BUTTONS,
@@ -64,13 +54,18 @@ import {
   type BrightnessContrastController,
 } from "./scene/PostProcessingPipeline";
 import { SceneLighting } from "./scene/SceneLighting";
-import {
-  useVisualPresetLerp,
-  type DebugValues,
-} from "./scene/useVisualPresetLerp";
-import { useSceneDebugControls } from "./scene/useSceneDebugControls";
+import { useVisualPresetLerp } from "./scene/useVisualPresetLerp";
 import type { GraphicsOverrides } from "./scene/visualPresetOverrides";
 import { useShallow } from "zustand/react/shallow";
+import {
+  DEFAULT_PLANET_METALNESS,
+  DEFAULT_PLANET_ROUGHNESS,
+  EARTH_NIGHT_LIGHT_INTENSITY,
+  EARTH_ROTATION_OFFSET_DEG,
+  RING_EMISSIVE_POWER,
+  RING_SHADOW_INTENSITY,
+  SUN_EMISSIVE_POWER,
+} from "../../config/artistCalibration";
 
 const CriticalSceneAssetsGate = () => {
   const showStarfield = useStore((state) => state.showStarfield);
@@ -201,16 +196,8 @@ interface VisualPresetLerpBridgeProps {
   sunLightRef: RefObject<THREE.PointLight | null>;
   smartSunLightRef: RefObject<THREE.DirectionalLight | null>;
   controlsRef: RefObject<OrbitControlsImpl | null>;
-  debugValues: DebugValues;
-  debugMode: boolean;
   bloomIntensityMultiplier: number;
-  /**
-   * User-facing override layer from `graphicsSlice.graphicsOverrides`.
-   * Wave α Commit 3 added the param on `useVisualPresetLerp` but the
-   * Scene bridge was never updated to pass it — so every DisplayPanel
-   * slider in Post-Processing / Atmosphere & Sun silently wrote to a
-   * store record nothing read. Fix wave-alpha P1.1 routes it through.
-   */
+  /** User-facing override layer from `graphicsSlice.graphicsOverrides`. */
   userOverrides: GraphicsOverrides;
 }
 
@@ -223,9 +210,6 @@ export const Scene = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
   const qualityMode = useStore((state) => state.qualityMode);
   const sunRenderMode = useStore((state) => state.sunRenderMode);
-  const visualPreset = useStore((state) => state.visualPreset); // Get current preset
-  const debugMode = useStore((state) => state.debugMode);
-  const toggleDebugMode = useStore((state) => state.toggleDebugMode);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const scaleMode = useStore((state) => state.scaleMode);
   const qualityProfile = useQualityProfile(qualityMode);
@@ -302,56 +286,6 @@ export const Scene = () => {
   const smartSunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
-  const values = useSceneDebugControls({
-    visualPreset,
-    debugMode,
-    controlsRef,
-  });
-
-  const {
-    ambientIntensity,
-    sunIntensity,
-    shadowIntensity,
-    envMapIntensity,
-    bloomThreshold,
-    bloomIntensity,
-    bloomRadius,
-    saturation,
-    contrast,
-    brightness,
-    roughness,
-    metalness,
-    sunEmissive,
-    ringEmissive,
-    ringShadowIntensity,
-    earthRotationOffset,
-    nightLightIntensity,
-  } = values;
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        toggleDebugMode();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleDebugMode]);
-
-  const debugValues = {
-    ambientIntensity,
-    sunIntensity,
-    shadowIntensity,
-    envMapIntensity,
-    bloomThreshold,
-    bloomIntensity,
-    bloomRadius,
-    saturation,
-    contrast,
-    brightness,
-  };
-
   // Observable marker for the Onda 0.2 gate: EffectComposer + ToneMapping +
   // HueSaturation + BrightnessContrast do not mount on the `constrained`
   // tier (full-screen GPU passes hurt weak hardware). This hidden element
@@ -366,18 +300,14 @@ export const Scene = () => {
         aria-hidden="true"
         data-postprocessing={postProcessingActive ? "active" : "inactive"}
       />
-      {/* <Leva /> must stay mounted even when debugMode is false: Leva's
-          `useControls` (called unconditionally by `useSceneDebugControls`
-          below) auto-inserts a panel into document.body if no <Leva />
-          is present in the tree. Gating the element behind debugMode
-          made the panel appear uncontrolled on every boot. The `hidden`
-          prop handles visibility; the chunk still folds into Scene-*.js
-          because useControls/folder/button are imported synchronously by
-          the hook — lazy-loading here only saves the render path cost
-          for non-debug users, not network bytes. */}
-      <Suspense fallback={null}>
-        <Leva theme={{ sizes: { rootWidth: "350px" } }} hidden={!debugMode} />
-      </Suspense>
+      {/* Leva debug panel retired — DisplayPanel + A11yPanel are the
+          canonical user surfaces for graphics tuning. Artist-calibration
+          constants that Leva used to carry (sun / ring emissive, Earth
+          night-lights, rotation offset, ring shadow, default roughness /
+          metalness) live in `src/config/artistCalibration.ts`. The
+          `debugMode` store flag kept for `OrbitalEngineDebugReporter`
+          and `OverlayPositionTracker` logging — Ctrl+Shift+D no longer
+          needs a keybind since there's nothing to flip-visible. */}
       <Canvas
         shadows="soft"
         onPointerMissed={() => setSelectedId(null)}
@@ -394,8 +324,6 @@ export const Scene = () => {
           sunLightRef={sunLightRef}
           smartSunLightRef={smartSunLightRef}
           controlsRef={controlsRef}
-          debugValues={debugValues}
-          debugMode={debugMode}
           bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
           userOverrides={graphicsOverrides}
         />
@@ -436,13 +364,13 @@ export const Scene = () => {
 
         <Suspense fallback={null}>
           <SolarSystem
-            roughness={roughness}
-            metalness={metalness}
-            sunEmissive={sunEmissive}
-            ringEmissive={ringEmissive}
-            ringShadowIntensity={ringShadowIntensity}
-            earthRotationOffset={earthRotationOffset}
-            nightLightIntensity={nightLightIntensity}
+            roughness={DEFAULT_PLANET_ROUGHNESS}
+            metalness={DEFAULT_PLANET_METALNESS}
+            sunEmissive={SUN_EMISSIVE_POWER}
+            ringEmissive={RING_EMISSIVE_POWER}
+            ringShadowIntensity={RING_SHADOW_INTENSITY}
+            earthRotationOffset={EARTH_ROTATION_OFFSET_DEG}
+            nightLightIntensity={EARTH_NIGHT_LIGHT_INTENSITY}
             qualityProfileName={qualityProfile.name}
             sunRenderMode={resolvedSunRenderMode}
           />

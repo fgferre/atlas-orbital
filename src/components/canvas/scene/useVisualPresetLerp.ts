@@ -18,19 +18,6 @@ import {
   type GraphicsOverrides,
 } from "./visualPresetOverrides";
 
-export interface DebugValues {
-  ambientIntensity: number;
-  sunIntensity: number;
-  shadowIntensity: number;
-  envMapIntensity: number;
-  bloomThreshold: number;
-  bloomIntensity: number;
-  bloomRadius: number;
-  saturation: number;
-  contrast: number;
-  brightness: number;
-}
-
 type SceneWithEnvironmentIntensity = THREE.Scene & {
   environmentIntensity?: number;
 };
@@ -43,14 +30,12 @@ interface UseVisualPresetLerpArgs {
   sunLightRef: RefObject<THREE.PointLight | null>;
   smartSunLightRef: RefObject<THREE.DirectionalLight | null>;
   controlsRef: RefObject<OrbitControlsImpl | null>;
-  debugValues: DebugValues;
-  debugMode: boolean;
   bloomIntensityMultiplier: number;
   /**
-   * Per-field user overrides resolved from `graphicsSlice.graphicsOverrides`
-   * (landing in Commit 3). Wave 0 ships the composition path with an
-   * empty-record default so callers remain byte-identical to pre-Wave-α
-   * behavior — see `visualPresetOverrides.test.ts` for the identity gate.
+   * Per-field user overrides resolved from
+   * `graphicsSlice.graphicsOverrides`. DisplayPanel sliders are the
+   * canonical user surface; see `resolveLerpRefTargets` for how the
+   * empty-record identity is preserved.
    */
   userOverrides?: GraphicsOverrides;
 }
@@ -63,8 +48,6 @@ export const useVisualPresetLerp = ({
   sunLightRef,
   smartSunLightRef,
   controlsRef,
-  debugValues,
-  debugMode,
   bloomIntensityMultiplier,
   userOverrides,
 }: UseVisualPresetLerpArgs) => {
@@ -115,17 +98,15 @@ export const useVisualPresetLerp = ({
     });
 
     // Resolve the target values for every ref through the pure helper.
-    // With `userOverrides = {}` and `debugMode = false`, this is
-    // byte-identical to the pre-Wave-α per-field math (pinned by
-    // `visualPresetOverrides.test.ts`). The hook stays responsible for
-    // the imperative ref mutation; the decision of *what* to write lives
-    // in the pure module.
+    // With `userOverrides = {}`, this is byte-identical to the
+    // pre-Wave-α per-field math (pinned by
+    // `visualPresetOverrides.test.ts`). The hook owns the imperative
+    // ref mutation; the decision of *what* to write lives in the pure
+    // module.
     const targets = resolveLerpRefTargets(
       currentValues.current,
       userOverrides ?? {},
-      bloomIntensityMultiplier,
-      debugMode,
-      debugValues
+      bloomIntensityMultiplier
     );
 
     if (bloomRef.current) {
