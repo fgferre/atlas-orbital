@@ -50,9 +50,6 @@ const PRESET_OPTIONS: Array<{
   { id: "ultra", label: "Ultra" },
 ];
 
-const formatPresetLabel = (id: string): string =>
-  PRESET_OPTIONS.find((opt) => opt.id === id)?.label ?? id;
-
 const TONE_MAPPING_OPTIONS: Array<{ id: ToneMappingName; label: string }> = [
   // Finding 7 amend: AgX is the default under R1 #1A's HDR pipeline.
   // Linear is dropped (would break the HDR contract). Wiring through
@@ -117,22 +114,6 @@ export const DisplayPanel = () => {
 
   return (
     <div className="space-y-6" data-testid="display-panel">
-      <div
-        data-testid="display-preset-chip"
-        className="flex items-center justify-between border border-nasa-accent/25 bg-black/20 px-3 py-2"
-      >
-        <span className="text-[10px] font-orbitron uppercase tracking-[0.18em] text-white/55">
-          {graphicsAutoMode ? "Auto-detected" : "Current Preset"}
-        </span>
-        <span className="text-[11px] font-orbitron uppercase tracking-[0.18em] text-nasa-accent">
-          {graphicsAutoMode
-            ? formatPresetLabel(activePreset)
-            : displayedPreset === "custom"
-              ? `Custom · ${formatPresetLabel(customBase)} base`
-              : formatPresetLabel(displayedPreset)}
-        </span>
-      </div>
-
       {/* ── Rendering ───────────────────────────────────────────────── */}
       <section className="space-y-3">
         <SectionLabel>Rendering</SectionLabel>

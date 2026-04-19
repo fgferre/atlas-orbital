@@ -115,7 +115,6 @@ Behaviors:
 
 Preserves current `DisplayPanel.tsx` structure, with additions:
 
-- **Header preset chip** (new): "Current preset: Ultra" or equivalent, derived from `qualityProfile.name` + `graphicsAutoMode`. Replaces the Quality signpost removed from the old Scene panel.
 - **Sun Render absorbed** into `Atmosphere & Sun` subsection — removed from the old Scene panel.
 - Reserved subsections (hidden until backing lands):
   - `Camera Effects` — populated in Wave γ / η.x per authoritative roadmap list (do not hardcode effect names here)
@@ -218,7 +217,7 @@ Persistence:
 | Overlay > Guides (6 items) | View > Guides                 | 1 → 1                                         |
 | Scene > Starfield + Source | View > Backdrop               | 1 → 1 (desktop default open)                  |
 | Scene > Scale Mode         | View > World                  | 1 → 1 (desktop default open)                  |
-| Scene > Quality signpost   | Display header preset chip    | replaced by permanent surface                 |
+| Scene > Quality signpost   | Removed                       | Preset subsection + one-time View hint cover  |
 | Scene > Sun Render         | Display > Atmosphere & Sun    | 1 → 1 (dup resolved)                          |
 | Display > all              | Display (unchanged)           | 1 → 1                                         |
 | A11y > all                 | Access (unchanged)            | 1 → 1                                         |
@@ -252,7 +251,6 @@ No subsection is exposed with empty content. The "no `coming soon` headers" rule
 - Project demotion to Gear popover
 - `focusId`-conditional focus chip in TopBar
 - `[⚙ Gear]` button added to TopBar
-- Display header preset chip (replaces Scene Quality signpost)
 - Sun Render dedup
 - Tutorial copy rewrite: step 6 (Control Stack) only — describes new View + Display + Access + Gear
 - One-time hint + localStorage persistence
@@ -341,3 +339,7 @@ Before merging the restructure:
 - Re-evaluate Search relocation to TopBar only if catalog grows significantly beyond current ~50 bodies (rationale in §1).
 
 None of these block merging the restructure.
+
+## 13. Resolved decisions (post-spec)
+
+- **Display preset chip retired.** Introduced in PR 1 as transitional wayfinding for users carrying muscle memory from the Scene Quality signpost. Removed in a follow-up after PR 2 because (1) Scene no longer exists so the wayfinding role is moot; (2) the Preset subsection already communicates the active preset through the highlighted button; (3) Custom mode has a dedicated badge + "Reset to X" button that covers that edge. The redundancy was flagged by Codex in the PR 1 review and deferred to PR 2 via chat; it was not promoted to §12, which is the process failure that let it survive the merge. Going forward: any deferred Codex item must land here or in the active scope immediately — chat acknowledgments are not tracking.
