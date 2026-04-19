@@ -98,8 +98,8 @@ Every row tagged exactly one of:
 | Shadow Map Size        | dropdown (1024 / 2048 / 4096)                   | 1024 / 2048 / 4096 / 4096 | E     | `qualityProfile.shadowMapSize`                            |
 | Env Map Resolution     | dropdown (64 / 128 / 256)                       | 64 / 128 / 256 / 256      | E     | `qualityProfile.environmentResolution`                    |
 | Bloom                  | toggle                                          | off / on / on / on        | E     | `qualityProfile.bloomEnabled`                             |
-| Bloom Intensity        | slider 0–2 step 0.05                            | 0 / 0.45 / 0.60 / 0.60    | H     | `VISUAL_PRESETS.bloomIntensity` × new `bloomIntensityMul` |
-| Bloom Threshold        | slider 0–1 step 0.02                            | 0.78 absolute             | H     | `VISUAL_PRESETS.bloomThreshold` (absolute override)       |
+| Bloom Intensity        | slider 0–2 step 0.05                            | 0 / 0.75 / 1.0 / 1.0      | H     | `VISUAL_PRESETS.bloomIntensity` × new `bloomIntensityMul` |
+| Bloom Threshold        | slider 0–1 step 0.02                            | 1.0 absolute              | H     | `VISUAL_PRESETS.bloomThreshold` (absolute override)       |
 | Tone Mapping           | dropdown (AgX / ACES / Reinhard / Cineon)       | AgX                       | H     | `PostProcessingPipeline` tone-effect operator ¹           |
 | Exposure               | slider 0–2 step 0.05                            | 1.0                       | F ²   | Deferred to Wave η.6 (adaptive exposure)                  |
 | Contrast               | slider −1..1 step 0.05                          | 0.30                      | H     | `VISUAL_PRESETS.contrast` + `contrastDelta`               |

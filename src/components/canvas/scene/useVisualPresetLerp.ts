@@ -63,6 +63,17 @@ export const useVisualPresetLerp = ({
   const sceneRef = useRef<SceneWithEnvironmentIntensity>(
     scene as SceneWithEnvironmentIntensity
   );
+  // Heliocentric distance is stable on the classifier's scale — the
+  // thresholds are in AU and no body drifts more than ~1e-6 AU per
+  // wall-clock second. Caching per (focusId, 1 s bucket) turns the
+  // useFrame call from `1 compose + 3 allocations per tick` into
+  // `~1 compose per second + scalar compare`. Cache invalidates when
+  // the user focuses a different body or enough sim time passes.
+  const distanceCacheRef = useRef<{
+    focusId: string | null;
+    bucket: number;
+    value: number;
+  }>({ focusId: null, bucket: -1, value: 0 });
 
   useEffect(() => {
     sceneRef.current = scene as SceneWithEnvironmentIntensity;
@@ -73,16 +84,33 @@ export const useVisualPresetLerp = ({
     if (autoPresetEnabled && focusId) {
       const focusedBody = BODIES_BY_ID.get(focusId);
       if (focusedBody) {
-        // True heliocentric distance in AU. Using `orbit.a` here was
-        // wrong for any body with a parentId (Europa's `orbit.a` is
-        // 0.0045 AU to Jupiter, not ~5.2 AU to the Sun), which made the
-        // preset classifier misroute satellites — 22 bodies in the
-        // current dataset. The composer walks parentId up to the Sun,
-        // staying in physical AU regardless of didactic remapping (L18
-        // applies — imperative read inside useFrame, no React subscribe).
-        const distanceFromSun = focusedBody.orbit
-          ? resolveHeliocentricDistanceAU(focusId, simulationClock.getNow())
-          : 0;
+        let distanceFromSun: number;
+        if (!focusedBody.orbit) {
+          // Sun (no orbit).
+          distanceFromSun = 0;
+        } else {
+          const bucket = Math.floor(Date.now() / 1000);
+          const cache = distanceCacheRef.current;
+          if (cache.focusId === focusId && cache.bucket === bucket) {
+            distanceFromSun = cache.value;
+          } else {
+            // True heliocentric distance in AU. Using `orbit.a` here
+            // was wrong for any body with a parentId (Europa's
+            // `orbit.a` is 0.0045 AU to Jupiter, not ~5.2 AU to the
+            // Sun), which misrouted satellite classification for all
+            // 22 satellites in the dataset. The composer walks
+            // parentId up to the Sun in physical AU, independent of
+            // didactic render-space remapping. L18 literal —
+            // imperative read inside useFrame, no React subscribe.
+            distanceFromSun = resolveHeliocentricDistanceAU(
+              focusId,
+              simulationClock.getNow()
+            );
+            cache.focusId = focusId;
+            cache.bucket = bucket;
+            cache.value = distanceFromSun;
+          }
+        }
         // Approximate camera distance using OrbitControls distance if available, else placeholder
         const cameraDistance = controlsRef.current?.getDistance() ?? 1000;
 

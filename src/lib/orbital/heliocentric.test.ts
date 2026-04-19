@@ -21,12 +21,13 @@ describe("resolveHeliocentricPositionAU", () => {
     expect(p.length()).toBe(0);
   });
 
-  it("an unknown body id collapses to the origin instead of throwing", () => {
-    const p = resolveHeliocentricPositionAU(
-      "this-body-does-not-exist",
-      TEST_DATE
-    );
-    expect(p.length()).toBe(0);
+  it("an unknown body id throws instead of masking to a fake origin", () => {
+    // Silent-origin fallback would fabricate a physically plausible
+    // value (same magnitude as the Sun special case) and hide the
+    // caller's mistake. Loud failure is the contract.
+    expect(() =>
+      resolveHeliocentricPositionAU("this-body-does-not-exist", TEST_DATE)
+    ).toThrow(/unknown body id/);
   });
 });
 
@@ -85,5 +86,41 @@ describe("resolveHeliocentricDistanceAU — satellites (parent composition)", ()
     // even if the exact jovian longitude on TEST_DATE drifts.
     const d = resolveHeliocentricDistanceAU("europa", TEST_DATE);
     expect(d).toBeGreaterThan(1);
+  });
+
+  // The per-body range asserts above use windows wide enough to
+  // bracket the body's heliocentric orbit across TEST_DATE. Those
+  // windows are also wide enough to ACCEPT a regression where the
+  // composer silently returned just the parent's heliocentric
+  // position without adding the local orbit — Jupiter alone fits
+  // inside Europa's [4.93, 5.48] range. The next three tests pin the
+  // composition math tightly so that regression fails.
+  it("Europa composer output minus Jupiter's heliocentric equals local jovicentric orbit", () => {
+    const europaHelio = resolveHeliocentricPositionAU("europa", TEST_DATE);
+    const jupiterHelio = resolveHeliocentricPositionAU("jupiter", TEST_DATE);
+    const localOffset = europaHelio.clone().sub(jupiterHelio).length();
+    // Europa's jovicentric semi-major axis is 0.00449 AU; e ≈ 0.009.
+    // Instantaneous distance stays within ~1 % of that.
+    expect(localOffset).toBeGreaterThan(0.0044);
+    expect(localOffset).toBeLessThan(0.0046);
+  });
+
+  it("Moon composer output minus Earth's heliocentric equals local geocentric orbit", () => {
+    const moonHelio = resolveHeliocentricPositionAU("moon", TEST_DATE);
+    const earthHelio = resolveHeliocentricPositionAU("earth", TEST_DATE);
+    const localOffset = moonHelio.clone().sub(earthHelio).length();
+    // Moon's geocentric semi-major axis is 0.00257 AU; e ≈ 0.055.
+    // Instantaneous distance 0.00243–0.00271.
+    expect(localOffset).toBeGreaterThan(0.0024);
+    expect(localOffset).toBeLessThan(0.0028);
+  });
+
+  it("composer output differs from parent alone by the local orbit (non-degenerate)", () => {
+    // Direct scalar guard: if the composer regressed to just calling
+    // itself on the parent, europa === jupiter and the diff would
+    // collapse to zero.
+    const europa = resolveHeliocentricDistanceAU("europa", TEST_DATE);
+    const jupiter = resolveHeliocentricDistanceAU("jupiter", TEST_DATE);
+    expect(Math.abs(europa - jupiter)).toBeGreaterThan(1e-5);
   });
 });

@@ -25,7 +25,11 @@ export function resolveHeliocentricPositionAU(
   if (bodyId === "sun") return new THREE.Vector3(0, 0, 0);
 
   const body = BODIES_BY_ID.get(bodyId);
-  if (!body) return new THREE.Vector3(0, 0, 0);
+  if (!body) {
+    throw new Error(
+      `resolveHeliocentricPositionAU: unknown body id "${bodyId}"`
+    );
+  }
 
   const result = orbitalEngine.calculatePosition(bodyId, date, body.parentId);
   const accumulator = result.position.clone();
