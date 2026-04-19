@@ -116,7 +116,6 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     title: "Pro Tips",
     content: (
       <ul className="space-y-1">
-        <li>• Press Ctrl+Shift+D for Debug Mode</li>
         <li>• Press Ctrl+Shift+T to Replay Tutorial</li>
         <li>
           • Switch Starfield Source between {STARFIELD_SOURCE_LABELS.hyg} and{" "}

@@ -3,7 +3,6 @@ import {
   STARFIELD_SOURCE_LABELS,
   type StarfieldSource,
 } from "../../lib/starfield";
-import type { SunRenderMode } from "../../lib/sunRenderMode";
 
 export type RightControlPanelId =
   | "search"
@@ -129,12 +128,6 @@ export const SCENE_QUALITY_OPTIONS = [
   { id: "balanced", label: "Balanced" },
   { id: "constrained", label: "Saver" },
 ] as const satisfies ReadonlyArray<{ id: QualityMode; label: string }>;
-
-export const SCENE_SUN_RENDER_OPTIONS = [
-  { id: "auto", label: "Auto" },
-  { id: "procedural", label: "Procedural" },
-  { id: "texture", label: "Texture" },
-] as const satisfies ReadonlyArray<{ id: SunRenderMode; label: string }>;
 
 export const OVERLAY_FILTER_OPTIONS = [
   { id: "planets", label: "Planets" },

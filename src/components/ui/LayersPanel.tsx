@@ -12,7 +12,6 @@ import {
   RIGHT_CONTROL_BUTTONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
-  SCENE_SUN_RENDER_OPTIONS,
   type RightControlPanelId,
 } from "./controlPanelConfig";
 import { DisplayPanel } from "./DisplayPanel";
@@ -88,8 +87,6 @@ export const LayersPanel = ({
   // and raw preset/autoMode flags are dropped from this surface.
   const qualityMode = useStore((state) => state.qualityMode);
   const graphicsAutoMode = useStore((state) => state.graphicsAutoMode);
-  const sunRenderMode = useStore((state) => state.sunRenderMode);
-  const setSunRenderMode = useStore((state) => state.setSunRenderMode);
   const showStarfield = useStore((state) => state.showStarfield);
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
   const starfieldSource = useStore((state) => state.starfieldSource);
@@ -276,32 +273,6 @@ export const LayersPanel = ({
                 <span className="text-white">{qualityProfile.name}</span>.
               </div>
             )}
-          </div>
-        </div>
-
-        <div>
-          <SubsectionLabel>Sun Render</SubsectionLabel>
-          <div
-            role="group"
-            aria-label="Sun render mode"
-            className="grid grid-cols-2 gap-2"
-          >
-            {SCENE_SUN_RENDER_OPTIONS.map((option) => (
-              <ChoiceButton
-                key={option.id}
-                label={option.label}
-                isActive={sunRenderMode === option.id}
-                onClick={() => setSunRenderMode(option.id)}
-                isWide={option.id === "auto"}
-              />
-            ))}
-          </div>
-          <div className="mt-2 text-[11px] text-white/55">
-            {sunRenderMode === "auto"
-              ? `Auto resolves to ${qualityProfile.name === "ultra" ? "Procedural" : "Texture"} for the current quality profile.`
-              : sunRenderMode === "procedural"
-                ? "Procedural enables the multi-pass solar surface, corona, rays, and flares pipeline."
-                : "Texture keeps the existing lightweight sun material."}
           </div>
         </div>
       </div>

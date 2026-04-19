@@ -4,7 +4,6 @@ import {
   OVERLAY_FILTER_OPTIONS,
   OVERLAY_GUIDE_OPTIONS,
   RIGHT_CONTROL_BUTTONS,
-  SCENE_SUN_RENDER_OPTIONS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   SCENE_QUALITY_OPTIONS,
   SCENE_SCALE_OPTIONS,
@@ -58,11 +57,6 @@ describe("controlPanelConfig", () => {
       "High",
       "Balanced",
       "Saver",
-    ]);
-    expect(SCENE_SUN_RENDER_OPTIONS.map((option) => option.label)).toEqual([
-      "Auto",
-      "Procedural",
-      "Texture",
     ]);
   });
 
