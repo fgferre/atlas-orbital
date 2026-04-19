@@ -81,31 +81,32 @@ export const PostProcessingPipeline = memo(
     // pipelines place grading after tone mapping for exactly this
     // reason. Documented in the Wave α P1-fix commit.
     //
-    // Selective bloom: `luminanceThreshold` + `luminanceSmoothing`
-    // keep only HDR-emissive allow-list surfaces in the bloom target.
+    // Selective bloom: the visible threshold + smoothing are set at
+    // construction below, but note — the `useVisualPresetLerp` hook
+    // overrides them every frame with the lerped values from
+    // `VISUAL_PRESETS[context].bloomThreshold` (1.0) and the
+    // corresponding `graphicsOverrides.bloomThreshold`. So the JSX
+    // value here is really just the boot-frame seed, and the
+    // authoritative runtime value lives in `config/visualPresets.ts`.
+    // Kept matching the preset so the boot frame and the first lerp
+    // tick don't disagree.
     //
-    // Threshold calibration (Wave α UX pass): the prompt's R1 #2
-    // called for `luminanceThreshold=1.0`, which in theory is exact
-    // for the HDR-emissive contract. In practice the Bloom pass
-    // downsamples through a 6-level mipmap pyramid, averaging each
-    // bright pixel with its neighbors at every level. Starfield
-    // sprites are 5–50 px wide HDR over a black sky, so the mipmap
-    // averaging dilutes their peak luminance below 1.0 after the
-    // first couple of downsamples → bright stars crossed the per-
-    // pixel threshold but the pyramid levels where bloom pulls
-    // from saw sub-threshold averages → no visible halo. Dropping
-    // to 0.85 keeps the selective behavior (planet surfaces / orbit
-    // lines / overlay HTML still can't bloom — they're ≤ 1.0 by
-    // contract and the 0.85 floor is comfortably above their
-    // typical peak) while catching the downsampled bright-star
-    // pixels. `luminanceSmoothing=0.1` kills magnitude-stable flicker.
+    // The HDR contract stays `luminanceThreshold=1.0` (prompt R1 #2):
+    // only surfaces on the HDR-emissive allow-list cross the
+    // threshold — planet / atmosphere / cloud / ring / orbit-line
+    // surfaces remain ≤ 1.0 by §1.3 contract. Star visibility is
+    // dialled via `vfxHdrGain` in `qualityProfile.ts`, which the
+    // Wave α UX pass bumped so bright-star sprites emit well above
+    // 1.0 even after the Bloom mipmap pyramid averages them with
+    // their black-sky neighbors. `luminanceSmoothing=0.1` kills
+    // magnitude-stable flicker.
     return (
       <EffectComposer>
         {bloomEnabled ? (
           <Bloom
             ref={assignBloomRef}
             mipmapBlur
-            luminanceThreshold={0.85}
+            luminanceThreshold={1.0}
             luminanceSmoothing={0.1}
             // radius={bloomRadius} // Removed to prevent serialization issues
           />

@@ -170,11 +170,18 @@ const DEFAULT_HYG_TIER: HygTier = "full";
  * and remains addressable for anyone overriding the default at runtime.
  */
 export function hygTierForQuality(name: ResolvedQualityName): HygTier {
+  // Wave α UX fix: the four graphics tiers now map to four DISTINCT
+  // HYG binaries. Previously `balanced` collapsed to `high`, so users
+  // clicking through Medium ↔ High in the Display panel saw no star
+  // density change (both tiers loaded the same ~27k catalogue). The
+  // `medium` HYG binary existed on disk but was unused. Binding
+  // balanced→medium gives each preset a visibly different density,
+  // matching the user expectation that preset clicks touch stars too.
   switch (name) {
     case "constrained":
       return "low";
     case "balanced":
-      return "high";
+      return "medium";
     case "high":
       return "high";
     case "ultra":

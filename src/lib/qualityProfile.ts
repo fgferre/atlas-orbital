@@ -63,9 +63,20 @@ export interface ResolvedQualityProfile {
    * (1.0) while leaving the faint tail below it. Landed in Wave α
    * Commit 2 (R1 #1B) alongside the HDR pipeline contract.
    *
-   * Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0
+   * Tier defaults: ultra 4.0 / high 3.0 / balanced 2.5 / constrained 1.0
    * — constrained keeps 1.0 because `bloomEnabled: false` on that tier
    * makes the gain cosmetic (faint stars in LDR range = no visible shift).
+   * The earlier Wave α Commit 2 values (2.0 / 1.8 / 1.5 / 1.0) were
+   * calibrated for per-pixel threshold checks, but the Bloom pass
+   * downsamples through a 6-level mipmap pyramid and averages each
+   * bright sprite with its black neighbours — bright-star sprites
+   * crossed the per-pixel threshold but the pyramid levels the pass
+   * actually reads saw sub-threshold averages. The new gains push
+   * sprite-center luminance high enough that downsampled averages
+   * stay above `luminanceThreshold=1.0` through the mip levels that
+   * drive visible halo. Users can dial back via Display panel Bloom
+   * Intensity × / HDR Gain overrides.
+   *
    * Commit 3 moves these values into the graphics resolver's
    * `PRESET_DEFAULTS`; this field stays on `ResolvedQualityProfile` as
    * the compat-shim projection so consumers keep a single read.
@@ -89,7 +100,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 256,
     bloomEnabled: true,
     bloomIntensityMultiplier: 1,
-    vfxHdrGain: 2.0,
+    vfxHdrGain: 4.0,
   },
   high: {
     name: "high",
@@ -99,7 +110,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 256,
     bloomEnabled: true,
     bloomIntensityMultiplier: 1,
-    vfxHdrGain: 1.8,
+    vfxHdrGain: 3.0,
   },
   balanced: {
     name: "balanced",
@@ -109,7 +120,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
     environmentResolution: 128,
     bloomEnabled: true,
     bloomIntensityMultiplier: 0.75,
-    vfxHdrGain: 1.5,
+    vfxHdrGain: 2.5,
   },
   constrained: {
     name: "constrained",

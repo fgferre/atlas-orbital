@@ -286,7 +286,7 @@ describe("projectToLegacyShape — compat-shim invariant", () => {
     expect(legacy.name).toBe("balanced");
     expect(legacy.bloomIntensityMultiplier).toBe(0.75);
     expect(legacy.bloomEnabled).toBe(true);
-    expect(legacy.vfxHdrGain).toBe(1.5);
+    expect(legacy.vfxHdrGain).toBe(2.5);
   });
 
   it("projects low effective to constrained-tier legacy shape", () => {

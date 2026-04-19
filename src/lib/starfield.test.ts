@@ -8,15 +8,18 @@ import {
 } from "./starfield";
 
 describe("hygTierForQuality", () => {
+  // Wave α UX remap: 1:1 correspondence between graphics tier and HYG
+  // catalogue tier so preset clicks translate to visible density
+  // changes. Previously balanced collapsed to the same tier as high.
   it("keeps the constrained profile on the smallest tier", () => {
     expect(hygTierForQuality("constrained")).toBe("low");
   });
 
-  it("lifts balanced from the sparse medium tier to high (density fix)", () => {
-    expect(hygTierForQuality("balanced")).toBe("high");
+  it("binds balanced to the medium tier (distinct from high)", () => {
+    expect(hygTierForQuality("balanced")).toBe("medium");
   });
 
-  it("leaves the high profile on the high tier so ultra stays above it", () => {
+  it("leaves the high profile on the high tier", () => {
     expect(hygTierForQuality("high")).toBe("high");
   });
 

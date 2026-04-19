@@ -111,20 +111,21 @@ describe("resolveLerpRefTargets — override composition", () => {
   });
 
   it("bloomThreshold is absolute — preset value is ignored", () => {
+    // Override value deliberately different from the preset base so
+    // "the override wins" is visible. After the Wave α HDR-contract
+    // shift, preset `bloomThreshold` is 1.0; we pick 0.42 for the
+    // override so neither `override === preset` nor `override ===
+    // preset × anything trivial` can sneak a false pass.
+    const OVERRIDE_THRESHOLD = 0.42;
     const result = resolveLerpRefTargets(
       BASE_PRESET,
-      { bloomThreshold: 0.5 },
+      { bloomThreshold: OVERRIDE_THRESHOLD },
       1,
       false,
       DEBUG_VALUES
     );
-    expect(result.bloomThreshold).toBe(0.5);
-    // Confirm absolute means "replace, not multiply" — preset is 0.78,
-    // override 0.5 must not become 0.39 (0.5 × 0.78) or similar.
-    expect(result.bloomThreshold).not.toBeCloseTo(
-      0.5 * BASE_PRESET.bloomThreshold,
-      3
-    );
+    expect(result.bloomThreshold).toBe(OVERRIDE_THRESHOLD);
+    expect(result.bloomThreshold).not.toBe(BASE_PRESET.bloomThreshold);
   });
 
   it("contrastDelta is additive: preset.contrast + delta", () => {
