@@ -80,6 +80,15 @@ our Three.js / R3F / TypeScript stack.**
 - Re-apply with understanding: study the shader, grasp the math and
   the uniforms, adapt to three.js / `@react-three/postprocessing`
   idioms. No literal copy-paste of `.glsl` files.
+- **Verbatim / transliteration tripwire**: implement from your own
+  notes, not with the Gaia Sky shader open side-by-side as a
+  line-by-line target. If any non-trivial block of Gaia Sky survives
+  almost intact in the atlas implementation (e.g. more than 3
+  contiguous non-comment lines of GLSL/Java or the body of a
+  recognizable named function), **stop and rewrite from
+  understanding**. This is not a license ceremony; it's a technical
+  trip that protects the "re-apply" boundary from silently
+  collapsing into "port with renames".
 - No license attribution ceremony in the commits — the user
   explicitly asked to skip that.
 - Every onda ships only after **visual side-by-side** against a Gaia
@@ -101,6 +110,30 @@ For every Phase θ onda that cites a `.frag.glsl` / `.vert.glsl`:
    bright-pass buffer; etc. Follow the chain.
 4. Write a 1-paragraph summary for the user: "Gaia Sky does X via Y.
    Atlas will re-apply as Z because W." Wait for approval.
+5. **Adaptation classification — the "because W" above must fit one
+   of these four justifications. Anything else is invention in
+   disguise**:
+   - **stack/API mismatch** — LibGDX Mesh vs three.js
+     BufferGeometry, Kotlin/Java host wiring vs React hooks,
+     three.js `ShaderMaterial` uniform shape, pmndrs `Effect` vs
+     Gaia Sky's raw FBO pass, etc.
+   - **pipeline/render-space mismatch** — Gaia Sky's
+     MainPostProcessor vs our `<EffectComposer>` ordering, HDR
+     half-float vs LDR, AgX vs Reinhard positioning, etc.
+   - **tier/performance gate** — ultra/high/medium/low tier caps
+     (`EffectiveGraphics` flags) that the Gaia Sky source doesn't
+     need to model.
+   - **a11y / reduced-motion gate** — atlas's Reduced Motion
+     override; Gaia Sky doesn't ship this.
+   - Any desvio labeled "I preferred", "simpler", "cheaper" without
+     a visual proof paired to it is **invention** — the onda is
+     blocked until classified or the desvio removed.
+
+**The approval in step 4 is NOT a routine approval and is NOT
+dispensed by auto mode.** Auto mode applies to routine code/test
+decisions, never to the "is your understanding of the source
+correct" checkpoint. Do not write code before the user explicitly
+accepts the step-4 paragraph.
 
 ### R2 — Visual reference before implementation
 
@@ -113,6 +146,34 @@ Find actual Gaia Sky screenshots / videos of the target effect:
 Drop 1–3 references into `tasks/design/refs/gaia-sky-θ-N/` or just
 paste them in chat for comparison. Without a reference, "looks OK"
 is not verification.
+
+**Matched-shot protocol** — when comparing atlas against the Gaia
+Sky reference, the two screenshots must match on:
+
+- same object(s) in frame (Sirius / Vega / Saturn / overview, etc.)
+- same camera distance + FoV
+- same tier/preset (`ultra` vs `ultra`, not atlas-ultra vs Gaia-
+  whatever)
+- same viewport resolution × DPR
+- same tone-mapping exposure where user-exposed
+- same HDR/bloom chain state (AgX on, bloom threshold at 1.0, etc.)
+- for animated effects: the same instant (seek the simulation
+  clock to a fixed timestamp) or the same 1-second window
+
+**Mismatch categories** — after the matched shot, explicitly list
+any perceptible delta in:
+
+- `shape` (spike geometry, halo footprint, core contour)
+- `radius / falloff` (arm length, halo width, gradient curve)
+- `color / chromatic split` (B-V tint, CA offset direction &
+  magnitude, vignette tone)
+- `animation timing` (twinkle period, LightGlow breathing phase)
+- `compositing order` (bloom vs grade vs dither layering)
+
+If ANY of those lists a delta, the onda status is **"paridade
+parcial / mismatches listados"** — NOT "1:1". An onda can ship at
+paridade parcial if the user explicitly accepts the mismatch list,
+but it can never be silently labeled 1:1.
 
 ### R3 — One onda at a time, no batching
 
@@ -159,9 +220,39 @@ three baseline PNGs but the ship only has the shader + unit tests,
 the commit message admits the scope cut AND the plan doc gets
 aligned in the same commit. No silent deferrals.
 
+**Scope-cut boundary** — R7 only protects cuts on **surfaces
+adjacent to the effect**, never on the effect's own core. Cuts
+allowed:
+
+- DisplayPanel rows / toggles / sliders
+- Persist-migration entries for the above
+- Playwright specs (with §7.2 defer entry)
+- Baseline PNGs / visual-diff gates
+- Extra unit tests beyond the math mirror
+- Docs alignment past the immediate §5 rewrite
+
+Cuts **NOT** allowed under R7:
+
+- Reading the Gaia Sky source in full (R1 step 2)
+- Tracing adjacent shaders the target calls (R1 step 3)
+- Host wiring that feeds the effect's uniforms (e.g. if Gaia Sky
+  animates a uniform over time, you can't ship a static constant
+  and call it scope cut — that's removing the effect)
+- Core visual sub-behaviors that define the effect (e.g. LightGlow
+  WITHOUT the polar-mask animation is not a reduced LightGlow, it's
+  a different effect)
+
+If cutting would touch any of that list, the onda is **deferred
+entirely**, not shipped partially.
+
 ---
 
 ## 4. Pre-onda checklist (fill before writing code)
+
+This checklist must be **pasted to chat** with all fields filled
+before Step 3 of the per-onda protocol runs. No filling "mentally"
+— the artifact is what makes the checklist a real gate instead of a
+suggestion.
 
 For onda **θ.N**:
 
@@ -170,12 +261,19 @@ For onda **θ.N**:
   - Adjacent shaders called: `___`
   - Host code (Java) that wires the uniforms: `___`
 - [ ] Source read in full (not skimmed)
+- [ ] Plan-vs-source divergences logged — **if the shader source
+      contradicts `tasks/phase-gaia-sky.md §5 θ.N`, the source is
+      authoritative IMMEDIATELY**, not post-ship. List any divergence
+      here before coding: `___`
 - [ ] Visual reference captured/found: `___`
-- [ ] 1-paragraph re-application writeup drafted
-- [ ] User approved the writeup
+- [ ] 1-paragraph re-application writeup drafted (with the R1
+      step-5 desvio classifications attached per desvio)
+- [ ] User approved the writeup (explicit accept, not auto-mode
+      silent approval)
 - [ ] Pre-onda screenshot of atlas baseline taken
 - [ ] Plan §5 θ.N re-read with source in mind
-- [ ] Scope decided (minimum viable + what gets deferred where)
+- [ ] Scope decided (minimum viable + what gets deferred where,
+      within R7 boundaries)
 
 ---
 
@@ -183,19 +281,30 @@ For onda **θ.N**:
 
 ```
 1. git status must be clean. If not, resolve/stash first.
-2. Run pre-onda checklist (§4 above).
+2. Run pre-onda checklist (§4). PASTE THE FILLED CHECKLIST TO CHAT
+   + the list of Gaia Sky files read + the 1-paragraph writeup.
+   This is a hard gate — Step 3 is forbidden without the pasted
+   artifact. Mental-only completion of Step 2 is the single highest
+   correlate of the rollback failure mode.
 3. Implement the onda. Shader math derives from the source study,
-   not from imagination.
+   not from imagination. If mid-implementation a new Gaia Sky
+   reading contradicts the plan §5 θ.N, the source wins without
+   needing post-ship rewrite — edit the plan in the same working
+   tree before committing.
 4. Run gates: npm run lint && npm run test:run && npm run build.
-5. Preview visually, compare against the Gaia Sky reference.
-   Report any perceptible mismatch BEFORE committing.
+5. Preview visually. Run the matched-shot protocol (R2) — capture
+   the atlas frame + the Gaia Sky reference under matched
+   conditions. List any mismatches by the five categories (shape /
+   radius / color / animation / compositing). Paste the list to
+   chat before committing — not after.
 6. Run Playwright: npx playwright test --workers=1.
 7. Commit with the honest message (§R7 above).
 8. Auto-dispatch Codex review (feedback_codex_auto_review.md
    memory rule) — prompt includes inlined Gaia Sky source (§R5).
 9. Read Codex findings. Apply agreed fixes in a fix commit. Flag
    anything ambiguous to the user before fixing.
-10. Update tasks/phase-gaia-sky.md §5 θ.N to reflect shipped state.
+10. Update tasks/phase-gaia-sky.md §5 θ.N to reflect shipped state
+    (if not already done in Step 3's plan-vs-source alignment).
 11. Update tasks/menu-structure-v3.md §13 ledger IF the onda produced
     a deferred decision.
 12. Only THEN move to θ.N+1.
@@ -258,6 +367,14 @@ Not "what should we do first". Say:
 > `billboard.fragment.glsl`, estudar em detalhe, e voltar com 1
 > parágrafo de entendimento antes de tocar em código. Ok seguir
 > assim?"
+
+**Only send this template if every claim is literally true.** If any
+§0 item failed — clone timed out, HEAD is drifted, preview won't
+start, a memory file is missing — report the blocker verbatim
+instead of reciting the template. A fresh assistant reciting the
+template when §0 silently failed is the second-highest correlate
+of the rollback failure mode (right after skipping Step 2 of the
+per-onda protocol).
 
 That's the contract. If the assistant skips any item in §0 or dives
 straight into code, stop it.
