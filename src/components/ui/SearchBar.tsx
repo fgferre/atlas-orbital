@@ -15,6 +15,7 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { searchBodies } from "../../lib/bodySearch";
 import { useStore } from "../../store";
+import { RailTabContent } from "./RightControlRail";
 import {
   getRightControlPanelDomId,
   RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X,
@@ -198,14 +199,14 @@ export const SearchBar = ({
   // clip-path as LayersPanel so Search and View's adjacent edges tile
   // together in the 6 px overlap zone. Mobile path is unchanged
   // (horizontal sheet model, no rail overlap).
-  const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center gap-1.5 overflow-hidden px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+  const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center overflow-hidden px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
     isMobile
       ? `${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} -translate-x-[0.5rem] rounded-r-[0.95rem] text-nasa-accent hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white`
       : `${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} translate-x-[0.5rem] ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white`
   }`;
 
-  const mobileOpenHandleClassName = `command-shell ghost-border relative z-[1] -ml-px flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
-  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center gap-1.5 overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const mobileOpenHandleClassName = `command-shell ghost-border relative z-[1] -ml-px flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 self-center items-center justify-center rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
   const triggerSlotClassName = isMobile
@@ -216,7 +217,7 @@ export const SearchBar = ({
   // tabs (View/Display/Access) overlaying the panel's right edge.
   const panelBodyClassName = isMobile
     ? "flex h-full min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4"
-    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] min-w-0 flex-col overflow-hidden p-3 pr-10 sm:p-4 sm:pr-12";
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.25rem))] min-w-0 flex-col overflow-hidden p-3 pr-8 sm:p-4 sm:pr-10";
 
   const panelContent = (
     <div
@@ -375,24 +376,7 @@ export const SearchBar = ({
           className={closedTabClassName}
           style={{ zIndex: 63 }}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="h-4 w-4 shrink-0"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
-            />
-          </svg>
-          <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
-            Search
-          </span>
+          <RailTabContent panelId="search" label="Search" />
         </button>
       )}
 
@@ -433,24 +417,7 @@ export const SearchBar = ({
                   onClick={() => closeSearch(true)}
                   className={mobileOpenHandleClassName}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="h-4 w-4 shrink-0"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
-                    />
-                  </svg>
-                  <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
-                    Search
-                  </span>
+                  <RailTabContent panelId="search" label="Search" />
                 </button>
               </div>
             ) : (
@@ -468,24 +435,7 @@ export const SearchBar = ({
                   onClick={() => closeSearch(true)}
                   className={desktopOpenTabClassName}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="h-4 w-4 shrink-0"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
-                    />
-                  </svg>
-                  <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
-                    Search
-                  </span>
+                  <RailTabContent panelId="search" label="Search" />
                 </button>
                 <div className={desktopPanelShellClassName}>{panelContent}</div>
               </div>

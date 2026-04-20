@@ -19,7 +19,7 @@ export type VisibilityCategory =
 
 // Shared filing-cabinet rail geometry. Keeping the desktop rail math in one
 // place avoids silent drift between Overlay, SearchBar, and LayersPanel.
-export const RIGHT_CONTROL_TAB_WIDTH_CLASS = "w-10";
+export const RIGHT_CONTROL_TAB_WIDTH_CLASS = "w-9";
 export const RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS = "h-[4.5rem]";
 export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS = "h-[5rem]";
 export const RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS =
@@ -31,7 +31,7 @@ export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX = 80;
 export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX = 6;
 export const RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX =
   RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX - RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX;
-export const RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X = "calc(100% - 2.5rem)";
+export const RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X = "calc(100% - 2.25rem)";
 
 // Menu structure v3.1 rail ordering (PR 3 state):
 //   search | view | display | a11y

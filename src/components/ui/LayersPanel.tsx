@@ -5,6 +5,7 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
+import { RailTabContent } from "./RightControlRail";
 import {
   getRightControlDesktopHandleOffsetStyle,
   getRightControlDesktopWrapperOffsetStyle,
@@ -173,8 +174,8 @@ export const LayersPanel = ({
     !isMobile && openPanelIndex >= 0
       ? getRightControlDesktopHandleOffsetStyle(openPanelIndex + 1)
       : undefined;
-  const mobileClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} -translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
-  const mobileActiveTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const mobileClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} -translate-x-[0.5rem] items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const mobileActiveTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   // Menu structure v3.1 filing-cabinet shape: tabs use a clip-path
   // polygon that slants the top and bottom edges by 6 px. When adjacent
   // tabs overlap by exactly 6 px (the stride reduction), the slanted
@@ -182,10 +183,10 @@ export const LayersPanel = ({
   // Tab2's top-slant line, tiling together like file-folder tabs in
   // the reference screenshot. Rectangular tabs with overlap look ugly
   // because they visibly stack; angled tabs interlock cleanly.
-  const desktopClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const desktopClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} translate-x-[0.5rem] items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   // Active handle: stronger visual weight (faint nasa-accent fill,
   // stronger border, subtle glow) + same angled shape as closed tabs.
-  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center gap-1.5 overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
   // Phase-2: pr-10 on desktop keeps panel content clear of the
@@ -195,7 +196,7 @@ export const LayersPanel = ({
   // 8 px breathing buffer on top of that.
   const panelBodyClassName = isMobile
     ? "flex h-full max-h-[inherit] flex-col overflow-hidden"
-    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4 pr-10";
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.25rem))] flex-col overflow-hidden p-4 pr-8";
 
   const panelSections =
     openPanel === "view" ? (
@@ -415,10 +416,7 @@ export const LayersPanel = ({
               }
               style={{ zIndex }}
             >
-              <RailButtonIcon panelId={button.id} />
-              <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
-                {button.label}
-              </span>
+              <RailTabContent panelId={button.id} label={button.label} />
             </button>
           );
         })}
@@ -467,10 +465,10 @@ export const LayersPanel = ({
                     className={desktopOpenTabClassName}
                     style={openPanelHandleOffset}
                   >
-                    <RailButtonIcon panelId={openPanelButton.id} />
-                    <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
-                      {openPanelButton.label}
-                    </span>
+                    <RailTabContent
+                      panelId={openPanelButton.id}
+                      label={openPanelButton.label}
+                    />
                   </button>
                 )}
                 <div className={desktopPanelShellClassName}>{panelContent}</div>
@@ -481,84 +479,6 @@ export const LayersPanel = ({
       </AnimatePresence>
     </div>
   );
-};
-
-const RailButtonIcon = ({
-  panelId,
-}: {
-  panelId: Exclude<RightControlPanelId, "search">;
-}) => {
-  // Menu structure v3.1 icon normalization: all 4 rail icons (search
-  // lives in SearchBar) redrawn to approximately match visual weight —
-  // bounding box ~15×15 within the 24×24 viewBox, centered at (12, 12),
-  // stroke-width 1.5. Without normalization, `view` read wide/short,
-  // `a11y` read narrow/tall, giving the rail an uneven look.
-  if (panelId === "view") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        className="h-4 w-4"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4.5 12s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5Z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 14.25A2.25 2.25 0 1 0 12 9.75a2.25 2.25 0 0 0 0 4.5Z"
-        />
-      </svg>
-    );
-  }
-
-  if (panelId === "display") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        className="h-4 w-4"
-        aria-hidden="true"
-      >
-        <rect x="4.5" y="5" width="15" height="11" rx="1.5" />
-        <path d="M9 19h6" strokeLinecap="round" />
-        <path d="M12 16v3" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  if (panelId === "a11y") {
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        className="h-4 w-4"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="5" r="1.75" />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M5 9h14M9 9v4l-1 5.5M15 9v4l1 5.5M9.5 13h5"
-        />
-      </svg>
-    );
-  }
-
-  // Exhaustive: RightControlPanelId minus "search" is view | display | a11y.
-  return null;
 };
 
 const RestructureHint = () => {

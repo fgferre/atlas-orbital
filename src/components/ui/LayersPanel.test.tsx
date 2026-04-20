@@ -144,4 +144,13 @@ describe("LayersPanel", () => {
       screen.queryByRole("button", { name: /project/i })
     ).not.toBeInTheDocument();
   });
+
+  it("stacks each rail icon and label in a single column", () => {
+    const setActivePanel = vi.fn();
+
+    render(<LayersPanel activePanel={null} setActivePanel={setActivePanel} />);
+
+    const viewButton = screen.getByRole("button", { name: /view/i });
+    expect(viewButton.firstElementChild).toHaveClass("flex-col");
+  });
 });

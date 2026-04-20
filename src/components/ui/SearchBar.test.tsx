@@ -96,4 +96,13 @@ describe("SearchBar", () => {
     expect(selectIdSpy).toHaveBeenCalledWith("mars");
     expect(setActivePanel).toHaveBeenCalledWith(null);
   });
+
+  it("stacks the search icon and vertical label in one internal column", () => {
+    const setActivePanel = vi.fn();
+
+    render(<SearchBar activePanel={null} setActivePanel={setActivePanel} />);
+
+    const trigger = screen.getByRole("button", { name: /open search panel/i });
+    expect(trigger.firstElementChild).toHaveClass("flex-col");
+  });
 });
