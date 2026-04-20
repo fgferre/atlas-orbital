@@ -187,16 +187,20 @@ export const SearchBar = ({
     ? "fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[max(0.2rem,env(safe-area-inset-left))] right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50"
     : "absolute right-0 top-0 z-50";
 
+  // Menu structure v3.1: desktop closed tab uses the same angled
+  // clip-path as LayersPanel so Search and View's adjacent edges tile
+  // together in the 6 px overlap zone. Mobile path is unchanged
+  // (horizontal sheet model, no rail overlap).
   const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center gap-1.5 overflow-hidden px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
     isMobile
       ? "h-[4.5rem] w-10 -translate-x-[0.5rem] rounded-r-[0.95rem] text-nasa-accent hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
-      : "h-[5rem] w-10 translate-x-[0.5rem] rounded-l-[0.95rem] text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
+      : "h-[5rem] w-10 translate-x-[0.5rem] [clip-path:polygon(0_6px,100%_0,100%_calc(100%-6px),0_100%)] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
   }`;
 
   const mobileOpenHandleClassName =
     "command-shell ghost-border relative z-[1] -ml-px flex h-[4.5rem] w-10 shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopOpenTabClassName =
-    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 rounded-l-[0.95rem] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden [clip-path:polygon(0_6px,100%_0,100%_calc(100%-6px),0_100%)] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
   const triggerSlotClassName = isMobile ? "h-[4.5rem] w-10" : "h-[5rem] w-10";
@@ -344,7 +348,14 @@ export const SearchBar = ({
       data-tutorial-target="search"
     >
       {isOpen ? (
-        <div aria-hidden="true" className={triggerSlotClassName}></div>
+        <div
+          aria-hidden="true"
+          className={triggerSlotClassName}
+          // Menu structure v3.1 §Phase-2: Search is stack-index 0, so its
+          // z-index sits above View/Display/Access (62/61/60) for the
+          // cascading-stack illusion in overlap zones.
+          style={{ zIndex: 63 }}
+        ></div>
       ) : (
         <button
           ref={buttonRef}
@@ -355,6 +366,7 @@ export const SearchBar = ({
           aria-controls="atlas-search-panel"
           onClick={openSearch}
           className={closedTabClassName}
+          style={{ zIndex: 63 }}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -368,7 +380,7 @@ export const SearchBar = ({
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+              d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
             />
           </svg>
           <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
@@ -426,7 +438,7 @@ export const SearchBar = ({
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                      d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
                     />
                   </svg>
                   <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
@@ -461,7 +473,7 @@ export const SearchBar = ({
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                      d="m19 19-3.97-3.97m0 0A6 6 0 1 0 6.57 6.57a6 6 0 0 0 8.485 8.485Z"
                     />
                   </svg>
                   <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">

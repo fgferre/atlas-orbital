@@ -89,14 +89,19 @@ export const Overlay = () => {
         className={`pointer-events-none absolute z-40 ${
           isMobile
             ? "bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] left-[max(0.2rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+4.75rem)]"
-            : "right-[max(0.75rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top)+0.75rem)]"
+            : "right-[env(safe-area-inset-right)] top-[calc(env(safe-area-inset-top)+0.75rem)]"
         }`}
       >
+        {/* Menu structure v3.1 filing-cabinet model: desktop flex-col uses
+            `[&>*+*]:-mt-[0.375rem]` (−6 px) instead of `gap-1.5` so the
+            closed tabs visually overlap slightly — matches the user's
+            fichário-empilhado reference. Stride across the 4 tabs:
+            80 px (tab height) − 6 px overlap = 74 px. */}
         <div
           className={`flex ${
             isMobile
               ? "h-full flex-col items-start justify-center gap-1.5"
-              : "flex-col items-end gap-1.5"
+              : "flex-col items-end [&>*+*]:-mt-[0.375rem]"
           }`}
         >
           <SearchBar

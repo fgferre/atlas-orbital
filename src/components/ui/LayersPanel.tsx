@@ -148,37 +148,46 @@ export const LayersPanel = ({
       ? controlButtons.findIndex((button) => button.id === openPanel)
       : -1;
   // Menu structure v3.1 filing-cabinet model: all 4 "papers" share a
-  // common top anchor at the viewport's top-safe edge. LayersPanel
-  // itself sits naturally below SearchBar in the flex-col (86px =
-  // SearchBar closed tab 5rem + gap 6px), so its open-panel wrapper
-  // has to climb back up by that amount to reach the shared top anchor.
-  // The staggered handle Y uses `openPanelIndex + 1` to account for
-  // Search being stack-index 0 (handled by SearchBar itself).
-  const openPanelWrapperStyle = !isMobile ? { top: "-5.375rem" } : undefined;
+  // common top anchor at the viewport's top-safe edge. Stride between
+  // adjacent tabs is 74 px = 80 px tab height − 6 px overlap (matches
+  // the -mt-[0.375rem] overlap applied in Overlay's flex-col and in
+  // this component's rail flex-col below). LayersPanel sits 74 px
+  // below SearchBar in the Overlay stack, so the open-panel wrapper
+  // climbs back up by 74 px to reach the shared top anchor. Handle Y
+  // uses `openPanelIndex + 1` to account for Search being stack-index
+  // 0 (handled by SearchBar itself).
+  const openPanelWrapperStyle = !isMobile ? { top: "-4.625rem" } : undefined;
   const openPanelHandleOffset =
     !isMobile && openPanelIndex >= 0
-      ? { marginTop: `${(openPanelIndex + 1) * 88}px` }
+      ? { marginTop: `${(openPanelIndex + 1) * 74}px` }
       : undefined;
   const mobileClosedTabClassName =
     "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 -translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const mobileActiveTabClassName =
     "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  // Menu structure v3.1 filing-cabinet shape: tabs use a clip-path
+  // polygon that slants the top and bottom edges by 6 px. When adjacent
+  // tabs overlap by exactly 6 px (the stride reduction), the slanted
+  // edges align perfectly — Tab1's bottom-slant line coincides with
+  // Tab2's top-slant line, tiling together like file-folder tabs in
+  // the reference screenshot. Rectangular tabs with overlap look ugly
+  // because they visibly stack; angled tabs interlock cleanly.
   const desktopClosedTabClassName =
-    "command-shell ghost-border relative z-[60] flex h-[5rem] w-10 translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
-  // Menu structure v3.1 §Phase-2: the active handle carries more visual
-  // weight than the closed rail tabs (stronger border + faint fill +
-  // subtle glow) so the user always knows which "paper" is pulled.
+    "command-shell ghost-border relative z-[60] flex h-[5rem] w-10 translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden [clip-path:polygon(0_6px,100%_0,100%_calc(100%-6px),0_100%)] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  // Active handle: stronger visual weight (faint nasa-accent fill,
+  // stronger border, subtle glow) + same angled shape as closed tabs.
   const desktopOpenTabClassName =
-    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden [clip-path:polygon(0_6px,100%_0,100%_calc(100%-6px),0_100%)] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
-  // Phase-2: pr-12 on desktop keeps panel content (close button, sliders,
-  // switches, scrollbar) clear of the closed-tabs column that overlays
-  // the panel's right edge at z-60. Without this, controls would live
-  // under the tabs and scrollbar would be half-hidden.
+  // Phase-2: pr-10 on desktop keeps panel content clear of the
+  // closed-tabs column overlaying the panel's right edge. Closed tabs
+  // are 40 px wide with an 8 px translate-x shift, so their left edge
+  // sits 32 px from the panel's right edge; pr-10 (40 px) leaves an
+  // 8 px breathing buffer on top of that.
   const panelBodyClassName = isMobile
     ? "flex h-full max-h-[inherit] flex-col overflow-hidden"
-    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4 pr-12";
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4 pr-10";
 
   const panelSections =
     openPanel === "view" ? (
@@ -355,9 +364,18 @@ export const LayersPanel = ({
       className="relative pointer-events-auto"
       data-tutorial-target="settings"
     >
-      <div className="flex flex-col items-stretch gap-2">
-        {controlButtons.map((button) => {
+      {/* Rail flex-col with 6 px overlap between adjacent tabs via
+          [&>*+*]:-mt-[0.375rem] (matches Overlay's SearchBar ↔ LayersPanel
+          overlap). Descending z-index per tab (Search 63 > View 62 >
+          Display 61 > Access 60) so upper tabs stack on top of lower
+          tabs in the overlap zones — gives the fichário-empilhado look. */}
+      <div className="flex flex-col items-stretch [&>*+*]:-mt-[0.375rem]">
+        {controlButtons.map((button, index) => {
           const isOpen = activePanel === button.id;
+          // index here is within `controlButtons` (View=0, Display=1,
+          // Access=2). Search lives in SearchBar at stack-index 0, so
+          // LayersPanel's buttons occupy stack-indices 1-3 → z=62-60.
+          const zIndex = 62 - index;
 
           if (!isMobile && isOpen) {
             return (
@@ -365,6 +383,7 @@ export const LayersPanel = ({
                 key={button.id}
                 aria-hidden="true"
                 className="h-[5rem] w-10"
+                style={{ zIndex }}
               ></div>
             );
           }
@@ -384,6 +403,7 @@ export const LayersPanel = ({
                     : mobileClosedTabClassName
                   : desktopClosedTabClassName
               }
+              style={{ zIndex }}
             >
               <RailButtonIcon panelId={button.id} />
               <span className="drawer-tab-label text-[7px] tracking-[0.22em] text-white">
@@ -458,6 +478,11 @@ const RailButtonIcon = ({
 }: {
   panelId: Exclude<RightControlPanelId, "search">;
 }) => {
+  // Menu structure v3.1 icon normalization: all 4 rail icons (search
+  // lives in SearchBar) redrawn to approximately match visual weight —
+  // bounding box ~15×15 within the 24×24 viewBox, centered at (12, 12),
+  // stroke-width 1.5. Without normalization, `view` read wide/short,
+  // `a11y` read narrow/tall, giving the rail an uneven look.
   if (panelId === "view") {
     return (
       <svg
@@ -472,7 +497,7 @@ const RailButtonIcon = ({
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
-          d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"
+          d="M4.5 12s3-5 7.5-5 7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5Z"
         />
         <path
           strokeLinecap="round"
@@ -494,17 +519,14 @@ const RailButtonIcon = ({
         className="h-4 w-4"
         aria-hidden="true"
       >
-        <rect x="3" y="4" width="18" height="12" rx="1.5" />
-        <path d="M8 20h8" strokeLinecap="round" />
-        <path d="M12 16v4" strokeLinecap="round" />
+        <rect x="4.5" y="5" width="15" height="11" rx="1.5" />
+        <path d="M9 19h6" strokeLinecap="round" />
+        <path d="M12 16v3" strokeLinecap="round" />
       </svg>
     );
   }
 
   if (panelId === "a11y") {
-    // Phase-2: path enlarged (head Y=5→4, r=1.75→2; arms 5-19→4-20;
-    // legs now reach to Y=21 instead of Y=15) so the a11y icon fills
-    // roughly the same viewBox area as the view/display/search icons.
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -515,11 +537,11 @@ const RailButtonIcon = ({
         className="h-4 w-4"
         aria-hidden="true"
       >
-        <circle cx="12" cy="4" r="2" />
+        <circle cx="12" cy="5" r="1.75" />
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
-          d="M4 8.5h16M9 8.5v5l-2 7.5M15 8.5v5l2 7.5M9 13.5h6"
+          d="M5 9h14M9 9v4l-1 5.5M15 9v4l1 5.5M9.5 13h5"
         />
       </svg>
     );
