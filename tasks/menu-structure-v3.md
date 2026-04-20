@@ -371,3 +371,97 @@ Rationale and process notes go in prose below the table. Split the two when the 
 **Rationale**: introduced in PR 1 as transitional wayfinding from the Scene Quality signpost to Display. Post-PR 2 (Scene consolidated into View), the role is moot — the Preset subsection already communicates the active preset through the highlighted button, Custom mode has a dedicated badge + "Reset to {customBase}" button, and the one-time View hint handles stale muscle memory.
 
 **Process note**: the redundancy was flagged in the PR 1 Codex review and deferred to PR 2 via chat; it was not promoted to §12 or §13, which is the process failure that let it survive the merge. The §13 template above is the corrective control — future deferred items land here or in an active PR scope immediately.
+
+---
+
+### PR 3 Codex 4-finding closeout
+
+| Field         | Value                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                              |
+| Source        | Codex review (PR 3)                                                                                                                                     |
+| Status        | resolved                                                                                                                                                |
+| Owning commit | `5411606`                                                                                                                                               |
+| Decision      | Collapse mobile brand to glyph, gate H/Alt+Left under blocking-overlay guard, drop menu semantics from GearPopover, list Ctrl+K in shortcuts reference. |
+
+**Rationale**: PR 3 shipped with the full ATLAS ORBITAL brand cluster at 360 px widths (spec §4.1 required glyph-only); H and Alt+← hotkeys fired through blocking modals, leaving users in an unexpected camera state when the overlay closed; GearPopover carried `role="menu"` without `menuitem` children or arrow-key roving focus — a11y was being told "menu" while receiving dialog-like tab navigation; KeyboardShortcutsModal only documented `/` for search despite the handler also accepting Ctrl+K. All four corrected before merge. §13 template also sharpened in this commit: `Summary` field renamed to `Decision` (imperative), existing chip entry retrofit.
+
+---
+
+### Filing-cabinet rail metaphor — right-edge tabs with staggered handles
+
+| Field         | Value                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                                                                |
+| Source        | User decision (preview observation)                                                                                                                                                       |
+| Status        | resolved                                                                                                                                                                                  |
+| Owning commit | `fae4174` (spatial reanchor) + `160cb0f` / `5ae47be` (Phase 2 polish) + `6fd211e` (shape correction)                                                                                      |
+| Decision      | Re-anchor the right rail as a filing-cabinet: tabs glued to the right edge with staggered Y offsets, trapézio-isósceles handle shape, 6 px vertical overlap, descending z-index top-down. |
+
+**Rationale**: user spotted (in browser preview) that closed tabs overlaid the open panel's content — the pre-existing `items-center` vertical stack forced every handle to share the same Y as the other panels, so the stack projected OVER the active sheet. Three options were proposed (corner move, filing-cabinet metaphor, extra reserved area); user picked filing-cabinet and pedagogically explained it with ASCII-art: each panel is a paper resting against the screen's right edge, handles sit at staggered heights so tabs never collide with their own panel body. Implementation converged over three commits (spatial reanchor → visual polish → shape correction).
+
+**Non-negotiables captured from the conversation**:
+
+- **Tab shape is trapézio isósceles** (narrow-left, wide-right at the panel's right edge, mirrored top/bottom slants). The first attempt shipped parallelogramo (slants in the same direction — a leaning flag) — user corrected twice before acceptance. The trapézio creates the "aba saindo do papel" physical read; parallelogramo looks like a typo.
+- **No right margin**: tabs must sit on the viewport edge so the metaphor lands ("papel encostado na borda"). Only `env(safe-area-inset-right)` is honored for notched displays.
+- **Vertical overlap between closed tabs is intentional** — 6 px via `[&>*+*]:-mt-[0.375rem]`, matched by a 74 px stride across Overlay + SearchBar + LayersPanel (was 88 px before the overlap). Z-index descends top→down so the topmost tab wins every overlap region.
+- **Drop-shadow, not box-shadow**: `filter: drop-shadow(0 3px 4px rgba(0,0,0,0.45))` follows the `clip-path` polygon; `box-shadow` would render around the original rectangle and break the metaphor.
+- **Active-tab saturation**: faint `nasa-accent` fill + stronger border + subtle cyan glow. The contrast (not position) communicates "this paper is pulled forward".
+
+**Process note**: user flagged during the iteration that Claude had introduced vertical overlap without alignment ("nao pode tomar esse tipo de decisao sem alinhar comigo antes"). The rule applies to every visual-structure decision in this spec's surface area — unilateral calls on geometry, shape, or spacing are process failures even when Codex approves. Named design pivots come through the user.
+
+---
+
+### Filing-cabinet geometry centralized in `controlPanelConfig.ts`
+
+| Field         | Value                                                                                                                                                                                                                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                                                                                                                                                  |
+| Source        | Codex review (post-PR-4)                                                                                                                                                                                                                                                    |
+| Status        | resolved                                                                                                                                                                                                                                                                    |
+| Owning commit | `841ed94`                                                                                                                                                                                                                                                                   |
+| Decision      | Move the filing-cabinet geometry tokens (handle height, overlap, stride, clip-path polygon, drop-shadow, panel exit offset) into `controlPanelConfig.ts` as named constants + helpers; all three consumers (Overlay, SearchBar, LayersPanel) import from the single source. |
+
+**Rationale**: the rail math was duplicated across three files. Any tweak to stride or overlap had to be remembered in three places or the handle silently drifted off its stagger — Codex flagged this right after the Phase 2 polish landed, before the drift became observable. Exposed `getRightControlDesktopHandleOffsetStyle()` + `getRightControlDesktopWrapperOffsetStyle()` helpers take the handle index and derive all style outputs, so future tabs (if v3 grows) don't touch the raw math.
+
+---
+
+### ViewportFramingTracker keeps framing reservation during panel-close animation
+
+| Field         | Value                                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                         |
+| Source        | Codex review (post-PR-4)                                                                                                                           |
+| Status        | resolved                                                                                                                                           |
+| Owning commit | `841ed94`                                                                                                                                          |
+| Decision      | Extend the tracker's fallback id list to cover every closable right-rail panel id so the framing stays reserved through the 240 ms exit animation. |
+
+**Rationale**: the tracker stopped measuring exiting display/a11y panels the instant `activePanel` flipped to `null` — but AnimatePresence kept their DOM mounted during the exit. The reservation release fired too early and could reframe the scene under a still-visible panel. Fix extends the fallback id list (`atlas-search-panel`, `atlas-view-panel`, `atlas-display-panel`, `atlas-a11y-panel`) so the tracker keeps measuring until the DOM node actually unmounts. Shared across desktop and mobile.
+
+---
+
+### Spec §10 test coverage reconciled with reality
+
+| Field         | Value                                                                                                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                                                                    |
+| Source        | Codex review (post-PR-4)                                                                                                                                                                      |
+| Status        | resolved                                                                                                                                                                                      |
+| Owning commit | `841ed94`                                                                                                                                                                                     |
+| Decision      | Author the test files §10 claimed existed (`Accordion.test.tsx`, `Overlay.test.tsx`) and expand `LayersPanel.test.tsx` + `controlPanelConfig.test.ts` to actually cover the claimed surfaces. |
+
+**Rationale**: §10 stated that `/` hotkey was tested in `SearchBar.test.tsx`, accordion breakpoint defaults in `LayersPanel.test.tsx`, and a standalone `Accordion.test.tsx` existed — none of that was true when Codex checked. Closed both directions: wrote the missing tests (37/37 now green across 9 files, up from 28/28 across 7) and rewrote §10 to describe what actually ships. Rule: the spec's coverage claims are the contract — the tests must match before merge, not after.
+
+---
+
+### Filing-cabinet tab proportions tuned post-merge
+
+| Field         | Value                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date          | 2026-04-19                                                                                                                                               |
+| Source        | User decision (preview iteration)                                                                                                                        |
+| Status        | resolved                                                                                                                                                 |
+| Owning commit | `d9a3541` (refactor) + `b36e475` (tuning)                                                                                                                |
+| Decision      | Extract `RightControlRail.tsx` as a reusable wrapper and tune handle width/height/padding proportions to match the physical-paper metaphor more closely. |
+
+**Rationale**: after the Phase 2 + shape-correction commits landed, iterative preview feedback refined the numeric proportions (handle width/height ratios, internal padding, clip-path corner radii). The extract into `RightControlRail.tsx` consolidates the wrapper logic so SearchBar and LayersPanel stop carrying near-duplicate structural JSX. Pure visual tuning + structural cleanup; no behavioral change.
