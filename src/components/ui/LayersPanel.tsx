@@ -16,9 +16,10 @@ import {
   RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS,
   RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS,
   RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS,
+  RIGHT_CONTROL_DESKTOP_TAB_WIDTH_CLASS,
   RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS,
+  RIGHT_CONTROL_MOBILE_TAB_WIDTH_CLASS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
-  RIGHT_CONTROL_TAB_WIDTH_CLASS,
   RIGHT_CONTROL_BUTTONS,
   SCENE_SCALE_OPTIONS,
   SCENE_SOURCE_OPTIONS,
@@ -160,13 +161,13 @@ export const LayersPanel = ({
       : -1;
   // Menu structure v3.1 filing-cabinet model: all 4 "papers" share a
   // common top anchor at the viewport's top-safe edge. Stride between
-  // adjacent tabs is 74 px = 80 px tab height − 6 px overlap (matches
-  // the -mt-[0.375rem] overlap applied in Overlay's flex-col and in
-  // this component's rail flex-col below). LayersPanel sits 74 px
-  // below SearchBar in the Overlay stack, so the open-panel wrapper
-  // climbs back up by 74 px to reach the shared top anchor. Handle Y
-  // uses `openPanelIndex + 1` to account for Search being stack-index
-  // 0 (handled by SearchBar itself).
+  // adjacent tabs is 78 px = 86 px tab height − 8 px overlap (matches
+  // the shared negative-top-margin overlap applied in Overlay and in
+  // this component's rail). LayersPanel sits one stride below SearchBar
+  // in the Overlay stack, so the open-panel wrapper climbs back up by
+  // one stride to reach the shared top anchor. Handle Y uses
+  // `openPanelIndex + 1` to account for Search being stack-index 0
+  // (handled by SearchBar itself).
   const openPanelWrapperStyle = !isMobile
     ? getRightControlDesktopWrapperOffsetStyle()
     : undefined;
@@ -174,19 +175,16 @@ export const LayersPanel = ({
     !isMobile && openPanelIndex >= 0
       ? getRightControlDesktopHandleOffsetStyle(openPanelIndex + 1)
       : undefined;
-  const mobileClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} -translate-x-[0.5rem] items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
-  const mobileActiveTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const mobileClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_MOBILE_TAB_WIDTH_CLASS} -translate-x-[0.5rem] items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const mobileActiveTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_MOBILE_TAB_WIDTH_CLASS} items-center justify-center overflow-hidden rounded-r-[0.95rem] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   // Menu structure v3.1 filing-cabinet shape: tabs use a clip-path
-  // polygon that slants the top and bottom edges by 6 px. When adjacent
-  // tabs overlap by exactly 6 px (the stride reduction), the slanted
-  // edges align perfectly — Tab1's bottom-slant line coincides with
-  // Tab2's top-slant line, tiling together like file-folder tabs in
-  // the reference screenshot. Rectangular tabs with overlap look ugly
-  // because they visibly stack; angled tabs interlock cleanly.
-  const desktopClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} translate-x-[0.5rem] items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  // polygon that slants the top and bottom edges by 8 px. Matching the
+  // overlap to that slant gives a slightly steeper, more legible file-tab
+  // silhouette while keeping the stack interlocked.
+  const desktopClosedTabClassName = `command-shell ghost-border relative z-[60] flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_WIDTH_CLASS} translate-x-[0.5rem] items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   // Active handle: stronger visual weight (faint nasa-accent fill,
   // stronger border, subtle glow) + same angled shape as closed tabs.
-  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_WIDTH_CLASS} shrink-0 items-center justify-center overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1 py-1.5 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
   // Phase-2: pr-10 on desktop keeps panel content clear of the
@@ -373,8 +371,8 @@ export const LayersPanel = ({
       className="relative pointer-events-auto"
       data-tutorial-target="settings"
     >
-      {/* Rail flex-col with 6 px overlap between adjacent tabs via
-          [&>*+*]:-mt-[0.375rem] (matches Overlay's SearchBar ↔ LayersPanel
+      {/* Rail flex-col with 8 px overlap between adjacent tabs via the
+          shared overlap utility (matches Overlay's SearchBar ↔ LayersPanel
           overlap). Descending z-index per tab (Search 63 > View 62 >
           Display 61 > Access 60) so upper tabs stack on top of lower
           tabs in the overlap zones — gives the fichário-empilhado look. */}
@@ -393,7 +391,7 @@ export const LayersPanel = ({
               <div
                 key={button.id}
                 aria-hidden="true"
-                className={`${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS}`}
+                className={`${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_WIDTH_CLASS}`}
                 style={{ zIndex }}
               ></div>
             );

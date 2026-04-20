@@ -94,10 +94,10 @@ export const Overlay = () => {
         }`}
       >
         {/* Menu structure v3.1 filing-cabinet model: desktop flex-col uses
-            `[&>*+*]:-mt-[0.375rem]` (−6 px) instead of `gap-1.5` so the
-            closed tabs visually overlap slightly — matches the user's
-            fichário-empilhado reference. Stride across the 4 tabs:
-            80 px (tab height) − 6 px overlap = 74 px. */}
+            a negative top margin instead of `gap` so the closed tabs
+            visually overlap slightly — matching the fichário-empilhado
+            reference. Current stride across the 4 tabs:
+            86 px (tab height) − 8 px overlap = 78 px. */}
         <div
           className={`flex ${
             isMobile

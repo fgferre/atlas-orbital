@@ -19,19 +19,20 @@ export type VisibilityCategory =
 
 // Shared filing-cabinet rail geometry. Keeping the desktop rail math in one
 // place avoids silent drift between Overlay, SearchBar, and LayersPanel.
-export const RIGHT_CONTROL_TAB_WIDTH_CLASS = "w-9";
-export const RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS = "h-[4.5rem]";
-export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS = "h-[5rem]";
+export const RIGHT_CONTROL_MOBILE_TAB_WIDTH_CLASS = "w-[38px]";
+export const RIGHT_CONTROL_DESKTOP_TAB_WIDTH_CLASS = "w-[34px]";
+export const RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS = "h-[76px]";
+export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS = "h-[98px]";
 export const RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS =
-  "[clip-path:polygon(0_6px,100%_0,100%_100%,0_calc(100%-6px))]";
+  "[clip-path:polygon(0_10px,100%_0,100%_100%,0_calc(100%-10px))]";
 export const RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS =
   "[filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))]";
-export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS = "[&>*+*]:-mt-[0.375rem]";
-export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX = 80;
-export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX = 6;
+export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS = "[&>*+*]:-mt-[0.625rem]";
+export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX = 98;
+export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX = 10;
 export const RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX =
   RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX - RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX;
-export const RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X = "calc(100% - 2.25rem)";
+export const RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X = "calc(100% - 34px)";
 
 // Menu structure v3.1 rail ordering (PR 3 state):
 //   search | view | display | a11y

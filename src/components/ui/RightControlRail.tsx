@@ -1,6 +1,6 @@
 import type { RightControlPanelId } from "./controlPanelConfig";
 
-const RAIL_TAB_ICON_CLASS = "h-[0.95rem] w-[0.95rem] shrink-0";
+const RAIL_TAB_ICON_CLASS = "h-[1.2rem] w-[1.2rem] shrink-0";
 
 export const RailTabContent = ({
   panelId,
@@ -9,9 +9,9 @@ export const RailTabContent = ({
   panelId: RightControlPanelId;
   label: string;
 }) => (
-  <span className="pointer-events-none flex flex-col items-center justify-start gap-[0.28rem] leading-none">
+  <span className="pointer-events-none flex flex-col items-center justify-start gap-[0.5rem] leading-none">
     <RailTabIcon panelId={panelId} />
-    <span className="drawer-tab-label text-[6.5px] leading-none tracking-[0.2em] text-white">
+    <span className="drawer-tab-label text-[7.5px] leading-none tracking-[0.2em] text-white">
       {label}
     </span>
   </span>
