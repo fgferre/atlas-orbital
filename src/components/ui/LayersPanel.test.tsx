@@ -8,9 +8,9 @@ import { useStore } from "../../store";
 import { LayersPanel } from "./LayersPanel";
 
 // jsdom doesn't implement matchMedia; useMediaQuery reads it directly.
-const stubMatchMedia = () => {
+const stubMatchMedia = (mobile = false) => {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: false,
+    matches: query === "(max-width: 767px)" ? mobile : false,
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -59,6 +59,34 @@ describe("LayersPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("defaults view accordions open on desktop and collapsed on mobile", () => {
+    const setActivePanel = vi.fn();
+
+    const { unmount } = render(
+      <LayersPanel activePanel="view" setActivePanel={setActivePanel} />
+    );
+
+    expect(screen.getByRole("button", { name: /^world$/i })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(
+      screen.getByRole("button", { name: /asteroids/i })
+    ).toBeInTheDocument();
+
+    unmount();
+    stubMatchMedia(true);
+    render(<LayersPanel activePanel="view" setActivePanel={setActivePanel} />);
+
+    expect(screen.getByRole("button", { name: /^world$/i })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(
+      screen.queryByRole("button", { name: /asteroids/i })
+    ).not.toBeInTheDocument();
+  });
+
   it("flips visibility.asteroids in the store when the Asteroids toggle is clicked", () => {
     const setActivePanel = vi.fn();
 
@@ -94,5 +122,26 @@ describe("LayersPanel", () => {
     });
 
     expect(setActivePanel).toHaveBeenCalledWith(null);
+  });
+
+  it("shows only the current View / Display / Access rail labels", () => {
+    const setActivePanel = vi.fn();
+
+    render(<LayersPanel activePanel={null} setActivePanel={setActivePanel} />);
+
+    expect(screen.getByRole("button", { name: /view/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /display/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /access/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /scene/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /overlay/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /project/i })
+    ).not.toBeInTheDocument();
   });
 });

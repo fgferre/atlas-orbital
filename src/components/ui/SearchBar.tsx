@@ -16,6 +16,13 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { searchBodies } from "../../lib/bodySearch";
 import { useStore } from "../../store";
 import {
+  getRightControlPanelDomId,
+  RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X,
+  RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS,
+  RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS,
+  RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS,
+  RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS,
+  RIGHT_CONTROL_TAB_WIDTH_CLASS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   SEARCH_QUICK_TARGETS,
   type RightControlPanelId,
@@ -193,17 +200,17 @@ export const SearchBar = ({
   // (horizontal sheet model, no rail overlap).
   const closedTabClassName = `command-shell ghost-border relative z-[60] flex items-center justify-center gap-1.5 overflow-hidden px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] transition-[transform,border-color,color,background-color,box-shadow] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
     isMobile
-      ? "h-[4.5rem] w-10 -translate-x-[0.5rem] rounded-r-[0.95rem] text-nasa-accent hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
-      : "h-[5rem] w-10 translate-x-[0.5rem] [clip-path:polygon(0_6px,100%_0,100%_100%,0_calc(100%-6px))] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white"
+      ? `${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} -translate-x-[0.5rem] rounded-r-[0.95rem] text-nasa-accent hover:-translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white`
+      : `${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} translate-x-[0.5rem] ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} text-nasa-accent hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white`
   }`;
 
-  const mobileOpenHandleClassName =
-    "command-shell ghost-border relative z-[1] -ml-px flex h-[4.5rem] w-10 shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
-  const desktopOpenTabClassName =
-    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden [clip-path:polygon(0_6px,100%_0,100%_100%,0_calc(100%-6px))] [filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  const mobileOpenHandleClassName = `command-shell ghost-border relative z-[1] -ml-px flex ${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
+  const desktopOpenTabClassName = `command-shell ghost-border relative z-[1] -mr-px flex ${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS} shrink-0 items-center justify-center gap-1.5 overflow-hidden ${RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS} ${RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS} border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation`;
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
-  const triggerSlotClassName = isMobile ? "h-[4.5rem] w-10" : "h-[5rem] w-10";
+  const triggerSlotClassName = isMobile
+    ? `${RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS}`
+    : `${RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS} ${RIGHT_CONTROL_TAB_WIDTH_CLASS}`;
 
   // Phase-2: pr-12 on desktop keeps Search content clear of the closed
   // tabs (View/Display/Access) overlaying the panel's right edge.
@@ -213,7 +220,7 @@ export const SearchBar = ({
 
   const panelContent = (
     <div
-      id="atlas-search-panel"
+      id={getRightControlPanelDomId("search")}
       ref={panelRef}
       role={isMobile ? "dialog" : undefined}
       aria-modal={isMobile ? true : undefined}
@@ -363,7 +370,7 @@ export const SearchBar = ({
           data-right-control-trigger="search"
           aria-label="Open search panel"
           aria-expanded={false}
-          aria-controls="atlas-search-panel"
+          aria-controls={getRightControlPanelDomId("search")}
           onClick={openSearch}
           className={closedTabClassName}
           style={{ zIndex: 63 }}
@@ -402,13 +409,13 @@ export const SearchBar = ({
             className={panelClassName}
             initial={{
               opacity: 0,
-              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              x: isMobile ? -56 : RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X,
               scale: 0.98,
             }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{
               opacity: 0,
-              x: isMobile ? -56 : "calc(100% - 2.5rem)",
+              x: isMobile ? -56 : RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X,
               scale: 0.98,
             }}
             transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
@@ -422,7 +429,7 @@ export const SearchBar = ({
                   data-right-control-trigger="search"
                   aria-label="Close search panel"
                   aria-expanded={true}
-                  aria-controls="atlas-search-panel"
+                  aria-controls={getRightControlPanelDomId("search")}
                   onClick={() => closeSearch(true)}
                   className={mobileOpenHandleClassName}
                 >
@@ -457,7 +464,7 @@ export const SearchBar = ({
                   data-right-control-trigger="search"
                   aria-label="Close search panel"
                   aria-expanded={true}
-                  aria-controls="atlas-search-panel"
+                  aria-controls={getRightControlPanelDomId("search")}
                   onClick={() => closeSearch(true)}
                   className={desktopOpenTabClassName}
                 >

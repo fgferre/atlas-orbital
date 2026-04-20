@@ -17,6 +17,22 @@ export type VisibilityCategory =
   | "asteroids"
   | "tnos";
 
+// Shared filing-cabinet rail geometry. Keeping the desktop rail math in one
+// place avoids silent drift between Overlay, SearchBar, and LayersPanel.
+export const RIGHT_CONTROL_TAB_WIDTH_CLASS = "w-10";
+export const RIGHT_CONTROL_MOBILE_TAB_HEIGHT_CLASS = "h-[4.5rem]";
+export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_CLASS = "h-[5rem]";
+export const RIGHT_CONTROL_DESKTOP_TAB_SHAPE_CLASS =
+  "[clip-path:polygon(0_6px,100%_0,100%_100%,0_calc(100%-6px))]";
+export const RIGHT_CONTROL_DESKTOP_TAB_SHADOW_CLASS =
+  "[filter:drop-shadow(0_3px_4px_rgba(0,0,0,0.45))]";
+export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS = "[&>*+*]:-mt-[0.375rem]";
+export const RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX = 80;
+export const RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX = 6;
+export const RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX =
+  RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX - RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX;
+export const RIGHT_CONTROL_DESKTOP_PANEL_EXIT_X = "calc(100% - 2.5rem)";
+
 // Menu structure v3.1 rail ordering (PR 3 state):
 //   search | view | display | a11y
 //
@@ -42,6 +58,26 @@ export const RIGHT_CONTROL_BUTTONS = [
   id: RightControlPanelId;
   label: string;
 }>;
+
+export const getRightControlPanelDomId = (panelId: RightControlPanelId) =>
+  `atlas-${panelId}-panel`;
+
+export const getTrackedRightControlPanelDomIds = (
+  activePanel: RightControlPanelId | null
+) =>
+  activePanel
+    ? [getRightControlPanelDomId(activePanel)]
+    : RIGHT_CONTROL_BUTTONS.map(({ id }) => getRightControlPanelDomId(id));
+
+export const getRightControlDesktopWrapperOffsetStyle = (stackOffset = 1) => ({
+  top: `-${RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX * stackOffset}px`,
+});
+
+export const getRightControlDesktopHandleOffsetStyle = (
+  stackIndex: number
+) => ({
+  marginTop: `${stackIndex * RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX}px`,
+});
 
 export const RIGHT_CONTROL_TRIGGER_SELECTOR = "[data-right-control-trigger]";
 

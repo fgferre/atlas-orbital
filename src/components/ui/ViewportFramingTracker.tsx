@@ -6,7 +6,10 @@ import {
 } from "../../lib/camera";
 import { useStore } from "../../store";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
-import type { RightControlPanelId } from "./controlPanelConfig";
+import {
+  getTrackedRightControlPanelDomIds,
+  type RightControlPanelId,
+} from "./controlPanelConfig";
 
 interface ViewportFramingTrackerProps {
   activePanel: RightControlPanelId | null;
@@ -31,14 +34,7 @@ const toRectSnapshot = (element: Element | null) => {
 };
 
 const queryPanelElement = (activePanel: RightControlPanelId | null) => {
-  const panelIds =
-    activePanel && activePanel !== "search"
-      ? [`atlas-${activePanel}-panel`]
-      : activePanel === "search"
-        ? ["atlas-search-panel"]
-        : ["atlas-search-panel", "atlas-view-panel"];
-
-  for (const panelId of panelIds) {
+  for (const panelId of getTrackedRightControlPanelDomIds(activePanel)) {
     const panel = document.getElementById(panelId);
     if (panel) {
       return panel;

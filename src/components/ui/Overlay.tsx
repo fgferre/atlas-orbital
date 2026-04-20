@@ -10,6 +10,7 @@ import { TopBar } from "./TopBar";
 import { SearchBar } from "./SearchBar";
 import { ViewportFramingTracker } from "./ViewportFramingTracker";
 import {
+  RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS,
   resolveRightControlPanelExit,
   resolveRightControlPanelRequest,
   type RightControlPanelId,
@@ -101,7 +102,7 @@ export const Overlay = () => {
           className={`flex ${
             isMobile
               ? "h-full flex-col items-start justify-center gap-1.5"
-              : "flex-col items-end [&>*+*]:-mt-[0.375rem]"
+              : `flex-col items-end ${RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS}`
           }`}
         >
           <SearchBar

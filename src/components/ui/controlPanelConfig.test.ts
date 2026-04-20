@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getRightControlDesktopHandleOffsetStyle,
+  getRightControlDesktopWrapperOffsetStyle,
+  getRightControlPanelDomId,
+  getTrackedRightControlPanelDomIds,
   OVERLAY_FILTER_OPTIONS,
   OVERLAY_GUIDE_OPTIONS,
+  RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX,
+  RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX,
+  RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX,
   RIGHT_CONTROL_BUTTONS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   SCENE_SCALE_OPTIONS,
@@ -108,5 +115,29 @@ describe("controlPanelConfig", () => {
 
   it("keeps a shared selector for all right-side panel triggers", () => {
     expect(RIGHT_CONTROL_TRIGGER_SELECTOR).toBe("[data-right-control-trigger]");
+  });
+
+  it("tracks all right-side panel DOM ids while a panel is exiting", () => {
+    expect(getTrackedRightControlPanelDomIds(null)).toEqual([
+      getRightControlPanelDomId("search"),
+      getRightControlPanelDomId("view"),
+      getRightControlPanelDomId("display"),
+      getRightControlPanelDomId("a11y"),
+    ]);
+    expect(getTrackedRightControlPanelDomIds("display")).toEqual([
+      getRightControlPanelDomId("display"),
+    ]);
+  });
+
+  it("derives the filing-cabinet stride and offsets from one source", () => {
+    expect(RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX).toBe(
+      RIGHT_CONTROL_DESKTOP_TAB_HEIGHT_PX - RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_PX
+    );
+    expect(getRightControlDesktopWrapperOffsetStyle()).toEqual({
+      top: `-${RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX}px`,
+    });
+    expect(getRightControlDesktopHandleOffsetStyle(3)).toEqual({
+      marginTop: `${RIGHT_CONTROL_DESKTOP_TAB_STRIDE_PX * 3}px`,
+    });
   });
 });
