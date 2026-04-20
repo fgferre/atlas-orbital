@@ -1,6 +1,6 @@
 # Phase θ — Gaia Sky-inspired visual upgrade
 
-Created: 2026-04-19 · Updated: 2026-04-20 (swarm findings + Codex review integrated, 15-onda sequencing finalizada) · Status: planning · Owner: fgferre
+Created: 2026-04-19 · Updated: 2026-04-20 (θ-audit: 4 rounds of source-verification against `/tmp/gaiasky`; §2/§4.1/§5.1/§5/§8/§8.6/§9/§10 all revised; θ.1b added; θ.2 merged into θ.4; θ.13 moved to §9) · Status: planning · Owner: fgferre
 
 Single-phase spec for porting the highest-impact visual techniques from
 [Gaia Sky](https://github.com/langurmonkey/gaiasky) (Java/LibGDX) to our
@@ -33,11 +33,23 @@ for:
   (`low/medium/high/full` with strict prefix indexing), or the names
   sidecar. `src/utils/hygBinary.ts` and `public/data/hyg-stars/*.bin.gz`
   are frozen.
-- **Do not** change the log-compressed transfer curve
+- ~~**Do not** change the log-compressed transfer curve
   `brightness = 2·log(1 + flux·250)` calibrated against NASA Eyes
-  (L16, L17). All new brightness lifts go into the _emissive_ side of
-  the HDR pipeline (via `vfxHdrGain` or post-process halos), not the
-  transfer curve.
+  (L16, L17).~~ **REVOKED 2026-04-20 in the θ-audit** (see §8.6). The
+  audit showed the NASA-Eyes log curve + `[5, 50]` / `[0.05, 1]` hard
+  floors are fundamentally incompatible with Gaia Sky's solid-angle →
+  opacity fade that the ported fragment shaders (θ.1 kernel, θ.14
+  variability, θ.7 approach) all assume. Keeping the pin would force
+  every downstream onda to either stack two brightness philosophies
+  (violating "replace, don't stack") or ship a half-port. θ.1b ports
+  the Gaia Sky vertex structure (`solidAngle = a_size / dist`,
+  `opacity = lint(solidAngle, u_solidAngleMap, u_opacityLimits)`) and
+  replaces the NASA-Eyes vertex math wholesale. L16 and L17 become
+  historical (calibration work that belonged to Wave α's starting
+  point, not the Gaia-Sky target). `NASAStarfield.tsx` +
+  `shaders/nasaStarShaders.ts` also drop in θ.1b (they were the NASA-
+  Eyes reference renderer for Wave α A/B; they have no role in a
+  Gaia-Sky-only starfield).
 - **Do not** replace AgX. Other tone mappers stay deferred per Wave α.
 - **Do not** re-platform to WebGPU. All shaders stay GLSL 3.00 ES via
   `THREE.ShaderMaterial` with the `useMemo(() => new THREE.ShaderMaterial(...))`
@@ -85,24 +97,28 @@ language inside an individual onda body defers to this table;
 
 ### 4.1 Per-onda activation by tier
 
-| Onda | constrained | balanced           | high               | ultra             | Notes                                    |
-| ---- | ----------- | ------------------ | ------------------ | ----------------- | ---------------------------------------- |
-| θ.1  | off         | on (hardcore)      | on (hardcore+halo) | on (full)         | Sprite baseline for all others           |
-| θ.2  | off         | off                | on                 | on                | Diffraction spikes, per-star billboard   |
-| θ.3  | off         | off                | on (Subtle)        | on (Pronounced)   | LightGlow post-process                   |
-| θ.4  | off         | off                | off                | on (Full)         | Pseudo lens flare                        |
-| θ.5  | off         | off                | off                | on (Subtle)       | Camera motion blur                       |
-| θ.6  | off         | on (vignette only) | on (CA+vignette)   | on (all three)    | Grading split into 3 independent toggles |
-| θ.7a | off         | off                | on (Ultra-only)    | on (Ultra-only)   | Hero-star corona billboard               |
-| θ.7b | off         | off                | off                | on (Ultra-only)   | Procedural surface                       |
-| θ.8  | on (basic)  | on                 | on                 | on (cinematic)    | Camera feel — affects all tiers          |
-| θ.9  | off         | on (Soft)          | on (Full)          | on (Full)         | Orbit-line glow shader                   |
-| θ.10 | off         | off                | on (Lines+Labels)  | on (Full)         | Constellations                           |
-| θ.11 | off         | on (Cubemap)       | on (Cubemap+Dust)  | on (Cubemap+Dust) | Milky Way backdrop                       |
-| θ.12 | off         | on (Named bright)  | on (All named)     | on (Full)         | SDF star labels                          |
-| θ.13 | off         | on (Bayer 4×4)     | on (Bayer 4×4)     | on (Bayer 8×8)    | Output dithering                         |
-| θ.14 | off         | off                | on (Subtle)        | on (Pronounced)   | Alive-sky twinkle                        |
-| θ.15 | off         | on (FXAA)          | on (SMAA)          | on (SMAA+Unsharp) | Anti-aliasing + unsharp mask             |
+| Onda | constrained    | balanced           | high                | ultra               | Notes                                                                |
+| ---- | -------------- | ------------------ | ------------------- | ------------------- | -------------------------------------------------------------------- |
+| θ.1  | off            | on (hardcore)      | on (hardcore+halo)  | on (full)           | Sprite fragment (shipped 2026-04-20, `2662f08`+`13e501e`)            |
+| θ.1b | on (solid-ang) | on (full)          | on (full)           | on (full)           | Vertex solid-angle port; replaces NASA-Eyes floor on ALL tiers       |
+| θ.3  | off            | off                | on (Subtle)         | on (Pronounced)     | LightGlow post-process (u_lightPositions + Archimedean spiral)       |
+| θ.4  | off            | off                | on (Subtle)         | on (Full)           | Pseudo lens flare + lensdirt starburst (incl. diffraction spikes)    |
+| θ.5  | off            | off                | off                 | on (Subtle)         | Camera motion blur                                                   |
+| θ.6  | off            | on (vignette only) | on (CA+vignette)    | on (all three)      | Grading split into 3 toggles (direct port of Gaia Sky shaders)       |
+| θ.7a | off            | off                | on (Ultra-only)     | on (Ultra-only)     | Hero-star corona billboard                                           |
+| θ.7b | off            | off                | off                 | on (Ultra-only)     | Procedural surface                                                   |
+| θ.8  | on (basic)     | on                 | on                  | on (cinematic)      | Camera feel — affects all tiers                                      |
+| θ.9  | off            | on (Soft)          | on (Full)           | on (Full)           | Orbit-line glow shader                                               |
+| θ.10 | off            | off                | on (Lines+Labels)   | on (Full)           | Constellations                                                       |
+| θ.11 | off            | on (Cubemap)       | on (Cubemap+Dust)   | on (Cubemap+Dust)   | Milky Way backdrop                                                   |
+| θ.12 | off            | on (Named bright)  | on (All named)      | on (Full)           | MSDF labels via troika (approximation of Gaia Sky SDF, §12 explains) |
+| θ.14 | off            | off                | on (Subtle)         | on (Pronounced)     | Alive-sky twinkle (depends on θ.1b solid-angle vertex)               |
+| θ.15 | off            | on (NFAA)          | on (FXAA+LumaSharp) | on (FXAA+LumaSharp) | Gaia Sky AA suite (NFAA + FXAA NVIDIA 3.11 + LumaSharpen — NO SMAA)  |
+
+**Removed rows (§8.6 audit):** θ.2 (merged into θ.4 — diffraction
+spikes are Gaia Sky's lensdirt starburst, not a per-star billboard;
+see θ.4); θ.13 (Gaia Sky does not ship output dithering at the
+composer; moved to §9 as atlas-only anti-banding follow-up).
 
 Constrained tier is byte-identical to pre-phase: EffectComposer is not
 mounted, no new scene-graph objects spawn, no new script runs in
@@ -166,33 +182,57 @@ operates in. The four allowed spaces, in pipeline order:
    dithering is the last composer step and applies at this boundary.
 
 **Composer chain for phase θ** (canonical order, derived from Gaia Sky
-`MainPostProcessor.java` + adapted to pmndrs constraints):
+`MainPostProcessor.java` ACTUAL `ppb.add()` sequence — verified in the
+2026-04-20 θ-audit against lines 204–522 of the source). The earlier
+revision of this section was wrong on multiple ordering points
+(bloom-vs-flare, AA position, CA position) and has been corrected.
 
 ```
 <Scene renders into linear HDR HalfFloat buffer>
      ↓
- θ.3 LightGlow                 (Scene linear HDR → Post-effect linear HDR)
+ θ.3 LightGlow                 (Scene linear HDR, runs FIRST per Gaia Sky)
      ↓
- Bloom                         (Post-effect linear HDR → Post-effect linear HDR)
+ (SSR — out of scope, §9)
      ↓
- θ.4 Pseudo lens flare         (Post-effect linear HDR → Post-effect linear HDR)
+ θ.5 Camera motion blur        (Still in linear HDR at this stage)
      ↓
- AgX ToneMapping               (→ Display-referred SDR)
+ θ.4 Pseudo lens flare + lensdirt (2 passes; lensdirt carries the starburst spikes)
      ↓
- θ.5 Camera motion blur        (Display-referred SDR — blurs the filmic look)
+ θ.15 UnsharpMask (LumaSharpen) (Display-referred after AgX — contrast-aware sharpen)
      ↓
- θ.15 AA pass (SMAA/FXAA)      (Display-referred SDR)
+ Bloom                         (Gaia Sky does Bloom AFTER lens flare + unsharp — verified)
      ↓
- θ.6 ChromaticAberration → Vignette → NoiseEffect (film grain)
+ AgX ToneMapping               (atlas-only adaptation — Gaia Sky has Levels/Curvature here; we keep AgX)
      ↓
- θ.15 UnsharpMask              (Display-referred SDR — applies to final look)
+ (Curvature / Reprojection — out of scope, §9)
      ↓
- HueSat → BrightnessContrast   (existing grading)
+ θ.6 NoiseEffect (film grain) → ChromaticAberration (Display-referred SDR, per Gaia Sky order)
      ↓
- θ.13 DitherEffect             (Encoded 8-bit output boundary — LAST)
+ θ.6 Vignette                  (Gaia Sky puts this in Levels / grading stage; we keep it adjacent to CA)
+     ↓
+ HueSat → BrightnessContrast   (Gaia Sky "Levels" — existing)
+     ↓
+ θ.15 Antialiasing (FXAA or NFAA) (LAST before framebuffer — verified in Gaia Sky)
      ↓
  Framebuffer
 ```
+
+**Where we still diverge from Gaia Sky's literal order** — and why
+(pipeline/render-space mismatches, classified R1 step-5 #2):
+
+- We collapse Gaia Sky's `Blend3(UI)` pass (UI compositor) into
+  `OverlayHTML` / React DOM overlays — not a shader, so no chain slot.
+- Gaia Sky's `Curvature` / `Reprojection` / `WarpingMesh` / `XBRZ`
+  are dome/projection-specific passes we do not port (§9 defers).
+- AgX replaces Gaia Sky's `Levels` for tone-mapping purposes; we
+  keep HueSat / BrightnessContrast as small post-adjust knobs.
+- Vignette is placed adjacent to CA / filmgrain in our chain for
+  surface coherence even though Gaia Sky lumps it into the Levels
+  stage — zero-perf-cost reorder, visually identical because all
+  three passes are display-referred SDR at that point.
+
+**θ.13 output dithering is NOT part of this chain** — Gaia Sky does
+not ship output dithering at the composer. See §9.
 
 **Hard invariants** (any violation is a blocker for the onda):
 
@@ -380,81 +420,162 @@ drives the existing `particleSize` uniform.
 
 ---
 
-### θ.2 — Diffraction spike layer for bright stars
+### θ.1b — Vertex solid-angle port (replaces NASA-Eyes floor)
 
-**Goal.** A 4- or 6-point spike ("starburst") on stars above a
-brightness threshold — the iconic Hubble / telescope lens look. On
-Gaia Sky this comes from the `lensdirt` starburst texture inside the
-pseudo-lens-flare chain, but we can get 80 % of the look far cheaper as
-a **per-star additive billboard** stacked on top of the sprite for
-stars above a magnitude threshold.
+**Goal.** Port Gaia Sky's vertex-stage brightness / sprite-size
+mathematics from `star.group.quad.vertex.glsl` so the fragment kernel
+shipped in θ.1 is driven by the Gaia Sky vertex it was designed for.
+This onda replaces the NASA-Eyes `brightness = 2·log(1 + flux·250)`
+transfer curve + `clamp([5, 50])` / `clamp([0.05, 1.0])` hard floors
+with Gaia Sky's solid-angle → opacity mapping, letting faint-distant
+stars fade to invisibility like Gaia Sky does, instead of painting
+every HYG star with the 5 px / 0.05 alpha floor the θ-audit surfaced
+as a foundational descompasso.
 
-**Gaia Sky reference.**
+**Gaia Sky reference.** `assets/shader/star.group.quad.vertex.glsl`
+(read in full 2026-04-20). Key math:
 
-- `assets/shader/postprocess/lensdirt.frag.glsl` — starburst texture
-  modulation (for context on the full-pipe approach).
-- `Lensflare` from `@react-three/drei` (for the per-object approach
-  we're actually taking).
+```glsl
+solidAngle = a_size / dist;
+opacity = lint(solidAngle, u_solidAngleMap.x, u_solidAngleMap.y,
+                          u_opacityLimits.x, u_opacityLimits.y);
+solidAngle = clamp(radians12(pow(degrees12(solidAngle), u_brightnessPower)),
+                   u_minQuadSolidAngle, 3.0e-8);
+quadSize = solidAngle * dist * u_alphaSizeBr.y;
+// ... boundary fade for close stars ...
+float alpha = clamp(opacity * u_alphaSizeBr.x * boundaryFade, 0.0, 1.0);
+```
 
-**Port plan — Option A (recommended, cheap, ships in θ.2).**
+Host defaults from `StarSetQuadComponent.java:46`:
 
-- Draw a **second Points primitive** filtered to stars with
-  `mag < THRESHOLD` (default `3.5`, ~170 stars on ultra, ~80 on
-  high). Uses the same geometry indices as the main starfield — a
-  separate `Float32Array` of source indices, no catalog duplication.
-- Custom shader: the fragment draws a 4-point star-shape via
-  `pow(max(|x|, |y|) - min(|x|, |y|), k)` profile — classic GLSL
-  starburst kernel.
-- Renders at a larger `gl_PointSize` than the main sprite
-  (×2.5 default) with alpha modulated by the same `vBrightness` so
-  it fades as the star's log-compressed brightness drops.
-- `blending: AdditiveBlending`, depth-write off, renderOrder one above
-  the main starfield.
+- `u_solidAngleMap = vec2(1.0e-10, 2.0e-9)`
+- `u_thAnglePoint = vec2(1.0e-10, 1.5e-8)`
+- `opacityLimits` from `Settings.settings.scene.star.opacity[]`
+  (user-adjustable; default values in `Settings.java` `StarSettings`).
 
-**Port plan — Option B (deferred to post-phase, for fidelity).**
+**Port plan.**
 
-- Screen-space pass reading the HDR buffer post-Bloom, thresholding,
-  sampling the starburst texture at each bright-luma pixel. This is
-  what Gaia Sky does and what `PseudoLensFlare` wraps — lands in θ.4,
-  not here.
+- `src/components/canvas/Starfield.tsx` vertex shader: replace the
+  NASA-Eyes brightness block with:
+  ```glsl
+  float solidAngle = u_starSize / dist; // u_starSize replaces a_size — see below
+  float opacity = lint(solidAngle,
+                       u_solidAngleMap.x, u_solidAngleMap.y,
+                       u_opacityLimits.x, u_opacityLimits.y);
+  solidAngle = clamp(pow(solidAngle, u_brightnessPower),
+                     u_minQuadSolidAngle, 3.0e-8);
+  float quadSize = solidAngle * dist * u_sizeFactor;
+  float boundaryFade = smoothstep(LEN0, LEN0 * 1e3, dist);
+  float alpha = clamp(opacity * u_alphaFactor * boundaryFade, 0.0, 1.0);
+  gl_PointSize = max(quadSize / <NDC-to-pixel conversion>, 0.0);
+  vBrightness = alpha; // fragment already consumes this
+  ```
+- `a_size` (per-star radius) substitute. HYG v4.2 does not ship
+  radius, so we synthesise it. Options, in order of 1:1 fidelity:
+  - **(best)** Stefan-Boltzmann via absolute magnitude + parallax:
+    `R ∝ sqrt(L) / T²`. Requires B-V → Teff lookup (Ballesteros
+    formula), then `L = 10^(−0.4·absMag) × L_sun`, then
+    `R = sqrt(L) × T_sun² / T²`. Adds ~40 lines to the HYG pipeline.
+  - **(pragmatic)** spectral-class → physical-radius lookup table
+    (Stellarium / Wikipedia): 16 entries from O5 to M9, indexed by
+    HYG's spectral-class first letter. Fast + deterministic.
+  - **(fallback)** apparent-mag proxy: `a_size ≈ k · 10^(−0.2·mag)`
+    where `k` is tuned so bright stars produce solid angles in
+    Gaia Sky's `u_solidAngleMap` range. Not physically anchored but
+    preserves magnitude ordering.
+    Choose (pragmatic) for first ship; escalate to (best) if the
+    matched-shot shows wrong radius distribution.
+- Host defaults:
+  - `u_solidAngleMap` = `vec2(1.0e-10, 2.0e-9)` (literal from source).
+  - `u_opacityLimits` = `vec2(0.1, 0.95)` (Gaia Sky default range —
+    verify against Settings.java StarSettings; fallback within
+    these bounds).
+  - `u_brightnessPower` = `0.6` (Gaia Sky default — verify).
+  - `u_minQuadSolidAngle` = `1.0e-10`.
+- Boundary fade `LEN0 = 20000 / DISTANCE_SCALE` (scale to our units)
+  fades stars out when camera gets within that distance (θ.7 hero-
+  star approach takes over).
+- Per-star `a_size` attribute added to the buffer geometry in
+  `buildVelocityAttribute`'s sibling function
+  (`buildStarSizeAttribute`), derived from the chosen option above.
+- Delete `NASAStarfield.tsx` + `shaders/nasaStarShaders.ts` in the
+  same commit (no longer needed as reference renderer; their
+  pre-Wave-α role ended when §2 revoked the log-compressed curve).
+- Delete the `brightness = 2·log(1 + flux·250)` math in
+  `starfieldPointMetrics` + its 23 unit tests; replace with
+  `starfieldSolidAngleMetrics` mirroring the new vertex math.
 
-**Parameters (ultra defaults).**
+**Parameters (ultra defaults).** Above — `u_solidAngleMap`,
+`u_opacityLimits`, `u_brightnessPower`, `u_minQuadSolidAngle`. Per-
+star `a_size` derived via spectral-class table.
 
-- Magnitude cutoff: `3.5`.
-- Spike size multiplier vs core sprite: `2.5`.
-- Spike kernel exponent: `k = 2.5` (2-point cross is too sharp; 3+ is
-  too blobby).
-- Spike rotation: fixed for cross look; optional `+0.25 rad` offset
-  for a 6-point hex look if we want Hubble-adjacent on ultra only.
-- Fade range: stars with `mag > 3.0` fade linearly to zero by
-  `mag = 4.0`.
-
-**DisplayPanel.** Add row **"Diffraction spikes"** with a 3-state
-selector: `Off / Cross (4-point) / Hex (6-point)` and a
-`Spike Intensity ×` slider (0.5–2.0). Persisted in
-`graphicsOverrides.diffractionSpikes`.
+**DisplayPanel.** Existing "Star size" slider rebinds from
+`particleSize` to `u_alphaFactor` (which multiplies the solid-angle-
+derived size). No new panel row.
 
 **Verification.**
 
-- Unit: the shader-math test suite pins the kernel's values at
-  `(x,y) = (0.5, 0)`, `(0.5, 0.5)`, `(0.1, 0.1)` so a tuning change
-  without intent fails CI.
-- Playwright: `e2e/diffraction-spikes.spec.ts` — screenshot the Canis
-  Major region, assert Sirius pixel cluster has a cross footprint
-  (non-zero alpha along `y=center ± 30px` and `x=center ± 30px`,
-  near-zero alpha on the 45° diagonals).
+- Unit: new `starfieldSolidAngleMath.test.ts` pins the mapping at
+  sample distances + sizes. Specifically:
+  - `solidAngle = size / dist`;
+  - `opacity = lint(...)` at the two map endpoints;
+  - boundary fade at `dist = LEN0` (zero) and `dist = LEN0 · 1e3`
+    (one).
+- Unit: ordering test — for fixed size, opacity is monotonically
+  non-increasing with distance (no ringing).
+- Playwright: `e2e/starfield-solidangle.spec.ts` — pan camera away
+  from the HYG cluster, assert faint-star pixel count decreases
+  (evidence of the fade).
+- Manual preview: Orion at default zoom vs. 10× zoom out — the
+  faint tail should visibly thin. At default HYG density we expect
+  ~50 % of stars to opacity-zero at the widest zoom, matching
+  Gaia Sky's typical looking.
 
-**Feasibility.** Easy (Option A).
+**Feasibility.** Medium. Vertex port is ~30 lines of GLSL; `a_size`
+attribute synthesis is the substantive work (~80 LOC in
+`hygBinary.ts` extension or a sibling loader).
 
 **Risks.**
 
-- L14 literal — perceptual spike size must be anchored to raw `mag`,
-  not to any compressed or HDR-lifted intermediate. Do not feed the
-  already-lifted `vColor * vfxHdrGain` back into the spike alpha.
-- Adding a second Points primitive doubles the draw-call cost for
-  ~150 stars on ultra. Budget check: on the reference Intel Iris Xe
-  test device, measure frame time before/after and reject the commit
-  if frame budget grows by > 0.5 ms.
+- L14 (historical) literal — perceptual lifts stay anchored to the
+  raw physical axis. We're swapping the curve from log-compressed to
+  solid-angle; the new axis is `solidAngle`, not `brightness`.
+  `faintLift` window math lives in the retired NASA path and is
+  removed together.
+- L15 literal — the existing `useMemo`'d ShaderMaterial is extended
+  with new uniforms; no JSX `<shaderMaterial>` slip.
+- L17 DPR — `gl_PointSize` needs a NDC-to-pixel conversion that
+  respects `gl.getPixelRatio()` (same rule as pre-θ.1b).
+- Visual regression risk on the Wave α baselines. All current
+  starfield Playwright specs + pixel-diff fixtures drop and get
+  rebuilt against the post-θ.1b baseline. This is a one-time
+  rebuild, flagged here so no one treats the invalidation as a bug.
+- Migration hazard: any downstream component that reads the HYG
+  magnitude floor (`vBrightness ≥ 0.05`) loses that invariant.
+  Audit `Planet.tsx`, `Starfield.test.ts`, and the overlay tracker
+  before ship.
+
+---
+
+### θ.2 — MERGED into θ.4 by the 2026-04-20 θ-audit
+
+θ.2 as originally scoped ("per-star additive billboard diffraction
+spike") was an invented simplification. Gaia Sky's diffraction spikes
+actually live in the `lensdirt.frag.glsl` pass of the pseudo-lens-
+flare pipeline, sampled from a shared 1D starburst texture
+(`u_texture2` in the source). The spikes are screen-centric (radial
+from viewport center), not per-star. Porting a per-star billboard
+cross would deliver an effect that does NOT match Gaia Sky's
+appearance, violating the 1:1 rule.
+
+**Scope consolidation:** the diffraction-spike feature now ships
+inside θ.4's 2-pass lens-flare onda, where `lensdirt.frag.glsl`
+delivers the starburst modulation naturally. See §5 θ.4 for the
+combined port plan.
+
+**§4.1 table row for θ.2 removed.** The `graphicsOverrides.diffractionSpikes`
+DisplayPanel key from the original plan now lives on θ.4's "Lens
+Flare" row as a sub-option ("with / without starburst spikes").
 
 ---
 
@@ -473,31 +594,54 @@ halo breathes.
   luma sampling (identifies bright-pixel clusters in the vertex
   stage).
 
-**Port plan.**
+**Port plan.** (Rewritten 2026-04-20 per θ-audit — the previous plan's
+"skip the Archimedean spiral" simplification was invented; Gaia Sky's
+LightGlow fundamentally needs per-light NDC positions, not bright-
+pass buffer, to work at all.)
 
-- Add a new custom `Effect` subclass in
+- Port **both** shaders verbatim: `lightglow.vert.glsl` (Archimedean
+  spiral luma sampler — 77 lines, no simplification) and
+  `lightglow.frag.glsl` (time-animated polar-mask glow — 99 lines).
+  The vertex samples the scene texture at `fx(t, a) = a·t·cos(t)` /
+  `fy(t, a) = a·t·sin(t)` spiral points around each `u_lightPositions[li]`
+  (NDC, `vec2`) to produce per-light `v_lums[li]`; the fragment uses
+  that lum + a time-animated `polarMask(uv, time)` to paint the glow.
+- **New infrastructure (CPU-side light registry).** Gaia Sky feeds
+  `u_lightPositions[MAX_LIGHTS]` (default `MAX_LIGHTS = 8`),
+  `u_lightColors[]`, `u_lightViewAngles[]`. Verified in
+  `core/src/gaiasky/render/postprocess/effects/LightGlow.java`:
+  `setLightPositions(nLights, float[] vec)`,
+  `setLightSolidAngles(float[])`, `setLightColors(float[])`.
+  Atlas needs an equivalent light registry:
+  - Sun (always present).
+  - Active hero-stars from θ.7a's detector (reuse the mutable-ref
+    cached nearest-bright-star list).
+  - Maximum 8 lights; if more qualify, pick the brightest by
+    solid-angle.
+  - Per-frame in `useFrame`: project each world position through
+    the camera, emit NDC `vec2` into a packed `Float32Array` that
+    gets uniformly uploaded (L19 — store-quiet guard: only upload
+    when the array's pixel-quantized fingerprint changes).
+- Custom `Effect` subclass in
   `src/components/canvas/scene/effects/LightGlowEffect.ts`, wrapping
-  the pmndrs `Effect` API (extends `Effect` from `postprocessing`).
-- **Simplification vs Gaia Sky:** skip the Archimedean-spiral
-  luma-detector and instead re-use the Bloom pass's downsampled
-  threshold buffer as the bright-pixel source. The animated
-  `polarMask` math ports verbatim; we just feed it from the
-  already-computed bright-pass texture instead of running a second
-  detection sweep.
-- Insert in the composer chain right before Bloom, per §5.1 chain.
-  Runs in Scene-linear HDR space (invariant #1 → #2). The ShaderMaterial
-  is constructed via `useMemo(() => new THREE.ShaderMaterial(...))`
-  (L15 literal) — never as a JSX `<shaderMaterial>` child.
-- Pass a `u_time` uniform from the simulation clock (NOT the store —
-  L18 literal) driven once per frame in `useFrame`. When
-  `a11y.reducedMotion === true`, **do not mount the effect at all**
-  (§4.2 hard-disable). Freezing `u_time` pays fragment cost for zero
-  visible change — forbidden.
-- **LightGlow v3.7.2 alignment (§8.6).** Gaia Sky v3.7.2 removed the
-  bloom-threshold dependency and adopted a time-animated polar mask
-  directly. Our port follows v3.7.2: the bright-pixel source is the
-  bloom bright-pass buffer, BUT the animated polar mask is evaluated
-  independently (not threshold-gated).
+  pmndrs `Effect`. The Effect owns the spiral-sampler vertex shader
+  - polar-mask fragment shader + glow-sprite texture
+    (`u_texture1` = the "starImage" that the fragment samples at the
+    glow uv; Gaia Sky loads this as a PNG, we generate via
+    `OffscreenCanvas` or ship the same baked asset).
+- Insert position per §5.1 (LightGlow runs FIRST in the Gaia Sky
+  chain, before bloom). ShaderMaterial constructed via `useMemo` (L15
+  literal).
+- Pass `u_time` uniform from `simulationClock.getNow()` (L18 literal).
+  When `a11y.reducedMotion === true`, **do not mount the effect at
+  all** (§4.2). Freezing `u_time` pays fragment cost for zero visible
+  change — forbidden.
+- `u_orientation` — Gaia Sky can rotate the glow texture per-frame
+  for a drifting star-spike look; keep off by default (`0.0`) since
+  the polar mask already animates.
+- **LightGlow v3.7.2 alignment (§8.6).** Gaia Sky v3.7.2 kept the
+  Archimedean spiral but made the polar mask time-animated
+  independently — exactly what our fragment port does above.
 
 **Parameters (ultra defaults).**
 
@@ -548,49 +692,83 @@ defer to §9.
 
 ---
 
-### θ.4 — Pseudo lens flare (Chapman ghosts + halo + starburst)
+### θ.4 — Pseudo lens flare + lensdirt starburst (Chapman ghosts + halo + diffraction spikes)
 
-**Goal.** The screen-space lens-flare effect that gives bright stars
-ghost reflections down the optical axis (toward screen center), a wide
-halo ring, and chromatic RGB separation — the "pointing the telescope
-at the Sun" look.
+**Goal.** Full Gaia Sky lens-flare pipeline: Chapman ghost march down
+the optical axis + wide halo ring + chromatic RGB separation +
+**lensdirt composite with diffraction-spike starburst**. This is
+where the "diffraction spikes" feature lives — originally mis-scoped
+as θ.2, now merged here per the 2026-04-20 θ-audit because Gaia Sky's
+spikes are sampled from a shared 1D starburst texture radially from
+screen center (`radial = centerVec.x / d`), not from per-star
+billboards.
 
-**Gaia Sky reference.**
+**Gaia Sky reference (verified 2026-04-20).**
 
-- `assets/shader/postprocess/pseudolensflare.frag.glsl` — John
-  Chapman's screen-space pseudo-lens-flare (MIT-compatible).
-- `assets/shader/postprocess/lensdirt.frag.glsl` — starburst + dirt
-  composite.
+- `assets/shader/postprocess/pseudolensflare.frag.glsl` (68 lines) —
+  John Chapman's pseudo-lens-flare (MPL2). Ghost march + halo sample.
+- `assets/shader/postprocess/lensdirt.frag.glsl` (37 lines) — the
+  composite pass. Reads scene (`u_texture0`) + dirt (`u_texture1`) +
+  1D starburst (`u_texture2`) + `u_starburstOffset`. Samples
+  starburst twice (rotated by `u_starburstOffset`, once as
+  `abs(radial - offset)`, once as `abs(-radial + offset)`) and
+  multiplies. Final: `fragColor = base * (dirt * 3.0 + starburst)`.
+- `core/src/gaiasky/render/MainPostProcessor.java:279` — `PseudoLensFlare`
+  construction takes `lensColor`, `lensDirt`, `lensStarBurst` as 3
+  distinct texture assets at a half-res FBO (`lensFlareSettings.fboScale`).
 
-**Port plan.**
+**Port plan.** Two composer passes (not one merged pass):
 
-- Port `pseudolensflare.frag.glsl` as a custom `Effect` in
-  `src/components/canvas/scene/effects/LensFlareEffect.ts` — direct
-  GLSL port, ~60 lines. Reads the Bloom pass's bright-threshold
-  buffer as input.
-- `lensdirt.frag.glsl` ports as a second `Effect` (or, cheaper, a
-  single combined pass: ghosts + halo + starburst + dirt in one
-  shader, mergeable since Chapman's output is small).
-- Dirt texture: generate at build time —
-  `scripts/build-lens-dirt.mjs` produces a 512×512 low-contrast
-  noise PNG; ship it lazy-loaded so the main bundle doesn't grow.
-- Insert in composer **after** Bloom but **before** AgX — the flare
-  needs the HDR signal to look right, and AgX still tone-maps the
-  composite.
+1. **PseudoLensFlareEffect** (`src/components/canvas/scene/effects/PseudoLensFlareEffect.ts`):
+   direct GLSL port of `pseudolensflare.frag.glsl`. Input = HDR scene
+   sampled at `u_texture0`. Generates ghost march + halo. Output is
+   the flare layer, not composited yet.
+2. **LensDirtEffect** (`src/components/canvas/scene/effects/LensDirtEffect.ts`):
+   direct GLSL port of `lensdirt.frag.glsl`. Takes the scene +
+   dirt texture + starburst texture. Renders the final composite with
+   diffraction spikes.
+
+Assets, in `public/textures/lens/`:
+
+- `lensColor.png` — gradient for chromatic aberration lookup (port
+  Gaia Sky's asset if licence permits; otherwise generate a neutral
+  RGB gradient at build time).
+- `lensDirt.png` — low-contrast dirt mask, 512×512. Generated via
+  `scripts/build-lens-assets.mjs` (AGENTS.md §11 preflight: grep
+  `scripts/` before creating; no existing equivalent).
+- `lensStarBurst.png` — 1D strip (e.g. 256×1) with the starburst
+  profile. Generated alongside dirt. The specific profile controls
+  the spike count and angular distribution.
+- `u_starburstOffset` — rotates with camera look direction so spikes
+  drift naturally when the user pans. Animated per-frame.
+
+Per §5.1 chain: both effects run BEFORE bloom (Gaia Sky's order —
+lensFlare at position 311, bloom at position 336). HDR signal gives
+the ghost weighting its filmic character; post-bloom would wash it
+out.
 
 **Parameters (ultra defaults).**
 
-- `u_ghosts = 8`
-- `u_ghostDispersal = 0.4`
-- `u_haloWidth = 0.45`
-- `u_aberrationAmount = 3.5` (texels; not the chromatic-aberration
-  effect — that's θ.6 and runs later in the chain)
-- Composite max clamp: `0.4` (prevents over-bright flare — port direct
-  from `lensdirt.frag.glsl`)
+- `u_ghosts = 8`, `u_ghostDispersal = 0.4`, `u_haloWidth = 0.45`,
+  `u_aberrationAmount = 3.5` texels. Values verified in source.
+- Lensdirt: `dirt * 3.0 + starburst` (hardcoded coefficients in the
+  source — port verbatim).
+- `u_starburstOffset`: derived from camera yaw × 0.1 per frame (gives
+  slow spike drift without visible flicker).
+- FBO scale: 0.5 (half-res for ghost pass, same as Gaia Sky default).
 
-**DisplayPanel.** Add row **"Lens Flare"** with `Off / Subtle / Full`.
-Off = effect disabled. Subtle = intensity × 0.4, 4 ghosts. Full = ship
-defaults. Default on `ultra`, off on `high` and below.
+**DisplayPanel.** One row **"Lens Flare"** with
+`Off / Pseudo Flare / Pseudo Flare + Spikes`. The spike setting
+toggles the LensDirt pass's `u_texture2` sampling (null → no
+spikes; asset bound → spikes). Default on `ultra`, off on `high`
+and below; `balanced` gets "Pseudo Flare + Spikes" at half-intensity
+as of the audit (originally deferred to ultra-only — the audit
+lowered the tier floor since the perf cost is ~0.3 ms on Iris Xe
+once FBO scale is 0.5).
+
+**§4.1 row merger.** This onda now covers the θ.2 effect the
+previous plan scoped separately. `graphicsOverrides.diffractionSpikes`
+becomes a sub-key of `graphicsOverrides.lensFlare`.
 
 **Verification.**
 
@@ -698,23 +876,42 @@ with trivial parameter surfaces.
 
 **Port plan.**
 
-- All three are already available as effects in the `postprocessing`
-  (pmndrs) library — no custom shader code needed:
-  - `ChromaticAberrationEffect` (pmndrs)
-  - `VignetteEffect` (pmndrs)
-  - `NoiseEffect` (pmndrs, grain substitute)
-- Wire them into `PostProcessingPipeline.tsx` in the order:
-  `... Bloom → AgX → ChromaticAberration → Vignette → NoiseEffect →
-HueSat → BrightnessContrast`.
+- **Direct port of the three Gaia Sky shaders** (rewrite 2026-04-20 per
+  θ-audit). The previous plan used pmndrs library defaults, which
+  approximate but do not reproduce Gaia Sky's specific math:
+  - `chromaticaberration.frag.glsl` (17 lines) — `aberrated =
+u_aberrationAmount · pow(length(vec_center_pixel), 3) · sign(...)`.
+    **Cubic radial profile**, not pmndrs's linear offset.
+  - `vignetting.frag.glsl` (99 lines) — `factor = smoothstep(VignetteX,
+VignetteY, distance(uv, center))`. Has optional CONTROL_SATURATION
+    - ENABLE_GRADIENT_MAPPING flags (we port only the base vignette;
+      the LUT path is out of scope).
+  - `filmgrain.frag.glsl` (24 lines) — three independent RGB channel
+    grains (`rand(uv + t)`, `rand(uv*0.8 + t)`, `rand(uv*1.2 + t)`),
+    NOT monochrome noise. `grain = rgb_noise * intensity - intensity/2`
+    then `saturate(color + grain)`.
+- Port each into a custom `Effect` subclass:
+  - `src/components/canvas/scene/effects/ChromaticAberrationEffect.ts`
+    (~5 lines of GLSL body).
+  - `src/components/canvas/scene/effects/VignetteEffect.ts` (~10 LOC
+    GLSL body — base only, no saturation / LUT).
+  - `src/components/canvas/scene/effects/FilmGrainEffect.ts`
+    (~10 LOC GLSL body — uses `simple_noise` port of
+    `lib/simple_noise.glsl`).
+- Wire into `PostProcessingPipeline.tsx` per §5.1 (corrected post-
+  audit): `FilmGrain → ChromaticAberration → Vignette → Levels
+(HueSat + BrightnessContrast) → Antialiasing`.
 - Gated by three new keys on `graphicsOverrides`:
   `chromaticAberrationEnabled`, `vignetteEnabled`, `filmGrainEnabled`,
   each with their own intensity slider.
 
-**Parameters (ultra defaults).**
+**Parameters (ultra defaults, from Gaia Sky source).**
 
-- Chromatic aberration offset: `THREE.Vector2(0.0005, 0.0005)`.
-- Vignette offset: `0.35`, darkness `0.5`.
-- Film grain intensity: `0.03`, blend mode `SOFT_LIGHT`.
+- Chromatic aberration: `u_aberrationAmount = 0.05` (default in
+  the source; tunable per Gaia Sky Settings).
+- Vignette: `VignetteIntensity = 0.5`, `VignetteX = 0.35`,
+  `VignetteY = 0.7`, `CenterX = CenterY = 0.5`.
+- Film grain: `u_intensity = 0.03`, `u_time` from simulation clock.
 
 **DisplayPanel.** Three toggle + slider pairs under a new
 **"Grading"** section (NOT "Lens" — reserved for θ.4 "Lens Flare"
@@ -806,17 +1003,40 @@ generalizes it to any HYG star within approach range.
 - **Stage 5 — cleanup.** When the camera leaves the hero-star zone,
   reverse the stages back to the standard starfield sprite.
 
-**Parameters (ultra defaults).**
+**Parameters (ultra defaults).** Literal values from
+`starsurface.fragment.glsl` (read 2026-04-20 θ-audit):
 
-- Approach threshold: `10 AU` (heliocentric radius equivalent scaled
-  by star's physical radius).
+- **FBM opts** (`gln_tFBMOpts` struct):
+  - seed = `0.3245`
+  - amplitude = `0.1`
+  - persistence = `1.4`
+  - frequency = `80.0`
+  - lacunarity = `2.0`
+  - scale = `vec3(4.0, 4.0, 4.0)`
+  - power = `1.0`
+  - octaves = `1` (ultra), `1` (high — Gaia Sky does NOT scale this
+    up; plan's earlier "high=1, ultra=2" was invention)
+  - redistribution = `false`, terbulance = `false`
+- **Surface-sphere mapping** — viewport hardcoded as
+  `vec2(1500.0, 750.0)`, `phiStep = PI / (viewport.y - 1)`,
+  `thetaStep = 2·PI / viewport.x`. `r = triangle_wave(time) * 0.2 +
+1.0` modulates noise seed over time.
+- **Sunspot curl**: `s = 0.47`, `un_radius = 2.3`, `frequency = 1.6`,
+  `ss = max(f1 - s, 0) * max(f2 - s, 0) * 4`, `ss2 = pow(ss * 1.5,
+5.0)`.
+- **Final composite**: `color = n * (1 - ss) - ss2`, then
+  `fragColor = min(vec3(0.9), color * 6.0 * v_lightDiffuse * percolor)`
+  with `percolor = v_lightDiffuse * min(1, perimeter + 0.5)` and
+  `perimeter = dot(normalize(v_normal), v_viewVec) * 0.6`.
+- **Approach threshold**: `10 AU` (heliocentric radius equivalent
+  scaled by star's physical radius; atlas-specific, not from Gaia
+  Sky — their threshold is `radius × 2.5 / fovFactor` for the
+  billboard→surface swap only).
 - Billboard→surface swap: `dist < radius × 2.5 / fovFactor` (direct
-  port from Gaia Sky).
-- Cross-fade duration: `500 ms`.
-- FBM curl noise octaves on high tier: 1; on ultra: 2.
-- Sunspot scale adjusted per star class (cooler stars get more
-  contrast from a spectral-type lookup in `src/lib/starPhysics.ts` —
-  new file).
+  port from Gaia Sky `NaturalCamera.java` line 527 surface-mode flag).
+- Cross-fade duration: `500 ms` (atlas-specific UX choice).
+- Sunspot scale adjusted per spectral class via
+  `src/lib/starPhysics.ts` (new file).
 
 **DisplayPanel.** Row **"Hero Star LOD"** with `Off / High-tier /
 Ultra-only` selector. Defaults: `Off` on balanced, `Ultra-only` on
@@ -1020,48 +1240,64 @@ skip on constrained tier — the effects aren't mounted there.
 
 ## 8. Sequencing and estimated weight
 
-Fifteen ondas (θ.7 split em θ.7a/θ.7b). Ordem revista após a validação
-em enxame (§8.5) e o review Codex (2026-04-20) para colocar primeiro o
-que destrava verificação visual, agrupar context-switches por subsistema,
-e empilhar os passes do composer numa ordem de re-baseline única.
+**Post-2026-04-20 θ-audit revision.** Fourteen ondas in phase θ
+(θ.7 split em θ.7a/θ.7b; θ.1 itself split into θ.1/θ.1b per the
+audit; θ.2 merged into θ.4; θ.13 moved to §9). Ordem revista pra
+respeitar a dependência θ.1b → θ.14, o casamento de composer
+passes na ordem do Gaia Sky real (§5.1), e agrupamento de
+context-switches por subsistema.
 
-| #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                    |
-| --- | ---- | ------ | --------------- | ------------------------------------------------------------------------------------------------------- |
-| 1   | θ.1  | S      | Star shader     | Foundation — sprite shape feeds θ.2/θ.3/θ.4/θ.14. First because it's small e barato de reverter.        |
-| 2   | θ.13 | S      | Composer        | Bayer dithering entra cedo: elimina banding que mascararia regressões dos próximos passes.              |
-| 3   | θ.6  | S      | Composer        | Grading finishes (CA/vignette/grain) — pequenos, parale-izáveis, mesmo context do θ.13.                 |
-| 4   | θ.2  | S      | Star shader     | Spikes aditivos sobre θ.1; visual payoff alto, nenhum novo pass.                                        |
-| 5   | θ.9  | M      | Scene-graph     | Orbit lines com glow — base do shader que θ.10 reusa; independente dos composer passes.                 |
-| 6   | θ.10 | M      | Scene-graph     | Constelações — linhas (θ.9) + primeiros SDF labels; prepara o caminho para θ.12 e θ.15.                 |
-| 7   | θ.12 | S      | Scene-graph     | Labels nomeadas de estrelas; reusa troika-three-text do θ.10.                                           |
-| 8   | θ.8  | M      | Camera          | Camera feel — não toca shaders; slot antes de motion-blur para isolar regressões de easing.             |
-| 9   | θ.3  | M      | Composer        | LightGlow — primeiro pass "grande" do composer; valida infra para θ.4/θ.5.                              |
-| 10  | θ.4  | M      | Composer        | Pseudo-lens-flare — reusa o effect-wrapper de θ.3.                                                      |
-| 11  | θ.5  | M      | Composer+Depth  | Motion blur — exige depth/velocity buffer; slot após θ.4 pra um único context-switch no chain.          |
-| 12  | θ.15 | M      | Composer        | AA + UnsharpMask — slot imediato após θ.5 pra re-baselinar uma única vez os specs com motion blur + AA. |
-| 13  | θ.14 | S      | Star shader     | Twinkle via LUT — depende de `vfxHdrGain` ser estável e de θ.1 estar final.                             |
-| 14  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust — asset pipeline + 2-layer blend; maior risco de regressão de bloom.           |
-| 15  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard.                                                             |
-| 16  | θ.7b | L      | Hero-LOD        | Procedural surface + cross-fade — o maior item; slot último pra beneficiar de todos os outros.          |
+| #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                                    |
+| --- | ---- | ------ | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| —   | θ.1  | S      | Star shader     | **SHIPPED 2026-04-20** (`2662f08`, `13e501e`). Sprite fragment port.                                                    |
+| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield Playwright specs. |
+| 2   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                            |
+| 3   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                           |
+| 4   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                 |
+| 5   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                 |
+| 6   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame. |
+| 7   | θ.3  | M      | Composer        | LightGlow (u_lightPositions + Archimedean spiral). First "big" composer pass; validates infra for θ.4/θ.5.              |
+| 8   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                       |
+| 9   | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                    |
+| 10  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                           |
+| 11  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                 |
+| 12  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                |
+| 13  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                 |
+| 14  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                          |
 
 Notas:
 
-- **θ.11 antes de θ.7:** o backdrop Milky Way muda a luminância de fundo
-  de forma não-trivial; tem que estar no lugar antes de θ.7 ajustar o
-  cross-fade billboard→surface (pra não re-calibrar duas vezes).
-- **θ.13 cedo, θ.6 em seguida:** evita re-capturar baseline duas vezes
-  — os dois são composer-level e fazem shift global de pixels.
-- **θ.9/θ.10/θ.12 em bloco:** scene-graph é um subsystem; fazer tudo
-  num go mantém o context-switch pequeno.
-- **θ.15 logo após θ.5:** AA precisa rodar DEPOIS de motion-blur no
-  chain §5.1; shippar junto evita rebaseline triplo (motion blur → sem
-  AA → motion blur com AA).
-- **Ordem reflete a chain da §5.1**, mas não é idêntica — as ondas de
-  scene-graph (θ.9/θ.10/θ.12) são ortogonais ao composer e aparecem
-  cedo pra desbloquear verificação visual das linhas.
+- **θ.1b antes de tudo composer-level:** revoking the NASA-Eyes curve
+  invalidates all pre-phase-θ starfield Playwright baselines. Slot
+  first so the post-θ.1b baseline becomes the pinned reference for
+  every later onda.
+- **θ.1b antes de θ.14:** Gaia Sky's variability shader perturbs the
+  size axis (solid-angle). θ.14 is architecturally incoherent until
+  θ.1b lands.
+- **θ.6 antes dos composer-grandes (θ.3/θ.4/θ.5):** CA/vignette/grain
+  são display-referred no final da chain; shippar cedo significa que
+  a baseline dos composer-grandes já inclui o "look" final e não
+  precisa rebaselines duplos quando θ.6 entrar depois.
+- **θ.8 antes de θ.5 (motion blur):** cinematic damping muda
+  simulação de velocidade da câmera; shippar antes do motion blur
+  garante que o tuning do `u_blurScale` é feito contra o damping
+  final, não o pre-cinematic.
+- **θ.3 antes de θ.4:** Lens-flare reusa o custom-Effect wrapper
+  estabelecido por θ.3, E lens-flare assume que a composer chain já
+  tem LightGlow operativa (confirmar no matched-shot da θ.4 que a
+  cadeia lightglow → flare produz o "look" Gaia Sky).
+- **θ.5 entre θ.3 e θ.4** na §5.1 real (verified audit): motion blur
+  slot é antes de lens flare. Sequenced accordingly.
+- **θ.11 antes de θ.7:** backdrop Milky Way muda luminância de fundo;
+  θ.7 cross-fade billboard→surface calibra contra o background
+  final, não o preto pré-θ.11.
+- **θ.15 (AA) LAST composer slot:** Gaia Sky's AA runs last in
+  `ppb.add` sequence; slot at end so all prior passes baseline
+  without AA, then AA lands as a once-pixel-shift commit.
 
-**Phase estimate:** 20–24 commits over 8–10 sessões, Wave α excluded
-(era 18–22 antes do θ.15; +2 commits pra AA + unsharp split).
+**Phase estimate:** 14 ondas + θ.1b = 15 ondas in phase θ, approx.
+22–26 commits (one per onda + Codex follow-up + occasional split).
+θ-audit revision is itself a separate commit (doc-only).
 
 ---
 
@@ -1319,13 +1555,28 @@ e adiciona labels permanentes para as estrelas IAU bright.
 
 **Port plan.**
 
-- Trocar `@react-three/drei` `<Text>` (troika-three-text). Atlas MSDF
-  pré-empacotado no troika — zero asset build.
+- **Adaptation classification (R1 step-5 #1, stack/API mismatch).**
+  Gaia Sky `font.fragment.glsl` is a **single-channel SDF** (reads
+  `.a` from a distance-field atlas, thresholds at 0.6 with a
+  scale-adaptive `smoothing = 1/(16·u_scale)`). troika-three-text —
+  the atlas-side binding via `@react-three/drei` `<Text>` — is **MSDF
+  (multi-channel SDF)**. MSDF preserves sharp corners better than
+  SDF on small glyphs but the sample math is different. Porting a
+  full custom SDF renderer (atlas build + rasteriser + GLSL) is ~300
+  LOC of net-new infrastructure, outside θ scope. troika gives us
+  equivalent functionality with a different sampler — acceptable
+  adaptation, flagged as non-1:1 (labels will NOT be pixel-identical
+  to Gaia Sky's labels).
+- Trocar por `@react-three/drei` `<Text>` (troika-three-text). Atlas
+  MSDF pré-empacotado no troika — zero asset build.
 - Componente `src/components/canvas/StarLabels.tsx`: consome o sidecar
   `hyg-v1.names.json` (já carregado em θ-prerreq), filtra estrelas com
   `mag < LABEL_MAG_THRESHOLD` (default `2.0` → ~45 labels).
 - Solid-angle fade: `opacity = smoothstep(THRESHOLD_MIN, THRESHOLD_MAX,
-starSolidAngleInViewport)`.
+starSolidAngleInViewport)`. (Matches Gaia Sky's
+  `font.vertex.glsl:22` formula `v_opacity = u_opacity *
+  clamp((pow(u_viewAngle, u_viewAnglePow) - u_thLabel) / u_thLabel,
+  0, 0.95) * u_componentAlpha`.)
 - Hover-sustain do `StarHoverPicker.tsx` atual: mantido, mas só para
   estrelas `mag > 2.0` (as labeled já têm label permanente).
 
@@ -1355,46 +1606,26 @@ Lazy-load on first toggle to `Named bright only`.
 
 ---
 
-### θ.13 — Bayer dithering no output composer
+### θ.13 — REMOVED from phase θ by the 2026-04-20 θ-audit
 
-**Goal.** Eliminar banding visível no fundo do espaço (gradient
-sub-1.0 alpha on 8-bit output). Bayer 4×4 é 20 linhas de GLSL, custo
-zero, e Gaia Sky confirma ser a técnica padrão.
+**Why removed.** The audit revealed that Gaia Sky does not ship
+output dithering at the composer: `MainPostProcessor.java`'s
+`ppb.add(...)` sequence does not include a Dither effect, and the
+cited `assets/shader/lib/dither4x4.glsl` is a utility function for
+**alpha-threshold binarisation** (`alpha < limit ? 0 : 1`) used
+internally by other shaders — NOT an output anti-banding pass. The
+plan's earlier "addition-based Bayer dither at composer terminal"
+was an atlas-specific anti-banding idea that happened to re-use the
+Bayer matrix, not a port of Gaia Sky behavior.
 
-**Gaia Sky reference.**
+**Where it went.** Kept as an atlas-only Wave β candidate in §9
+("Out-of-scope follow-ups"). If output banding becomes a visible
+regression after θ ships, the 20-line Bayer addition pass stays
+available as a single-commit fix outside phase θ. Removing it here
+keeps phase θ honest about "what Gaia Sky ships" vs. "what atlas
+would benefit from".
 
-- `assets/shader/lib/dither4x4.glsl` / `dither8x8.glsl`.
-
-**Port plan.**
-
-- Novo custom `Effect` em `effects/DitherEffect.ts` que roda **last**
-  no composer (depois de BrightnessContrast), antes do output para
-  framebuffer 8-bit. Vide §5.1 invariant "Dither position".
-- Effect shader construído via `useMemo` pattern dentro do wrapper
-  pmndrs `Effect` subclass (L15 literal — nenhum `<shaderMaterial>`
-  JSX child, mesmo que seja custom-effect wrapper).
-- Fragment:
-  ```glsl
-  const int matrix[16] = {0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5};
-  int x = int(mod(gl_FragCoord.x, 4.0));
-  int y = int(mod(gl_FragCoord.y, 4.0));
-  float t = float(matrix[x + y*4]) / 16.0 - 0.5;
-  outputColor = inputColor + vec4(vec3(t / 255.0), 0.0);
-  ```
-
-**DisplayPanel.** Row **"Dithering"** — `Off / Bayer 4×4 / Bayer 8×8`.
-Default on for balanced+, off on constrained.
-
-**Verification.**
-
-- Unit: none (pixel-level).
-- Playwright: `e2e/dithering.spec.ts` — amostrar uma gradient region
-  escura, confirmar que histograma de luminance pós-θ.13 tem
-  distribuição mais contínua (less histogram spikes).
-
-**Feasibility.** Easy.
-
-**Risks.** Nenhum. Custo GPU negligenciável.
+**§4.1 row removed.** `graphicsOverrides.dithering` retired.
 
 ---
 
@@ -1410,24 +1641,38 @@ LUT de phase-folded variable-stars do Gaia Sky.
 - `assets/shader/variable.group.quad.vertex.glsl` — LUT lookup
   phase-folded com linear interp entre sample points.
 
-**Port plan.**
+**Hard dependency on θ.1b.** This onda depends on the solid-angle
+vertex port from θ.1b. Gaia Sky's `variable.group.quad.vertex.glsl`
+applies the variability perturbation to the star's **size** input
+feeding `solidAngle = size / dist` — NOT to any brightness /
+magnitude intermediate. Under the atlas pre-θ.1b NASA-Eyes vertex
+the perturbation axis doesn't exist; shipping θ.14 before θ.1b
+would graft the wrong kind of perturbation onto the wrong axis.
+θ.14 is sequenced AFTER θ.1b in §8.
 
-- Gerar 1D LUT 128×1 RGBA no boot (offline seria overkill) com shape
-  `cos(2π·t) + 0.3·cos(6π·t)` clampada.
-- Novo atributo per-star `a_twinkleEnabled` (0/1) + `a_twinklePhase`
-  (hash do HIP id).
-- **L14 literal — apply in the raw physical axis, NOT in derived
-  brightness.** The magnitude-domain perturbation is added to the
-  star's _apparent magnitude_ **before** the log-compressed transfer
-  curve `brightness = 2·log(1 + flux · 250)` in
-  `starfieldShaderMath.ts`. Concretely in the vertex shader:
+**Port plan.** (Rewritten 2026-04-20 per θ-audit — was tied to the
+retired log-compressed curve; now aligns with θ.1b solid-angle axis.)
+
+- Generate per-star variability LUT following Gaia Sky's packing:
+  `variable.group.quad.vertex.glsl` samples a `u_variabilityTex` of
+  texels `(mag, time, packedColor, 1)` per entry, with
+  `a_nVari` + `a_varIndex` selecting the star's slice. Atlas can
+  simplify to a single-profile LUT 128×1 RGBA (shape `cos(2π·t) +
+0.3·cos(6π·t)` clamped) since HYG does not ship per-star light-
+  curves. Document as a stack/API mismatch (R1 step-5 #1).
+- Per-star attributes: `a_twinkleEnabled` (0/1, set for a seeded
+  ~5 % subset) + `a_twinklePhase` (hash of HIP id).
+- **Apply in the size-axis (θ.1b's physical axis)**, verbatim from
+  the Gaia Sky source:
   ```glsl
-  float magEffective = a_apparentMag - 0.08 * sampleLUT(a_twinklePhase, u_time);
-  float flux = pow(10.0, -0.4 * magEffective);
-  float brightness = 2.0 * log(1.0 + flux * 250.0); // unchanged curve
+  float sizeDelta = 1.0 + 0.08 * sampleLUT(a_twinklePhase, u_time) * a_twinkleEnabled;
+  float solidAngle = (a_size * sizeDelta) / dist;
+  // remainder of the vertex follows θ.1b
   ```
-  Do NOT multiply the already-derived `brightness` — that would
-  scramble ordering across magnitudes (L13/L14 failure mode).
+  The perturbation multiplies `a_size` (a positive physical radius),
+  so `solidAngle` stays non-negative and magnitude ordering is
+  preserved (L14 literal: perturb the physical axis, not a derived
+  one).
 - `u_time` uniform fed from the simulation clock (L18 literal —
   never from the React store).
 - ShaderMaterial constructed via `useMemo` (L15 literal); the LUT
@@ -1483,41 +1728,64 @@ scene-graph additions: jagged orbit lines (θ.9), label edges (θ.10,
 θ.12), and star-sprite shimmer on pan. Gaia Sky exposes AA and
 unsharp-mask as first-class graphics controls; we bring both.
 
-**Gaia Sky reference.**
+**Gaia Sky reference (verified 2026-04-20 θ-audit — previous plan
+had multiple source-fidelity errors).**
 
-- `assets/shader/postprocess/antialias.*.glsl` (FXAA / SMAA / TAA
-  implementations — Gaia Sky ships all three and picks via
-  graphics-settings preset).
-- `assets/shader/postprocess/unsharpmask.*.glsl` — sharpens
-  post-AA output; paired with SMAA in the preset stack.
+- `assets/shader/postprocess/fxaa.frag.glsl` — NVIDIA FXAA 3.11
+  whitepaper port, 302 lines, 5 presets (1–5) controlling
+  `FXAA_EDGE_THRESHOLD`, `FXAA_SEARCH_STEPS` etc. **Plan's earlier
+  pmndrs-library reference is an approximation, not a port.**
+- `assets/shader/postprocess/nfaa.frag.glsl` — Normal-Filtered AA,
+  42 lines, sibling alternative (cheaper than FXAA). Samples 5 points
+  along a normal map computed from the input. **Gaia Sky picks FXAA
+  or NFAA at runtime; there is no SMAA in the source.** Plan's
+  earlier "SMAA on high tier" is a pure invention.
+- `assets/shader/postprocess/unsharpmask.frag.glsl` — **"LumaSharpen
+  1.4.1"** by Christian Cann Schuldt Jensen (GLSL port by Anon), 45
+  lines, contrast-aware blur-then-subtract with min/max clamping per
+  channel. **NOT a plain Gaussian blur + subtract** as the previous
+  plan described. The algorithm checks local min/max to avoid
+  introducing halos.
 
 **Port plan.**
 
-- Use pmndrs `postprocessing` library's built-in `SMAAEffect` and
-  `FXAAEffect` — no custom shader code. Chain position per §5.1:
-  AA runs after θ.5 motion blur and before θ.6 grading (display-
-  referred SDR). Unsharp mask via a custom wrapper around the
-  pmndrs `BrightnessContrastEffect` is not sufficient — port
-  Gaia Sky's `unsharpmask.frag.glsl` (~40 lines, single Gaussian
-  blur + subtract) as `effects/UnsharpMaskEffect.ts`.
-- Tier table (authoritative in §4):
+- Direct port of all three shaders (no pmndrs library substitution):
+  - `src/components/canvas/scene/effects/FxaaEffect.ts` — ~300 LOC
+    direct port of `fxaa.frag.glsl` with `FXAA_PRESET = 5`
+    (ultra/high).
+  - `src/components/canvas/scene/effects/NfaaEffect.ts` — ~45 LOC
+    direct port of `nfaa.frag.glsl` + port of `lib/normal.glsl` and
+    `lib/luma.glsl` it depends on.
+  - `src/components/canvas/scene/effects/LumaSharpenEffect.ts` — ~50
+    LOC direct port of `unsharpmask.frag.glsl` ("LumaSharpen 1.4.1").
+- Tier table (authoritative in §4.1):
   - `constrained` → off (no composer);
-  - `balanced` → FXAA only (cheapest);
-  - `high` → SMAA (better quality, still fast);
-  - `ultra` → SMAA + UnsharpMask (`amount = 0.25`, single-pass).
-- L15 literal for UnsharpMask ShaderMaterial. L7 preflight for the
-  unsharp-mask effect file (grep `src/components/canvas/scene/effects`
-  — nothing equivalent expected but check).
+  - `balanced` → NFAA (cheaper, mobile-friendly);
+  - `high` → FXAA + LumaSharpen;
+  - `ultra` → FXAA + LumaSharpen (same as high — there is no
+    higher-fidelity AA in Gaia Sky; previous plan's SMAA tier was
+    invented).
+- Chain position per §5.1 (corrected post-audit): Antialiasing runs
+  LAST in the composer, after Levels. LumaSharpen runs before Bloom,
+  in the display-referred stage (Gaia Sky position 320 — between
+  lens-flare composite and bloom). This is the opposite of the
+  previous plan's ordering.
+- L15 literal for all three ShaderMaterials. L7 preflight passes:
+  none of these filenames exist in `src/components/canvas/scene/effects/`
+  at time of writing.
 
 **Parameters (ultra).**
 
-- FXAA: library defaults, `edgeDetectionMethod = LUMA`.
-- SMAA: library defaults, `preset = SMAAPreset.HIGH`.
-- UnsharpMask: `amount = 0.25`, `radius = 1.0` (single Gaussian tap
-  per axis — cheap, Gaia Sky default).
+- FXAA: `FXAA_PRESET = 5` — `FXAA_EDGE_THRESHOLD = 1/8`,
+  `FXAA_EDGE_THRESHOLD_MIN = 1/24`, `FXAA_SEARCH_STEPS = 32`,
+  `FXAA_SUBPIX_CAP = 4/5`, `FXAA_SUBPIX_TRIM = 1/4`. Literal from
+  source.
+- NFAA: library defaults, 5-sample blur along computed normals.
+- LumaSharpen: `u_sharpenFactor = 0.25` (default), `CONTR = 0.08`,
+  `DETAILS = 1.0` — literal from source.
 
-**DisplayPanel.** Row **"Anti-aliasing"** — `Off / FXAA / SMAA`.
-Secondary row **"Unsharp Mask"** — `Off / On` (slider `0.0–0.5`).
+**DisplayPanel.** Row **"Anti-aliasing"** — `Off / NFAA / FXAA`.
+Secondary row **"Sharpen"** — `Off / On` (slider `0.0–0.5`).
 Both respect the tier defaults in §4.1 but users can downgrade/override.
 
 **Verification.**
@@ -1548,30 +1816,109 @@ Medium for the unsharp-mask port (~40 LOC shader + wrapper).
 
 ---
 
-## 8.6 Correções ao relatório Sonnet original (confirmadas pelo enxame)
+## 8.6 Correções pós-audit — source-verified (2026-04-20)
 
-- **Pipeline chain order** (verified against `MainPostProcessor.java`):
-  `BlendFullHalfRes → LightGlow → RayMarching → SSR → CameraMotionBlur
-→ PseudoLensFlare/LensFlare → Blend3(UI) → UnsharpMask → AA → Bloom
-→ Curvature → Reprojection → FilmGrain → ChromaticAberration →
-Levels → WarpingMesh → XBRZ`. SSR roda cedo; Curvature roda DEPOIS
-  do Bloom (não é o warp final). XBRZ e Curvature são passes separados.
-- **LightGlow v3.7.2 (Apr 2026)** removeu o threshold interno do
-  bloom e ganhou polar mask com dependência temporal dinâmica — θ.3
-  deve adotar essa versão atualizada em vez da v3.6.
-- **B-V → RGB** em Gaia Sky: CIE xyY polinomial (Ballesteros formula
-  for Teff + polynomial Teff→(x,y) + xyY→sRGB + gamma). Nossa
-  piecewise-linear em 3 segmentos (L14/L16-calibrada) é menos acurada
-  em estrelas frias. Registro em §9 como follow-up opcional; não
-  trocar sem Playwright-baseline comparison.
-- **Star shaders v3.7.0+** ganharam três modos de shading de billboard
-  (emissive / uniformly-lit / spherical Phong) — θ.1 pode opcionalmente
-  absorver o Phong em `ultra` para halo anisotrópico mais realista
-  (documentado mas não planejado para a fase).
-- **Billboard corona.** O `model_const = 172.4643429` é parâmetro de
-  transição (not the trigger) — Gaia Sky combina com `dist < radius
-× 2.5 / fovFactor` (surface-mode flag) para o swap final bilboard→mesh.
-  θ.7 está correto em usar os dois.
+**REWRITTEN 2026-04-20 after the θ-audit.** The previous version of
+this section contained inherited claims from the swarm + early Codex
+review that the audit found to be inaccurate. Current content below
+is cross-checked against `MainPostProcessor.java` line-by-line and
+against the shader files read in full (see §5 per-onda bodies for
+source-grounded rewrites).
+
+**Pipeline chain order (actual, from `ppb.add(...)` call sequence in
+`MainPostProcessor.java`).**
+
+```
+blendFullHalfRes → lightGlow → ssrEffect → cameraMotionBlur
+    → pseudoLensFlare → lensFlare → blend(UI Blend3)
+    → unsharp (LumaSharpen) → bloom → curvature → reprojection
+    → grain (FilmGrain) → aberration (ChromaticAberration)
+    → warpingMesh → upscaleFilter (XBRZ)
+    → levels → antialiasing (FXAA or NFAA)
+```
+
+- **Bloom runs AFTER unsharp + lens-flare**, NOT before. The previous
+  plan had this wrong.
+- **Antialiasing runs LAST**, after levels. The previous plan put AA
+  mid-chain.
+- **ChromaticAberration is mid-chain** (pos 365 in source), not
+  last. The previous plan had this wrong.
+- The atlas chain in §5.1 is adapted to this ordering; divergences
+  we keep are documented inline as pipeline/render-space mismatches
+  (R1 step-5 #2).
+
+**LightGlow architecture (verified lightglow.vert + lightglow.frag +
+LightGlow.java).**
+
+- Vertex samples the scene texture via an Archimedean spiral around
+  each `u_lightPositions[li]` to produce per-light `v_lums[li]` — a
+  luma detector PER KNOWN LIGHT, not a bright-pass buffer read.
+- Fragment renders a per-light glow sprite modulated by a time-
+  animated `polarMask(uv, time)` (polar frequencies 12, 37, 59 with
+  phase offsets; plan quotes these correctly).
+- The "v3.7.2 simplification" claim in the previous plan ("skip the
+  spiral, use bloom threshold") is **reversed by the audit**: the
+  spiral is still there in the current source, and the port requires
+  it because the bright-pass buffer does not know which lights are
+  "named" (Sun, hero stars) vs. which are just bright pixels.
+
+**Blending modes (verified `core/src/gaiasky/render/BlendMode.java`).**
+
+- `ADDITIVE` = `GL_ONE, GL_ONE` (pure premultiplied).
+- `ALPHA` = `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA`.
+- Atlas θ.1 post-audit switched to `THREE.CustomBlending` with
+  `OneFactor, OneFactor` + premultiplied fragment output to match
+  exactly (see commit `13e501e`).
+
+**Diffraction spikes location (verified `lensdirt.frag.glsl`).**
+
+- Spikes are sampled from a 1D `u_texture2` starburst texture at
+  `radial = centerVec.x / d`, rotated by `u_starburstOffset`, and
+  multiplied into the scene via `base * (dirt * 3.0 + starburst)`.
+- **Screen-centric radial pattern**, NOT per-star billboard. The
+  previous plan's θ.2 "per-star cross billboard" was invention.
+- Merged into θ.4 under the 2-pass lens-flare pipeline.
+
+**Anti-aliasing options (verified `postprocess/fxaa.frag.glsl` and
+`nfaa.frag.glsl`, `MainPostProcessor.java:514-522`).**
+
+- Gaia Sky ships `FXAA` (NVIDIA 3.11 whitepaper, 302 LOC, 5 presets)
+  and `NFAA` (Normal-Filtered, 42 LOC). **No SMAA.** Plan's earlier
+  SMAA-on-high was invention.
+- `unsharpmask.frag.glsl` is **"LumaSharpen 1.4.1"** (contrast-aware
+  blur-subtract with min/max channel clamping), NOT a plain Gaussian
+  blur + subtract as the previous plan described.
+
+**Star uniforms (verified `StarSetQuadComponent.java:46`).**
+
+- `u_solidAngleMap = vec2(1.0e-10, 2.0e-9)` (defaults, literal).
+- `u_thAnglePoint = vec2(1.0e-10, 1.5e-8)` (billboard switch).
+- θ.1b uses these values as the default port target.
+
+**θ.13 dither file mischaracterisation.** `lib/dither4x4.glsl` is a
+lib utility for alpha-threshold binarisation (`alpha < limit ? 0 :
+1`), NOT an output-composer anti-banding dither. Gaia Sky's
+`MainPostProcessor` does not instantiate any Dither effect. θ.13 as
+"port Gaia Sky dither" was a wrong-reference invention — moved to §9
+as atlas-only.
+
+**θ.2 deleted.** Diffraction spikes merged into θ.4.
+
+**Claims from the earlier §8.6 revision that still hold.**
+
+- LightGlow v3.7.2 polar-mask time animation is real — θ.3 adopts it
+  (the frequencies 12, 37, 59 with phase offsets are quoted
+  correctly in the plan).
+- `model_const = 172.4643429` is the billboard-corona transition
+  parameter, paired with `dist < radius × 2.5 / fovFactor` for the
+  surface-mode swap (θ.7 uses both correctly).
+
+**Claims retired.**
+
+- "B-V → RGB via CIE xyY / Ballesteros" — still deferred to §9 but
+  its urgency drops after θ.1b revises the whole brightness pipeline.
+- "Phong / spherical billboard shading mode for θ.1" — documented
+  in §9 but out of scope; we ship emissive only.
 
 ---
 
@@ -1633,66 +1980,133 @@ Added after Codex review (2026-04-20):
   cool-star regime than our piecewise-linear). See §8.6. Swap only
   with a Playwright-baseline comparison; low urgency.
 
+Added after θ-audit (2026-04-20):
+
+- **Output anti-banding Bayer dither** (was θ.13 — moved here).
+  Atlas-specific enhancement, NOT a Gaia Sky port
+  (`MainPostProcessor.java` does not instantiate an output dither
+  effect; the `lib/dither4x4.glsl` cited in the old plan is a
+  threshold-binarise utility for alpha-testing shaders, not the
+  composer). Bayer-addition approach is ~20 lines and addresses real
+  dark-gradient banding on 8-bit output, but it belongs to a Wave β
+  bundle of atlas-only polish, not phase θ. Ship if and when HDR→8-bit
+  banding becomes visible in production.
+- **"True" LensFlare (`lensflare.frag.glsl` — distinct from
+  `pseudolensflare.frag.glsl` already ported in θ.4).** Gaia Sky
+  ships both; the true one is a per-element billboard chain (much
+  more complex). θ.4 gives 80–90 % of the visual for 20 % of the
+  complexity. Upgrade path if the user ever asks for the full effect.
+- **NFAA + FXAA + LumaSharpen tiering** as a user-configurable combo
+  matrix. Audit ships a simple `balanced=NFAA, high/ultra=FXAA+Sharpen`
+  — richer combinations (NFAA+Sharpen, FXAA without Sharpen, etc.)
+  stay for post-phase if anyone asks.
+- **Ray-marching effects** (`postprocess/raymarching/*.glsl`,
+  particularly `volumeclouds.frag.glsl` and `torus.frag.glsl`) — Gaia
+  Sky uses these for accretion-disk visuals around black holes. Out
+  of scope for phase θ's star-focus.
+- **Reprojection effect** (`reprojection.frag.glsl`) — Gaia Sky's
+  warp-free rebaselining for VR dome projections. No current atlas
+  use case.
+- **Curvature effect** (`geometrywarp.frag.glsl`) — dome / VR
+  spherical projection. Out of scope.
+- **XBRZ upscale** (`xbrz-freescale.glsl`) — pixel-art upscaler for
+  the dome preview screen; irrelevant to desktop / web.
+- **Occlusion texture for LightGlow** (`setOcclusionTexture` API on
+  `LightGlow.java`). Deferred per θ.3's optional fold-in clause;
+  atlas hero-star + planet layout rarely triggers the occlusion case
+  at our typical camera distances. Ship only if the user notices the
+  "star glows through a planet" artifact.
+- **Gaia Sky `raymarching.frag.glsl` for procedural atmosphere
+  visuals** — separate from H-II volumetrics above; this is the
+  atmospheric-fog pass around planets.
+
 ---
 
 ## 10. Exit criteria for phase θ
 
+**Updated 2026-04-20 for the θ-audit revision** (14 ondas in phase
+θ, plus θ.1b split from θ.1, plus θ.7 split into θ.7a/θ.7b; θ.2
+merged into θ.4; θ.13 deferred to §9).
+
 Phase ships when:
 
-1. All **fifteen ondas** (θ.1–θ.15, com θ.7 split em θ.7a/θ.7b — 16
-   commits total) committed, cada uma com a coluna correspondente
-   em §7 (unit coverage onde possível + config/math guard +
-   Playwright) passando verde. "Unit n/a" passes §10.1 only if the
-   corresponding config/math guard is green; §7's verification-rule
-   paragraph is the authoritative reading.
+1. All **fifteen ondas** (θ.1 + θ.1b + θ.3 + θ.4 + θ.5 + θ.6 + θ.7a
+   - θ.7b + θ.8 + θ.9 + θ.10 + θ.11 + θ.12 + θ.14 + θ.15 = 15
+     commits minimum, ~22–26 with Codex follow-ups) committed, cada
+     uma com a coluna correspondente em §7 passando verde. "Unit n/a"
+     passes §10.1 only if the corresponding config/math guard is
+     green; §7's verification-rule paragraph is the authoritative
+     reading.
 2. `DisplayPanel` contém as novas linhas, todas funcionais, **com os
    nomes exatos abaixo** (não "Lens" standalone, que conflita com
    "Grading" do θ.6):
-   - **Star shader:** "Diffraction Spikes" (θ.2), "Star Twinkle"
-     (θ.14).
-   - **Composer/HDR:** "Star Halo" (θ.3), "Lens Flare" (θ.4),
-     "Motion Blur" (θ.5), "Grading" → {Chromatic Aberration,
-     Vignette, Film Grain} sub-rows (θ.6), "Anti-aliasing" (θ.15),
-     "Unsharp Mask" (θ.15), "Output Dithering" (θ.13).
+   - **Star shader / vertex:** "Star Twinkle" (θ.14). θ.1b is
+     invisible — it rebinds the existing "Star Size" slider from
+     `particleSize` to `u_alphaFactor`.
+   - **Composer/HDR:** "Star Halo" (θ.3), "Lens Flare" (θ.4 — with
+     sub-option "Pseudo Flare / Pseudo Flare + Spikes" covering the
+     merged-in diffraction-spike feature), "Motion Blur" (θ.5),
+     "Grading" → {Chromatic Aberration, Vignette, Film Grain}
+     sub-rows (θ.6), "Anti-aliasing" → `Off / NFAA / FXAA` (θ.15),
+     "Sharpen" → `Off / On` with LumaSharpen slider (θ.15).
    - **Scene-graph/backdrop:** "Orbit Line Glow" (θ.9),
      "Constellations" (θ.10), "Galactic Backdrop" + "HD Backdrop
      Asset" (θ.11), "Star Labels" (θ.12).
    - **Hero-star:** "Hero Star LOD" (θ.7a/b).
+   - **NOT present at exit** (retired by audit): "Diffraction
+     Spikes" standalone (folded into Lens Flare), "Output Dithering"
+     (moved to §9), "SMAA" (never existed in Gaia Sky).
 3. `A11yPanel` Reduced-Motion force-disables **θ.3, θ.5, e θ.14**
    per §4.2 (single source of truth). `todo.md` hard-constraints
    list matches verbatim.
 4. Side-by-side reference screenshot (pre-θ.1 vs post-θ.15) commitado
    em `tasks/design/refs/phase-theta-before-after.png` e revisto
    contra equivalentes Gaia Sky no mesmo camera pose. Sub-screens
-   por subsistema: star-shader, composer, scene-graph, backdrop,
-   hero-LOD.
-5. Frame budget no Intel Iris Xe reference device dentro de 15 %
-   do pre-phase no tier ultra; constrained tier byte-identical ao
-   pre-phase (todos os novos efeitos pulam). Backdrop θ.11 aceita
-   até 20 % no ultra (asset heavy).
-6. `HANDOFF.md` atualizado com "Phase θ shipped — Gaia Sky-inspired
-   visual upgrade" status block, citando as 15 ondas.
-7. Codex critical review da fase completado — o review de
-   2026-04-20 é o primeiro pass; um segundo pass post-θ.15 é
-   opcional se nenhum high-severity finding surgir em commit-review.
-   Todos os findings high-severity endereçados ou deferidos
-   explicitamente com rationale.
-8. §8.6 corrections (pipeline chain order, LightGlow v3.7.2 polar
-   mask, CIE xyY color grade, star shader v3.7.0+ billboard modes)
-   foram aplicadas ou registradas como follow-up em §9.
+   por subsistema: star-shader (θ.1/θ.1b/θ.14), composer (θ.3/θ.4/
+   θ.5/θ.6/θ.15), scene-graph (θ.9/θ.10/θ.12), backdrop (θ.11),
+   hero-LOD (θ.7a/b).
+5. Frame budget no Intel Iris Xe reference device dentro de 20 %
+   do pre-phase no tier ultra (audit raised from 15 % to 20 %
+   because θ.1b's solid-angle vertex math is marginally more
+   expensive than NASA-Eyes; expected net frame-time delta
+   compensates when faint stars stop rendering); constrained tier
+   byte-identical ao pre-phase. Backdrop θ.11 aceita até 25 % no
+   ultra (asset heavy).
+6. `HANDOFF.md` atualizado com "Phase θ shipped — Gaia Sky 1:1
+   visual port (star subsystem + composer + scene-graph + hero-
+   approach)" status block, citando as 15 ondas.
+7. Codex critical review da fase completado. Every onda has its own
+   Codex `fix(vfx): θ.N Codex follow-up` commit on file per
+   `feedback_codex_auto_review` memory rule. Each follow-up aligns
+   with `feedback_codex_findings_toward_1to1` (tighten parity, not
+   soften language).
+8. §8.6 audit-verified corrections applied or registered as follow-up
+   in §9. No claim in the body of §5 ondas diverges from what the
+   audit verified against Gaia Sky source.
 9. Licensing/provenance notes presentes em `AboutPanel.tsx` para os
    assets third-party usados em θ.10 (IAU/Delporte) e θ.11 (ESO
-   Milky Way).
+   Milky Way) e em θ.4 (lens dirt / starburst assets if Gaia Sky's
+   own are used; procedural generation if not).
+10. `NASAStarfield.tsx` + `shaders/nasaStarShaders.ts` deleted in
+    θ.1b (no longer needed after log-compressed curve revocation).
 
 ### 10.1 Non-goals guard at exit
 
 The following must remain true at exit (regression protection):
 
 - HYG binary format unchanged (`public/data/hyg-stars/*.bin.gz`
-  byte-identical to pre-phase).
-- Log-compressed transfer curve `brightness = 2·log(1 + flux·250)`
-  unchanged.
+  byte-identical to pre-phase). Adding NEW attributes (e.g.
+  `a_size` for θ.1b) lives in a sibling sidecar or a separate
+  derived array, not in the frozen binary.
+- ~~Log-compressed transfer curve `brightness = 2·log(1 + flux·250)`
+  unchanged.~~ **Revoked by the θ-audit (§2).** θ.1b replaces it
+  with Gaia Sky's solid-angle → opacity math. L16/L17 become
+  historical.
 - AgX is still the tone mapper.
-- `@react-three/postprocessing` is still the composer library.
+- `@react-three/postprocessing` is still the composer library
+  (custom `Effect` subclasses compose with pmndrs `EffectComposer`,
+  which is what the θ.3/θ.4/θ.5/θ.6/θ.15 ports do).
 - No `<shaderMaterial>` used as a JSX child in any file touched by
   phase θ (automated grep in CI).
+- `NASAStarfield.tsx` and `shaders/nasaStarShaders.ts` are deleted
+  (θ.1b invariant); automated grep guards against re-introduction.
