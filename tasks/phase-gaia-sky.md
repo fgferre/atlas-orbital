@@ -1,6 +1,6 @@
 # Phase θ — Gaia Sky-inspired visual upgrade
 
-Created: 2026-04-19 · Updated: 2026-04-20 (θ-audit: 4 rounds of source-verification against `/tmp/gaiasky`; §2/§4.1/§5.1/§5/§8/§8.6/§9/§10 all revised; θ.1b added; θ.2 merged into θ.4; θ.13 moved to §9) · Status: planning · Owner: fgferre
+Created: 2026-04-19 · Updated: 2026-04-20 (θ-audit: 6 rounds of source-verification against `/tmp/gaiasky`; §2/§4.1/§5.1/§5/§8/§8.6/§9/§10 all revised; θ.1b added; θ.1c added (motion trails — Round 5); θ.2 merged into θ.4; θ.13 moved to §9; Round 5 fixes: `lint` is smoothstep / `pow()` wrapped in `degrees12`/`radians12` / `u_brightnessPower` range [0.9, 1.1]; Round 6 fixes: StarSettings defaults + true-LensFlare vs Pseudo split + BillboardSet load-vs-procedural divergence) · Status: planning · Owner: fgferre
 
 Single-phase spec for porting the highest-impact visual techniques from
 [Gaia Sky](https://github.com/langurmonkey/gaiasky) (Java/LibGDX) to our
@@ -101,6 +101,7 @@ language inside an individual onda body defers to this table;
 | ---- | -------------- | ------------------ | ------------------- | ------------------- | -------------------------------------------------------------------- |
 | θ.1  | off            | on (hardcore)      | on (hardcore+halo)  | on (full)           | Sprite fragment (shipped 2026-04-20, `2662f08`+`13e501e`)            |
 | θ.1b | on (solid-ang) | on (full)          | on (full)           | on (full)           | Vertex solid-angle port; replaces NASA-Eyes floor on ALL tiers       |
+| θ.1c | off            | on                 | on                  | on                  | Billboard motion trails (stretch snippet). A11y RM hard-off.         |
 | θ.3  | off            | off                | on (Subtle)         | on (Pronounced)     | LightGlow post-process (u_lightPositions + Archimedean spiral)       |
 | θ.4  | off            | off                | on (Subtle)         | on (Full)           | Pseudo lens flare + lensdirt starburst (incl. diffraction spikes)    |
 | θ.5  | off            | off                | off                 | on (Subtle)         | Camera motion blur                                                   |
@@ -458,17 +459,41 @@ Host defaults from `StarSetQuadComponent.java:46`:
 - `src/components/canvas/Starfield.tsx` vertex shader: replace the
   NASA-Eyes brightness block with:
   ```glsl
-  float solidAngle = u_starSize / dist; // u_starSize replaces a_size — see below
+  float solidAngle = a_size / dist;
+  // `lint` in Gaia Sky `lib/math.glsl` is SMOOTHSTEP-based, not
+  // linear — endpoints get a smoothstep curve, not a sharp ramp.
+  // Port as (verified Round 5):
+  //   float lint(float x, float x0, float x1, float y0, float y1) {
+  //       if (x <= x0) return y0;
+  //       if (x >= x1) return y1;
+  //       return y0 + (y1 - y0) * smoothstep(x0, x1, x);
+  //   }
   float opacity = lint(solidAngle,
                        u_solidAngleMap.x, u_solidAngleMap.y,
                        u_opacityLimits.x, u_opacityLimits.y);
-  solidAngle = clamp(pow(solidAngle, u_brightnessPower),
+  // `degrees12` / `radians12` scale by 1e12 around `pow()` so we do
+  // not lose fp32 precision when raising a solid angle on the order
+  // of 1e-10 rad to a fractional power. `lib/angles.glsl`:
+  //   TO_DEG12 = 180.0e12 / PI; TO_RAD12 = PI / 180.0e12.
+  // Without the 12-suffix wrappers, pow(1e-10, 1.0) in fp32 collapses
+  // to zero. Port both macros alongside the vertex code.
+  solidAngle = clamp(radians12(pow(degrees12(solidAngle),
+                                   u_brightnessPower)),
                      u_minQuadSolidAngle, 3.0e-8);
-  float quadSize = solidAngle * dist * u_sizeFactor;
+  float quadSize = solidAngle * dist * u_alphaSizeBr_y;
   float boundaryFade = smoothstep(LEN0, LEN0 * 1e3, dist);
-  float alpha = clamp(opacity * u_alphaFactor * boundaryFade, 0.0, 1.0);
-  gl_PointSize = max(quadSize / <NDC-to-pixel conversion>, 0.0);
+  float alpha = clamp(opacity * u_alphaSizeBr_x * boundaryFade,
+                      0.0, 1.0);
+  // Performance trick from source (star.group.quad.vertex.glsl:121):
+  // if alpha collapses below 1e-3 OR the star is within LEN0 (θ.7
+  // billboard takeover zone), null the quad so rasterisation emits
+  // just one fragment which the fragment shader discards.
+  if (alpha <= 1.0e-3 || dist < LEN0) {
+      quadSize = 0.0;
+      alpha = 0.0;
+  }
   vBrightness = alpha; // fragment already consumes this
+  gl_PointSize = max(quadSize / <NDC-to-pixel conversion>, 0.0);
   ```
 - `a_size` (per-star radius) substitute. HYG v4.2 does not ship
   radius, so we synthesise it. Options, in order of 1:1 fidelity:
@@ -485,13 +510,38 @@ Host defaults from `StarSetQuadComponent.java:46`:
     preserves magnitude ordering.
     Choose (pragmatic) for first ship; escalate to (best) if the
     matched-shot shows wrong radius distribution.
-- Host defaults:
-  - `u_solidAngleMap` = `vec2(1.0e-10, 2.0e-9)` (literal from source).
-  - `u_opacityLimits` = `vec2(0.1, 0.95)` (Gaia Sky default range —
-    verify against Settings.java StarSettings; fallback within
-    these bounds).
-  - `u_brightnessPower` = `0.6` (Gaia Sky default — verify).
+- Host defaults (verified Round 5 2026-04-20):
+  - `u_solidAngleMap` = `vec2(1.0e-10, 2.0e-9)` (literal in
+    `StarSetQuadComponent.java:46`).
+  - `u_opacityLimits` = `vec2(opacity[0], opacity[1])` from
+    `Settings.java StarSettings.opacity[]`. The `opacityLimitsHlShowAll`
+    branch in `StarSetQuadComponent.java:35` uses `{0.95f, opacity[1]}`,
+    so `opacity[1] ≈ 0.95` is consistent with the Gaia Sky defaults;
+    `opacity[0]` confirmed in Round 6 deep-read of StarSettings.
+  - `u_brightnessPower` = `1.0` default, valid range **`[0.9, 1.1]`**
+    (`Constants.java:110–112`). The earlier draft's `0.6` was outside
+    the Gaia Sky allowed range.
   - `u_minQuadSolidAngle` = `1.0e-10`.
+  - `u_alphaSizeBr` = `vec3(alpha, size, brightness)` per source.
+    Atlas binds `.x` to a global alpha scale (default `1.0`), `.y`
+    to the point-size multiplier replacing the old `particleSize`
+    uniform (default `1.0`, user-scalable), `.z` to a brightness
+    multiplier for the final per-star colour. Gaia Sky brightness
+    range: `[0.4, 8.0]` (`Constants.java:91,100`), default `1.0`.
+  - `saturate = 0.16f` (default colour saturation, StarSettings).
+    Not in the vertex; used later in B-V→RGB. Document for θ.14.
+  - `glowFactor = 0.06` (default, StarSettings). Used by θ.3's
+    LightGlow texture scale — documented there.
+  - Star texture asset: `textureIndex = 4` default → Gaia Sky loads
+    `tex/base/star-tex-04.{jpg,png}`. Atlas θ.1 currently ships a
+    procedural 64×64 gaussian (σ=10) as a stack/API adaptation
+    (asset bundle not distributed with the Gaia Sky source repo);
+    for stricter parity, a future polish could download the actual
+    asset and ship it under `public/textures/`. Note in θ.1b
+    commit message.
+  - LightGlow texture asset: `textureIndexLens = 1` →
+    `tex/base/star-tex-01.{jpg,png}`. θ.3 references this
+    separately.
 - Boundary fade `LEN0 = 20000 / DISTANCE_SCALE` (scale to our units)
   fades stars out when camera gets within that distance (θ.7 hero-
   star approach takes over).
@@ -554,6 +604,113 @@ attribute synthesis is the substantive work (~80 LOC in
   magnitude floor (`vBrightness ≥ 0.05`) loses that invariant.
   Audit `Planet.tsx`, `Starfield.test.ts`, and the overlay tracker
   before ship.
+
+---
+
+### θ.1c — Star billboard motion trails (Round 5 addition)
+
+**Goal.** Port Gaia Sky's motion-trail billboard stretching from
+`assets/shader/snippet/billboard.stretch.glsl`. Every star in Gaia
+Sky goes through this snippet via the `star.group.quad.vertex.glsl`
+`#include`. When the camera moves fast, the billboard quad ELONGATES
+in the direction of `u_camVel`, producing the subtle streaking that
+makes a Gaia Sky fly-through feel cinematic. The atlas currently
+ships flat (non-stretched) billboards; θ.1b inherits that flatness.
+θ.1c adds the stretching as a separate onda so θ.1b's solid-angle
+port stays small.
+
+**Gaia Sky reference.** `assets/shader/snippet/billboard.stretch.glsl`
+(115 lines, verified Round 5 2026-04-20). Key shape:
+
+- Compute billboard axes (`s_right`, `s_up`, `s_obj`).
+- Branch on `dot(u_camVel, u_camVel) == 0.0`:
+  - If zero velocity: plain rotation (same as `billboard.fast.glsl`).
+  - Else: quaternion-based rotation + screen-space velocity estimate
+    via `ndc_now - ndc_next`, stretch factor
+    `stretch = (screenVel * 300)^1.5` clamped at 6.0, distance
+    fade-out `smoothstep(50 Mpc, 30 Mpc, distance)`, brightness
+    compensation `v_col.rgb *= min(2.0 / (1.0 + stretch), 1.0)`.
+- `obj_next = s_obj_pos - u_camVel * u_dt` — predicts next-frame
+  object position for the screen-velocity calc.
+
+**Port plan.**
+
+- Add two new uniforms to the Starfield vertex shader:
+  - `u_camVel` (vec3) — camera velocity in world units per second.
+  - `u_dt` (float) — delta time in seconds (reused from the
+    Gaia Sky signature).
+- CPU-side infrastructure (`useFrame` in `Starfield.tsx`):
+  - Track camera world-position between frames in a `useRef`.
+  - `camVel = (worldPos - prevWorldPos) / dt` (world-units / s).
+  - Upload `u_camVel` + `u_dt` to the material each frame.
+  - Zero `u_camVel` when paused or when `a11y.reducedMotion === true`
+    (the stretch implies apparent motion — Reduced Motion must
+    suppress it).
+- Port `billboard.stretch.glsl` as a new GLSL include
+  `src/components/canvas/shaders/billboardStretch.glsl` (string
+  template imported by the vertex). Requires the quaternion helpers
+  `q_look_at`, `qrot`, `qmul`, `q_conj` from Gaia Sky
+  `lib/geometry.glsl` — port those to
+  `src/components/canvas/shaders/geometryHelpers.glsl`.
+- Swap the Starfield vertex's current `gl_Position` calculation for
+  the ported snippet's output. Quad geometry (the 4-vertex attribute
+  `a_position`) stays as-is — the snippet rotates in-place.
+- `DISTANCE_SCALE` from `Starfield.tsx` is our `u_uToMpc` substitute:
+  the snippet uses `u_uToMpc` to convert internal units to Mpc for
+  the distance fade-out at 50 Mpc / 30 Mpc. Atlas HYG positions are
+  parsecs × `DISTANCE_SCALE`; `u_uToMpc = 1 / (DISTANCE_SCALE * 1e6)`
+  (parsec-to-Mpc is 1e-6).
+
+**Parameters (ultra defaults — from Gaia Sky source).**
+
+- `stretch = (screenVel * 300)^1.5`, clamped at `6.0`.
+- Distance fadeout: `smoothstep(50 Mpc, 30 Mpc, dist)` — streaking
+  only visible within ~50 Mpc (essentially always for our local
+  stars).
+- Brightness compensation: `v_col.rgb *= min(2.0 / (1.0 + stretch), 1.0)`
+  — keeps peak luminance when sprite elongates.
+- Reduced Motion: `u_camVel` held at `vec3(0.0)`, snippet drops into
+  the no-trail fast path.
+
+**DisplayPanel.** Row **"Motion Trails"** — `Off / On`.
+Default: `On` for balanced / high / ultra; `Off` for constrained.
+A11yPanel Reduced Motion force-overrides to `Off`.
+
+**Verification.**
+
+- Unit: `billboardStretchMath.test.ts` — pins the stretch formula
+  at three sample screen-velocities (slow, medium, fast — all
+  below and at the 6.0 clamp), the brightness-compensation ratio,
+  and the 50→30 Mpc fade curve.
+- Playwright: `e2e/motion-trails.spec.ts` — scripted pan at known
+  angular velocity; assert bright-star cluster pixel footprint
+  elongates along the velocity direction by `> 1.5×` its rest
+  footprint, and brightness per pixel drops by the compensated
+  factor.
+- Manual: pan across Canis Major at ultra tier; Sirius should
+  streak visibly in the pan direction, stop streaking when the pan
+  stops.
+
+**Feasibility.** Medium. Main complexity is the quaternion math +
+CPU-side camera-velocity tracking. All of it is port, no invention.
+
+**Risks.**
+
+- L18 / L19 literal — `u_camVel` / `u_dt` are per-frame uniform
+  writes on the memoised ShaderMaterial; same pattern as θ.1's
+  `vfxHdrGain`. Do NOT subscribe the vertex to React store state.
+- The atlas's logarithmic depth buffer interacts with
+  `obj_next = s_obj_pos - u_camVel * u_dt`. If the predicted
+  next-frame position projects past the log-depth far plane, the
+  NDC delta is garbage. Clamp `u_camVel` magnitude to keep
+  `obj_next` within the current frame's near/far band, or project
+  through a linear-depth matrix for the velocity calc only.
+- Reduced Motion gate — if the `useFrame` forgets to zero `u_camVel`
+  in reduced-motion mode, vestibular-sensitive users see streaking.
+  Hard mount-time check, not just a uniform guard.
+
+**Dependency.** Must ship AFTER θ.1b (the stretching math assumes
+`quadSize` from θ.1b's solid-angle vertex output). Sequenced in §8.
 
 ---
 
@@ -716,6 +873,22 @@ billboards.
 - `core/src/gaiasky/render/MainPostProcessor.java:279` — `PseudoLensFlare`
   construction takes `lensColor`, `lensDirt`, `lensStarBurst` as 3
   distinct texture assets at a half-res FBO (`lensFlareSettings.fboScale`).
+
+**Partial parity disclosure.** Gaia Sky ships **two** lens-flare
+pipelines (confirmed Round 6, `MainPostProcessor.java:279/301`):
+
+1. **PseudoLensFlare** (this onda): screen-space Chapman-style, reads
+   HDR bright-pass. Good for general bright-source flaring.
+2. **True LensFlare** (`lensflare.frag.glsl`, `LensFlareFilter.java`):
+   per-known-light flares using `u_lightPositions[]` + intensities,
+   with `#define simpleLensFlare` / `complexLensFlare` / `useLensDirt`
+   variants. Visually distinct from pseudo — specific-light oriented,
+   not screen-centric. **Deferred to §9** because the complex variant
+   is ~3× the implementation cost of pseudo and the user settings
+   default to pseudo.
+
+θ.4 ships **pseudo only** — matches Gaia Sky's default
+`settings.postprocess.lensFlare.type = pseudo`.
 
 **Port plan.** Two composer passes (not one merged pass):
 
@@ -883,9 +1056,8 @@ with trivial parameter surfaces.
 u_aberrationAmount · pow(length(vec_center_pixel), 3) · sign(...)`.
     **Cubic radial profile**, not pmndrs's linear offset.
   - `vignetting.frag.glsl` (99 lines) — `factor = smoothstep(VignetteX,
-VignetteY, distance(uv, center))`. Has optional CONTROL_SATURATION
-    - ENABLE_GRADIENT_MAPPING flags (we port only the base vignette;
-      the LUT path is out of scope).
+VignetteY, distance(uv, center))`. Has optional CONTROL_SATURATION - ENABLE_GRADIENT_MAPPING flags (we port only the base vignette;
+    the LUT path is out of scope).
   - `filmgrain.frag.glsl` (24 lines) — three independent RGB channel
     grains (`rand(uv + t)`, `rand(uv*0.8 + t)`, `rand(uv*1.2 + t)`),
     NOT monochrome noise. `grain = rgb_noise * intensity - intensity/2`
@@ -1250,20 +1422,21 @@ context-switches por subsistema.
 | #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                                    |
 | --- | ---- | ------ | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | —   | θ.1  | S      | Star shader     | **SHIPPED 2026-04-20** (`2662f08`, `13e501e`). Sprite fragment port.                                                    |
-| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield Playwright specs. |
-| 2   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                            |
-| 3   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                           |
-| 4   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                 |
-| 5   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                 |
-| 6   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame. |
-| 7   | θ.3  | M      | Composer        | LightGlow (u_lightPositions + Archimedean spiral). First "big" composer pass; validates infra for θ.4/θ.5.              |
-| 8   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                       |
-| 9   | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                    |
-| 10  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                           |
-| 11  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                 |
-| 12  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                |
-| 13  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                 |
-| 14  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                          |
+| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14 and θ.1c.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield specs.   |
+| 2   | θ.1c | M      | Star vertex     | Billboard motion-trail stretch + quaternion helpers + CPU cam-velocity tracking. Ships after θ.1b's quadSize is stable. |
+| 3   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                            |
+| 4   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                           |
+| 5   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                 |
+| 6   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                 |
+| 7   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame. |
+| 8   | θ.3  | M      | Composer        | LightGlow (u_lightPositions + Archimedean spiral). First "big" composer pass; validates infra for θ.4/θ.5.              |
+| 9   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                       |
+| 10  | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                    |
+| 11  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                           |
+| 12  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                 |
+| 13  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                |
+| 14  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                 |
+| 15  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                          |
 
 Notas:
 
@@ -1475,6 +1648,13 @@ procedurais para dust lanes com paralaxe sutil.
   em `public/textures/milkyway-cubemap/`. Preflight (L7, AGENTS.md
   §11): grep `scripts/download-textures.js` for existing panorama
   pipelines and extend that script if present instead of a new one.
+- **Adaptation classification (R1 step-5 #1, stack/API mismatch).**
+  Gaia Sky's `BillboardSet` component (confirmed Round 6) defaults
+  to LOADED particle data files (`BillboardSet.procedural = false`);
+  procedural generation via `GalaxyGenerator` / `GalaxyMorphology`
+  - seed is a FALLBACK when the loaded file is absent. Atlas ships
+    procedural-only for license-cleanliness — we do not bundle Gaia
+    Sky's particle data. Document the divergence in the onda commit.
 - Camada dust-billboard: `InstancedMesh` com ~5k partículas, posições
   amostradas numa distribuição disk-+-bulge gerada offline em
   `scripts/generate-mw-dust.mjs` (log-normal radial distribution
