@@ -1,6 +1,6 @@
 # Atlas Orbital — Active Todo
 
-Updated: 2026-04-18
+Updated: 2026-04-20
 
 This file is the single running todo list for the orbital-realism initiative.
 It complements the long-form plan in `PLAN.md` (strategy) and
@@ -8,63 +8,139 @@ It complements the long-form plan in `PLAN.md` (strategy) and
 
 ## Active
 
-### Wave α — HDR foundation + Graphics panel — 2026-04-18 (in flight)
+### Phase θ — Gaia Sky-inspired visual upgrade — 2026-04-19 (ready to start)
+
+**Governing doc:** `tasks/phase-gaia-sky.md` (long-form spec).
+**Prerequisite status:** Wave α **shipped 2026-04-18** (see §Wave α below —
+3 commits + HANDOFF + ~12 polish). HDR contract, `vfxHdrGain`, selective
+bloom, `graphicsSlice`, `DisplayPanel`, `A11yPanel`, persist-migration
+v0→v1 are all in place. Playwright baselines were captured and
+re-captured across polish rounds. θ.1 is unblocked — open whenever.
+
+Fifteen ondas (16 commits — θ.7 splits em 7a/7b), sequenced in
+`phase-gaia-sky.md §8`. Tier/reduced-motion contract é autoridade
+única em `phase-gaia-sky.md §4`:
+
+_Core star-focused (ondas originais):_
+
+- [ ] **θ.1** — Star sprite kernel refinement (hardcore + soft halo texture)
+- [ ] **θ.2** — Diffraction spike layer for bright stars (per-star billboard)
+- [ ] **θ.3** — LightGlow post-process (animated polar-noise halo)
+- [ ] **θ.4** — Pseudo lens flare (Chapman ghosts + halo + starburst)
+- [ ] **θ.5** — Camera motion blur (velocity-based reprojection)
+- [ ] **θ.6** — Grading finishes (3 independent toggles: CA, vignette, grain)
+- [ ] **θ.7a** — Hero-star approach LOD — detector + corona billboard
+- [ ] **θ.7b** — Hero-star approach LOD — procedural surface + cross-fade
+- [ ] **θ.8** — Camera feel (cinematic mode, FoV easing, surface-mode damping)
+
+_Scene-graph / backdrop (descobertas pelo enxame Haiku, `phase-gaia-sky.md §8.5`):_
+
+- [ ] **θ.9** — Orbit/trajectory lines com glow shader (quad-strip + core aditivo)
+- [ ] **θ.10** — Camada de constelações (linhas com glow + SDF labels)
+- [ ] **θ.11** — Milky Way backdrop (cubemap panorama + billboard dust)
+- [ ] **θ.12** — SDF labels in-scene para estrelas nomeadas
+- [ ] **θ.13** — Bayer dithering no output composer
+- [ ] **θ.14** — Star Twinkle (variable-star LUT, aplicado em magnitude raw-domain)
+
+_Coverage (adicionada pelo review Codex 2026-04-20, `phase-gaia-sky.md §8.5`):_
+
+- [ ] **θ.15** — Anti-aliasing (FXAA/SMAA) + Unsharp mask tiering
+
+**Hard constraints (see `phase-gaia-sky.md §2`, §4, §5.1 for full authority):**
+
+- HYG binary catalog, tier layout, and transfer curve are frozen.
+- AgX stays as the tone mapper; render-space chain is §5.1 literal.
+- `@react-three/postprocessing` stays as the composer library.
+- EffectComposer MUST use `frameBufferType: HalfFloatType` (verified by unit test per onda).
+- Every ShaderMaterial added obeys L15 (useMemo constructor, no JSX children).
+- Every DPR-dependent calc reads `gl.getPixelRatio()`, not `window.devicePixelRatio`.
+- **Reduced Motion (§4.2, single source):** hard-disables **θ.3, θ.5, θ.14**; freezes secondary animation on θ.8, θ.11.
+- θ.14 applies magnitude-domain perturbation **before** the log transfer curve (L14 literal).
+- θ.7 detector math is imperative (outside React); Zustand writes only on `(heroStarId, lodStage)` tuple change (L18/L19).
+- Every onda has unit-or-guard + Playwright coverage per §7 rule; constrained tier is byte-identical to pre-phase.
+- Every new `scripts/build-*.mjs` requires a grep-preflight for existing equivalents (AGENTS.md §11, L7).
+- Third-party assets (IAU, ESO) ship with SHA-256 pinning, schema sanitizer, and runtime fallback.
+
+**Exit criteria:** `phase-gaia-sky.md §10`.
+
+---
+
+### Wave α — HDR foundation + Graphics panel — 2026-04-18 (shipped)
 
 **Governing doc:** `tasks/implementation-roadmap.md` wave card α.
 **Authoritative refs:** `tasks/lighting-backlog.md` §1.1 §1.2 §1.3 (R1 #1A/#1B/#2),
 `tasks/graphics-settings-design.md` (R2 architecture), `tasks/graphics-settings-implementation-plan.md`
 (Wave 0 + Wave 1).
 
-Three-commit spine (strict order — do NOT reorder; `Autonomy — NONE` on the prompt):
+Three-commit spine (strict order executed — all three merged 2026-04-18):
 
-- [ ] **Commit 1 — R2 Wave 0** — `refactor(graphics): single-source overrides via visualPreset lerp`
-  - [ ] Extend `useVisualPresetLerp` signature with `userOverrides: GraphicsOverrides` (default `{}`).
-  - [ ] Per-frame math: `ref = (preset × (Mul ?? 1)) + (Delta ?? 0)` for compose-fields; absolute override for `bloomThreshold` etc.
-  - [ ] Identity-invariant when `overrides = {}` (same pixel output).
-  - [ ] Add `GraphicsOverrides` type next to the lerp (Commit 3 will move to `graphicsSlice`; leaving a local type now keeps Commit 1 self-contained).
-  - [ ] Add `toHaveScreenshot` assertions to `e2e/boot.spec.ts`, `e2e/focus.spec.ts`, `e2e/postprocessing.spec.ts` with `maxDiffPixelRatio: 0.001`.
-  - [ ] Capture baseline PNGs (commit them alongside the refactor).
-  - [ ] Add `useVisualPresetLerp.test.ts` — identity, `bloomIntensityMul`, `bloomThreshold` absolute.
-  - [ ] Gates: `npm run lint`, `npm run test:run`, `npm run build`, `npx playwright test` (visual-diff ≤ 0.1%).
+- [x] **Commit 1 — R2 Wave 0** — `refactor(graphics): single-source overrides via visualPreset lerp` (`73e75d3`)
+  - [x] Extend `useVisualPresetLerp` signature with `userOverrides: GraphicsOverrides` (default `{}`).
+  - [x] Per-frame math: `ref = (preset × (Mul ?? 1)) + (Delta ?? 0)` for compose-fields; absolute override for `bloomThreshold` etc.
+  - [x] Identity-invariant when `overrides = {}` (same pixel output).
+  - [x] Add `GraphicsOverrides` type next to the lerp (Commit 3 moved it to `graphicsSlice`).
+  - [x] Add `toHaveScreenshot` assertions to `e2e/boot.spec.ts`, `e2e/focus.spec.ts`, `e2e/postprocessing.spec.ts` with `maxDiffPixelRatio: 0.001`.
+  - [x] Capture baseline PNGs (commit them alongside the refactor).
+  - [x] Add `useVisualPresetLerp.test.ts` — identity, `bloomIntensityMul`, `bloomThreshold` absolute.
+  - [x] Gates: `npm run lint`, `npm run test:run`, `npm run build`, `npx playwright test` (visual-diff ≤ 0.1%).
 
-- [ ] **Commit 2 — R1 #1A + #1B + #2** — `feat(vfx): HDR pipeline + AgX + selective bloom + star emissive recal`
-  - [ ] **#1A** — remove `gl.toneMapping = ReinhardToneMapping` in `Scene.tsx:267`; set `gl.outputColorSpace = THREE.SRGBColorSpace` explicitly; replace `<ToneMapping />` with `<ToneMapping mode={ToneMappingMode.AGX} />`; reorder chain so ToneMapping runs last (Bloom → HueSat → BrightnessContrast → ToneMapping).
-  - [ ] Grep `gl.toneMapping` repo-wide — must be zero after this commit.
-  - [ ] **#1B** — introduce `vfxHdrGain` uniform on both `Starfield.tsx` and `NASAStarfield.tsx` ShaderMaterials (useMemo pattern — L15 literal; NO JSX children). Final fragment color × `vfxHdrGain`. Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0. Feed tier-keyed default through existing `qualityProfile` plumbing (tier read already available in both files).
-  - [ ] Update `starfieldShaderMath.ts` + `starfieldShaderMath.test.ts` — propagate `vfxHdrGain` into the final size/brightness test expectations.
-  - [ ] **#2** — `luminanceThreshold={1.0}` + `luminanceSmoothing={0.1}` on `<Bloom>` in `PostProcessingPipeline.tsx`.
-  - [ ] Re-capture Playwright baselines (pixel shift is expected). Verify the shift is intentional (star halos, bloom only above 1.0, crisper bright-star bloom) not a regression.
-  - [ ] Gates: same as Commit 1.
+- [x] **Commit 2 — R1 #1A + #1B + #2** — `feat(vfx): HDR pipeline + AgX + selective bloom + star emissive recal` (`73cd2c2`)
+  - [x] **#1A** — remove `gl.toneMapping = ReinhardToneMapping` in `Scene.tsx:267`; set `gl.outputColorSpace = THREE.SRGBColorSpace` explicitly; replace `<ToneMapping />` with `<ToneMapping mode={ToneMappingMode.AGX} />`; reorder chain so ToneMapping runs last (Bloom → HueSat → BrightnessContrast → ToneMapping).
+  - [x] Grep `gl.toneMapping` repo-wide — zero after this commit.
+  - [x] **#1B** — introduce `vfxHdrGain` uniform on both `Starfield.tsx` and `NASAStarfield.tsx` ShaderMaterials (useMemo pattern — L15 literal; NO JSX children). Final fragment color × `vfxHdrGain`. Tier defaults: ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0. Fed through existing `qualityProfile` plumbing.
+  - [x] Update `starfieldShaderMath.ts` + `starfieldShaderMath.test.ts` — propagate `vfxHdrGain` into the final size/brightness test expectations.
+  - [x] **#2** — `luminanceThreshold={1.0}` + `luminanceSmoothing={0.1}` on `<Bloom>` in `PostProcessingPipeline.tsx`.
+  - [x] Re-capture Playwright baselines (pixel shift is intentional: star halos, bloom only above 1.0, crisper bright-star bloom).
+  - [x] Gates: same as Commit 1.
 
-- [ ] **Commit 3 — R2 Wave 1** — `feat(graphics): graphicsSlice + Display/A11y panels + migration`
-  - [ ] **New files:** `src/store/graphicsSlice.ts`, `src/lib/graphics/resolver.ts`, `src/lib/graphics/deviceSignals.ts`, `src/hooks/useEffectiveGraphics.ts`, `src/components/ui/DisplayPanel.tsx`, `src/components/ui/A11yPanel.tsx`, `src/components/ui/primitives/Slider.tsx`, `src/lib/graphics/resolver.test.ts`, `e2e/a11y.spec.ts`.
-  - [ ] **Extended (NOT created — per Finding 8):** `src/store.persistMigration.ts` (bump `PERSIST_VERSION 0→1`; add `migrate()` branch); `src/store.persistMigration.test.ts` (v0→v1 for all 5 `qualityMode` values + preservation of `sunRenderMode`/`tutorialCompletionStatus`).
-  - [ ] **Modified:** `src/store.ts` (integrate slice + expand partialize 3→7 + wire migrate), `src/lib/qualityProfile.ts` (compat shim via `resolveEffectiveGraphics` + `projectToLegacyShape`), `src/hooks/useQualityProfile.ts` (wrapper), `src/components/ui/controlPanelConfig.ts` (+display +a11y), `src/components/ui/LayersPanel.tsx` (route), `e2e/quality.spec.ts` (panel open + preset change + override flip + Reset).
-  - [ ] **Finding 7 inline amend:** `tasks/graphics-settings-design.md §3` — Tone Mapping dropdown becomes `{AgX [default], ACES, Reinhard, Cineon}` (drop Linear, add AgX); Exposure slider's backing becomes the `<ToneMapping>` effect's exposure (ref mutation inside `useVisualPresetLerp`, same pattern as bloom ref).
-  - [ ] Finding 1 — `vfxSettings` is NOT a separate slice; R1 keys live inside `graphicsSlice.graphicsOverrides`.
-  - [ ] A11yPanel ships 4 rows: Reduced Motion (E, active), UI Scale (H, active), Colorblind Mode (grayed "Available in a future update"), High Contrast (grayed same tooltip).
-  - [ ] Gates: same, plus new `e2e/a11y.spec.ts` and extended `e2e/quality.spec.ts`.
+- [x] **Commit 3 — R2 Wave 1** — `feat(graphics): graphicsSlice + Display/A11y panels + migration` (`4601969`)
+  - [x] **New files:** `src/store/graphicsSlice.ts`, `src/lib/graphics/resolver.ts`, `src/lib/graphics/deviceSignals.ts`, `src/hooks/useEffectiveGraphics.ts`, `src/components/ui/DisplayPanel.tsx`, `src/components/ui/A11yPanel.tsx`, `src/components/ui/primitives/Slider.tsx`, `src/lib/graphics/resolver.test.ts`, `e2e/a11y.spec.ts`.
+  - [x] **Extended:** `src/store.persistMigration.ts` (`PERSIST_VERSION 0→1`; `migrate()` branch); `src/store.persistMigration.test.ts` (v0→v1 for all 5 `qualityMode` values + preservation of `sunRenderMode`/`tutorialCompletionStatus`).
+  - [x] **Modified:** `src/store.ts`, `src/lib/qualityProfile.ts` (compat shim), `src/hooks/useQualityProfile.ts`, `src/components/ui/controlPanelConfig.ts`, `src/components/ui/LayersPanel.tsx`, `e2e/quality.spec.ts`.
+  - [x] **Finding 7 inline amend:** `tasks/graphics-settings-design.md §3` — Tone Mapping dropdown = `{AgX [default], ACES, Reinhard, Cineon}`; Exposure slider backs `<ToneMapping>` exposure via `useVisualPresetLerp` ref mutation.
+  - [x] Finding 1 — `vfxSettings` is NOT a separate slice; R1 keys live inside `graphicsSlice.graphicsOverrides`.
+  - [x] A11yPanel ships 4 rows: Reduced Motion (E, active), UI Scale (H, active), Colorblind Mode (grayed), High Contrast (grayed).
+  - [x] Gates: plus new `e2e/a11y.spec.ts` and extended `e2e/quality.spec.ts`.
 
 **After Commit 3:**
 
-- [ ] Update `HANDOFF.md` status block — flip the "Reinhard is the live tone mapper" claim if present; note Wave α shipped.
-- [ ] Final chat report per prompt §"Final report format".
+- [x] `HANDOFF.md` status block updated (commit `cb863ae` — "Wave α shipped — HDR pipeline + graphics panel status").
+- [x] Final chat report delivered.
 
-**Critical invariants (L-literal references, mandatory reads):**
+**Post-ship polish (Codex reviews + UX bugs flushed, 2026-04-18):**
 
-- L15 — `vfxHdrGain` MUST flow through useMemo'd `THREE.ShaderMaterial`, NEVER via JSX children.
-- L17 — any DPR math uses `gl.getPixelRatio()`, never `window.devicePixelRatio`.
-- L18 — simulation-time stays outside store; hot-path consumers use `simulationClock.getNow()`.
-- L19 — Display panel MUST NOT subscribe to `displayedDatetime`; shallow-select only the fields it needs.
-- Finding 9 — Playwright invocation is `npx playwright test` only; `playwright.config.ts:10` owns preview lifecycle.
+- [x] `387a61c` — repair Display wiring + HDR regression + IBL flood.
+- [x] `2ef0e8a` — UX polish round + visible star bloom.
+- [x] `94e61a7` — visible star bloom + per-preset HYG density.
+- [x] `6b6e478` — stop privileged-position reset on panel open/close.
+- [x] `e7a6fcc` — Codex 2nd-round findings (P2×2 + P3×2).
+- [x] `0ef3054` — retire Leva; migrate 7 calibration knobs to constants.
+- [x] `51c911d` + `ce66ff3` — recalibrate 5 visualPresets for AgX pipeline.
+- [x] `42072fa` + `4dcd1cc` — real heliocentric distance for preset auto-selection + Codex 2nd round.
+- [x] `7487ed0` — test: pin `getPresetForContext` + heliocentric composer.
+- [x] `f672086` — sync post-AgX values in pipeline comment + settings docs.
+
+**Critical invariants (verified green at ship):**
+
+- L15 — `vfxHdrGain` flows through useMemo'd `THREE.ShaderMaterial`.
+- L17 — DPR math uses `gl.getPixelRatio()`.
+- L18 — simulation-time stays outside store.
+- L19 — Display panel shallow-selects, never `displayedDatetime`.
+- Finding 9 — Playwright invocation is `npx playwright test` only.
+
+**Residual (not Wave α scope):** `implementation-roadmap.md` wave β, γ, η
+keep their existing checklists. Phase θ (above) is the next named work.
 
 ---
 
-### Project-wide critical review — 2026-04-18 (started)
+### Project-wide critical review — 2026-04-18 (done)
 
-Plan at `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v3).
-Two independent Codex reviews + 3 Explore agents + direct code read. 11 ondas
-ordenadas por ROI. Nenhuma quebra de UX ao longo do caminho.
+Plan at `~/.claude/plans/revise-este-projeto-de-zany-abelson.md` (v4).
+Two independent Codex reviews + 3 Explore agents + direct code read.
+10 ondas executadas (Onda 0 / 0.5 / 1 / 2 / 3 / 4 / 5 / 5.5 / 6 +
+batches 8.0·10·8·9a and 9c·9b·7) — todas verdes e mergeadas. A lista
+v3 tinha 11 slots; Onda 11 foi absorvida pelo batch paralelo e não
+ficou como commit solto.
 
 Deliberately **not** in scope (absorbed from Codex): WebGPU, path aliases,
 `celestialBodies.ts` schema, features visuais (HDR/bloom/lens flare), pixel-diff
