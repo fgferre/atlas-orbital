@@ -548,12 +548,30 @@ Host defaults from `StarSetQuadComponent.java:46`:
 - Per-star `a_size` attribute added to the buffer geometry in
   `buildVelocityAttribute`'s sibling function
   (`buildStarSizeAttribute`), derived from the chosen option above.
-- Delete `NASAStarfield.tsx` + `shaders/nasaStarShaders.ts` in the
-  same commit (no longer needed as reference renderer; their
-  pre-Wave-α role ended when §2 revoked the log-compressed curve).
+- **Scope-cut (R7 — 2026-04-20 ship time):** `NASAStarfield.tsx` +
+  `shaders/nasaStarShaders.ts` deletion DEFERRED to a follow-up commit.
+  The cleanup touches ~13 files (`store.ts`, `StarfieldManager.tsx`,
+  `LayersPanel.tsx`, `loaderStages.ts`, `Loader.tsx`, `lib/starfield.ts`,
+  `nasaStarParser.ts` + test, etc.) — refactoring all of them in the
+  same commit as the vertex port would inflate the diff past "one
+  feature per onda". The vertex-port core ships alone; NASA cleanup
+  lands as a separate `chore(starfield): delete NASA reference
+renderer` commit. NASAStarfield remains accessible via the existing
+  LayersPanel "Source" toggle until that cleanup.
 - Delete the `brightness = 2·log(1 + flux·250)` math in
   `starfieldPointMetrics` + its 23 unit tests; replace with
   `starfieldSolidAngleMetrics` mirroring the new vertex math.
+- **Known visual side-effect, documented not fixed:** post-θ.1b the
+  raw sprite size from `solidAngle × pixelsPerRadian` is sub-pixel
+  for the vast majority of HYG stars (Sirius at 2.64 pc renders at
+  ~2e-4 px; mid-mag stars vanish entirely in raw-pixel terms). This
+  matches Gaia Sky's ACTUAL behaviour — the visible halos in Gaia
+  Sky screenshots come from the `LightGlow` post-process (θ.3),
+  which paints visible glow around each known-light NDC position,
+  not from the raw sprite. Until θ.3 ships, the atlas starfield
+  post-θ.1b will look noticeably sparser than pre-θ.1b; that is
+  parity with Gaia Sky's pre-LightGlow rendering, not a regression.
+  θ.3 is sequenced in §8 specifically to compensate.
 
 **Parameters (ultra defaults).** Above — `u_solidAngleMap`,
 `u_opacityLimits`, `u_brightnessPower`, `u_minQuadSolidAngle`. Per-

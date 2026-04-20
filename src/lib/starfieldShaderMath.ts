@@ -1,48 +1,41 @@
 /**
- * Pure-TypeScript mirror of the per-star transfer curve in
- * `src/components/canvas/Starfield.tsx`. The shader is authoritative;
- * this file exists so the math has an executable shape that unit tests
- * can pin. Keep both sides in sync.
+ * Pure-TypeScript mirrors of the Gaia Sky star vertex + fragment math
+ * that ships in `src/components/canvas/Starfield.tsx`. The shader is
+ * authoritative; this file exists so the math has an executable shape
+ * unit tests can pin. Keep both sides in sync.
  *
- * The curve is a direct port of NASA Eyes' own shader (see
- * `src/components/canvas/shaders/nasaStarShaders.ts`) with one
- * substitution: we drive the flux from HYG's apparent magnitude (one
- * number per star) rather than NASA's absolute magnitude + camera-
- * distance formula. The two are mathematically equivalent for a
- * solar-system observer because the distance term cancels: apparent
- * magnitude *is* flux-at-Earth in magnitudes. The 250 multiplier
- * inside `log(1 + flux·250)` is what collapses NASA's absMag + 1e4 ×
- * inverse-square pipeline to a plain apparent-mag input at the
- * distance regime we actually render at.
+ * θ.1 shipped the fragment-kernel port from `star.group.quad.fragment.glsl`;
+ * θ.1b (this file's rewrite) ports the vertex solid-angle math from
+ * `star.group.quad.vertex.glsl` and retires the NASA-Eyes
+ * `brightness = 2·log(1 + flux·250)` transfer curve + `[5, 50]` /
+ * `[0.05, 1.0]` hard floors. See `tasks/phase-gaia-sky.md §2, §5 θ.1/θ.1b`.
  *
- * Inputs:
- *   - `mag`: per-star apparent magnitude.
- *   - `particleSize`: the viewport-adaptive scalar the shader gets
- *     as a uniform, set each frame to `sqrt(max(w,h) * DPR) / 60`.
- *     Already includes devicePixelRatio. Typical desktop value is
- *     0.6–0.9 depending on viewport and DPR.
+ * Two concerns live here:
  *
- * Returns the final gl_PointSize and vBrightness the shader emits,
- * with NASA's [5, 50] size clamp and [0.05, 1.0] alpha clamp applied
- * post-particleSize (same order as the GLSL).
+ *   1. **Vertex solid-angle mapping** (`starfieldSolidAngleMetrics`) —
+ *      mirrors the source's
+ *        solidAngle = a_size / dist;
+ *        opacity    = lint(solidAngle, u_solidAngleMap, u_opacityLimits);
+ *        solidAngle = clamp(
+ *          radians12(pow(degrees12(solidAngle), u_brightnessPower)),
+ *          u_minQuadSolidAngle, 3e-8);
+ *        quadSize   = solidAngle * dist * sizeFactor;
+ *      with Gaia Sky's smoothstep-based `lint` and its `degrees12/radians12`
+ *      precision wrappers around `pow()` (both confirmed in Round 5 of the
+ *      2026-04-20 θ-audit — `lib/math.glsl` and `lib/angles.glsl`).
+ *   2. **Fragment core-kernel** (`starfieldCoreKernel`) — unchanged from
+ *      θ.1: mirrors
+ *        core = saturate(1.0 - smoothstep(0.0, 0.04, dist_from_center * 2.0))
+ *      from `star.group.quad.fragment.glsl`.
  */
 
-const FLUX_PER_MAG_EXPONENT = 0.4; // Pogson slope
-const BRIGHTNESS_LOG_SCALE = 250; // matches NASA's effective response at apparent mag
-const BRIGHTNESS_LOG_COEFF = 2; // outer coefficient on 2·log(…)
-const SIZE_COEFFICIENT = 4; // NASA's original
-const SIZE_FLOOR_PX = 5; // NASA's original
-const SIZE_CEIL_PX = 50; // NASA's original
-const ALPHA_FLOOR = 0.05; // NASA's original
-const ALPHA_CEIL = 1;
+// -----------------------------------------------------------------------------
+// Fragment core-kernel (θ.1 — unchanged)
+// -----------------------------------------------------------------------------
 
-// Gaia Sky star.group.quad.fragment.glsl core-kernel smoothstep edges.
+// Gaia Sky `star.group.quad.fragment.glsl` core-kernel smoothstep edges.
 // Source: `core = saturate(1.0 - smoothstep(0.0, 0.04, distance(vec2(0.5), uv) * 2.0))`.
-// These are the authoritative values — NOT the (0.45, 0.50) pixel-
-// space attempt that was rolled back on 2026-04-20 after the invented
-// θ.1 commit. The inner edge at 0.0 and outer edge at 0.04 UV put the
-// core inside a sub-pixel / single-pixel pinpoint at sprite center
-// across the entire NASA-calibrated [5, 50] size range.
+// NOT the (0.45, 0.50) pixel-space values rolled back on 2026-04-20.
 export const CORE_SMOOTHSTEP_EDGE_LOW = 0.0;
 export const CORE_SMOOTHSTEP_EDGE_HIGH = 0.04;
 
@@ -55,12 +48,12 @@ const smoothstep = (edge0: number, edge1: number, x: number): number => {
 };
 
 /**
- * Pure-TS mirror of the Gaia Sky star.group.quad.fragment.glsl core
- * kernel. `r` is the UV-space distance from sprite center scaled × 2
- * so `r = 0` is the pixel at the exact sprite center and `r = 1` is
- * the sprite edge (matches the shader's `distance(vec2(0.5), uv) * 2.0`).
- * Returns the core contribution that the shader multiplies by `2.0`
- * and adds to `vColor` before premultiplied additive blending.
+ * Pure-TS mirror of the Gaia Sky fragment core kernel. `r` is the
+ * UV-space distance from sprite center scaled × 2 so `r = 0` is the
+ * exact center and `r = 1` is the sprite edge (matches the shader's
+ * `distance(vec2(0.5), uv) * 2.0`). Returns the core contribution the
+ * shader multiplies by `2.0` and adds to `vColor` before premultiplied
+ * additive blending.
  */
 export const starfieldCoreKernel = (r: number): number => {
   return clamp(
@@ -70,31 +63,146 @@ export const starfieldCoreKernel = (r: number): number => {
   );
 };
 
-export interface StarfieldPointMetrics {
-  /** Final gl_PointSize in pixels (post particleSize, post clamp). */
-  gl_PointSize: number;
-  /** Final vBrightness passed to the fragment (post particleSize, post clamp). */
-  vBrightness: number;
-  /** Intermediate: raw Pogson flux (mag 0 = 1). */
-  flux: number;
-  /** Intermediate: log-compressed brightness, 2·log(1 + flux·250). */
-  brightness: number;
+// -----------------------------------------------------------------------------
+// Vertex solid-angle mapping (θ.1b — 2026-04-20)
+// -----------------------------------------------------------------------------
+
+// Host defaults verified against `StarSetQuadComponent.java:46` +
+// `Constants.java:91,100,110-112`. Atlas-side initial values align with
+// Gaia Sky's defaults; `Settings.java StarSettings.opacity[]` is
+// user-adjustable in Gaia Sky at runtime, we pick a fixed pair for
+// shipping.
+export const U_SOLID_ANGLE_MAP: readonly [number, number] = [1.0e-10, 2.0e-9];
+export const U_OPACITY_LIMITS: readonly [number, number] = [0.1, 0.95];
+export const U_BRIGHTNESS_POWER_DEFAULT = 1.0;
+export const U_BRIGHTNESS_POWER_RANGE: readonly [number, number] = [0.9, 1.1];
+export const U_MIN_QUAD_SOLID_ANGLE = 1.0e-10;
+export const U_MAX_QUAD_SOLID_ANGLE = 3.0e-8;
+
+// LEN0 controls the near-camera fade-out: stars inside LEN0 scene units
+// fade out (θ.7 hero-star billboard takes over); stars between LEN0 and
+// LEN0 × 1e3 ramp in via smoothstep. The raw value `20000.0` in
+// `star.group.quad.vertex.glsl` is in Gaia Sky's internal units; we
+// apply it in atlas scene units (where 1 pc = DISTANCE_SCALE units)
+// with the same literal constant — the fade kicks in at a camera
+// distance of ~0.0001 pc from the star, small enough that only the Sun
+// and approached hero-stars hit it.
+export const LEN0 = 20000.0;
+
+// GLSL `smoothstep`-style `lint` from Gaia Sky `lib/math.glsl`. Endpoints
+// get a smoothstep curve, NOT a linear ramp. This is the authoritative
+// shape — `lint2` / `lint3` exist in the lib but the star vertex uses
+// `lint` specifically.
+const lintSmoothstep = (
+  x: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number
+): number => {
+  if (x <= x0) return y0;
+  if (x >= x1) return y1;
+  return y0 + (y1 - y0) * smoothstep(x0, x1, x);
+};
+
+// `degrees12` / `radians12` from Gaia Sky `lib/angles.glsl` — scale by
+// 1e12 around `pow()` so we do not lose fp32 precision on solid angles
+// in the 1e-10 rad band. `TO_DEG12 = 180.0e12 / PI`, `TO_RAD12 = PI / 180.0e12`.
+const TO_DEG12 = 180.0e12 / Math.PI;
+const TO_RAD12 = Math.PI / 180.0e12;
+const degrees12 = (radians: number) => radians * TO_DEG12;
+const radians12 = (degrees: number) => degrees * TO_RAD12;
+
+export interface StarfieldSolidAngleMetrics {
+  /** Raw angular size before opacity mapping: `a_size / dist` (radians). */
+  rawSolidAngle: number;
+  /** Mapped opacity through `lint_smoothstep`, ∈ [opacityLimits.x, opacityLimits.y]. */
+  opacity: number;
+  /**
+   * Clamped solid angle after `radians12(pow(degrees12(_), brightnessPower))`,
+   * ∈ [U_MIN_QUAD_SOLID_ANGLE, U_MAX_QUAD_SOLID_ANGLE]. This is the
+   * value the vertex uses to compute `quadSize`.
+   */
+  clampedSolidAngle: number;
+  /** Final world-space quad size: `clampedSolidAngle * dist * sizeFactor`. */
+  quadSize: number;
+  /** Boundary fade: 0 at dist=LEN0, 1 at dist=LEN0×1000 (smoothstep). */
+  boundaryFade: number;
+  /** Final per-star alpha: clamp(opacity × alphaFactor × boundaryFade, 0, 1). */
+  alpha: number;
 }
 
-export const starfieldPointMetrics = (
-  mag: number,
-  particleSize: number
-): StarfieldPointMetrics => {
-  const flux = Math.pow(10, -mag * FLUX_PER_MAG_EXPONENT);
-  const brightness =
-    BRIGHTNESS_LOG_COEFF * Math.log(1 + flux * BRIGHTNESS_LOG_SCALE);
+export interface StarfieldSolidAngleInputs {
+  /** Per-star physical radius (parsecs × DISTANCE_SCALE, i.e. scene units). */
+  size: number;
+  /** Camera-to-star distance in the same scene units. */
+  dist: number;
+  /** `u_solidAngleMap`. Default: `U_SOLID_ANGLE_MAP`. */
+  solidAngleMap?: readonly [number, number];
+  /** `u_opacityLimits`. Default: `U_OPACITY_LIMITS`. */
+  opacityLimits?: readonly [number, number];
+  /** `u_brightnessPower`. Default: `U_BRIGHTNESS_POWER_DEFAULT`. */
+  brightnessPower?: number;
+  /** `u_alphaSizeBr.y` — user size multiplier. Default: 1.0. */
+  sizeFactor?: number;
+  /** `u_alphaSizeBr.x` — global alpha scale. Default: 1.0. */
+  alphaFactor?: number;
+}
 
-  const gl_PointSize = clamp(
-    brightness * SIZE_COEFFICIENT * particleSize,
-    SIZE_FLOOR_PX,
-    SIZE_CEIL_PX
+/**
+ * Pure-TS mirror of the Gaia Sky vertex solid-angle mapping from
+ * `star.group.quad.vertex.glsl`. Returns the intermediate and final
+ * values the vertex computes, in the same order the shader computes
+ * them.
+ *
+ * Known divergence from the GLSL: we skip the `radians(acos(...))` and
+ * `tangent / arctangent` small-angle-approximation branch logic — Gaia
+ * Sky's comment "we omit the arctangent and tangent, as per the
+ * small-angle approximation" documents that simplification in the
+ * source itself, so our math lines up with the shader's actual
+ * behaviour for the HYG range.
+ */
+export const starfieldSolidAngleMetrics = (
+  input: StarfieldSolidAngleInputs
+): StarfieldSolidAngleMetrics => {
+  const size = input.size;
+  const dist = Math.max(input.dist, Number.EPSILON);
+  const [sMin, sMax] = input.solidAngleMap ?? U_SOLID_ANGLE_MAP;
+  const [oMin, oMax] = input.opacityLimits ?? U_OPACITY_LIMITS;
+  const power = input.brightnessPower ?? U_BRIGHTNESS_POWER_DEFAULT;
+  const sizeFactor = input.sizeFactor ?? 1;
+  const alphaFactor = input.alphaFactor ?? 1;
+
+  const rawSolidAngle = size / dist;
+  const opacity = lintSmoothstep(rawSolidAngle, sMin, sMax, oMin, oMax);
+
+  // Gaia Sky: `clamp(radians12(pow(degrees12(solidAngle), brightnessPower)),
+  //                  u_minQuadSolidAngle, 3.0e-8)`.
+  // The degrees12/radians12 wrappers keep precision for pow() operating
+  // on values in the 1e-10 band. Without them, pow(1e-10, 1.0) in fp32
+  // collapses to zero.
+  const boosted = radians12(Math.pow(degrees12(rawSolidAngle), power));
+  const clampedSolidAngle = clamp(
+    boosted,
+    U_MIN_QUAD_SOLID_ANGLE,
+    U_MAX_QUAD_SOLID_ANGLE
   );
-  const vBrightness = clamp(brightness * particleSize, ALPHA_FLOOR, ALPHA_CEIL);
 
-  return { gl_PointSize, vBrightness, flux, brightness };
+  const quadSize = clampedSolidAngle * dist * sizeFactor;
+
+  // Smoothstep-style boundary fade. Far stars fade IN (0 at LEN0, 1 at
+  // LEN0·1000). The near-camera check in the shader also nulls the quad
+  // when `dist < LEN0`; we return alpha = 0 in that branch too.
+  const boundaryFade = smoothstep(LEN0, LEN0 * 1000, dist);
+  let alpha = clamp(opacity * alphaFactor * boundaryFade, 0, 1);
+  if (alpha <= 1e-3 || dist < LEN0) alpha = 0;
+
+  return {
+    rawSolidAngle,
+    opacity,
+    clampedSolidAngle,
+    quadSize,
+    boundaryFade,
+    alpha,
+  };
 };
