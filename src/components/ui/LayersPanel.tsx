@@ -165,13 +165,20 @@ export const LayersPanel = ({
     "command-shell ghost-border relative z-[60] flex h-[4.5rem] w-10 items-center justify-center gap-1.5 overflow-hidden rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_18px_rgba(0,240,255,0.16)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopClosedTabClassName =
     "command-shell ghost-border relative z-[60] flex h-[5rem] w-10 translate-x-[0.5rem] items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[transform,border-color,color,background-color,box-shadow] hover:translate-x-[0.2rem] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+  // Menu structure v3.1 §Phase-2: the active handle carries more visual
+  // weight than the closed rail tabs (stronger border + faint fill +
+  // subtle glow) so the user always knows which "paper" is pulled.
   const desktopOpenTabClassName =
-    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-l-[0.95rem] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
+  // Phase-2: pr-12 on desktop keeps panel content (close button, sliders,
+  // switches, scrollbar) clear of the closed-tabs column that overlays
+  // the panel's right edge at z-60. Without this, controls would live
+  // under the tabs and scrollbar would be half-hidden.
   const panelBodyClassName = isMobile
     ? "flex h-full max-h-[inherit] flex-col overflow-hidden"
-    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4";
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] flex-col overflow-hidden p-4 pr-12";
 
   const panelSections =
     openPanel === "view" ? (
@@ -495,6 +502,9 @@ const RailButtonIcon = ({
   }
 
   if (panelId === "a11y") {
+    // Phase-2: path enlarged (head Y=5→4, r=1.75→2; arms 5-19→4-20;
+    // legs now reach to Y=21 instead of Y=15) so the a11y icon fills
+    // roughly the same viewBox area as the view/display/search icons.
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -505,11 +515,11 @@ const RailButtonIcon = ({
         className="h-4 w-4"
         aria-hidden="true"
       >
-        <circle cx="12" cy="5" r="1.75" />
+        <circle cx="12" cy="4" r="2" />
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
-          d="M5 9h14M9 9v5l-1.5 6M15 9v5l1.5 6M9.5 14h5"
+          d="M4 8.5h16M9 8.5v5l-2 7.5M15 8.5v5l2 7.5M9 13.5h6"
         />
       </svg>
     );

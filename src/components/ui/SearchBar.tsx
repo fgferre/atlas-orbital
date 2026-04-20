@@ -196,14 +196,16 @@ export const SearchBar = ({
   const mobileOpenHandleClassName =
     "command-shell ghost-border relative z-[1] -ml-px flex h-[4.5rem] w-10 shrink-0 self-center items-center justify-center gap-1.5 rounded-r-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopOpenTabClassName =
-    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 rounded-l-[0.95rem] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-nasa-accent transition-[color,border-color,background-color,box-shadow] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
+    "command-shell ghost-border relative z-[1] -mr-px flex h-[5rem] w-10 shrink-0 items-center justify-center gap-1.5 rounded-l-[0.95rem] border-nasa-accent/40 bg-nasa-accent/[0.08] px-1.5 py-2 text-[10px] font-orbitron uppercase tracking-[0.16em] text-white shadow-[0_0_14px_rgba(0,240,255,0.14)] transition-[color,border-color,background-color,box-shadow] hover:border-nasa-accent/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation";
   const desktopPanelShellClassName =
     "command-shell ghost-border tech-corners panel-scan flex items-stretch overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.45)]";
   const triggerSlotClassName = isMobile ? "h-[4.5rem] w-10" : "h-[5rem] w-10";
 
+  // Phase-2: pr-12 on desktop keeps Search content clear of the closed
+  // tabs (View/Display/Access) overlaying the panel's right edge.
   const panelBodyClassName = isMobile
     ? "flex h-full min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-4"
-    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] min-w-0 flex-col overflow-hidden p-3 sm:p-4";
+    : "flex max-h-[min(78vh,42rem)] w-[min(24rem,calc(100vw-5.75rem))] min-w-0 flex-col overflow-hidden p-3 pr-10 sm:p-4 sm:pr-12";
 
   const panelContent = (
     <div
