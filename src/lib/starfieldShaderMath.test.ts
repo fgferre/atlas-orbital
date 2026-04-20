@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { starfieldPointMetrics } from "./starfieldShaderMath";
+import {
+  CORE_SMOOTHSTEP_EDGE_HIGH,
+  CORE_SMOOTHSTEP_EDGE_LOW,
+  starfieldCoreKernel,
+  starfieldPointMetrics,
+} from "./starfieldShaderMath";
 import { getResolvedQualityProfileOptions } from "./qualityProfile";
 
 const approxEq = (actual: number, expected: number, tol = 1e-3) => {
@@ -159,5 +164,60 @@ describe("starfieldPointMetrics — HDR-emissive allow-list (R1 #1B)", () => {
       expect(c).toBeLessThanOrEqual(previous + 1e-6);
       previous = c;
     }
+  });
+});
+
+describe("starfieldCoreKernel — Gaia Sky star.group.quad port", () => {
+  // Source (star.group.quad.fragment.glsl, 2026-04-20 read):
+  //   float core = saturate(1.0 - smoothstep(0.0, 0.04, distance(vec2(0.5), uv) * 2.0));
+  //
+  // These tests pin the three source-authoritative anchor points plus
+  // the saturation tail. The prior rollback shipped a smoothstep with
+  // edges (0.45, 0.50) in pixel space that drifted by an order of
+  // magnitude in the rendered sprite — pinning (0.0, 0.04) as exported
+  // constants, plus the midpoint value, prevents a silent regression
+  // back to the invented kernel.
+
+  it("exports the source-authoritative edge constants", () => {
+    expect(CORE_SMOOTHSTEP_EDGE_LOW).toBe(0.0);
+    expect(CORE_SMOOTHSTEP_EDGE_HIGH).toBe(0.04);
+  });
+
+  it("matches the Gaia Sky shader at the three edge-defining points", () => {
+    // Center: the pinpoint is at full intensity.
+    approxEq(starfieldCoreKernel(0.0), 1.0);
+    // Midpoint of the smoothstep window: GLSL smoothstep is
+    // 3t²-2t³; at t = 0.5 that's 0.5, so core = 1 - 0.5 = 0.5.
+    approxEq(starfieldCoreKernel(0.02), 0.5);
+    // Upper edge: smoothstep saturates to 1, core collapses to 0.
+    approxEq(starfieldCoreKernel(0.04), 0.0);
+  });
+
+  it("stays at 0 everywhere outside the core (r > 0.04, up to the sprite corner)", () => {
+    // The sprite's UV-scaled radius ranges roughly 0..√2 because of the
+    // `* 2` factor. Everywhere outside the razor-thin window must
+    // contribute exactly 0 additive white boost — otherwise the halo
+    // (texture profile) would be swallowed by a fat bright disc like
+    // the rolled-back θ.1 produced.
+    for (const r of [0.041, 0.05, 0.1, 0.25, 0.5, 1.0, 1.4]) {
+      approxEq(starfieldCoreKernel(r), 0.0);
+    }
+  });
+
+  it("is strictly non-increasing from r=0 outward", () => {
+    // If the kernel ever bumped up as r grew, bright stars would paint
+    // a ring, which is the exact failure mode L13 / L14 fight.
+    let previous = Infinity;
+    for (let r = 0; r <= 1.5; r += 0.005) {
+      const v = starfieldCoreKernel(r);
+      expect(v).toBeLessThanOrEqual(previous + 1e-9);
+      previous = v;
+    }
+  });
+
+  it("clamps negative r inputs to the pinpoint value (defensive against sampling artifacts)", () => {
+    // GLSL saturate = clamp(x, 0, 1); a negative `r` would only come
+    // from a shader bug but the TS mirror should not amplify it.
+    approxEq(starfieldCoreKernel(-0.01), 1.0);
   });
 });

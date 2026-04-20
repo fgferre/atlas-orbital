@@ -36,8 +36,39 @@ const SIZE_CEIL_PX = 50; // NASA's original
 const ALPHA_FLOOR = 0.05; // NASA's original
 const ALPHA_CEIL = 1;
 
+// Gaia Sky star.group.quad.fragment.glsl core-kernel smoothstep edges.
+// Source: `core = saturate(1.0 - smoothstep(0.0, 0.04, distance(vec2(0.5), uv) * 2.0))`.
+// These are the authoritative values — NOT the (0.45, 0.50) pixel-
+// space attempt that was rolled back on 2026-04-20 after the invented
+// θ.1 commit. The inner edge at 0.0 and outer edge at 0.04 UV put the
+// core inside a sub-pixel / single-pixel pinpoint at sprite center
+// across the entire NASA-calibrated [5, 50] size range.
+export const CORE_SMOOTHSTEP_EDGE_LOW = 0.0;
+export const CORE_SMOOTHSTEP_EDGE_HIGH = 0.04;
+
 const clamp = (value: number, lo: number, hi: number) =>
   Math.min(Math.max(value, lo), hi);
+
+const smoothstep = (edge0: number, edge1: number, x: number): number => {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * Pure-TS mirror of the Gaia Sky star.group.quad.fragment.glsl core
+ * kernel. `r` is the UV-space distance from sprite center scaled × 2
+ * so `r = 0` is the pixel at the exact sprite center and `r = 1` is
+ * the sprite edge (matches the shader's `distance(vec2(0.5), uv) * 2.0`).
+ * Returns the core contribution that the shader multiplies by `2.0`
+ * and adds to `vColor` before premultiplied additive blending.
+ */
+export const starfieldCoreKernel = (r: number): number => {
+  return clamp(
+    1 - smoothstep(CORE_SMOOTHSTEP_EDGE_LOW, CORE_SMOOTHSTEP_EDGE_HIGH, r),
+    0,
+    1
+  );
+};
 
 export interface StarfieldPointMetrics {
   /** Final gl_PointSize in pixels (post particleSize, post clamp). */

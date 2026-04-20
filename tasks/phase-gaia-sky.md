@@ -222,72 +222,149 @@ restating the rules.
 
 ### θ.1 — Star sprite kernel refinement
 
-**Goal.** Port Gaia Sky's sprite structure (soft outer halo texture +
-procedural hard core) to our Points renderer. Our current fragment is
-`pow(d, 5)` radial falloff, which gives a soft ball. Gaia Sky stacks a
-sampled radial halo texture + a `smoothstep(0.0, 0.04)` inner-core step,
-which reads as a crisp star at any size.
+**Goal.** Port Gaia Sky's per-star sprite kernel (sampled radial halo
+texture + razor-thin additive white core) to our `THREE.Points`
+starfield. Our current fragment is `pow(d, 5)` — a soft isotropic ball.
+Gaia Sky's `star.group.quad.fragment.glsl` (3.7.x) multiplies a
+baked radial-gaussian texture into the alpha AND stacks a
+`smoothstep(0.0, 0.04)` pinpoint core that is **added to the RGB**
+(not to the alpha). That gives a crisp center-pop at any sprite size
+without changing the global halo footprint.
 
-**Gaia Sky reference.**
+**Gaia Sky reference (source-authoritative — 2026-04-20 source study).**
 
-- `assets/shader/star.group.quad.fragment.glsl` — texture sample +
-  white core.
-- `assets/shader/billboard.fragment.glsl` — the `farAway()` branch with
-  light decay.
+- `assets/shader/star.group.quad.fragment.glsl` (57 lines) — the
+  entire θ.1 reference. Fragment body, verbatim:
+  ```glsl
+  float profile = texture(u_starTex, uv).r;
+  if (profile <= 0.0) discard;
+  float alpha = v_col.a * profile;
+  float core = saturate(1.0 - smoothstep(0.0, 0.04, distance(vec2(0.5), uv) * 2.0));
+  fragColor = saturate(alpha * vec4(v_col.rgb + core * 2.0, 1.0));
+  ```
+- `assets/shader/star.group.quad.vertex.glsl` — host math (proper
+  motion, solid-angle quad sizing). Not ported; atlas already has its
+  own NASA-Eyes-calibrated log-compressed vertex transfer (L16/L17).
+- Host Java: `StarSetQuadComponent.setStarTexture()` loads
+  `tex/base/star-tex-NN.{jpg,png}` with `LINEAR/LINEAR` filter.
+- Blending: Gaia Sky `BlendMode.ADDITIVE = GL_ONE, GL_ONE` (pure
+  premultiplied additive).
+
+**Correction log (plan prose vs. source, pre-port).** The previous plan
+body cited three items that do not hold against the actual source:
+
+1. Old: core smoothstep edges `(0.45, 0.50)` on `1 - 2·length(…)`.
+   Source: `(0.0, 0.04)` on `distance(vec2(0.5), uv) * 2.0`. The two
+   expressions map to sprite regions an order of magnitude apart
+   (UV radius ~0.25 vs. ~0.02). **Fix below uses source values.**
+2. Old: final composite `(halo + core) × vBrightness × alpha`, core
+   added to alpha. Source adds core to **RGB** (`v_col.rgb + core * 2`)
+   and computes alpha as `profile × v_col.a` only. **Fix below mirrors
+   the source.**
+3. Old cited `billboard.fragment.glsl` as a θ.1 reference. That file
+   is the hero-star close-approach corona shader (three-tier
+   `closeUp/mix/farAway` blend keyed on `(u_distance - u_radius) /
+((u_radius * model_const) - u_radius)`). It belongs to θ.7, not
+   θ.1. **Removed from the θ.1 reference list.**
+
+These were the θ.1 failures that cost the 2026-04-20 rollback — the
+shipped commit had a `smoothstep(0.0, 0.5)` pixel-space core that
+never matched Gaia Sky's intent. Recording the delta here keeps the
+plan and the implementation agreeing in the same working tree
+(kickoff per-onda protocol step 3, `feedback_fix_plan_divergences`
+memory).
 
 **Port plan.**
 
-- Generate a 64×64 `R8` sprite texture at build time in
-  `scripts/build-star-sprite.mjs`: radial gaussian baked to PNG.
-  Alternative: generate lazily with an `OffscreenCanvas` at first
-  Canvas mount (single file, zero net bundle growth).
-- Edit `src/components/canvas/Starfield.tsx` fragment:
-  - Sample `u_starTex` at `gl_PointCoord` for the soft halo.
-  - Composite a procedural core: `core = smoothstep(0.45, 0.50, d)` (d
-    is the already-clamped `1 - 2·length(gl_PointCoord - 0.5)`).
-  - Final alpha: `(halo + core) × vBrightness × alpha` with an
-    upper clamp at 1.0 before additive blend.
-- Mirror change into `src/components/canvas/NASAStarfield.tsx` +
-  `shaders/nasaStarShaders.ts`.
+- `src/components/canvas/Starfield.tsx` fragment shader, using the
+  existing `gl_PointCoord` UV:
+  ```glsl
+  vec2 uv = gl_PointCoord;
+  float profile = texture2D(u_starTex, uv).r;
+  if (profile <= 0.0) discard;
+  float r = length(uv - vec2(0.5)) * 2.0;
+  float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
+  float alpha = vBrightness * profile;
+  // Let three.js AdditiveBlending (SrcAlpha/One) multiply src.rgb by
+  // src.a at blend time, which recovers Gaia Sky's One/One
+  // `alpha * (rgb + core*2)` effect exactly. Do NOT saturate: post-
+  // Wave-α HDR wants values > 1 to trigger Bloom (luminanceThreshold=1).
+  gl_FragColor = vec4(vColor + vec3(core * 2.0), alpha);
+  ```
+- `u_starTex`: 64×64 R8 radial-gaussian generated via `OffscreenCanvas`
+  at first material construction (no build script, zero bundle growth
+  — plan's earlier option B path). Wrap `ClampToEdgeWrapping`, filter
+  `LinearFilter/LinearFilter`. Shape `exp(-(r/σ)²)` with σ chosen so
+  the profile reaches ≈ 0 at the corners.
+- `src/lib/starfieldShaderMath.ts`: add a pure-TS `starfieldCoreKernel(r)`
+  that mirrors `clamp(1 - smoothstep(0, 0.04, r), 0, 1)` so the unit
+  test can pin the edges.
+- `NASAStarfield.tsx` / `shaders/nasaStarShaders.ts`: **not touched in
+  this onda**. That reference renderer stays the NASA Eyes baseline;
+  mirroring the Gaia Sky kernel there would collapse the side-by-side
+  comparison tool we used in Wave α.
 
 **Parameters (ultra defaults).**
 
-- Core inner edge: `0.45`, outer edge: `0.50` (tunable in
-  `starfieldShaderMath.ts` exported constants).
-- Texture mip filter: trilinear; wrap `CLAMP_TO_EDGE`.
+- Core smoothstep: `(0.0, 0.04)` on `distance(vec2(0.5), uv) * 2.0` —
+  verbatim from source. Exported as constants in
+  `starfieldShaderMath.ts` so the unit test pins them.
+- Core RGB boost: `core * 2.0` — verbatim.
+- Halo texture: 64×64 R8, radial gaussian, `LinearFilter` min/mag,
+  `ClampToEdgeWrapping`. Σ tunable in the generator.
 
 **DisplayPanel.** No new slider. "Star size" slider in Wave α still
 drives the existing `particleSize` uniform.
 
 **Verification.**
 
-- Unit: `starfieldShaderMath.test.ts` new cases — core-edge crossing
-  at `d=0.47` returns `halo + 0`, `d=0.49` returns `halo + ~0.8`,
-  `d=0.51` returns `halo + 1`.
+- Unit: `starfieldShaderMath.test.ts` new cases — `starfieldCoreKernel(r)`
+  returns `1.0` at `r = 0.0` (pinpoint center), `≈ 0.5` at `r = 0.02`
+  (smoothstep midpoint), `0.0` at `r = 0.04` (smoothstep upper edge),
+  `0.0` for all `r ≥ 0.04` through `r = 1.0` (sprite corner). A
+  separate monotonicity test confirms the kernel only decreases as
+  `r` increases.
 - Playwright: `e2e/starfield-sprite.spec.ts` — captures post-Wave α
   baseline, confirms pixel shift `> 0.4 %` after this onda and that
-  bright-star centers are now > 90 % saturated pixels in a 3×3 box.
+  bright-star centers have ≥ 1 pixel with per-channel RGB above the
+  pre-port peak (evidence of the `core * 2.0` white boost). Allowed
+  to land as a fast-follow commit per R7 if the ship-commit budget
+  runs tight.
 - Manual preview: boot, compare named bright stars (Sirius, Vega,
-  Betelgeuse) against the Stellarium screenshot reference in
-  `tasks/design/refs/star-sprite-target.png` (produce this alongside
-  this commit).
+  Betelgeuse) against a Gaia Sky reference screenshot when available
+  (user-provided or gaiasky.space gallery if restored). Absent a
+  reference, matched-shot falls back to "pre-port atlas vs. post-port
+  atlas, expect razor-thin center pop that the pre-port pow(d,5) ball
+  cannot produce". Explicit acknowledgment of the partial-reference
+  fallback in the ship commit message per kickoff R2.
 
 **Feasibility.** Easy.
 
 **Risks.**
 
-- L17 literal — porting Gaia Sky's numbers without verifying our own
-  emitted pixel sizes regresses us to "too big and round". Before
-  shipping, compute the on-screen diameter of a mag 4 star at
-  1440p/DPR 1.5 and verify it sits in the **5–8 px core / 8–12 px
-  halo** band, NOT the 16–24 px range this lesson's history shows we
-  keep drifting into. If the port lands a mag-4 star at > 12 px core,
-  the core edges are wrong, not the transfer curve.
+- L17 literal — Gaia Sky's core occupies UV radius `[0.0, 0.04]`,
+  which at our existing NASA-calibrated `[5, 50]` `gl_PointSize`
+  clamp is:
+  - at 50 px sprite: core diameter ≈ 4 px, full halo diameter 50 px
+    (core is 8 % of sprite width, matches Gaia Sky's look);
+  - at 5 px sprite (floor for telescopic tail): core is sub-pixel;
+    the smoothstep effectively collapses to a single bright pixel
+    at sprite center, which IS the expected behavior — the halo
+    gaussian carries the star at that magnitude.
+    Regression guard: the unit test pins the kernel math at `r = 0.0,
+0.02, 0.04` (in UV space, independent of sprite size), and a
+    post-ship screenshot verifies a mag-4 star has a visibly brighter
+    center pixel than the ring 1–2 px out. Do NOT re-introduce
+    pixel-space clamps or global brightness floors here — L13/L14 show
+    those destroy magnitude ordering.
 - L15 literal — the new `u_starTex` uniform is added to the existing
   `useMemo`'d `THREE.ShaderMaterial` constructor, never as a JSX
-  `<shaderMaterial uniforms={{...}}>` child.
-- L17 DPR — if we add any size math that multiplies by DPR, it reads
-  from `gl.getPixelRatio()`, not `window.devicePixelRatio`.
+  `<shaderMaterial uniforms={{...}}>` child. The generated
+  `THREE.DataTexture` is stored in a ref / module-scope cache so
+  React remounts don't rebuild the gaussian every mount.
+- L17 DPR — the shader does not introduce new pixel math; all size
+  scaling continues to live in the vertex stage via `particleSize`
+  (which already derives from `gl.getPixelRatio()`).
 
 ---
 

@@ -133,22 +133,91 @@ const vertexShader = /* glsl */ `
   }
 `;
 
+// Gaia Sky star.group.quad.fragment.glsl (3.7.x) kernel port. The
+// fragment structure is:
+//   - `u_starTex.r` delivers a baked radial-gaussian halo profile.
+//   - `core` is a razor-thin additive white pinpoint, UV radius
+//     [0.0, 0.04] around sprite center, added to RGB (NOT to alpha).
+//   - alpha = vBrightness × profile (Gaia Sky: v_col.a × profile).
+//   - Blending: three.js AdditiveBlending (SrcAlpha/One) multiplies
+//     src.rgb by src.a at blend time, which recovers Gaia Sky's
+//     One/One `alpha * (rgb + core*2)` effect exactly.
+//   - No saturate() at the end: our Wave α HDR pipeline needs
+//     values above 1.0 to trigger Bloom's luminanceThreshold=1 pass.
+//     Gaia Sky clamps for SDR; we inherit the clamp from AgX instead.
 const fragmentShader = /* glsl */ `
   precision highp float;
+
+  uniform sampler2D u_starTex;
 
   varying vec3 vColor;
   varying float vBrightness;
 
   void main() {
-    // NASA's exact pow(d, 5) radial falloff. Previously bumped to
-    // pow(d, 8) to keep small sprites crisp, but the sprites were
-    // only small because the size calibration was wrong. With the
-    // proper [5, 50] NASA clamp restored, pow(5) is the right shape.
-    float d = clamp(1.0 - 2.0 * length(gl_PointCoord - vec2(0.5)), 0.0, 1.0);
-    float alpha = pow(d, 5.0);
-    gl_FragColor = vec4(vColor, alpha * vBrightness);
+    vec2 uv = gl_PointCoord;
+    float profile = texture2D(u_starTex, uv).r;
+    if (profile <= 0.0) discard;
+
+    float r = length(uv - vec2(0.5)) * 2.0;
+    float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
+
+    float alpha = vBrightness * profile;
+    gl_FragColor = vec4(vColor + vec3(core * 2.0), alpha);
   }
 `;
+
+// Baked radial-gaussian texture that plays the role of Gaia Sky's
+// `tex/base/star-tex-NN.{jpg,png}` asset-bundle halo. Generated once
+// per process on first material construction so the bundle does not
+// grow and the gaussian parameters stay tweakable in one place.
+// R8 (THREE.RedFormat) matches the shader's `.r` sample; LinearFilter
+// min/mag matches Gaia Sky's `Texture.TextureFilter.Linear` pair.
+//
+// σ = 10 in a 64×64 texture gives, in UV-space radius terms:
+//   - 100 % at centre,
+//   -  ~29 % at r_uv = 0.25 (half sprite width),
+//   -  ~0.7 % at r_uv = 0.5 (sprite edge),
+//   - essentially zero past the edge.
+// That is materially wider than the pre-port `pow(d, 5)` ball (~3 %
+// at half radius), matching Gaia Sky's softer halo aesthetic, without
+// collapsing the starfield into the uniform haze a broader σ (14+)
+// produced on a first visual pass. Narrower σ (≤ 6) would reproduce
+// the NASA-Eyes footprint and lose the Gaia-Sky-specific character.
+const STAR_SPRITE_TEXTURE_SIZE = 64;
+const STAR_SPRITE_GAUSSIAN_SIGMA = 10;
+
+let starSpriteTextureCache: THREE.DataTexture | null = null;
+
+function buildStarSpriteTexture(): THREE.DataTexture {
+  const size = STAR_SPRITE_TEXTURE_SIZE;
+  const sigma = STAR_SPRITE_GAUSSIAN_SIGMA;
+  const data = new Uint8Array(size * size);
+  const center = (size - 1) / 2;
+  const twoSigmaSq = 2 * sigma * sigma;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - center;
+      const dy = y - center;
+      const r2 = dx * dx + dy * dy;
+      data[y * size + x] = Math.round(Math.exp(-r2 / twoSigmaSq) * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RedFormat);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function getStarSpriteTexture(): THREE.DataTexture {
+  if (!starSpriteTextureCache) {
+    starSpriteTextureCache = buildStarSpriteTexture();
+  }
+  return starSpriteTextureCache;
+}
 
 /**
  * Convert the catalog's pmra / pmdec (int16 mas/yr, stored on the HYG
@@ -229,6 +298,10 @@ export const Starfield = () => {
         // value is a safe default (1.0 = no HDR lift) until the first
         // frame writes the tier-keyed gain.
         vfxHdrGain: { value: 1.0 },
+        // Lazily-generated radial-gaussian halo profile. The texture
+        // is process-wide cached so React remounts reuse it, matching
+        // Gaia Sky's asset-loaded star-tex-NN.* lifetime.
+        u_starTex: { value: getStarSpriteTexture() },
       },
       transparent: true,
       depthWrite: false,
