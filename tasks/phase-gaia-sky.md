@@ -285,17 +285,27 @@ memory).
   float r = length(uv - vec2(0.5)) * 2.0;
   float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
   float alpha = vBrightness * profile;
-  // Let three.js AdditiveBlending (SrcAlpha/One) multiply src.rgb by
-  // src.a at blend time, which recovers Gaia Sky's One/One
-  // `alpha * (rgb + core*2)` effect exactly. Do NOT saturate: post-
-  // Wave-α HDR wants values > 1 to trigger Bloom (luminanceThreshold=1).
-  gl_FragColor = vec4(vColor + vec3(core * 2.0), alpha);
+  // Pre-multiply alpha into rgb INSIDE the fragment, then use true
+  // One/One additive in the material (see CustomBlending setup in
+  // Starfield.tsx). Blend factors then match Gaia Sky's
+  // `BlendMode.ADDITIVE = GL_ONE, GL_ONE` exactly — both on RGB and
+  // on framebuffer alpha accumulation. Gaia Sky's final `saturate()`
+  // clamp is the only structural divergence left, and it is an
+  // intentional pipeline/render-space mismatch (R1 step-5 #2): Wave
+  // α HDR wants `alpha * (rgb + core*2) > 1` to trigger Bloom's
+  // luminanceThreshold = 1 bright pass; AgX tone-maps back into
+  // display range at the end of the composer.
+  vec3 rgb = (vColor + vec3(core * 2.0)) * alpha;
+  gl_FragColor = vec4(rgb, alpha);
   ```
-- `u_starTex`: 64×64 R8 radial-gaussian generated via `OffscreenCanvas`
-  at first material construction (no build script, zero bundle growth
-  — plan's earlier option B path). Wrap `ClampToEdgeWrapping`, filter
-  `LinearFilter/LinearFilter`. Shape `exp(-(r/σ)²)` with σ chosen so
-  the profile reaches ≈ 0 at the corners.
+- `u_starTex`: 64×64 R8 radial-gaussian generated via a process-wide
+  `Uint8Array` cache uploaded into a `THREE.DataTexture` on first
+  material construction (no build script, zero bundle growth — plan's
+  earlier option B path, realised via `DataTexture` instead of an
+  `OffscreenCanvas` since the data is numeric, not a drawn bitmap).
+  Wrap `ClampToEdgeWrapping`, filter `LinearFilter/LinearFilter`.
+  Shape `exp(-r² / (2σ²))` (standard statistics Gaussian in texture-
+  pixel space) with σ chosen so the profile reaches ≈ 0 at the corners.
 - `src/lib/starfieldShaderMath.ts`: add a pure-TS `starfieldCoreKernel(r)`
   that mirrors `clamp(1 - smoothstep(0, 0.04, r), 0, 1)` so the unit
   test can pin the edges.
@@ -342,11 +352,13 @@ drives the existing `particleSize` uniform.
 
 **Risks.**
 
-- L17 literal — Gaia Sky's core occupies UV radius `[0.0, 0.04]`,
-  which at our existing NASA-calibrated `[5, 50]` `gl_PointSize`
-  clamp is:
-  - at 50 px sprite: core diameter ≈ 4 px, full halo diameter 50 px
-    (core is 8 % of sprite width, matches Gaia Sky's look);
+- L17 literal — Gaia Sky's core smoothstep triggers when
+  `distance(vec2(0.5), uv) * 2.0 <= 0.04`, i.e. at UV radius ≤ 0.02.
+  Against our existing NASA-calibrated `[5, 50]` `gl_PointSize` clamp
+  that maps to:
+  - at 50 px sprite: core diameter ≈ 2 px, full halo diameter 50 px
+    (core is 4 % of sprite width — a razor-thin pinpoint that the
+    halo gaussian carries the rest of the sprite around);
   - at 5 px sprite (floor for telescopic tail): core is sub-pixel;
     the smoothstep effectively collapses to a single bright pixel
     at sprite center, which IS the expected behavior — the halo

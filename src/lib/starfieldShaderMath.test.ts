@@ -165,6 +165,60 @@ describe("starfieldPointMetrics — HDR-emissive allow-list (R1 #1B)", () => {
       previous = c;
     }
   });
+
+  // θ.1 shifted bloom eligibility at the sprite center pixel: the
+  // additive `core * 2.0` RGB boost raises the center pixel's
+  // contribution from `vBrightness × channel × gain` to
+  // `vBrightness × (channel × gain + 2)` when core = 1. The earlier
+  // "telescopic stays below 1" guard above is still true for every
+  // non-center pixel (core = 0 there), but the center pixel crosses
+  // the Bloom threshold at mid-faint magnitudes on high and ultra
+  // tiers. That is a DESIRED visual — it paints a subpixel-sized
+  // bright tip on mid-faint stars which is the Gaia-Sky look — but
+  // it needs to be pinned here so a future refactor of the `* 2.0`
+  // RGB boost factor doesn't silently change which stars' centers
+  // bloom.
+  const centerPixelComposite = (mag: number, gain: number, vColorChannel = 1) =>
+    starfieldPointMetrics(mag, 0.75).vBrightness * (vColorChannel * gain + 2);
+
+  it("θ.1 core-center pixel pushes mid-faint magnitudes over the bloom threshold on ultra / high / balanced", () => {
+    // At mag 7, vBrightness = 0.5. Center composite on ultra =
+    // 0.5 × (4 + 2) = 3.0 — well past the 1.0 bright-pass threshold.
+    expect(centerPixelComposite(7, ULTRA_GAIN)).toBeGreaterThan(1);
+    expect(centerPixelComposite(7, HIGH_GAIN)).toBeGreaterThan(1);
+    expect(centerPixelComposite(7, BALANCED_GAIN)).toBeGreaterThan(1);
+    // At mag 8, vBrightness = 0.22. Center composite on ultra =
+    // 0.22 × (4 + 2) ≈ 1.32 — still over the threshold. This is the
+    // expansion of the bloom allow-list that θ.1 introduces; the
+    // non-center pixels of the same star sit below threshold
+    // (0.22 × 4 = 0.88) so the bloom contribution is a single-pixel
+    // tip, not a whole-sprite glow.
+    expect(centerPixelComposite(8, ULTRA_GAIN)).toBeGreaterThan(1);
+  });
+
+  it("θ.1 core-center pixel stays below the bloom threshold for the deep telescopic tail (mag ≥ 10)", () => {
+    // vBrightness floors at 0.05 beyond mag 10. On ultra that caps
+    // the center composite at 0.05 × (ULTRA_GAIN + 2) — which must
+    // stay below 1 for the deep tail not to manufacture bloom fog.
+    // With ULTRA_GAIN < 18 this invariant holds; assert both sides.
+    expect(ULTRA_GAIN).toBeLessThan(18);
+    expect(centerPixelComposite(10, ULTRA_GAIN)).toBeLessThan(1);
+    expect(centerPixelComposite(12, ULTRA_GAIN)).toBeLessThan(1);
+    expect(centerPixelComposite(20, ULTRA_GAIN)).toBeLessThan(1);
+  });
+
+  it("constrained tier never blooms the core-center pixel (bloom is off on constrained anyway, but a zero-HDR-gain tier must not lift mid-mag stars into HDR through the core alone)", () => {
+    // On constrained, gain = 1. Max center composite at mag 6 (where
+    // vBrightness = 1): 1 × (1 + 2) = 3. That IS > 1, meaning even
+    // constrained would paint HDR at the sprite center — and since
+    // the tier's bloom pass is not mounted, the AgX endpoint
+    // receives the value directly. The guard here is that the deep
+    // telescopic tail still caps out below 1 on constrained, so the
+    // sky doesn't turn into a center-pixel HDR haze on weak
+    // hardware.
+    expect(centerPixelComposite(10, CONSTRAINED_GAIN)).toBeLessThan(1);
+    expect(centerPixelComposite(12, CONSTRAINED_GAIN)).toBeLessThan(1);
+  });
 });
 
 describe("starfieldCoreKernel — Gaia Sky star.group.quad port", () => {
@@ -191,6 +245,15 @@ describe("starfieldCoreKernel — Gaia Sky star.group.quad port", () => {
     approxEq(starfieldCoreKernel(0.02), 0.5);
     // Upper edge: smoothstep saturates to 1, core collapses to 0.
     approxEq(starfieldCoreKernel(0.04), 0.0);
+  });
+
+  it("matches smoothstep off-midpoint samples (proves the curve is THIS smoothstep, not any decreasing bump through the same anchors)", () => {
+    // r = 0.01 → smoothstep t = 0.25 → 3·0.0625 − 2·0.015625 = 0.15625.
+    // core = 1 − 0.15625 = 0.84375.
+    approxEq(starfieldCoreKernel(0.01), 0.84375);
+    // r = 0.03 → t = 0.75 → 3·0.5625 − 2·0.421875 = 0.84375.
+    // core = 1 − 0.84375 = 0.15625. Symmetric around the 0.5 midpoint.
+    approxEq(starfieldCoreKernel(0.03), 0.15625);
   });
 
   it("stays at 0 everywhere outside the core (r > 0.04, up to the sprite corner)", () => {

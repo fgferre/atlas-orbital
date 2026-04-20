@@ -139,12 +139,19 @@ const vertexShader = /* glsl */ `
 //   - `core` is a razor-thin additive white pinpoint, UV radius
 //     [0.0, 0.04] around sprite center, added to RGB (NOT to alpha).
 //   - alpha = vBrightness × profile (Gaia Sky: v_col.a × profile).
-//   - Blending: three.js AdditiveBlending (SrcAlpha/One) multiplies
-//     src.rgb by src.a at blend time, which recovers Gaia Sky's
-//     One/One `alpha * (rgb + core*2)` effect exactly.
-//   - No saturate() at the end: our Wave α HDR pipeline needs
-//     values above 1.0 to trigger Bloom's luminanceThreshold=1 pass.
-//     Gaia Sky clamps for SDR; we inherit the clamp from AgX instead.
+//   - RGB output is pre-multiplied by alpha INSIDE the fragment so
+//     the material can use true One/One additive (see material
+//     setup below). That matches Gaia Sky's blend setup
+//     (`BlendMode.ADDITIVE = GL_ONE, GL_ONE` in
+//     `core/src/gaiasky/render/BlendMode.java`) exactly, both on
+//     RGB and on the framebuffer alpha-channel accumulation. The
+//     only intentional divergence left is Gaia Sky's final
+//     `saturate()` clamp on the fragment output — we skip it so
+//     the Wave α HDR pipeline can pass `alpha * (rgb + core*2) > 1`
+//     into Bloom's luminanceThreshold = 1 bright pass; AgX tone-maps
+//     back into display range at the end of the composer. That is a
+//     pipeline/render-space mismatch (R1 step-5 classification #2),
+//     not a structural one.
 const fragmentShader = /* glsl */ `
   precision highp float;
 
@@ -162,7 +169,8 @@ const fragmentShader = /* glsl */ `
     float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
 
     float alpha = vBrightness * profile;
-    gl_FragColor = vec4(vColor + vec3(core * 2.0), alpha);
+    vec3 rgb = (vColor + vec3(core * 2.0)) * alpha;
+    gl_FragColor = vec4(rgb, alpha);
   }
 `;
 
@@ -305,7 +313,20 @@ export const Starfield = () => {
       },
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      // True premultiplied additive: matches Gaia Sky's
+      // `BlendMode.ADDITIVE = GL_ONE, GL_ONE` exactly. The fragment
+      // shader pre-multiplies `rgb` by `alpha` so the blend-time
+      // factors stay One/One. THREE.AdditiveBlending (which is
+      // SrcAlpha/One) would produce identical RGB in the scene here
+      // — alpha² on the framebuffer vs. alpha — but keeping the
+      // factors One/One removes that last wrinkle of structural
+      // divergence from Gaia Sky.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.OneFactor,
+      blendDstAlpha: THREE.OneFactor,
     });
   }, []);
 
