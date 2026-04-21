@@ -1,142 +1,135 @@
 /**
- * Star-physics helpers for the Gaia-Sky-style solid-angle vertex
- * (θ.1b port). Provides per-star physical radius synthesis from
- * HYG catalog attributes (B-V color index) so the shader can
- * compute `solidAngle = radius / distance`.
+ * Per-star sizing helpers for the Gaia-Sky-style solid-angle vertex
+ * (θ.1b port). Provides the `a_size` attribute that feeds
+ * `solidAngle = a_size / dist` in `star.group.quad.vertex.glsl`.
  *
- * HYG v4.2 does not ship stellar radius directly. Gaia Sky pulls
- * it from its own catalog's `a_size` attribute. The θ-audit's
- * Round 5 classified two viable substitutes:
+ * **Key semantic (Opus audit, 2026-04-21): `a_size` is NOT a physical
+ * stellar radius.** Gaia Sky's own source is explicit:
  *
- *   - Stefan-Boltzmann from absolute magnitude + Teff (Ballesteros):
- *     physically anchored, ~40 LOC, requires parallax-derived absMag.
- *   - Spectral-class → radius lookup table (this file): fast,
- *     deterministic, indexed via B-V mapped to spectral class, using
- *     main-sequence (luminosity class V) typical radii.
+ *   `AstroUtils.absoluteMagnitudeToPseudoSize` JavaDoc:
+ *   > "The pseudo-size of this star... has no physical meaning and has
+ *   > no relation to the actual physical size of the star."
  *
- * The lookup here takes the pragmatic path. Main-sequence radii are
- * the statistical norm in the HYG magnitude-limited sample; the
- * resulting `solidAngle = a_size / dist` falls inside Gaia Sky's
- * default `u_solidAngleMap = vec2(1e-10, 2e-9)` band for typical
- * HYG stars at typical HYG distances (verified manually for Sirius
- * at 2.64 pc → ~1.45e-8 rad, and mag-6 at 20 pc → ~1.1e-9 rad).
+ * The value is a rendering-only pseudo-size derived from absolute
+ * magnitude / pseudo-luminosity:
  *
- * If the matched-shot against Gaia Sky shows systematic radius
- * errors for giants / supergiants (which are under-represented here),
- * escalate to the Stefan-Boltzmann path in a follow-up; this file's
- * lookup stays as the fallback.
+ *   pseudoL = 10^(-0.4 · absMag)
+ *   size    = sqrt(pseudoL) · 0.15  (parsecs, pre-render)
+ *
+ * Crucially, the formula uses `sqrt(L)` WITHOUT the Stefan-Boltzmann
+ * `/T²` correction, so cool red supergiants (Betelgeuse, Arcturus)
+ * stay comparable to bright hot dwarfs (Sirius, Vega) instead of
+ * dwarfing them. An earlier θ.1b implementation (2026-04-20) ported
+ * Stefan-Boltzmann physical radii and shipped a test asserting
+ * Betelgeuse > Sirius — both were wrong relative to Gaia Sky, and
+ * produced the visual artifact the user flagged (Betelgeuse larger
+ * than the Sun on screen).
+ *
+ * Full pipeline (Gaia Sky source, verified 2026-04-21):
+ *   1. `BinaryPointDataProvider.java:262` — on catalog load if no
+ *      extra size column: `sizePc = absoluteMagnitudeToPseudoSize(absMag)`
+ *   2. `StarSetInstancedRenderer.java:143` — into vertex buffer:
+ *      `a_size = particle.size() × Constants.STAR_SIZE_FACTOR × sizeFactor`
+ *      (STAR_SIZE_FACTOR = 1.31526e-6, sizeFactor is an app-level tuning knob)
+ *   3. `star.group.quad.vertex.glsl:100` — in the shader:
+ *      `solidAngle = a_size / dist`
+ *
+ * HYG v4.2 carries apparent magnitude and parallax-derived distance,
+ * so the atlas port computes `absMag` via distance modulus per star
+ * and pipes it through the pseudo-size formula.
  */
-
-// 1 solar radius in parsecs.
-// 6.957e8 m / (3.0857e16 m/pc) ≈ 2.2537e-8 pc.
-export const SOLAR_RADIUS_PC = 2.2537e-8;
-
-// Sun's absolute magnitude (V band) — anchor for the distance-modulus
-// and Stefan-Boltzmann path below.
-export const SUN_ABS_MAG_V = 4.83;
-// Sun's effective temperature in K.
-export const SUN_TEFF = 5778;
 
 /**
- * Ballesteros 2012 formula for effective temperature from B-V color
- * index. Applicable across the main HYG range with ~5 % accuracy.
- * Reference: Ballesteros, F.J. (2012) "New insights into black bodies"
- * https://arxiv.org/abs/1201.1809
+ * Gaia Sky's `Constants.STAR_SIZE_FACTOR` — a unit-conversion
+ * multiplier applied per-vertex when `a_size` is written into the
+ * instance attribute buffer (`StarSetInstancedRenderer.java:143`).
+ * Source-verified: `Constants.java:51`.
  */
-export const bvToTeff = (bv: number): number => {
-  return 4600 * (1 / (0.92 * bv + 1.7) + 1 / (0.92 * bv + 0.62));
-};
+export const STAR_SIZE_FACTOR = 1.31526e-6;
+
+/**
+ * Gaia Sky's pseudo-size coefficient. Literal `0.15` in
+ * `AstroUtils.absoluteMagnitudeToPseudoSize` — the pre-render factor
+ * that scales `sqrt(pseudoL)` from dimensionless to parsecs before
+ * `STAR_SIZE_FACTOR` converts to the final render-space magnitude.
+ */
+export const GAIA_PSEUDO_SIZE_COEFFICIENT_PC = 0.15;
 
 /**
  * Distance modulus — convert apparent magnitude to absolute magnitude
  * given heliocentric distance in parsecs.
  *   absMag = apparentMag − 5 · log10(distPc / 10)
  * Degenerate distances (≤ 0) fall back to the apparent magnitude so
- * the caller always gets a finite result.
+ * the caller always gets a finite result (matches Gaia Sky's
+ * `AstroUtils.apparentToAbsoluteMagnitude` guard).
  */
 export const apparentToAbsMag = (
   apparentMag: number,
   distPc: number
 ): number => {
+  if (!Number.isFinite(apparentMag)) return apparentMag;
   if (distPc <= 0) return apparentMag;
   return apparentMag - 5 * Math.log10(distPc / 10);
 };
 
 /**
- * Stefan-Boltzmann-derived stellar radius, in solar radii.
+ * Gaia Sky `AstroUtils.absoluteMagnitudeToPseudoSize` — exact port.
+ * Returns pseudo-size in parsecs (unit name mirrors the
+ * `BinaryPointDataProvider.java:262` local `double sizePc = ...`).
  *
- *   L / L_sun = 10^(−0.4 · (absMag − absMag_sun))
- *   R / R_sun = sqrt(L / L_sun) · (T_sun / T_eff)²
+ * Java source (`AstroUtils.java:470`):
+ * ```java
+ * double pseudoL = FastMath.pow(10, -0.4 * absMag);
+ * double sizeFactor = Nature.PC_TO_M * Constants.ORIGINAL_M_TO_U * 0.15;
+ * return FastMath.min(Math.pow(pseudoL, 0.5) * sizeFactor, 1e10)
+ *        * Constants.DISTANCE_SCALE_FACTOR;
+ * ```
  *
- * Physically anchored across luminosity classes — recovers giant /
- * supergiant radii the main-sequence `bvToSolarRadius` table misses
- * (Codex θ.1b review finding #1, 2026-04-20). Degenerate inputs
- * (non-finite absMag, zero Teff) fall back to a unit radius so the
- * HYG pipeline never emits NaN geometry.
+ * The Java version returns internal units (meters × ORIGINAL_M_TO_U).
+ * The TS port factors out the unit conversion so the caller can
+ * apply the atlas's own `DISTANCE_SCALE` (1 pc → scene units) at the
+ * buffer-write site, keeping the result in parsecs here.
+ *
+ * Per-star numeric sanity check (cross-verified against Gaia Sky
+ * runtime by the Opus audit, 2026-04-21):
+ *   - Sirius   (apparentMag=−1.46, dist=2.64 pc → absMag≈+1.44) →
+ *     sqrt(10^(−0.576))·0.15 ≈ 0.0774 pc
+ *   - Betelgeuse (apparentMag=0.42, dist=168 pc → absMag≈−5.71) →
+ *     sqrt(10^(+2.284))·0.15 ≈ 2.083 pc
+ *
+ * Both divided by their respective distances (solidAngle = size/dist):
+ *   - Sirius solidAngle ≈ 2.93e-2 rad (→ clamps to 3.0e-8 per
+ *     u_solidAngle upper bound in the shader, so renders at ceiling)
+ *   - Betelgeuse solidAngle ≈ 1.24e-2 rad (→ also clamps)
+ *
+ * Both SATURATE at the upper clamp, but the pre-clamp ordering matches
+ * Gaia Sky (Sirius > Betel), and more importantly the typical HYG
+ * star at mag 5+ falls inside the `[1e-10, 2e-9]` band where the
+ * opacity-lint mapping gives meaningful fade.
  */
-export const estimateRadiusSolar = (
+export const absoluteMagnitudeToPseudoSize = (absMag: number): number => {
+  if (!Number.isFinite(absMag)) return 0;
+  const pseudoL = Math.pow(10, -0.4 * absMag);
+  const sizePc = Math.sqrt(pseudoL) * GAIA_PSEUDO_SIZE_COEFFICIENT_PC;
+  // Gaia Sky clamps at 1e10 internal units (post sizeFactor multiply).
+  // In parsec-space with the 0.15 coefficient stripped, that's an
+  // absurd ceiling; `Number.isFinite` catches degenerate absMag
+  // inputs upstream, so we mirror the `min(... , 1e10)` literal for
+  // strict 1:1 parity even if it rarely fires in practice.
+  return Math.min(sizePc, 1e10);
+};
+
+/**
+ * Convenience helper for the HYG pipeline: takes apparent magnitude
+ * + heliocentric distance in parsecs (both shipped in the binary
+ * catalog) and returns the Gaia-Sky-style pseudo-size in parsecs.
+ * Used by `Starfield.tsx buildSizeAttribute` — one call per star at
+ * geometry-build time.
+ */
+export const pseudoSizeFromApparentMag = (
   apparentMag: number,
-  distPc: number,
-  bv: number
+  distPc: number
 ): number => {
-  if (!Number.isFinite(apparentMag) || !Number.isFinite(distPc) || distPc <= 0)
-    return 1.0;
   const absMag = apparentToAbsMag(apparentMag, distPc);
-  if (!Number.isFinite(absMag)) return 1.0;
-  const luminosityRatio = Math.pow(10, -0.4 * (absMag - SUN_ABS_MAG_V));
-  if (!Number.isFinite(luminosityRatio) || luminosityRatio < 0) return 1.0;
-  const teff = bvToTeff(bv);
-  if (!Number.isFinite(teff) || teff <= 0) return 1.0;
-  const tRatio = SUN_TEFF / teff;
-  return Math.sqrt(luminosityRatio) * tRatio * tRatio;
-};
-
-/**
- * Stefan-Boltzmann-derived radius in parsecs — used by
- * `Starfield.tsx buildSizeAttribute` to fill the `a_size` vertex
- * attribute. Preferred over `bvToRadiusPc` (main-sequence lookup)
- * for 1:1 Gaia Sky parity on bright giants / supergiants.
- */
-export const estimateRadiusPc = (
-  apparentMag: number,
-  distPc: number,
-  bv: number
-): number => {
-  return estimateRadiusSolar(apparentMag, distPc, bv) * SOLAR_RADIUS_PC;
-};
-
-/**
- * Main-sequence stellar radius in solar radii, estimated from B-V
- * color index. Piecewise monotonic — O/B stars are largest, M stars
- * smallest. Table cross-checked against Wikipedia's "main sequence"
- * typical values and Stellarium's internal tables:
- *
- *   Spectral   B-V range        R / R_sun
- *   O          bv < -0.30       12.0
- *   B          -0.30 ≤ bv < -0.15    7.0
- *   A          -0.15 ≤ bv < 0.00    2.5
- *   F           0.00 ≤ bv < 0.30    1.4
- *   G           0.30 ≤ bv < 0.60    1.05   (Sun at bv≈0.63 ≈ 1.0)
- *   K           0.60 ≤ bv < 1.00    0.85
- *   M early     1.00 ≤ bv < 1.40    0.55
- *   M late      bv ≥ 1.40             0.25
- */
-export const bvToSolarRadius = (bv: number): number => {
-  if (bv < -0.3) return 12.0;
-  if (bv < -0.15) return 7.0;
-  if (bv < 0.0) return 2.5;
-  if (bv < 0.3) return 1.4;
-  if (bv < 0.6) return 1.05;
-  if (bv < 1.0) return 0.85;
-  if (bv < 1.4) return 0.55;
-  return 0.25;
-};
-
-/**
- * Physical radius in parsecs, given B-V color index.
- * Used by `Starfield.tsx` to fill the `a_size` per-star attribute
- * (stored in scene units after multiplication by `DISTANCE_SCALE`).
- */
-export const bvToRadiusPc = (bv: number): number => {
-  return bvToSolarRadius(bv) * SOLAR_RADIUS_PC;
+  return absoluteMagnitudeToPseudoSize(absMag);
 };

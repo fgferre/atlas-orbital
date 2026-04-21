@@ -7,14 +7,17 @@
  *
  *   • Real B-V colour (blue/white/yellow/orange/red) derived per star
  *     instead of a single Sun-like default.
- *   • **θ.1b (2026-04-20):** Gaia-Sky-style solid-angle vertex math,
- *     replacing the NASA-Eyes log-compressed curve + hard floors.
- *     Per-star `a_size` attribute is synthesised from the B-V color
- *     index via `src/lib/starPhysics.ts`. `solidAngle = a_size / dist`
- *     drives both opacity (via `lint_smoothstep` mapping) and pixel
- *     size (scaled by projection × viewport). Faint distant stars
- *     fade to invisibility like Gaia Sky does; there is no `[5, 50]`
- *     size floor or `0.05` alpha floor in this path.
+ *   • **θ.1b (2026-04-20, revised 2026-04-21):** Gaia-Sky-style
+ *     solid-angle vertex math, replacing the NASA-Eyes log-compressed
+ *     curve + hard floors. Per-star `a_size` is a Gaia-Sky-style
+ *     **pseudo-size** derived from apparent-magnitude → absolute-
+ *     magnitude → sqrt(pseudoL) × 0.15 pc (NOT a physical radius —
+ *     see src/lib/starPhysics.ts for source-verified semantics).
+ *     `solidAngle = a_size / dist` drives both opacity (via
+ *     `lint_smoothstep` mapping) and pixel size (scaled by projection
+ *     × viewport). Faint distant stars fade to invisibility like
+ *     Gaia Sky does; there is no `[5, 50]` size floor or `0.05`
+ *     alpha floor in this path.
  *   • **θ.1 (2026-04-20):** Gaia-Sky-style fragment kernel — baked
  *     radial-gaussian halo texture (`u_starTex`) + razor-thin
  *     additive white core via `smoothstep(0.0, 0.04, r)`. See
@@ -43,7 +46,10 @@ import {
 } from "../../lib/starfield";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
-import { estimateRadiusPc } from "../../lib/starPhysics";
+import {
+  pseudoSizeFromApparentMag,
+  STAR_SIZE_FACTOR,
+} from "../../lib/starPhysics";
 import {
   computeMinQuadSolidAngle,
   computeViewportHeightScalar,
@@ -56,9 +62,11 @@ import {
 
 // 1 parsec expressed in the scene's unit system (matches the legacy
 // tycho2 path; keeps the relative scale of the sky consistent between
-// presets). `a_size` is a physical radius in parsecs × DISTANCE_SCALE,
-// which puts `size / dist` directly in the Gaia Sky `u_solidAngleMap`
-// range for typical HYG stars at typical HYG distances.
+// presets). `a_size` = Gaia-Sky pseudo-size (parsecs) × DISTANCE_SCALE
+// × STAR_SIZE_FACTOR, which puts `size / dist` directly in the Gaia
+// Sky `u_solidAngleMap` range for typical HYG stars at typical
+// distances (verified Sirius ≈ 3e-8 rad clamp ceiling; mag-5 G-dwarf
+// at 20 pc ≈ 1.1e-9 rad in the opacity-lint band).
 const DISTANCE_SCALE = 206_265_000.0;
 
 // Convert 1 milliarcsecond to radians. Used to turn the stored pmra/pmdec
@@ -310,20 +318,32 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
 }
 
 /**
- * Per-star physical radius attribute. Gaia Sky's `star.group.quad.vertex.glsl`
- * reads `a_size` as a scalar physical radius. HYG does not ship radius
- * directly, so we synthesise via Stefan-Boltzmann from apparent magnitude
- * + heliocentric distance + B-V color index (Codex θ.1b review finding
- * #1: main-sequence lookup under-estimates bright giants / supergiants).
- * `estimateRadiusPc` wraps the Ballesteros Teff formula + distance
- * modulus + `R/R_sun = sqrt(L/L_sun) × (T_sun/T)²`.
+ * Per-star `a_size` attribute feeding Gaia Sky's
+ * `solidAngle = a_size / dist` vertex math.
  *
- * Documented in `tasks/phase-gaia-sky.md §5 θ.1b` as a stack/API
- * adaptation (HYG has no radius column; Gaia Sky's internal catalog
- * does).
+ * **Not a physical radius** — see `src/lib/starPhysics.ts` module
+ * docstring for the full story. In short: Gaia Sky's own
+ * `AstroUtils.absoluteMagnitudeToPseudoSize` JavaDoc says pseudo-size
+ * "has no physical meaning and has no relation to the actual physical
+ * size of the star". It's a rendering-only scalar derived from
+ * absolute magnitude:
+ *   pseudoL = 10^(-0.4 · absMag)
+ *   size    = sqrt(pseudoL) · 0.15  (parsecs, pre-render)
+ *
+ * Replaces the previous Stefan-Boltzmann port (2026-04-20) that pulled
+ * real `R/R_sun` values and produced Betelgeuse ≈ 350 R_sun sprites —
+ * bigger than the Sun on screen and visually wrong per Gaia Sky.
+ * Opus audit (2026-04-21) cross-referenced the source and confirmed
+ * the pseudo-size path is the source-authoritative one.
+ *
+ * The `STAR_SIZE_FACTOR = 1.31526e-6` multiplier mirrors Gaia Sky's
+ * `StarSetInstancedRenderer.java:143` write:
+ *   `a_size = particle.size() × Constants.STAR_SIZE_FACTOR × sizeFactor`
+ * Where `sizeFactor` is the app-level tuning (we leave it as 1.0,
+ * folded into `u_sizeFactor` on the shader side).
  */
 function buildSizeAttribute(catalog: HygCatalogData): Float32Array {
-  const { positions, magnitudes, colorIndices } = catalog;
+  const { positions, magnitudes } = catalog;
   const count = catalog.header.count;
   const sizes = new Float32Array(count);
   for (let i = 0; i < count; i++) {
@@ -331,8 +351,8 @@ function buildSizeAttribute(catalog: HygCatalogData): Float32Array {
     const py = positions[i * 3 + 1];
     const pz = positions[i * 3 + 2];
     const distPc = Math.sqrt(px * px + py * py + pz * pz);
-    sizes[i] =
-      estimateRadiusPc(magnitudes[i], distPc, colorIndices[i]) * DISTANCE_SCALE;
+    const pseudoSizePc = pseudoSizeFromApparentMag(magnitudes[i], distPc);
+    sizes[i] = pseudoSizePc * DISTANCE_SCALE * STAR_SIZE_FACTOR;
   }
   return sizes;
 }
@@ -371,18 +391,17 @@ export const Starfield = () => {
         u_LEN0: { value: LEN0 },
         // `u_sizeFactor` is the atlas equivalent of Gaia Sky's
         // `u_alphaSizeBr.y = starPointSize × 1e6 × pointScale`
-        // (`StarSetQuadComponent.java:96`). The `1e6` multiplier is a
-        // unit-conversion factor that Gaia Sky applies so the
-        // world-space quadSize computed from physical solid angle
-        // renders at visible pixel sizes on typical displays; without
-        // it every star collapses to sub-pixel and the GPU rasterises
-        // everything at the 1-pixel floor, erasing the giant /
-        // supergiant distinction entirely (validation finding,
-        // 2026-04-20 post-Codex). Default of 1e6 places Sirius at
-        // ~25 px, Betelgeuse (clamped at 3e-8 rad) at ~52 px, mag-5
-        // G-dwarfs at ~2 px, and faints fade to invisible — matching
-        // Gaia Sky's raw vertex output at comparable view.
-        u_sizeFactor: { value: 1.0e6 },
+        // (`StarSetQuadComponent.java:96`). Exact default derivation:
+        //   config.yaml `pointSize = 3.0`
+        //   → `updateStarPointSize(ps)`: `starPointSize = ps × 0.4 = 1.2`
+        //   → `updateSizeAggregate()`: `alphaSizeBr[1] = 1.2 × 1e6 × 1.0 = 1.2e6`
+        // The 2026-04-20 validation fix set this to `1e6` (close but
+        // off by 20 %); Opus audit (2026-04-21) flagged the miss and
+        // it's corrected here. With pseudo-size (not physical radius)
+        // driving `a_size`, `1.2e6` puts bright hot dwarfs like Sirius
+        // at the ~3e-8 clamp ceiling and lets the full HYG magnitude
+        // distribution render at visible pixel counts.
+        u_sizeFactor: { value: 1.2e6 },
         u_alphaFactor: { value: 1.0 },
         // Seeded below each frame.
         u_viewportHeight: { value: 1.0 },
@@ -435,9 +454,10 @@ export const Starfield = () => {
       velocities[i] *= DISTANCE_SCALE;
     }
 
-    // `a_size` carries the Stefan-Boltzmann-derived radius (scene units).
-    // The NASA-Eyes-era `mag` attribute was retired in the Codex θ.1b
-    // follow-up — the solid-angle path reads size + ci + position only.
+    // `a_size` carries the Gaia-Sky-style pseudo-size (scene units ×
+    // STAR_SIZE_FACTOR). The NASA-Eyes-era `mag` attribute was retired
+    // in the Codex θ.1b follow-up — the solid-angle path reads
+    // `a_size + ci + position` only.
     const sizeArray = buildSizeAttribute(catalog);
 
     const geom = new THREE.BufferGeometry();

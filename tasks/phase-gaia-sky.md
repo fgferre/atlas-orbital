@@ -495,21 +495,28 @@ Host defaults from `StarSetQuadComponent.java:46`:
   vBrightness = alpha; // fragment already consumes this
   gl_PointSize = max(quadSize / <NDC-to-pixel conversion>, 0.0);
   ```
-- `a_size` (per-star radius) substitute. HYG v4.2 does not ship
-  radius, so we synthesise it. Options, in order of 1:1 fidelity:
-  - **(best)** Stefan-Boltzmann via absolute magnitude + parallax:
-    `R ∝ sqrt(L) / T²`. Requires B-V → Teff lookup (Ballesteros
-    formula), then `L = 10^(−0.4·absMag) × L_sun`, then
-    `R = sqrt(L) × T_sun² / T²`. Adds ~40 lines to the HYG pipeline.
-  - **(pragmatic)** spectral-class → physical-radius lookup table
-    (Stellarium / Wikipedia): 16 entries from O5 to M9, indexed by
-    HYG's spectral-class first letter. Fast + deterministic.
-  - **(fallback)** apparent-mag proxy: `a_size ≈ k · 10^(−0.2·mag)`
-    where `k` is tuned so bright stars produce solid angles in
-    Gaia Sky's `u_solidAngleMap` range. Not physically anchored but
-    preserves magnitude ordering.
-    Choose (pragmatic) for first ship; escalate to (best) if the
-    matched-shot shows wrong radius distribution.
+- `a_size` (per-star attribute) — **source-verified pseudo-size, NOT
+  physical radius.** Opus audit (2026-04-21) + `AstroUtils.java:463-475`
+  JavaDoc: "The pseudo-size... has no physical meaning and has no
+  relation to the actual physical size of the star."
+  Full formula (1:1 port from `AstroUtils.absoluteMagnitudeToPseudoSize`):
+  ```
+  pseudoL = 10^(-0.4 · absMag)
+  size    = min(sqrt(pseudoL) × 0.15, 1e10)  // parsecs (pre-STAR_SIZE_FACTOR)
+  ```
+  HYG v4.2 ships apparent magnitude + parallax-derived distance, so
+  we compute `absMag = apparentMag − 5·log10(distPc / 10)` per star
+  and pipe it through the formula (`src/lib/starPhysics.ts`).
+  Crucially, `sqrt(L)` without a `/T²` correction means cool red
+  supergiants (Betelgeuse) do NOT outsize bright hot dwarfs (Sirius),
+  matching Gaia Sky's visible behaviour. The earlier θ.1b ship
+  (2026-04-20) used Stefan-Boltzmann physical radii and produced
+  Betelgeuse ≈ 350 R_sun sprites — on-screen bigger than the Sun —
+  which the user flagged and the Opus audit diagnosed as a semantic
+  drift, not a pipeline gap.
+  Render-side multipliers match Gaia Sky exactly:
+  `a_size_final = sizePc × STAR_SIZE_FACTOR × appSizeFactor`
+  where `STAR_SIZE_FACTOR = 1.31526e-6` (`Constants.java:51`).
 - Host defaults (verified Round 5 2026-04-20):
   - `u_solidAngleMap` = `vec2(1.0e-10, 2.0e-9)` (literal in
     `StarSetQuadComponent.java:46`).
@@ -575,7 +582,8 @@ renderer` commit. NASAStarfield remains accessible via the existing
 
 **Parameters (ultra defaults).** Above — `u_solidAngleMap`,
 `u_opacityLimits`, `u_brightnessPower`, `u_minQuadSolidAngle`. Per-
-star `a_size` derived via spectral-class table.
+star `a_size` derived via `AstroUtils.absoluteMagnitudeToPseudoSize`
+(1:1 port in `src/lib/starPhysics.ts`).
 
 **DisplayPanel.** Existing "Star size" slider rebinds from
 `particleSize` to `u_alphaFactor` (which multiplies the solid-angle-

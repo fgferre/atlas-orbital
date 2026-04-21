@@ -16,15 +16,11 @@ import {
   starfieldSolidAngleMetrics,
 } from "./starfieldShaderMath";
 import {
+  absoluteMagnitudeToPseudoSize,
   apparentToAbsMag,
-  bvToRadiusPc,
-  bvToSolarRadius,
-  bvToTeff,
-  estimateRadiusPc,
-  estimateRadiusSolar,
-  SOLAR_RADIUS_PC,
-  SUN_ABS_MAG_V,
-  SUN_TEFF,
+  GAIA_PSEUDO_SIZE_COEFFICIENT_PC,
+  pseudoSizeFromApparentMag,
+  STAR_SIZE_FACTOR,
 } from "./starPhysics";
 
 const approxEq = (actual: number, expected: number, tol = 1e-3) => {
@@ -81,34 +77,33 @@ describe("starfieldCoreKernel — Gaia Sky star.group.quad.fragment port", () =>
 });
 
 // ---------------------------------------------------------------------------
-// Vertex solid-angle mapping (θ.1b — 2026-04-20)
+// Solid-angle metrics (θ.1b vertex port)
 // ---------------------------------------------------------------------------
 
-describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", () => {
-  // Verify constants carried over from Round 5 / Round 6 source-reads.
-  it("pins Gaia Sky host uniform defaults", () => {
-    expect(U_SOLID_ANGLE_MAP).toStrictEqual([1.0e-10, 2.0e-9]);
-    expect(U_OPACITY_LIMITS).toStrictEqual([0.0, 1.0]);
+describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () => {
+  it("pins the source-authoritative default uniforms", () => {
+    // Source: StarSetQuadComponent.java + star.group.quad.vertex.glsl.
+    expect(U_SOLID_ANGLE_MAP[0]).toBe(1e-10);
+    expect(U_SOLID_ANGLE_MAP[1]).toBe(2e-9);
+    // config.yaml default (no user override): opacityLimits = [0.0, 1.0].
+    expect(U_OPACITY_LIMITS[0]).toBe(0.0);
+    expect(U_OPACITY_LIMITS[1]).toBe(1.0);
     expect(U_BRIGHTNESS_POWER_DEFAULT).toBe(1.0);
-    expect(U_BRIGHTNESS_POWER_RANGE).toStrictEqual([0.9, 1.1]);
-    // Baseline at 1440p. Runtime value is resolution-adaptive per
-    // `computeMinQuadSolidAngle` (mirrors StarSetQuadComponent.java:68).
-    expect(U_MIN_QUAD_SOLID_ANGLE).toBe(1.8e-9);
-    // 3.0e-8 is a SOURCE LITERAL, not a runtime uniform (Codex θ.1b #2).
+    expect(U_BRIGHTNESS_POWER_RANGE[0]).toBe(0.9);
+    expect(U_BRIGHTNESS_POWER_RANGE[1]).toBe(1.1);
     expect(MAX_QUAD_SOLID_ANGLE_LITERAL).toBe(3.0e-8);
-    expect(LEN0).toBe(20000.0);
   });
 
   it("rawSolidAngle is size/dist (dimensionless)", () => {
-    // Sirius-scale: physical radius ≈ 1.7 Rsun, distance 2.64 pc.
-    const sizePc = 1.7 * SOLAR_RADIUS_PC;
+    // Pseudo-size sample: Sirius-like (absMag +1.44 → size ≈ 0.077 pc),
+    // at 2.64 pc. size/dist ≈ 2.93e-2 rad pre-shader scaling.
+    const sizePc = absoluteMagnitudeToPseudoSize(1.44);
     const distPc = 2.64;
     const m = starfieldSolidAngleMetrics({
       size: sizePc * DISTANCE_SCALE,
       dist: distPc * DISTANCE_SCALE,
     });
     approxEq(m.rawSolidAngle, sizePc / distPc, 1e-12);
-    // Within Gaia Sky's map — this is a "present" star, not a faint one.
     expect(m.rawSolidAngle).toBeGreaterThan(U_SOLID_ANGLE_MAP[0]);
   });
 
@@ -212,28 +207,27 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
 
   it("preserves magnitude ordering across typical HYG distances", () => {
     // Three representative stars at the typical HYG range; solidAngle
-    // should be monotonic in the expected direction (larger radius or
-    // smaller distance → larger solidAngle).
+    // should be monotonic in the expected direction (larger pseudo-size
+    // or smaller distance → larger solidAngle).
+    //
+    // Use Gaia-Sky pseudo-size (not physical radius) so the ordering
+    // test reflects the actual vertex-shader semantics.
     const sirius = starfieldSolidAngleMetrics({
-      size: bvToRadiusPc(0.0) * DISTANCE_SCALE,
+      size: pseudoSizeFromApparentMag(-1.46, 2.64) * DISTANCE_SCALE,
       dist: 2.64 * DISTANCE_SCALE,
     });
     const typical = starfieldSolidAngleMetrics({
-      size: bvToRadiusPc(0.5) * DISTANCE_SCALE,
+      size: pseudoSizeFromApparentMag(3.0, 20) * DISTANCE_SCALE,
       dist: 20 * DISTANCE_SCALE,
     });
     const faint = starfieldSolidAngleMetrics({
-      size: bvToRadiusPc(1.2) * DISTANCE_SCALE,
+      size: pseudoSizeFromApparentMag(7.0, 200) * DISTANCE_SCALE,
       dist: 200 * DISTANCE_SCALE,
     });
     expect(sirius.rawSolidAngle).toBeGreaterThan(typical.rawSolidAngle);
     expect(typical.rawSolidAngle).toBeGreaterThan(faint.rawSolidAngle);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Star physics (radius synthesis)
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Pixel-space conversion helpers (θ.1b stack/API — Codex #4)
@@ -279,22 +273,20 @@ describe("computeViewportHeightScalar — host DPR feed", () => {
 });
 
 // ---------------------------------------------------------------------------
-// End-to-end pixel-size regression (validation round, 2026-04-20)
+// End-to-end pixel-size regression (Gaia Sky 1:1, post-pseudo-size fix
+// 2026-04-21)
 //
-// The user flagged post-θ.1b-initial-ship that all stars rendered as a
-// single pixel — no visible giant/supergiant distinction. Root cause:
-// `u_sizeFactor = 1.0` was 6 orders of magnitude smaller than Gaia Sky's
-// `alphaSizeBr.y = starPointSize × 1e6 × pointScale`
-// (StarSetQuadComponent.java:96). The `1e6` multiplier is a source-
-// literal unit-conversion factor; without it every HYG star's clamped
-// solid angle produces a sub-pixel `gl_PointSize` and the GPU collapses
-// them all to the 1-pixel rasterisation floor, erasing magnitude-ordering.
-// Tests below pin the fixed calibration — Betelgeuse > Sirius > G-dwarf
-// in final pixel size — so a future refactor to `u_sizeFactor` can't
-// silently re-break the giant-distinction invariant.
+// **Key invariant the earlier Stefan-Boltzmann ship violated:** with
+// Gaia Sky pseudo-size (`sqrt(10^(-0.4·absMag)) × 0.15 pc`), bright hot
+// dwarfs like Sirius SATURATE the `3e-8` solid-angle clamp BEFORE cool
+// red supergiants like Betelgeuse. Both reach the ceiling (so on-
+// screen they end up the same size after clamp), but the PRE-clamp
+// ordering is Sirius > Betel — the opposite of Stefan-Boltzmann
+// physical radius. This section pins that semantic so a future
+// "fix" doesn't silently reintroduce Betelgeuse > Sirius.
 // ---------------------------------------------------------------------------
 
-describe("end-to-end pixel-size calibration (Gaia Sky parity post-validation)", () => {
+describe("end-to-end pixel-size calibration (Gaia Sky pseudo-size parity)", () => {
   // Canonical view: 60° fov, 1080 CSS × 1.5 DPR viewport.
   const PROJ_MATRIX_11 = 1 / Math.tan(Math.PI / 6); // cot(30°) ≈ 1.732
   const VIEWPORT_HEIGHT = computeViewportHeightScalar(1080, 1.5); // 1620
@@ -302,181 +294,177 @@ describe("end-to-end pixel-size calibration (Gaia Sky parity post-validation)", 
     PROJ_MATRIX_11,
     VIEWPORT_HEIGHT
   );
-  // Default u_sizeFactor after the validation fix.
-  const SIZE_FACTOR = 1.0e6;
+  // Gaia Sky default u_sizeFactor: starPointSize (1.2) × 1e6 × pointScale (1.0)
+  // = 1.2e6 (StarSetQuadComponent.java:96).
+  const SIZE_FACTOR = 1.2e6;
   const DIST = 206_265_000.0; // 1 pc in scene units.
 
-  const finalPixelSize = (sizePc: number, distPc: number): number => {
-    const m = starfieldSolidAngleMetrics({
-      size: sizePc * DIST,
-      dist: distPc * DIST,
-    });
+  // Compose the full Starfield.tsx pipeline:
+  //   1. pseudoSizeFromApparentMag(apparentMag, distPc) → pc
+  //   2. × DISTANCE_SCALE → scene units
+  //   3. × STAR_SIZE_FACTOR → final a_size value
+  //   4. solidAngleMetrics clamps → clampedSolidAngle
+  //   5. × u_sizeFactor × pixelsPerRadian → pixel size
+  const pixelSize = (apparentMag: number, distPc: number): number => {
+    const pseudoPc = pseudoSizeFromApparentMag(apparentMag, distPc);
+    const aSize = pseudoPc * DIST * STAR_SIZE_FACTOR;
+    const m = starfieldSolidAngleMetrics({ size: aSize, dist: distPc * DIST });
     return m.clampedSolidAngle * SIZE_FACTOR * PIXELS_PER_RADIAN;
   };
 
-  it("Betelgeuse-class supergiant saturates at the 3e-8 clamp and renders > Sirius", () => {
-    // Betelgeuse: apparentMag 0.42, distance ~168 pc, B-V ≈ 1.85
-    // → Stefan-Boltzmann R ≈ hundreds of solar radii.
-    const rBetelSol = estimateRadiusSolar(0.42, 168, 1.85);
-    expect(rBetelSol).toBeGreaterThan(300);
-    const pxBetel = finalPixelSize(rBetelSol * SOLAR_RADIUS_PC, 168);
-    // Sirius: apparentMag -1.46, 2.64 pc, B-V ≈ 0.0 → R ~ 1.7 solar.
-    const rSiriusSol = estimateRadiusSolar(-1.46, 2.64, 0.0);
-    const pxSirius = finalPixelSize(rSiriusSol * SOLAR_RADIUS_PC, 2.64);
-    // Sun at 10 pc (reference main-sequence G dwarf).
-    const pxSun10pc = finalPixelSize(1 * SOLAR_RADIUS_PC, 10);
+  it("Sirius renders LARGER than Betelgeuse at the typical view (inverts Stefan-Boltzmann ordering)", () => {
+    // Sirius: apparentMag -1.46, 2.64 pc → absMag ≈ +1.44 → pseudo-size
+    // ≈ 0.0775 pc → raw solidAngle ≈ 3.86e-8 rad → clamps at 3e-8
+    // ceiling → ~50.5 px under the canonical view.
+    const pxSirius = pixelSize(-1.46, 2.64);
+    // Betelgeuse: apparentMag 0.42, 168 pc → absMag ≈ −5.71 → pseudo-size
+    // ≈ 2.083 pc → raw solidAngle ≈ 1.63e-8 rad → does NOT clamp →
+    // ~27.4 px under the canonical view.
+    const pxBetel = pixelSize(0.42, 168);
 
-    // Expected ordering: supergiant > bright main-sequence > distant dwarf.
-    expect(pxBetel).toBeGreaterThan(pxSirius);
-    expect(pxSirius).toBeGreaterThan(pxSun10pc);
-
-    // Rough magnitudes the calibration needs to hit for a useful
-    // visual result:
-    //   - Supergiant at or near the clamp ceiling (> 30 px).
-    //   - Bright local main-sequence > 10 px.
-    //   - Typical mag-5 G dwarf still visible (> 1 px — mandatory, else
-    //     the whole starfield collapses to single-pixel haze like
-    //     pre-validation).
-    expect(pxBetel).toBeGreaterThan(30);
-    expect(pxSirius).toBeGreaterThan(10);
-    expect(pxSun10pc).toBeGreaterThan(1);
+    // THE correctness anchor (reversal of the pre-fix Stefan-Boltzmann
+    // ship that had Betel ≈ 3× Sirius): Sirius must be LARGER.
+    expect(pxSirius).toBeGreaterThan(pxBetel);
+    // Both bright and clearly visible.
+    expect(pxSirius).toBeGreaterThan(40);
+    expect(pxBetel).toBeGreaterThan(15);
+    // Ratio in a sane range — Sirius outsizes Betel by ~1.8× (not 3×
+    // the other way) under the pseudo-size semantics.
+    expect(pxSirius / pxBetel).toBeGreaterThan(1.3);
+    expect(pxSirius / pxBetel).toBeLessThan(2.5);
   });
 
-  it("deep-tail dwarf (apparentMag 15, 200 pc) alpha fades via opacity mapping", () => {
-    // Gaia Sky floors the minimum quad solid angle at ~1.8e-9 rad at
-    // 1440p (see `computeMinQuadSolidAngle`). Faint-deep-tail stars
-    // don't fade via sprite-size collapse — they stabilise at the
-    // floor with opacity saturated at opacityLimits[0] (= 0 in Gaia
-    // Sky default). Pick a star far enough + dim enough that
-    // rawSolidAngle lives well below the opacity-map minimum.
-    const apparentMag = 15;
-    const distPc = 200;
-    const rDwarf = estimateRadiusSolar(apparentMag, distPc, 1.0); // K/M dwarf
+  it("PRE-clamp ordering: Sirius > Betelgeuse in raw pseudo-solidAngle", () => {
+    // Cross-check before clamp to verify the pseudo-size formula itself
+    // produces the Sirius > Betel ordering that Gaia Sky has. This is
+    // what the Opus audit 2026-04-21 pinned as the correctness anchor.
+    const pseudoSirius = pseudoSizeFromApparentMag(-1.46, 2.64);
+    const rawSiriusSA = pseudoSirius / 2.64;
+    const pseudoBetel = pseudoSizeFromApparentMag(0.42, 168);
+    const rawBetelSA = pseudoBetel / 168;
+    expect(rawSiriusSA).toBeGreaterThan(rawBetelSA);
+  });
+
+  it("typical mag-5 star at 20 pc renders above the 1px floor (visible)", () => {
+    // Ensures the opacity band and clamp math don't collapse the
+    // sparse main-sequence tail to sub-pixel. The user flagged pre-
+    // validation "all stars 1 pixel" — this is the sentinel.
+    const pxTypical = pixelSize(5.0, 20);
+    expect(pxTypical).toBeGreaterThan(1);
+  });
+
+  it("deep-tail faint star (mag 12, 500 pc) stabilises at minQuad floor with alpha = 0", () => {
+    // Stars dim + far enough that rawSolidAngle sits below the
+    // opacityMap lower bound (1e-10). Shader path:
+    //   - clampedSolidAngle = U_MIN_QUAD_SOLID_ANGLE (resolution-adaptive floor)
+    //   - opacity = opacityLimits[0] = 0 (Gaia Sky default)
+    //   - alpha = 0 → fragment discard → invisible
+    const apparentMag = 12;
+    const distPc = 500;
+    const pseudoPc = pseudoSizeFromApparentMag(apparentMag, distPc);
+    const aSize = pseudoPc * DIST * STAR_SIZE_FACTOR;
     const m = starfieldSolidAngleMetrics({
-      size: rDwarf * SOLAR_RADIUS_PC * DIST,
+      size: aSize,
       dist: distPc * DIST,
     });
-    // Opacity saturates to the low endpoint (0.0 in Gaia Sky default).
     expect(m.opacity).toBe(U_OPACITY_LIMITS[0]);
-    // Sprite is floored at the minQuad (not sub-pixel).
-    approxEq(m.clampedSolidAngle, 1.8e-9, 1e-15);
-    // Net alpha collapses to 0 via opacity mapping → invisible.
     expect(m.alpha).toBe(0);
   });
 
-  it("u_sizeFactor calibration is the pixel-size knob: halving it halves pixels", () => {
-    // Under the current fixed u_sizeFactor = 1e6, Sirius gets ~25 px.
-    // If a future tuning change the user asks for needs smaller stars,
-    // halving the uniform should halve the pixel size linearly.
-    const pxFull = finalPixelSize(1.7 * SOLAR_RADIUS_PC, 2.64);
-    const pxHalf = (() => {
-      const m = starfieldSolidAngleMetrics({
-        size: 1.7 * SOLAR_RADIUS_PC * DIST,
-        dist: 2.64 * DIST,
-      });
-      return m.clampedSolidAngle * (SIZE_FACTOR / 2) * PIXELS_PER_RADIAN;
-    })();
+  it("u_sizeFactor is the pixel-size knob: halving it halves pixels linearly", () => {
+    // Under the fixed u_sizeFactor = 1.2e6 default, halving the uniform
+    // should halve the pixel size linearly (for a star not floored /
+    // ceilinged by the solidAngle clamps).
+    const sample = pseudoSizeFromApparentMag(5.0, 20);
+    const aSize = sample * DIST * STAR_SIZE_FACTOR;
+    const m = starfieldSolidAngleMetrics({ size: aSize, dist: 20 * DIST });
+    const pxFull = m.clampedSolidAngle * SIZE_FACTOR * PIXELS_PER_RADIAN;
+    const pxHalf = m.clampedSolidAngle * (SIZE_FACTOR / 2) * PIXELS_PER_RADIAN;
     approxEq(pxHalf, pxFull / 2, 1e-9);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Star physics — main-sequence lookup (legacy) + Stefan-Boltzmann (primary)
+// Star physics — Gaia Sky pseudo-size port (θ.1b, 2026-04-21)
 // ---------------------------------------------------------------------------
 
-describe("bvToSolarRadius — main-sequence radius lookup (legacy path)", () => {
-  it("maps B-V monotonically toward smaller radii for redder stars", () => {
-    expect(bvToSolarRadius(-0.4)).toBe(12.0); // O star
-    expect(bvToSolarRadius(-0.2)).toBe(7.0); // B
-    expect(bvToSolarRadius(-0.05)).toBe(2.5); // A
-    expect(bvToSolarRadius(0.2)).toBe(1.4); // F
-    expect(bvToSolarRadius(0.5)).toBe(1.05); // G (Sun near here)
-    expect(bvToSolarRadius(0.8)).toBe(0.85); // K
-    expect(bvToSolarRadius(1.2)).toBe(0.55); // M early
-    expect(bvToSolarRadius(1.5)).toBe(0.25); // M late
+describe("absoluteMagnitudeToPseudoSize — Gaia Sky AstroUtils port", () => {
+  it("pins the pseudo-size coefficient constant 0.15", () => {
+    expect(GAIA_PSEUDO_SIZE_COEFFICIENT_PC).toBe(0.15);
   });
 
-  it("is non-increasing as B-V increases (no ringing between bins)", () => {
-    let prev = Infinity;
-    for (let bv = -0.5; bv <= 2.0; bv += 0.01) {
-      const r = bvToSolarRadius(bv);
-      expect(r).toBeLessThanOrEqual(prev + 1e-9);
-      prev = r;
-    }
+  it("pins STAR_SIZE_FACTOR to Gaia Sky Constants.java:51 literal", () => {
+    expect(STAR_SIZE_FACTOR).toBe(1.31526e-6);
   });
 
-  it("bvToRadiusPc converts through SOLAR_RADIUS_PC", () => {
-    approxEq(bvToRadiusPc(0.5), 1.05 * SOLAR_RADIUS_PC, 1e-15);
-    approxEq(SOLAR_RADIUS_PC, 2.2537e-8, 1e-11);
-  });
-});
-
-describe("Stefan-Boltzmann radius synthesis (θ.1b primary path, Codex #1)", () => {
-  it("pins solar anchors (SUN_ABS_MAG_V = 4.83, SUN_TEFF = 5778 K)", () => {
-    expect(SUN_ABS_MAG_V).toBe(4.83);
-    expect(SUN_TEFF).toBe(5778);
+  it("matches the Java formula at absMag = 0 (pseudoL = 1)", () => {
+    // pseudoL = 10^(-0.4·0) = 1.0 → size = sqrt(1)·0.15 = 0.15 pc.
+    approxEq(absoluteMagnitudeToPseudoSize(0), 0.15, 1e-12);
   });
 
-  it("Ballesteros Teff recovers the Sun at BV ≈ 0.63", () => {
-    // Sun's BV is ~0.656. Expected Teff ~5778 K, tolerate ~5 %.
-    const teff = bvToTeff(0.656);
-    expect(teff).toBeGreaterThan(5500);
-    expect(teff).toBeLessThan(6050);
+  it("Sun (absMag +4.83) → sqrt(10^(-1.932))·0.15 ≈ 0.0162 pc", () => {
+    // Verifies the direction: Sun at absMag +4.83 is FAINTER than the
+    // absMag=0 reference, so pseudo-size should be SMALLER than 0.15 pc.
+    const sun = absoluteMagnitudeToPseudoSize(4.83);
+    const expected = Math.sqrt(Math.pow(10, -1.932)) * 0.15;
+    approxEq(sun, expected, 1e-6);
+    expect(sun).toBeLessThan(absoluteMagnitudeToPseudoSize(0));
   });
 
-  it("Ballesteros Teff spans the HYG range monotonically in BV", () => {
-    const teffO = bvToTeff(-0.3); // O star (hot)
-    const teffA = bvToTeff(0.0); // A star
-    const teffG = bvToTeff(0.65); // G (Sun)
-    const teffK = bvToTeff(1.0); // K star
-    const teffM = bvToTeff(1.4); // M star (cool)
-    expect(teffO).toBeGreaterThan(teffA);
-    expect(teffA).toBeGreaterThan(teffG);
-    expect(teffG).toBeGreaterThan(teffK);
-    expect(teffK).toBeGreaterThan(teffM);
+  it("Betelgeuse (absMag ≈ −5.71) → brighter → LARGER pseudo-size than Sirius", () => {
+    // absMag -5.71 → pseudoL = 10^2.284 ≈ 192.5 → sqrt ≈ 13.88
+    //   → size ≈ 2.08 pc.
+    const betel = absoluteMagnitudeToPseudoSize(-5.71);
+    // absMag +1.44 (Sirius) → pseudoL ≈ 0.265 → sqrt ≈ 0.515
+    //   → size ≈ 0.0772 pc.
+    const sirius = absoluteMagnitudeToPseudoSize(1.44);
+    approxEq(betel, 2.083, 0.01);
+    approxEq(sirius, 0.0772, 0.001);
+    // In absolute-magnitude space, Betelgeuse is LARGER pseudo-size.
+    expect(betel).toBeGreaterThan(sirius);
+  });
+
+  it("the distance divide inverts the ordering: at typical HYG distances, Sirius > Betelgeuse in solidAngle", () => {
+    // This is the whole point — pseudo-size grows with luminosity, but
+    // the shader's `solidAngle = a_size / dist` makes closer bright
+    // stars outshine distant supergiants.
+    const sirius = absoluteMagnitudeToPseudoSize(1.44) / 2.64; // 2.64 pc
+    const betel = absoluteMagnitudeToPseudoSize(-5.71) / 168; // 168 pc
+    expect(sirius).toBeGreaterThan(betel);
   });
 
   it("apparentToAbsMag inverts the distance modulus", () => {
     // A star at 10 pc has absMag == apparentMag.
     approxEq(apparentToAbsMag(5, 10), 5, 1e-9);
-    // Sirius: apparentMag -1.46 at 2.64 pc → absMag ≈ 1.42.
+    // Sirius: apparentMag -1.46 at 2.64 pc → absMag ≈ 1.44.
     const absSirius = apparentToAbsMag(-1.46, 2.64);
-    approxEq(absSirius, 1.42, 0.05);
+    approxEq(absSirius, 1.44, 0.05);
+    // Betelgeuse: apparentMag 0.42 at 168 pc → absMag ≈ -5.71.
+    const absBetel = apparentToAbsMag(0.42, 168);
+    approxEq(absBetel, -5.71, 0.05);
   });
 
-  it("recovers Sirius' known radius within ~15 %", () => {
-    // Sirius A: apparentMag -1.46, distance 2.64 pc, B-V ≈ 0.0 (A1V).
-    // Known physical radius ≈ 1.71 solar radii.
-    const rSun = estimateRadiusSolar(-1.46, 2.64, 0.0);
-    expect(rSun).toBeGreaterThan(1.4);
-    expect(rSun).toBeLessThan(2.0);
+  it("pseudoSizeFromApparentMag = absoluteMagnitudeToPseudoSize ∘ apparentToAbsMag", () => {
+    const apparentMag = -1.46;
+    const distPc = 2.64;
+    const viaCombined = pseudoSizeFromApparentMag(apparentMag, distPc);
+    const viaExplicit = absoluteMagnitudeToPseudoSize(
+      apparentToAbsMag(apparentMag, distPc)
+    );
+    approxEq(viaCombined, viaExplicit, 1e-15);
   });
 
-  it("recovers Betelgeuse's supergiant radius MUCH larger than main-sequence lookup", () => {
-    // Betelgeuse: apparentMag 0.42, distance ~168 pc, B-V ≈ 1.85 (M2I).
-    // Actual radius ~764 solar radii (red supergiant).
-    const rStefan = estimateRadiusSolar(0.42, 168, 1.85);
-    const rMainSeq = bvToSolarRadius(1.85); // 0.25 (M late)
-    // Stefan-Boltzmann should give radii orders of magnitude larger,
-    // closing the gap on giants/supergiants Codex finding #1 flagged.
-    expect(rStefan).toBeGreaterThan(100 * rMainSeq);
-    expect(rStefan).toBeGreaterThan(300); // within an order of magnitude of 764.
+  it("falls back to 0 on non-finite absolute magnitude", () => {
+    expect(absoluteMagnitudeToPseudoSize(NaN)).toBe(0);
+    expect(absoluteMagnitudeToPseudoSize(Infinity)).toBe(0);
+    expect(absoluteMagnitudeToPseudoSize(-Infinity)).toBe(0);
   });
 
-  it("Sun at 10 pc → radius 1.0 solar, within the numeric precision floor", () => {
-    const rSun = estimateRadiusSolar(SUN_ABS_MAG_V, 10, 0.656);
-    approxEq(rSun, 1.0, 0.05); // Ballesteros is ~5 % off from true Sun Teff.
-  });
-
-  it("falls back to unit radius on degenerate inputs", () => {
-    expect(estimateRadiusSolar(NaN, 10, 0.5)).toBe(1.0);
-    expect(estimateRadiusSolar(5, -1, 0.5)).toBe(1.0); // negative dist → absMag path guards.
-    expect(estimateRadiusSolar(5, 10, -100)).toBe(1.0); // Teff guard.
-  });
-
-  it("estimateRadiusPc wraps through SOLAR_RADIUS_PC", () => {
-    const rSun = estimateRadiusSolar(-1.46, 2.64, 0.0);
-    const rPc = estimateRadiusPc(-1.46, 2.64, 0.0);
-    approxEq(rPc, rSun * SOLAR_RADIUS_PC, 1e-15);
+  it("clamps at the Gaia Sky 1e10 internal-unit ceiling", () => {
+    // absMag very negative → pseudoL explodes → sqrt × 0.15 might
+    // exceed 1e10 pc. Gaia Sky caps at 1e10 internal units; we mirror
+    // the `min(..., 1e10)` literal for 1:1 parity.
+    const result = absoluteMagnitudeToPseudoSize(-60);
+    expect(result).toBeLessThanOrEqual(1e10);
   });
 });
