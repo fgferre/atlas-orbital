@@ -7,6 +7,7 @@ import {
   ToneMapping,
 } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
+import { LightGlowSlot } from "./LightGlowInjector";
 
 export interface BloomController {
   intensity: number;
@@ -100,8 +101,18 @@ export const PostProcessingPipeline = memo(
     // halos are handled by the Gaia LightGlow/lens-flare waves, not by
     // selective Bloom. `luminanceSmoothing=0.1` kills stable-threshold
     // flicker.
+    // θ.3 LightGlow — FIRST effect in the chain, matching Gaia Sky's
+    // `MainPostProcessor.java:227` ordering (`ppb.add(lightGlow)`
+    // before any Bloom / tone-map / grading pass). Reads the scene
+    // HDR buffer, samples the Archimedean spiral for per-light bright-
+    // pass detection, then adds a polar-masked time-animated halo
+    // via `BlendFunction.ADD` (preserves downstream HDR for the
+    // selective Bloom below). Reduced-motion gate is internal to the
+    // slot component — when active it returns `null` and no
+    // LightGlow fragment is compiled into the composer program.
     return (
       <EffectComposer>
+        <LightGlowSlot />
         {bloomEnabled ? (
           <Bloom
             ref={assignBloomRef}

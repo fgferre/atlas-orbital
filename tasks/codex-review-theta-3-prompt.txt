@@ -1,0 +1,194 @@
+You are auditing the Gaia Sky LightGlow post-process port (θ.3) that
+just landed in atlas-orbital. Goal: detect any drift from the Gaia
+Sky source implementation that would keep the atlas port from
+rendering a 1:1 halo around the Sun and the top-N bright stars.
+
+## Context
+
+atlas-orbital is porting Gaia Sky's star-rendering subsystem to
+Three.js / R3F / TypeScript. Phase θ.3 ports the LightGlow post-
+process pass — the soft, time-animated halo on bright stars that
+gives Gaia Sky its "alive" look. Prior phases (θ.1 / θ.1b) ported
+the fragment kernel, vertex solid-angle math, pseudo-size formula,
+billboard-quad rendering, color pipeline, and fragment saturate.
+
+Gaia Sky source lives at /tmp/gaiasky. Key files:
+
+- `assets/shader/postprocess/lightglow.frag.glsl` (99 LOC) — the
+  polar-masked halo shader
+- `assets/shader/postprocess/lightglow.vert.glsl` (77 LOC) — the
+  Archimedean spiral vertex-stage luma sampler
+- `core/src/gaiasky/render/postprocess/effects/LightGlow.java` — the
+  Effect wrapper
+- `core/src/gaiasky/render/postprocess/filters/GlowFilter.java` —
+  the Filter that binds uniforms
+- `core/src/gaiasky/render/system/LightPositionUpdater.java` — the
+  per-frame light registry that feeds positions / solidAngles / colors
+- `core/src/gaiasky/scene/system/update/GraphUpdater.java:182` — the
+  body.solidAngleApparent = solidAngle × star.brightness / fovFactor
+  formula that produces the `u_lightViewAngles` values
+- `core/src/gaiasky/render/MainPostProcessor.java:214-227` +
+  `:540-562` — the Effect wiring, default values, and texture-scale
+  formulas
+- `assets/conf/config.yaml` — `lightGlow.active: true`, `samples: 10`,
+  `scene.star.brightness: 2.22`, `star.glowFactor: 0.055`
+- `core/src/gaiasky/util/Settings.java:672` — tier-nLights map
+  (low 4 / normal 5 / high 6 / ultra 8)
+
+## Atlas implementation (under audit)
+
+Files to read:
+
+- `src/lib/lightRegistry.ts` + `.test.ts` — CPU-side light selection
+  (Sun always slot 0 + top-N HYG by clamped solid angle), NDC
+  projection, per-frame `updateLightRegistry()` entrypoint.
+- `src/components/canvas/scene/effects/LightGlowEffect.ts` — the
+  ported shader as a pmndrs `Effect` subclass. 1:1 port of Gaia's
+  fragment with the Archimedean spiral moved from vertex-stage to
+  fragment-stage (documented inside the file as a
+  correctness-preserving move because the computation is
+  uniform-constant per frame).
+- `src/components/canvas/scene/effects/lightGlowSprite.ts` —
+  procedural gaussian replacement for Gaia's `star-tex-01.png`.
+- `src/components/canvas/scene/effects/lightGlowMath.ts` +
+  `.test.ts` — executable mirrors of the polar mask + halo-size
+  formulas.
+- `src/components/canvas/scene/LightGlowInjector.tsx` — React
+  wrapper (`LightGlowSlot`) that creates the effect, drives its
+  uniforms each frame via `useFrame`, and enforces the
+  reduced-motion gate.
+- `src/components/canvas/scene/PostProcessingPipeline.tsx` — where
+  `LightGlowSlot` gets mounted as the FIRST child of
+  `<EffectComposer>` (ahead of Bloom).
+- `tasks/phase-gaia-sky.md §5 θ.3` — plan section with
+  "Implementation notes" capturing the drift we caught during
+  self-check (`solidAngleApparent` was initially post-clamp; fixed
+  pre-ship to match `GraphUpdater.java:182`).
+
+## Your audit questions
+
+### Part 1: Shader correctness (most important)
+
+1. **Polar mask formula** — does the TS + GLSL `polarMask(uv, time)`
+   match `lightglow.frag.glsl:40-65` exactly? Check:
+   - The three sinusoidal terms with frequencies 12, 37, 59.
+   - Time multipliers 2.0, -1.3, 1.6.
+   - `minVal = 0.55` floor.
+   - Centre smoothstep `smoothstep(0.85, 1.0, 1.0 - r)`.
+
+2. **Spiral sampling loop** — the vertex→fragment migration. Does
+   the inlined loop at the top of `mainImage` in
+   `LightGlowEffect.ts` compute the same `v_lums[li]` that Gaia's
+   vertex shader would (given identical inputs)? Check:
+   - `dt = 3π / nSamples`.
+   - `fx(t, a) = a·t·cos(t)`, `fy(t, a) = a·t·sin(t)`.
+   - Aspect-ratio division `fx / ar`.
+   - Luma threshold `0.95` via `step(0.95, value)`.
+   - Bonus post-loop sample (Gaia has one extra sample after the
+     nSamples loop).
+   - `lum /= nSamples` at the end.
+
+3. **Halo rendering per light** — does the per-light halo math
+   match `lightglow.frag.glsl:77-96` exactly? Check:
+   - `viewAngle = min(0.0001, u_lightViewAngles[li])`.
+   - `size = u_textureScale × min(1.6, viewAngle × 5e5) × lum`.
+   - `glow_tc = (uv × u_backbufferScale - lightPositions[li])`,
+     `glow_tc.x ×= ar`, `/= size`, `+= 0.5`.
+   - `core_inc = (0.1 - min(0.1, dist_center)) × glow_value`.
+   - Final accumulation into `effectColor`.
+
+4. **ADD-blend vs saturate() divergence** — Gaia ends with
+   `fragColor.rgb = saturate(effectColor + scene.rgb)`; atlas
+   emits only `effectColor` and relies on pmndrs
+   `BlendFunction.ADD`. The plan doc calls this a documented HDR-
+   preservation divergence. Is this defensible, or does it cause a
+   visible discrepancy?
+
+### Part 2: Light registry correctness
+
+5. **`solidAngleApparent` semantics.** Gaia's
+   `GraphUpdater.java:182` sets `body.solidAngleApparent =
+   body.solidAngle × scene.star.brightness / camera.fovFactor` for
+   stars. Atlas's `lightRegistry.ts` feeds `rawSolidAngle ×
+   STAR_BRIGHTNESS_DEFAULT` (2.22). We omit the `/fovFactor`
+   divisor because the atlas camera uses a fixed 60° FOV
+   (fovFactor = 1). Is this a real drift when the user zooms in
+   via the FOV control?
+
+6. **NDC projection coordinate system.** Gaia writes
+   `positions[li*2] = auxV.x / w` where `auxV` comes from
+   `camera.project(pos3, 0, 0, w, h)` — which uses Y-down screen
+   coordinates. Three.js's `Vector3.project(camera)` returns NDC
+   in [-1, 1] (Y-up). We rescale via `(x+1)*0.5, (y+1)*0.5`. Does
+   our Y-up source produce positions correctly oriented for the
+   shader's spiral-sampling `texture(u_texture0, u_lightPositions
+   + ...)` which is definitely Y-up in a WebGL/Three.js texture
+   coordinate system? The shader comments mention viewport
+   coordinates at `LightPositionUpdater.java:121` — check for
+   potential Y-flip.
+
+7. **Tier mapping.** `LIGHT_GLOW_N_LIGHTS_BY_TIER` maps low/
+   normal/high/ultra to 4/5/6/8 matching `Settings.java:672`. The
+   atlas `tierForProfile` function in `LightGlowInjector.tsx`
+   maps:
+   - constrained → low
+   - balanced → normal
+   - high → high
+   - ultra → ultra
+   Is the mapping defensible, or is a quality profile missing?
+
+8. **Sun always at slot 0.** Atlas unconditionally inserts the
+   Sun first. Gaia's `LightPositionUpdater` loops backwards through
+   the render proximity list, picking up any `Mapper.hip`-tagged
+   entity — the Sun happens to be in that list but isn't
+   guaranteed slot 0. Is our unconditional Sun slot an invented
+   requirement, or a sensible adaptation given atlas's heliocentric
+   scene?
+
+9. **Tests** — run through `src/lib/lightRegistry.test.ts` and
+   `src/components/canvas/scene/effects/lightGlowMath.test.ts`.
+   Do the pins + expectations align with Gaia's source? Any test
+   that would silently let a future regression through?
+
+### Part 3: Composer integration
+
+10. **Insertion position.** LightGlow is the FIRST child of
+    `<EffectComposer>` in `PostProcessingPipeline.tsx`, per plan
+    §5.1 (Gaia runs LightGlow before Bloom per
+    `MainPostProcessor.java:227`). Verify this matches Gaia.
+
+11. **Texture-scale + spiral-scale defaults.**
+    `LIGHT_GLOW_DEFAULT_TEXTURE_SCALE = 2.22 × (0.055/0.06) × 0.2`
+    ≈ 0.407 and `LIGHT_GLOW_DEFAULT_SPIRAL_SCALE = 2.22 × 3.0 ×
+    0.5e-4` ≈ 3.33e-4. These come from
+    `MainPostProcessor.java:552-563`. Confirm the arithmetic +
+    formula match (note the non-cubemap branch).
+
+12. **Reduced-motion gate.** `<LightGlowSlot>` returns `null` when
+    `state.accessibility.reducedMotion === true` so the effect
+    never enters the composer. Is this a proper implementation of
+    plan §4.2? Any leak where the effect's fragment cost might
+    still run?
+
+### Output format
+
+Write a short report:
+- **Summary** (1-2 sentences).
+- **Verified 1:1** (bullet list of checks that pass).
+- **Drifts found** (if any), priority-sorted, each with file:line
+  + fix direction.
+- **Unanswerable without runtime** (visual-only concerns, if any).
+
+Cite Gaia Sky source file:line on all claims. Keep the report
+focused — do not suggest scope extensions (θ.4 / θ.5 / θ.14 are
+separate ondas in the sequence).
+
+## Explicit non-goals
+
+- Don't flag the fragment-stage spiral sampling as a drift —
+  it's documented as a correctness-preserving re-arrangement.
+- Don't flag the HDR ADD-blend as a drift beyond the one question
+  in Part 1 Q4.
+- Don't flag the procedural gaussian sprite as a drift unless it
+  produces a visibly different halo profile than Gaia's
+  `star-tex-01.png`.

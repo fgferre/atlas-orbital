@@ -751,6 +751,12 @@ Flare" row as a sub-option ("with / without starburst spikes").
 
 ### θ.3 — LightGlow post-process (animated halos on bright pixels)
 
+**Status (2026-04-21): SHIPPED.** Ports verified 1:1 against
+`/tmp/gaiasky`. Self-check caught one drift during implementation
+(`solidAngleApparent` was being fed post-shader-clamp rather than
+pre-shader-clamp × `scene.star.brightness` — fixed before ship).
+See "Implementation notes" below.
+
 **Goal.** A soft, slow-shimmering halo around any sufficiently bright
 pixel cluster — what gives Gaia Sky's bright stars their "alive" feel.
 Different from bloom: bloom is radially symmetric and static; LightGlow
@@ -763,6 +769,21 @@ halo breathes.
 - `assets/shader/postprocess/lightglow.vert.glsl` — Archimedean-spiral
   luma sampling (identifies bright-pixel clusters in the vertex
   stage).
+- `core/src/gaiasky/render/postprocess/effects/LightGlow.java` +
+  `core/src/gaiasky/render/postprocess/filters/GlowFilter.java` —
+  Effect + Filter wrappers; `setLightPositions / setLightSolidAngles
+/ setLightColors` imperative feed.
+- `core/src/gaiasky/render/system/LightPositionUpdater.java:82-162` —
+  per-frame proximity walk + NDC projection, feeds the Effect.
+- `core/src/gaiasky/scene/system/update/GraphUpdater.java:182` —
+  where `body.solidAngleApparent = body.solidAngle × star.brightness
+/ fovFactor` gets computed (the "apparent" value fed to the
+  shader).
+- `assets/conf/config.yaml` — `lightGlow.active: true`,
+  `samples: 10`, `scene.star.brightness: 2.22`, `star.glowFactor:
+0.055`, `star.pointSize: 3.0`.
+- `core/src/gaiasky/util/Settings.java:672` — `getGlowNLights()`
+  maps quality tier → (low 4 / normal 5 / high 6 / ultra 8).
 
 **Port plan.** (Rewritten 2026-04-20 per θ-audit — the previous plan's
 "skip the Archimedean spiral" simplification was invented; Gaia Sky's
@@ -812,6 +833,54 @@ pass buffer, to work at all.)
 - **LightGlow v3.7.2 alignment (§8.6).** Gaia Sky v3.7.2 kept the
   Archimedean spiral but made the polar mask time-animated
   independently — exactly what our fragment port does above.
+
+**Implementation notes (2026-04-21 ship).**
+
+- Shader location: `src/components/canvas/scene/effects/LightGlowEffect.ts`.
+  Ports both `lightglow.vert.glsl` and `lightglow.frag.glsl` 1:1
+  into a single pmndrs `Effect` fragment. The Archimedean spiral
+  sampling that Gaia runs vertex-stage lives at the top of our
+  `mainImage` — a correctness-preserving move (the computation is
+  uniform-constant per frame, so vertex-stage vs fragment-stage
+  produces identical output; pmndrs `Effect` does not expose a
+  vertex shader slot for full-screen passes).
+- Light registry: `src/lib/lightRegistry.ts` walks the HYG catalog +
+  Sun origin each frame, projects to NDC [0, 1] via
+  `camera.project()`, and writes positions / solidAngleApparent /
+  RGB into packed Float32Arrays. Sun is always slot 0 when visible;
+  remaining slots filled with top-N HYG by clamped solid angle.
+  Selection tier matches Gaia (4/5/6/8 for low/normal/high/ultra).
+- **Drift caught during self-check (fixed pre-ship):** initial
+  implementation fed the post-3e-8-clamp solid angle to
+  `u_lightViewAngles[]`. Gaia uses `body.solidAngleApparent`, which
+  is the RAW pre-clamp value × `scene.star.brightness` (2.22
+  default) × 1 / fovFactor (`GraphUpdater.java:182`). Under the
+  wrong value, the shader's `min(0.0001, viewAngle) × 5.0e5`
+  saturation math produced halos ≈ 0.6 % of the max cap (3e-8 ×
+  5e5 = 0.015 vs the shader's 1.6 ceiling). Fixed by emitting
+  `rawSolidAngle × STAR_BRIGHTNESS_DEFAULT` from the registry; the
+  shader's own clamps then produce full-cap halos for every
+  bright star / Sun — matching Gaia.
+- **HDR preservation.** Gaia's literal final step is
+  `fragColor.rgb = saturate(effectColor + scene.rgb)`; we emit only
+  the `effectColor` and let the pmndrs composer ADD-blend it via
+  `BlendFunction.ADD`. Documented divergence — Gaia's `saturate`
+  never fires in their default config (Bloom off) but would clip
+  our HDR Bloom downstream if left in. Zero visual change vs Gaia
+  in typical views.
+- Glow sprite: procedural gaussian in
+  `src/components/canvas/scene/effects/lightGlowSprite.ts`
+  (128 × 128, σ = 20). Swaps 1:1 for Gaia's `star-tex-01.png`
+  without distributing a binary asset. Luma-only sampling means
+  the R/G/B channels can be identical.
+- Executable math mirror: `lightGlowMath.ts` + 19 test cases pin
+  polar-mask frequencies, time multipliers, minVal floor, halo-
+  size formula, Archimedean sample curve — a safety net against
+  future silent drift.
+- Reduced-motion gate: `<LightGlowSlot>` returns `null` when
+  `state.accessibility.reducedMotion === true`, so the effect is
+  never compiled into the composer's program. No fragment cost +
+  no animation — correct per §4.2.
 
 **Parameters (ultra defaults).**
 
@@ -1432,24 +1501,24 @@ respeitar a dependência θ.1b → θ.14, o casamento de composer
 passes na ordem do Gaia Sky real (§5.1), e agrupamento de
 context-switches por subsistema.
 
-| #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                                    |
-| --- | ---- | ------ | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| —   | θ.1  | S      | Star shader     | **SHIPPED 2026-04-20** (`2662f08`, `13e501e`). Sprite fragment port.                                                    |
-| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14 and θ.1c.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield specs.   |
-| 2   | θ.1c | M      | Star vertex     | Billboard motion-trail stretch + quaternion helpers + CPU cam-velocity tracking. Ships after θ.1b's quadSize is stable. |
-| 3   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                            |
-| 4   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                           |
-| 5   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                 |
-| 6   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                 |
-| 7   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame. |
-| 8   | θ.3  | M      | Composer        | LightGlow (u_lightPositions + Archimedean spiral). First "big" composer pass; validates infra for θ.4/θ.5.              |
-| 9   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                       |
-| 10  | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                    |
-| 11  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                           |
-| 12  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                 |
-| 13  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                |
-| 14  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                 |
-| 15  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                          |
+| #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                                        |
+| --- | ---- | ------ | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| —   | θ.1  | S      | Star shader     | **SHIPPED 2026-04-20** (`2662f08`, `13e501e`). Sprite fragment port.                                                        |
+| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14 and θ.1c.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield specs.       |
+| 2   | θ.1c | M      | Star vertex     | Billboard motion-trail stretch + quaternion helpers + CPU cam-velocity tracking. Ships after θ.1b's quadSize is stable.     |
+| 3   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                                |
+| 4   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                               |
+| 5   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                     |
+| 6   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                     |
+| 7   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame.     |
+| —   | θ.3  | M      | Composer        | **SHIPPED 2026-04-21.** LightGlow (u_lightPositions + Archimedean spiral). Shader + registry + tests + reduced-motion gate. |
+| 9   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                           |
+| 10  | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                        |
+| 11  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                               |
+| 12  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                     |
+| 13  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                    |
+| 14  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                     |
+| 15  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                              |
 
 Notas:
 
