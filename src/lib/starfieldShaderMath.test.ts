@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ATLAS_SCENE_UNITS_PER_PC,
   computePixelsPerRadian,
   computeViewportHeightScalar,
   CORE_SMOOTHSTEP_EDGE_HIGH,
   CORE_SMOOTHSTEP_EDGE_LOW,
+  GAIA_INTERNAL_UNITS_PER_PC,
+  GAIA_LEN0_INTERNAL_UNITS,
   GAIA_STAR_COLOR_SATURATION,
   gaiaBvToRgb,
   LEN0,
@@ -255,6 +258,28 @@ describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () =
       dist: LEN0 * 1e4,
     });
     expect(far.boundaryFade).toBe(1);
+  });
+
+  it("LEN0 carries Gaia's 20000 internal-unit literal correctly scaled to atlas scene units", () => {
+    // Math drift audit 2026-04-21 D1: Gaia `#define LEN0 20000.0`
+    // (star.group.quad.vertex.glsl:59) is in internal units, NOT
+    // world/scene units. The conversion factor is
+    // `ATLAS_SCENE_UNITS_PER_PC / GAIA_INTERNAL_UNITS_PER_PC ≈ 6.684`.
+    expect(GAIA_LEN0_INTERNAL_UNITS).toBe(20000.0);
+    // 3.0857e16 × 1e-9 = 3.0857e7 internal_u per parsec.
+    approxEq(GAIA_INTERNAL_UNITS_PER_PC, 3.0857e7, 1e-3);
+    expect(ATLAS_SCENE_UNITS_PER_PC).toBe(206_265_000.0);
+    // Atlas LEN0 must be ~133_689 scene units — equivalent to
+    // Gaia's ≈6.48e-4 pc ≈ 134 AU threshold.
+    approxEq(LEN0, 133_689, 100);
+    // Expressed in parsecs it's ~6.48e-4 either way — confirm the
+    // atlas value maps back to the same physical distance Gaia uses.
+    const atlasLen0InPc = LEN0 / ATLAS_SCENE_UNITS_PER_PC;
+    const gaiaLen0InPc = GAIA_LEN0_INTERNAL_UNITS / GAIA_INTERNAL_UNITS_PER_PC;
+    approxEq(atlasLen0InPc, gaiaLen0InPc, 1e-9);
+    // ≈134 AU (1 AU = 1/206265 pc).
+    const atlasLen0InAu = atlasLen0InPc * 206_265;
+    approxEq(atlasLen0InAu, 133.7, 0.5);
   });
 
   it("alpha zeros when opacity × factors × fade collapses below 1e-3", () => {

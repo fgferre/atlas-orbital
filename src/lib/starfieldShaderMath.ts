@@ -258,15 +258,39 @@ export const computeMinQuadSolidAngle = (backBufferHeight: number): number => {
 // (Codex θ.1b review finding #2, 2026-04-20).
 export const MAX_QUAD_SOLID_ANGLE_LITERAL = 3.0e-8;
 
-// LEN0 controls the near-camera fade-out: stars inside LEN0 scene units
-// fade out (θ.7 hero-star billboard takes over); stars between LEN0 and
-// LEN0 × 1e3 ramp in via smoothstep. The raw value `20000.0` in
-// `star.group.quad.vertex.glsl` is in Gaia Sky's internal units; we
-// apply it in atlas scene units (where 1 pc = DISTANCE_SCALE units)
-// with the same literal constant — the fade kicks in at a camera
-// distance of ~0.0001 pc from the star, small enough that only the Sun
-// and approached hero-stars hit it.
-export const LEN0 = 20000.0;
+// LEN0 controls the near-camera fade-out: stars inside LEN0 (in
+// scene-space dist) fade to invisibility; stars between LEN0 and
+// LEN0×1e3 ramp in via smoothstep (θ.7 hero-star billboard takes
+// over inside LEN0 once it ships).
+//
+// Gaia Sky declares the raw literal `#define LEN0 20000.0` in
+// `star.group.quad.vertex.glsl:59`, expressed in Gaia's INTERNAL
+// UNITS — a coordinate system where
+//     1 pc = PC_TO_M × ORIGINAL_M_TO_U = 3.0857e16 × 1e-9
+//          = 3.0857e7 internal_u
+// (Constants.java:255 + Nature.java:45). So Gaia's LEN0 represents
+// a threshold of `20000 / 3.0857e7 ≈ 6.48e-4 pc ≈ 134 AU`.
+//
+// Atlas uses a different scene-unit convention: `1 pc =
+// DISTANCE_SCALE = 206_265_000 scene_u` (Starfield.tsx:73). To
+// preserve the SAME physical distance threshold we must scale the
+// Gaia literal by the ratio of scene-unit conventions:
+//     LEN0_atlas = 20000 × (206_265_000 / 3.0857e7)
+//                = 20000 × 6.6845
+//                ≈ 133_689 scene_u
+// Initial θ.1b ship copied the `20000.0` literal directly into
+// atlas scene units (Math drift audit 2026-04-21 D1). That made the
+// threshold ~6.7× too close (≈20 AU vs the intended ≈134 AU), which
+// currently has no visible effect because all shipped camera paths
+// sit well beyond LEN0×1000 from every HYG star — but is a real
+// 1:1 drift and would mis-trigger the θ.7a hero-star LOD when that
+// onda ships.
+export const GAIA_LEN0_INTERNAL_UNITS = 20000.0;
+export const GAIA_INTERNAL_UNITS_PER_PC = 3.0857e16 * 1e-9; // ≈ 3.0857e7
+export const ATLAS_SCENE_UNITS_PER_PC = 206_265_000.0;
+export const LEN0 =
+  GAIA_LEN0_INTERNAL_UNITS *
+  (ATLAS_SCENE_UNITS_PER_PC / GAIA_INTERNAL_UNITS_PER_PC);
 
 // GLSL `smoothstep`-style `lint` from Gaia Sky `lib/math.glsl`. Endpoints
 // get a smoothstep curve, NOT a linear ramp. This is the authoritative
