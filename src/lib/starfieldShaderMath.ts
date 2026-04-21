@@ -73,7 +73,14 @@ export const starfieldCoreKernel = (r: number): number => {
 // user-adjustable in Gaia Sky at runtime, we pick a fixed pair for
 // shipping.
 export const U_SOLID_ANGLE_MAP: readonly [number, number] = [1.0e-10, 2.0e-9];
-export const U_OPACITY_LIMITS: readonly [number, number] = [0.1, 0.95];
+// Gaia Sky `config.yaml` default — verified 2026-04-20 validation round.
+// `scene.star.opacity: [0.0, 1.0]`. The earlier draft used `[0.1, 0.95]`
+// which injected a 0.1 opacity floor on the faintest stars, producing
+// a uniform background haze that masked the bright-star hierarchy. The
+// source's [0.0, 1.0] lets faint stars fade to invisible and bright
+// stars saturate to full — matching the star-to-star contrast a user
+// expects at a solar-system interior view.
+export const U_OPACITY_LIMITS: readonly [number, number] = [0.0, 1.0];
 export const U_BRIGHTNESS_POWER_DEFAULT = 1.0;
 export const U_BRIGHTNESS_POWER_RANGE: readonly [number, number] = [0.9, 1.1];
 export const U_MIN_QUAD_SOLID_ANGLE = 1.0e-10;

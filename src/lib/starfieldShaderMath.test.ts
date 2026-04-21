@@ -88,7 +88,7 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
   // Verify constants carried over from Round 5 / Round 6 source-reads.
   it("pins Gaia Sky host uniform defaults", () => {
     expect(U_SOLID_ANGLE_MAP).toStrictEqual([1.0e-10, 2.0e-9]);
-    expect(U_OPACITY_LIMITS[1]).toBeCloseTo(0.95, 5);
+    expect(U_OPACITY_LIMITS).toStrictEqual([0.0, 1.0]);
     expect(U_BRIGHTNESS_POWER_DEFAULT).toBe(1.0);
     expect(U_BRIGHTNESS_POWER_RANGE).toStrictEqual([0.9, 1.1]);
     expect(U_MIN_QUAD_SOLID_ANGLE).toBe(1.0e-10);
@@ -124,10 +124,10 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
   });
 
   it("opacity saturates to map endpoints outside the raw range", () => {
-    // Very small solidAngle: saturates to opacityLimits[0].
+    // Very small solidAngle: saturates to opacityLimits[0] (default 0).
     const dim = starfieldSolidAngleMetrics({ size: 1, dist: 1e20 });
     approxEq(dim.opacity, U_OPACITY_LIMITS[0], 1e-9);
-    // Very large solidAngle: saturates to opacityLimits[1].
+    // Very large solidAngle: saturates to opacityLimits[1] (default 1).
     const bright = starfieldSolidAngleMetrics({ size: 1, dist: 1 });
     approxEq(bright.opacity, U_OPACITY_LIMITS[1], 1e-9);
   });
@@ -197,12 +197,13 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
   });
 
   it("alpha zeros when opacity × factors × fade collapses below 1e-3", () => {
-    // At very far distance (opacity → opacityLimits[0] = 0.1) with
-    // alphaFactor = 0.005, final = 0.1 × 0.005 = 5e-4 < 1e-3 → alpha 0.
+    // At very far distance opacity → opacityLimits[0] = 0.0 (Gaia Sky
+    // default). Faint stars naturally fade to full-zero alpha without
+    // needing a `< 1e-3` guard. Confirm this default behaviour: the
+    // deep tail is outright invisible.
     const m = starfieldSolidAngleMetrics({
       size: 1e-14,
       dist: LEN0 * 1e4,
-      alphaFactor: 0.005,
     });
     expect(m.alpha).toBe(0);
   });
