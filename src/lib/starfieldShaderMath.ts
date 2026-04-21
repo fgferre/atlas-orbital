@@ -77,7 +77,12 @@ export const U_OPACITY_LIMITS: readonly [number, number] = [0.1, 0.95];
 export const U_BRIGHTNESS_POWER_DEFAULT = 1.0;
 export const U_BRIGHTNESS_POWER_RANGE: readonly [number, number] = [0.9, 1.1];
 export const U_MIN_QUAD_SOLID_ANGLE = 1.0e-10;
-export const U_MAX_QUAD_SOLID_ANGLE = 3.0e-8;
+// Upper clamp is a SOURCE-LITERAL 3.0e-8 in Gaia Sky's
+// star.group.quad.vertex.glsl:105. Not a runtime uniform — inlined in
+// both the shader and the TS mirror below so the atlas cannot
+// accidentally drift the ceiling away from the source
+// (Codex θ.1b review finding #2, 2026-04-20).
+export const MAX_QUAD_SOLID_ANGLE_LITERAL = 3.0e-8;
 
 // LEN0 controls the near-camera fade-out: stars inside LEN0 scene units
 // fade out (θ.7 hero-star billboard takes over); stars between LEN0 and
@@ -185,7 +190,7 @@ export const starfieldSolidAngleMetrics = (
   const clampedSolidAngle = clamp(
     boosted,
     U_MIN_QUAD_SOLID_ANGLE,
-    U_MAX_QUAD_SOLID_ANGLE
+    MAX_QUAD_SOLID_ANGLE_LITERAL
   );
 
   const quadSize = clampedSolidAngle * dist * sizeFactor;
@@ -205,4 +210,48 @@ export const starfieldSolidAngleMetrics = (
     boundaryFade,
     alpha,
   };
+};
+
+// -----------------------------------------------------------------------------
+// Stack/API adaptations: screen-space pixel conversion + viewport scalar
+// -----------------------------------------------------------------------------
+//
+// Gaia Sky renders instanced-quad billboards via `snippet/billboard.stretch.glsl`
+// (world-space). Atlas uses `THREE.Points` (pixel-based `gl_PointSize`). The
+// two helpers below encode the stack/API adaptation: convert the Gaia Sky
+// world-quad pixel equivalent for a THREE.Points sprite. Pinned by tests so
+// a future refactor cannot silently drift the conversion (Codex θ.1b review
+// finding #4, 2026-04-20).
+
+/**
+ * Pixels-per-radian factor at unit distance from the camera, for a
+ * perspective projection. `projMatrix11 = 1 / tan(fovY / 2) = cot(fovY/2)`
+ * as it appears at `projectionMatrix[1][1]` in three.js. `viewportHeight`
+ * is the render-buffer height in pixels (CSS pixels × effective DPR).
+ *
+ *   pixels_per_radian = cot(fovY / 2) × viewportHeight / 2
+ *
+ * The shader multiplies this by `solidAngle * u_sizeFactor` to get the
+ * final `gl_PointSize` in pixels.
+ */
+export const computePixelsPerRadian = (
+  projMatrix11: number,
+  viewportHeight: number
+): number => {
+  return projMatrix11 * viewportHeight * 0.5;
+};
+
+/**
+ * Compute the viewport-height scalar uploaded as `u_viewportHeight` in
+ * the Starfield vertex. Takes CSS-pixel canvas height and the renderer's
+ * clamped DPR (via `gl.getPixelRatio()` — L17 literal). The product is
+ * the render-buffer height in physical pixels. Exported for unit
+ * testing so the host-side DPR feed is pinnable without a live R3F
+ * canvas.
+ */
+export const computeViewportHeightScalar = (
+  canvasHeightCss: number,
+  rendererDpr: number
+): number => {
+  return Math.max(canvasHeightCss, 0) * Math.max(rendererDpr, 0);
 };

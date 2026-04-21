@@ -43,11 +43,11 @@ import {
 } from "../../lib/starfield";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
-import { bvToRadiusPc } from "../../lib/starPhysics";
+import { estimateRadiusPc } from "../../lib/starPhysics";
 import {
+  computeViewportHeightScalar,
   LEN0,
   U_BRIGHTNESS_POWER_DEFAULT,
-  U_MAX_QUAD_SOLID_ANGLE,
   U_MIN_QUAD_SOLID_ANGLE,
   U_OPACITY_LIMITS,
   U_SOLID_ANGLE_MAP,
@@ -89,7 +89,6 @@ const vertexShader = /* glsl */ `
   #define TO_RAD12 (PI / 180.0e12)
 
   attribute vec3 velocity;
-  attribute float mag;
   attribute float ci;
   attribute float a_size;
 
@@ -101,7 +100,8 @@ const vertexShader = /* glsl */ `
   uniform vec2 u_opacityLimits;      // vec2(opacity[0], opacity[1])
   uniform float u_brightnessPower;   // 1.0, range [0.9, 1.1]
   uniform float u_minQuadSolidAngle; // 1e-10
-  uniform float u_maxQuadSolidAngle; // 3e-8
+  // Upper clamp is a literal 3.0e-8 in Gaia Sky's source
+  // (star.group.quad.vertex.glsl:105). Inlining below matches source.
 
   // User-facing "Star Size" multiplier + global alpha scale.
   // Maps to Gaia Sky's u_alphaSizeBr.y / .x. Default 1.0.
@@ -168,7 +168,7 @@ const vertexShader = /* glsl */ `
     solidAngle = clamp(
       radians12(pow(degrees12(solidAngle), u_brightnessPower)),
       u_minQuadSolidAngle,
-      u_maxQuadSolidAngle
+      3.0e-8
     );
 
     // 4. Boundary fade (near-camera) — θ.7 hero-star billboard takes
@@ -310,18 +310,28 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
 
 /**
  * Per-star physical radius attribute. Gaia Sky's `star.group.quad.vertex.glsl`
- * reads `a_size` as a scalar physical radius. HYG does not ship radius,
- * so we synthesise via `bvToRadiusPc(ci)` (main-sequence lookup) and
- * scale to scene units. Documented in `tasks/phase-gaia-sky.md §5 θ.1b`
- * as a stack/API adaptation (HYG has no radius column; Gaia Sky's
- * internal catalog does).
+ * reads `a_size` as a scalar physical radius. HYG does not ship radius
+ * directly, so we synthesise via Stefan-Boltzmann from apparent magnitude
+ * + heliocentric distance + B-V color index (Codex θ.1b review finding
+ * #1: main-sequence lookup under-estimates bright giants / supergiants).
+ * `estimateRadiusPc` wraps the Ballesteros Teff formula + distance
+ * modulus + `R/R_sun = sqrt(L/L_sun) × (T_sun/T)²`.
+ *
+ * Documented in `tasks/phase-gaia-sky.md §5 θ.1b` as a stack/API
+ * adaptation (HYG has no radius column; Gaia Sky's internal catalog
+ * does).
  */
 function buildSizeAttribute(catalog: HygCatalogData): Float32Array {
-  const { colorIndices } = catalog;
+  const { positions, magnitudes, colorIndices } = catalog;
   const count = catalog.header.count;
   const sizes = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    sizes[i] = bvToRadiusPc(colorIndices[i]) * DISTANCE_SCALE;
+    const px = positions[i * 3 + 0];
+    const py = positions[i * 3 + 1];
+    const pz = positions[i * 3 + 2];
+    const distPc = Math.sqrt(px * px + py * py + pz * pz);
+    sizes[i] =
+      estimateRadiusPc(magnitudes[i], distPc, colorIndices[i]) * DISTANCE_SCALE;
   }
   return sizes;
 }
@@ -357,7 +367,6 @@ export const Starfield = () => {
         },
         u_brightnessPower: { value: U_BRIGHTNESS_POWER_DEFAULT },
         u_minQuadSolidAngle: { value: U_MIN_QUAD_SOLID_ANGLE },
-        u_maxQuadSolidAngle: { value: U_MAX_QUAD_SOLID_ANGLE },
         u_LEN0: { value: LEN0 },
         // User-facing multipliers (replace the old `particleSize`
         // viewport-adaptive uniform — viewport scaling is now done
@@ -402,7 +411,7 @@ export const Starfield = () => {
   const geometry = useMemo(() => {
     if (!catalog) return null;
 
-    const { positions, magnitudes, colorIndices } = catalog;
+    const { positions, colorIndices } = catalog;
     const count = catalog.header.count;
 
     const scaledPositions = new Float32Array(count * 3);
@@ -415,11 +424,9 @@ export const Starfield = () => {
       velocities[i] *= DISTANCE_SCALE;
     }
 
-    const magArray = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
-      magArray[i] = magnitudes[i];
-    }
-
+    // `a_size` carries the Stefan-Boltzmann-derived radius (scene units).
+    // The NASA-Eyes-era `mag` attribute was retired in the Codex θ.1b
+    // follow-up — the solid-angle path reads size + ci + position only.
     const sizeArray = buildSizeAttribute(catalog);
 
     const geom = new THREE.BufferGeometry();
@@ -428,7 +435,6 @@ export const Starfield = () => {
       new THREE.BufferAttribute(scaledPositions, 3)
     );
     geom.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-    geom.setAttribute("mag", new THREE.BufferAttribute(magArray, 1));
     geom.setAttribute("ci", new THREE.BufferAttribute(colorIndices, 1));
     geom.setAttribute("a_size", new THREE.BufferAttribute(sizeArray, 1));
 
@@ -446,9 +452,13 @@ export const Starfield = () => {
 
     // Viewport height × effective DPR. `gl.getPixelRatio()` returns the
     // renderer's clamped DPR (honors `qualityProfile.dprMax`), so this
-    // is the right value for pixels-per-radian. `size.height` is the
-    // canvas height in CSS pixels.
-    matUniforms.u_viewportHeight.value = size.height * gl.getPixelRatio();
+    // is the right value for pixels-per-radian. Extracted to
+    // `computeViewportHeightScalar` so the host-side DPR feed is
+    // unit-testable (Codex θ.1b review finding #4).
+    matUniforms.u_viewportHeight.value = computeViewportHeightScalar(
+      size.height,
+      gl.getPixelRatio()
+    );
 
     // Tier-keyed HDR gain (Wave α R1 #1B). L15 literal: routed through
     // the memoised uniforms map.

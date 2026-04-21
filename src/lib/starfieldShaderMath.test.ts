@@ -1,19 +1,31 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computePixelsPerRadian,
+  computeViewportHeightScalar,
   CORE_SMOOTHSTEP_EDGE_HIGH,
   CORE_SMOOTHSTEP_EDGE_LOW,
   LEN0,
+  MAX_QUAD_SOLID_ANGLE_LITERAL,
   U_BRIGHTNESS_POWER_DEFAULT,
   U_BRIGHTNESS_POWER_RANGE,
-  U_MAX_QUAD_SOLID_ANGLE,
   U_MIN_QUAD_SOLID_ANGLE,
   U_OPACITY_LIMITS,
   U_SOLID_ANGLE_MAP,
   starfieldCoreKernel,
   starfieldSolidAngleMetrics,
 } from "./starfieldShaderMath";
-import { bvToRadiusPc, bvToSolarRadius, SOLAR_RADIUS_PC } from "./starPhysics";
+import {
+  apparentToAbsMag,
+  bvToRadiusPc,
+  bvToSolarRadius,
+  bvToTeff,
+  estimateRadiusPc,
+  estimateRadiusSolar,
+  SOLAR_RADIUS_PC,
+  SUN_ABS_MAG_V,
+  SUN_TEFF,
+} from "./starPhysics";
 
 const approxEq = (actual: number, expected: number, tol = 1e-3) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
@@ -80,7 +92,8 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
     expect(U_BRIGHTNESS_POWER_DEFAULT).toBe(1.0);
     expect(U_BRIGHTNESS_POWER_RANGE).toStrictEqual([0.9, 1.1]);
     expect(U_MIN_QUAD_SOLID_ANGLE).toBe(1.0e-10);
-    expect(U_MAX_QUAD_SOLID_ANGLE).toBe(3.0e-8);
+    // 3.0e-8 is a SOURCE LITERAL, not a runtime uniform (Codex θ.1b #2).
+    expect(MAX_QUAD_SOLID_ANGLE_LITERAL).toBe(3.0e-8);
     expect(LEN0).toBe(20000.0);
   });
 
@@ -119,10 +132,13 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
     approxEq(bright.opacity, U_OPACITY_LIMITS[1], 1e-9);
   });
 
-  it("clampedSolidAngle stays within [U_MIN_QUAD_SOLID_ANGLE, U_MAX_QUAD_SOLID_ANGLE]", () => {
-    // Gigantic solidAngle → clamp to 3e-8.
+  it("clampedSolidAngle stays within [U_MIN_QUAD_SOLID_ANGLE, 3.0e-8]", () => {
+    // Gigantic solidAngle → clamp to the source literal 3.0e-8
+    // (NOT a runtime uniform — Codex θ.1b #2).
     const huge = starfieldSolidAngleMetrics({ size: 1, dist: 1 });
-    expect(huge.clampedSolidAngle).toBeLessThanOrEqual(U_MAX_QUAD_SOLID_ANGLE);
+    expect(huge.clampedSolidAngle).toBeLessThanOrEqual(
+      MAX_QUAD_SOLID_ANGLE_LITERAL
+    );
     // Minuscule solidAngle → clamp to 1e-10.
     const tiny = starfieldSolidAngleMetrics({ size: 1, dist: 1e30 });
     expect(tiny.clampedSolidAngle).toBeGreaterThanOrEqual(
@@ -216,7 +232,54 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
 // Star physics (radius synthesis)
 // ---------------------------------------------------------------------------
 
-describe("bvToSolarRadius — main-sequence radius lookup", () => {
+// ---------------------------------------------------------------------------
+// Pixel-space conversion helpers (θ.1b stack/API — Codex #4)
+// ---------------------------------------------------------------------------
+
+describe("computePixelsPerRadian — shader host-side parity", () => {
+  it("pins the cot(fov/2) × height / 2 formula at a canonical perspective", () => {
+    // 60° fov → tan(30°) ≈ 0.5774 → cot(30°) = projMatrix[1][1] ≈ 1.7321.
+    const projMatrix11 = 1 / Math.tan((60 * Math.PI) / 180 / 2);
+    const viewportHeight = 1000;
+    const pxPerRad = computePixelsPerRadian(projMatrix11, viewportHeight);
+    // Direct: cot(30°) × 1000 / 2 ≈ 866.025.
+    approxEq(pxPerRad, (1 / Math.tan(Math.PI / 6)) * 500, 1e-9);
+  });
+
+  it("doubles when viewport height doubles (linear)", () => {
+    const proj = 1.732;
+    const a = computePixelsPerRadian(proj, 1000);
+    const b = computePixelsPerRadian(proj, 2000);
+    approxEq(b, 2 * a, 1e-9);
+  });
+
+  it("doubles when projection matrix [1][1] doubles (narrower fov)", () => {
+    const h = 1000;
+    const a = computePixelsPerRadian(1.732, h);
+    const b = computePixelsPerRadian(3.464, h);
+    approxEq(b, 2 * a, 1e-9);
+  });
+});
+
+describe("computeViewportHeightScalar — host DPR feed", () => {
+  it("multiplies CSS height by renderer DPR (L17 literal path)", () => {
+    expect(computeViewportHeightScalar(1080, 1.5)).toBe(1620);
+    expect(computeViewportHeightScalar(720, 2)).toBe(1440);
+    expect(computeViewportHeightScalar(400, 1)).toBe(400);
+  });
+
+  it("clamps to non-negative on degenerate inputs", () => {
+    expect(computeViewportHeightScalar(-100, 2)).toBe(0);
+    expect(computeViewportHeightScalar(100, -2)).toBe(0);
+    expect(computeViewportHeightScalar(0, 2)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Star physics — main-sequence lookup (legacy) + Stefan-Boltzmann (primary)
+// ---------------------------------------------------------------------------
+
+describe("bvToSolarRadius — main-sequence radius lookup (legacy path)", () => {
   it("maps B-V monotonically toward smaller radii for redder stars", () => {
     expect(bvToSolarRadius(-0.4)).toBe(12.0); // O star
     expect(bvToSolarRadius(-0.2)).toBe(7.0); // B
@@ -240,5 +303,75 @@ describe("bvToSolarRadius — main-sequence radius lookup", () => {
   it("bvToRadiusPc converts through SOLAR_RADIUS_PC", () => {
     approxEq(bvToRadiusPc(0.5), 1.05 * SOLAR_RADIUS_PC, 1e-15);
     approxEq(SOLAR_RADIUS_PC, 2.2537e-8, 1e-11);
+  });
+});
+
+describe("Stefan-Boltzmann radius synthesis (θ.1b primary path, Codex #1)", () => {
+  it("pins solar anchors (SUN_ABS_MAG_V = 4.83, SUN_TEFF = 5778 K)", () => {
+    expect(SUN_ABS_MAG_V).toBe(4.83);
+    expect(SUN_TEFF).toBe(5778);
+  });
+
+  it("Ballesteros Teff recovers the Sun at BV ≈ 0.63", () => {
+    // Sun's BV is ~0.656. Expected Teff ~5778 K, tolerate ~5 %.
+    const teff = bvToTeff(0.656);
+    expect(teff).toBeGreaterThan(5500);
+    expect(teff).toBeLessThan(6050);
+  });
+
+  it("Ballesteros Teff spans the HYG range monotonically in BV", () => {
+    const teffO = bvToTeff(-0.3); // O star (hot)
+    const teffA = bvToTeff(0.0); // A star
+    const teffG = bvToTeff(0.65); // G (Sun)
+    const teffK = bvToTeff(1.0); // K star
+    const teffM = bvToTeff(1.4); // M star (cool)
+    expect(teffO).toBeGreaterThan(teffA);
+    expect(teffA).toBeGreaterThan(teffG);
+    expect(teffG).toBeGreaterThan(teffK);
+    expect(teffK).toBeGreaterThan(teffM);
+  });
+
+  it("apparentToAbsMag inverts the distance modulus", () => {
+    // A star at 10 pc has absMag == apparentMag.
+    approxEq(apparentToAbsMag(5, 10), 5, 1e-9);
+    // Sirius: apparentMag -1.46 at 2.64 pc → absMag ≈ 1.42.
+    const absSirius = apparentToAbsMag(-1.46, 2.64);
+    approxEq(absSirius, 1.42, 0.05);
+  });
+
+  it("recovers Sirius' known radius within ~15 %", () => {
+    // Sirius A: apparentMag -1.46, distance 2.64 pc, B-V ≈ 0.0 (A1V).
+    // Known physical radius ≈ 1.71 solar radii.
+    const rSun = estimateRadiusSolar(-1.46, 2.64, 0.0);
+    expect(rSun).toBeGreaterThan(1.4);
+    expect(rSun).toBeLessThan(2.0);
+  });
+
+  it("recovers Betelgeuse's supergiant radius MUCH larger than main-sequence lookup", () => {
+    // Betelgeuse: apparentMag 0.42, distance ~168 pc, B-V ≈ 1.85 (M2I).
+    // Actual radius ~764 solar radii (red supergiant).
+    const rStefan = estimateRadiusSolar(0.42, 168, 1.85);
+    const rMainSeq = bvToSolarRadius(1.85); // 0.25 (M late)
+    // Stefan-Boltzmann should give radii orders of magnitude larger,
+    // closing the gap on giants/supergiants Codex finding #1 flagged.
+    expect(rStefan).toBeGreaterThan(100 * rMainSeq);
+    expect(rStefan).toBeGreaterThan(300); // within an order of magnitude of 764.
+  });
+
+  it("Sun at 10 pc → radius 1.0 solar, within the numeric precision floor", () => {
+    const rSun = estimateRadiusSolar(SUN_ABS_MAG_V, 10, 0.656);
+    approxEq(rSun, 1.0, 0.05); // Ballesteros is ~5 % off from true Sun Teff.
+  });
+
+  it("falls back to unit radius on degenerate inputs", () => {
+    expect(estimateRadiusSolar(NaN, 10, 0.5)).toBe(1.0);
+    expect(estimateRadiusSolar(5, -1, 0.5)).toBe(1.0); // negative dist → absMag path guards.
+    expect(estimateRadiusSolar(5, 10, -100)).toBe(1.0); // Teff guard.
+  });
+
+  it("estimateRadiusPc wraps through SOLAR_RADIUS_PC", () => {
+    const rSun = estimateRadiusSolar(-1.46, 2.64, 0.0);
+    const rPc = estimateRadiusPc(-1.46, 2.64, 0.0);
+    approxEq(rPc, rSun * SOLAR_RADIUS_PC, 1e-15);
   });
 });
