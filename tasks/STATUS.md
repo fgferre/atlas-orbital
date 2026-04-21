@@ -3,7 +3,7 @@
 **Single source of truth for where we are in the Gaia Sky visual port.**
 Read this first before touching shader / VFX code.
 
-_Last updated: 2026-04-21 (after `fdb66ae` de-drift pass on θ.3)._
+_Last updated: 2026-04-21 (after `fa23a27` LEN0 unit-drift fix — Math audit D1)._
 
 ---
 
@@ -27,11 +27,11 @@ you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                               | Shipped                 | Commits                                                                                           | What it delivers                                                                                                                                                                                                                                                                                      |
-| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1** — Star sprite kernel       | 2026-04-20              | `2662f08`, `13e501e`                                                                              | Gaia fragment kernel: gaussian halo texture + razor white core via `smoothstep(0.0, 0.04, r)` on premul additive blend                                                                                                                                                                                |
-| **θ.1b** — Vertex solid-angle port | 2026-04-20 → 2026-04-21 | `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591` | Pseudo-size `a_size` from absMag + `solidAngle = a_size/dist` + `lint_smoothstep` opacity + `degrees12/radians12` precision + `[minQuad, 3e-8]` clamp + billboard-quad rendering + full Gaia color pipeline (Ballesteros→xyY→XYZ→γRGB +0.16 HSV) + fragment saturate                                  |
-| **θ.3** — LightGlow post-process   | 2026-04-21              | `a27dc42`, `fdb66ae`                                                                              | `lightglow.frag.glsl` port as pmndrs Effect: Archimedean-spiral luma gate + polar-mask time-animated halo on top-N HYG billboard stars. Sun NOT in registry (Gaia: Sun is planet/model, not HIP-billboard). FOV-factor aware. Reduced-motion gates the mount. Runtime `nSamples=1` override honoured. |
+| Onda                               | Shipped                 | Commits                                                                                                      | What it delivers                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1** — Star sprite kernel       | 2026-04-20              | `2662f08`, `13e501e`                                                                                         | Gaia fragment kernel: gaussian halo texture + razor white core via `smoothstep(0.0, 0.04, r)` on premul additive blend                                                                                                                                                                                                     |
+| **θ.1b** — Vertex solid-angle port | 2026-04-20 → 2026-04-21 | `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`, `fa23a27` | Pseudo-size `a_size` from absMag + `solidAngle = a_size/dist` + `lint_smoothstep` opacity + `degrees12/radians12` precision + `[minQuad, 3e-8]` clamp + billboard-quad rendering + full Gaia color pipeline (Ballesteros→xyY→XYZ→γRGB +0.16 HSV) + fragment saturate + LEN0 unit-conversion fix (Math audit D1, `fa23a27`) |
+| **θ.3** — LightGlow post-process   | 2026-04-21              | `a27dc42`, `fdb66ae`                                                                                         | `lightglow.frag.glsl` port as pmndrs Effect: Archimedean-spiral luma gate + polar-mask time-animated halo on top-N HYG billboard stars. Sun NOT in registry (Gaia: Sun is planet/model, not HIP-billboard). FOV-factor aware. Reduced-motion gates the mount. Runtime `nSamples=1` override honoured.                      |
 
 ---
 
