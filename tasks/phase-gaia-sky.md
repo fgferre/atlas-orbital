@@ -1,6 +1,17 @@
 # Phase θ — Gaia Sky-inspired visual upgrade
 
-Created: 2026-04-19 · Updated: 2026-04-20 (θ-audit: 6 rounds of source-verification against `/tmp/gaiasky`; §2/§4.1/§5.1/§5/§8/§8.6/§9/§10 all revised; θ.1b added; θ.1c added (motion trails — Round 5); θ.2 merged into θ.4; θ.13 moved to §9; Round 5 fixes: `lint` is smoothstep / `pow()` wrapped in `degrees12`/`radians12` / `u_brightnessPower` range [0.9, 1.1]; Round 6 fixes: StarSettings defaults + true-LensFlare vs Pseudo split + BillboardSet load-vs-procedural divergence) · Status: planning · Owner: fgferre
+Created: 2026-04-19 · Updated: 2026-04-21 · Status: **in flight — 3 of 16 ondas shipped** · Owner: fgferre
+
+> **For a fresh session / new agent**: read `tasks/STATUS.md` first. That
+> is the single-screen dashboard with current ship state, next-action,
+> and the onboarding read-order. THIS file is the long-form spec (the
+> "why" + "how"); STATUS.md is the "where are we now". Keep both in
+> sync — see STATUS.md's "Ship-protocol contract" §.
+
+Revisions log (header-only): 2026-04-20 θ-audit (6 rounds of
+source-verification against `/tmp/gaiasky`; §2/§4.1/§5.1/§5/§8/§8.6/§9/§10
+all revised; θ.1b added; θ.1c added; θ.2 merged into θ.4; θ.13 moved
+to §9). 2026-04-21: θ.1, θ.1b, θ.3 marked SHIPPED in §8.
 
 Single-phase spec for porting the highest-impact visual techniques from
 [Gaia Sky](https://github.com/langurmonkey/gaiasky) (Java/LibGDX) to our
@@ -1519,24 +1530,24 @@ respeitar a dependência θ.1b → θ.14, o casamento de composer
 passes na ordem do Gaia Sky real (§5.1), e agrupamento de
 context-switches por subsistema.
 
-| #   | Onda | Effort | Subsystem       | Ship order rationale                                                                                                        |
-| --- | ---- | ------ | --------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| —   | θ.1  | S      | Star shader     | **SHIPPED 2026-04-20** (`2662f08`, `13e501e`). Sprite fragment port.                                                        |
-| 1   | θ.1b | M      | Star vertex     | **MUST ship before θ.14 and θ.1c.** Vertex solid-angle port + NASAStarfield cleanup. Rebaselines all starfield specs.       |
-| 2   | θ.1c | M      | Star vertex     | Billboard motion-trail stretch + quaternion helpers + CPU cam-velocity tracking. Ships after θ.1b's quadSize is stable.     |
-| 3   | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                                |
-| 4   | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                               |
-| 5   | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                     |
-| 6   | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                     |
-| 7   | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame.     |
-| —   | θ.3  | M      | Composer        | **SHIPPED 2026-04-21.** LightGlow (u_lightPositions + Archimedean spiral). Shader + registry + tests + reduced-motion gate. |
-| 9   | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                           |
-| 10  | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                        |
-| 11  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                               |
-| 12  | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis). Size-multiplier per-star.                                     |
-| 13  | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                    |
-| 14  | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                     |
-| 15  | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                              |
+| Status      | Onda | Effort | Subsystem       | Ship SHAs / next-in-line rationale                                                                                                                                                                                   |
+| ----------- | ---- | ------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅ SHIPPED  | θ.1  | S      | Star shader     | 2026-04-20 — `2662f08`, `13e501e`. Sprite fragment port.                                                                                                                                                             |
+| ✅ SHIPPED  | θ.1b | M      | Star vertex     | 2026-04-20 → 2026-04-21 — `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`. Vertex solid-angle + pseudo-size + billboard-quad + color pipeline + fragment saturate. |
+| ✅ SHIPPED  | θ.3  | M      | Composer        | 2026-04-21 — `a27dc42`, `fdb66ae`. LightGlow post-process (shader + registry + reduced-motion gate + de-drift pass).                                                                                                 |
+| → **NEXT**  | θ.1c | M      | Star vertex     | Billboard motion-trail stretch via `billboard.stretch.glsl` snippet. Depends on θ.1b's `quadSize` (✅). Reduced-motion RM hard-off.                                                                                  |
+| pending #2  | θ.6  | S      | Composer        | Grading finishes (direct-port CA/vignette/grain). Small, display-referred, easy to baseline.                                                                                                                         |
+| pending #3  | θ.9  | M      | Scene-graph     | Orbit-lines quad-strip + core-glow shader. Base for θ.10 constellation reuse.                                                                                                                                        |
+| pending #4  | θ.10 | M      | Scene-graph     | Constellations lines + first troika-MSDF labels. Shader reuse from θ.9.                                                                                                                                              |
+| pending #5  | θ.12 | S      | Scene-graph     | Named star labels via troika (MSDF approx of Gaia Sky SDF — §12 notes).                                                                                                                                              |
+| pending #6  | θ.8  | M      | Camera          | Camera feel (cinematic damping + FoV easing + surfaceMode). No shaders — ships before composer passes to isolate blame.                                                                                              |
+| pending #7  | θ.5  | M      | Composer+Depth  | Camera motion blur. Depth/velocity buffer; slot before lens-flare per §5.1 order.                                                                                                                                    |
+| pending #8  | θ.4  | M-L    | Composer        | Pseudo lens flare + lensdirt starburst (diffraction spikes). 2 passes; reuses effect-wrapper of θ.3.                                                                                                                 |
+| pending #9  | θ.15 | M      | Composer        | NFAA + FXAA + LumaSharpen (direct ports, no SMAA). Slot near end so re-baseline happens once.                                                                                                                        |
+| pending #10 | θ.14 | S      | Star vertex     | Variability twinkle. **Hard dep on θ.1b** (solid-angle axis — ✅ shipped). Size-multiplier per-star.                                                                                                                 |
+| pending #11 | θ.11 | M-H    | Backdrop/assets | Milky Way cubemap + dust. Asset pipeline + 2-layer blend; highest bloom-regression risk.                                                                                                                             |
+| pending #12 | θ.7a | M      | Hero-LOD        | Detector de aproximação + corona billboard (hero-star).                                                                                                                                                              |
+| pending #13 | θ.7b | L      | Hero-LOD        | Procedural surface (with literal FBM opts from θ-audit) + cross-fade. Largest item; slot last.                                                                                                                       |
 
 Notas:
 

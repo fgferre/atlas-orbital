@@ -1,21 +1,23 @@
 # Atlas Orbital — Active Todo
 
-Updated: 2026-04-20
+Updated: 2026-04-21 (post θ.3 de-drift ship)
 
 This file is the single running todo list for the orbital-realism initiative.
 It complements the long-form plan in `PLAN.md` (strategy) and
 `tasks/lessons.md` (accumulated mistakes and corrections).
 
+> **For at-a-glance current state + next action, read `tasks/STATUS.md`
+> first.** That file is the single-screen dashboard; this one is the
+> historical checklist.
+
 ## Active
 
-### Phase θ — Gaia Sky-inspired visual upgrade — 2026-04-19 (ready to start)
+### Phase θ — Gaia Sky-inspired visual upgrade — in flight (3 of 16 shipped)
 
 **Governing doc:** `tasks/phase-gaia-sky.md` (long-form spec).
-**Prerequisite status:** Wave α **shipped 2026-04-18** (see §Wave α below —
-3 commits + HANDOFF + ~12 polish). HDR contract, `vfxHdrGain`, selective
-bloom, `graphicsSlice`, `DisplayPanel`, `A11yPanel`, persist-migration
-v0→v1 are all in place. Playwright baselines were captured and
-re-captured across polish rounds. θ.1 is unblocked — open whenever.
+**Dashboard:** `tasks/STATUS.md` (read first for next-action).
+**Prerequisite status:** Wave α **shipped 2026-04-18**. θ-phase kickoff
+2026-04-19; three ondas shipped so far.
 
 Fifteen ondas (16 commits — θ.7 splits em 7a/7b), sequenced in
 `phase-gaia-sky.md §8`. Tier/reduced-motion contract é autoridade
@@ -23,10 +25,11 @@ Fifteen ondas (16 commits — θ.7 splits em 7a/7b), sequenced in
 
 _Core star-focused (ondas originais):_
 
-- [ ] **θ.1** — Star sprite kernel refinement (hardcore + soft halo texture)
-- [ ] **θ.2** — Diffraction spike layer for bright stars (per-star billboard)
-- [ ] **θ.3** — LightGlow post-process (animated polar-noise halo)
-- [ ] **θ.4** — Pseudo lens flare (Chapman ghosts + halo + starburst)
+- [x] **θ.1** — Star sprite kernel — **SHIPPED 2026-04-20** (`2662f08`, `13e501e`)
+- [x] **θ.1b** — Vertex solid-angle port — **SHIPPED 2026-04-20 → 2026-04-21** (`22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`). Includes billboard-quad rendering + Gaia color pipeline + fragment saturate.
+- [ ] **θ.1c** — Star billboard motion trails (`billboard.stretch.glsl`) — **NEXT UP**
+- [x] **θ.3** — LightGlow post-process — **SHIPPED 2026-04-21** (`a27dc42`, `fdb66ae`). Sun NOT in registry (Gaia filter is HIP-billboard only). Reduced-motion gate hard-off. pmndrs Effect + light registry + conservative radial sprite.
+- [ ] **θ.4** — Pseudo lens flare + lensdirt starburst (θ.2 merged in here per audit)
 - [ ] **θ.5** — Camera motion blur (velocity-based reprojection)
 - [ ] **θ.6** — Grading finishes (3 independent toggles: CA, vignette, grain)
 - [ ] **θ.7a** — Hero-star approach LOD — detector + corona billboard
@@ -39,12 +42,16 @@ _Scene-graph / backdrop (descobertas pelo enxame Haiku, `phase-gaia-sky.md §8.5
 - [ ] **θ.10** — Camada de constelações (linhas com glow + SDF labels)
 - [ ] **θ.11** — Milky Way backdrop (cubemap panorama + billboard dust)
 - [ ] **θ.12** — SDF labels in-scene para estrelas nomeadas
-- [ ] **θ.13** — Bayer dithering no output composer
 - [ ] **θ.14** — Star Twinkle (variable-star LUT, aplicado em magnitude raw-domain)
 
 _Coverage (adicionada pelo review Codex 2026-04-20, `phase-gaia-sky.md §8.5`):_
 
 - [ ] **θ.15** — Anti-aliasing (FXAA/SMAA) + Unsharp mask tiering
+
+_Out of scope (moved to §9):_
+
+- ~~θ.2~~ merged into θ.4 (Gaia spikes live in `lensdirt.frag.glsl`, not a separate layer).
+- ~~θ.13~~ output dithering (Gaia does not ship it).
 
 **Hard constraints (see `phase-gaia-sky.md §2`, §4, §5.1 for full authority):**
 
