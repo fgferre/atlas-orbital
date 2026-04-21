@@ -45,6 +45,7 @@ import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 import { estimateRadiusPc } from "../../lib/starPhysics";
 import {
+  computeMinQuadSolidAngle,
   computeViewportHeightScalar,
   LEN0,
   U_BRIGHTNESS_POWER_DEFAULT,
@@ -465,10 +466,17 @@ export const Starfield = () => {
     // is the right value for pixels-per-radian. Extracted to
     // `computeViewportHeightScalar` so the host-side DPR feed is
     // unit-testable (Codex θ.1b review finding #4).
-    matUniforms.u_viewportHeight.value = computeViewportHeightScalar(
+    const vHeight = computeViewportHeightScalar(
       size.height,
       gl.getPixelRatio()
     );
+    matUniforms.u_viewportHeight.value = vHeight;
+
+    // Resolution-adaptive `u_minQuadSolidAngle` — mirrors
+    // `StarSetQuadComponent.java:68` (validation finding 2026-04-20).
+    // Floors faint stars at ~2-3 px regardless of backbuffer size;
+    // keeps blue A-type dwarfs visible instead of fading to sub-pixel.
+    matUniforms.u_minQuadSolidAngle.value = computeMinQuadSolidAngle(vHeight);
 
     // Tier-keyed HDR gain (Wave α R1 #1B). L15 literal: routed through
     // the memoised uniforms map.

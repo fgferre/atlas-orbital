@@ -91,7 +91,9 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
     expect(U_OPACITY_LIMITS).toStrictEqual([0.0, 1.0]);
     expect(U_BRIGHTNESS_POWER_DEFAULT).toBe(1.0);
     expect(U_BRIGHTNESS_POWER_RANGE).toStrictEqual([0.9, 1.1]);
-    expect(U_MIN_QUAD_SOLID_ANGLE).toBe(1.0e-10);
+    // Baseline at 1440p. Runtime value is resolution-adaptive per
+    // `computeMinQuadSolidAngle` (mirrors StarSetQuadComponent.java:68).
+    expect(U_MIN_QUAD_SOLID_ANGLE).toBe(1.8e-9);
     // 3.0e-8 is a SOURCE LITERAL, not a runtime uniform (Codex θ.1b #2).
     expect(MAX_QUAD_SOLID_ANGLE_LITERAL).toBe(3.0e-8);
     expect(LEN0).toBe(20000.0);
@@ -161,8 +163,10 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
   });
 
   it("brightnessPower within the Gaia Sky [0.9, 1.1] range produces monotonic size curve", () => {
-    // Same input at the two power endpoints; size should shift monotonically.
-    const sample = { size: 1e-9 * 206_265_000, dist: 206_265_000 };
+    // Pick a sample well above the minQuad floor (1.8e-9) so the three
+    // power endpoints produce distinct clamped values instead of all
+    // getting pinned to the floor.
+    const sample = { size: 1e-8 * 206_265_000, dist: 206_265_000 };
     const low = starfieldSolidAngleMetrics({
       ...sample,
       brightnessPower: 0.9,
@@ -175,8 +179,6 @@ describe("starfieldSolidAngleMetrics — Gaia Sky star.group.quad.vertex port", 
       ...sample,
       brightnessPower: 1.1,
     });
-    // Monotonic in one direction (power > 1 shrinks small solid angles
-    // when wrapped in degrees12; we only assert strict monotonicity).
     expect(low.clampedSolidAngle).not.toBe(mid.clampedSolidAngle);
     expect(mid.clampedSolidAngle).not.toBe(high.clampedSolidAngle);
   });
@@ -340,12 +342,26 @@ describe("end-to-end pixel-size calibration (Gaia Sky parity post-validation)", 
     expect(pxSun10pc).toBeGreaterThan(1);
   });
 
-  it("deep-tail M dwarf at 100 pc renders at sub-pixel (fade-to-invisible)", () => {
-    // Mag-10+ red dwarf — we want these to fade away, NOT render at the
-    // 1-pixel floor as a uniform haze.
-    const rMdwarf = estimateRadiusSolar(10.5, 100, 1.5);
-    const px = finalPixelSize(rMdwarf * SOLAR_RADIUS_PC, 100);
-    expect(px).toBeLessThan(1);
+  it("deep-tail dwarf (apparentMag 15, 200 pc) alpha fades via opacity mapping", () => {
+    // Gaia Sky floors the minimum quad solid angle at ~1.8e-9 rad at
+    // 1440p (see `computeMinQuadSolidAngle`). Faint-deep-tail stars
+    // don't fade via sprite-size collapse — they stabilise at the
+    // floor with opacity saturated at opacityLimits[0] (= 0 in Gaia
+    // Sky default). Pick a star far enough + dim enough that
+    // rawSolidAngle lives well below the opacity-map minimum.
+    const apparentMag = 15;
+    const distPc = 200;
+    const rDwarf = estimateRadiusSolar(apparentMag, distPc, 1.0); // K/M dwarf
+    const m = starfieldSolidAngleMetrics({
+      size: rDwarf * SOLAR_RADIUS_PC * DIST,
+      dist: distPc * DIST,
+    });
+    // Opacity saturates to the low endpoint (0.0 in Gaia Sky default).
+    expect(m.opacity).toBe(U_OPACITY_LIMITS[0]);
+    // Sprite is floored at the minQuad (not sub-pixel).
+    approxEq(m.clampedSolidAngle, 1.8e-9, 1e-15);
+    // Net alpha collapses to 0 via opacity mapping → invisible.
+    expect(m.alpha).toBe(0);
   });
 
   it("u_sizeFactor calibration is the pixel-size knob: halving it halves pixels", () => {

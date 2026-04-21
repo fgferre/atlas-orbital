@@ -83,7 +83,30 @@ export const U_SOLID_ANGLE_MAP: readonly [number, number] = [1.0e-10, 2.0e-9];
 export const U_OPACITY_LIMITS: readonly [number, number] = [0.0, 1.0];
 export const U_BRIGHTNESS_POWER_DEFAULT = 1.0;
 export const U_BRIGHTNESS_POWER_RANGE: readonly [number, number] = [0.9, 1.1];
-export const U_MIN_QUAD_SOLID_ANGLE = 1.0e-10;
+// Gaia Sky `u_minQuadSolidAngle` is RESOLUTION-ADAPTIVE, NOT fixed.
+// Host math: `minQuadSolidAngle = 1.8e-9 × 1440 / backBufferHeight`
+// (`StarSetQuadComponent.java:68`). Keeps the minimum quad at ≈2–3 px
+// across resolutions so faint stars floor at visible size instead of
+// fading to sub-pixel. The constant below is the 1440p-baseline value
+// that `computeMinQuadSolidAngle` scales at runtime.
+export const U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE = 1.8e-9;
+// Kept as export for legacy consumers — this is the floor used when
+// no runtime resolution is known (e.g. unit tests); the Starfield.tsx
+// useFrame writes the resolution-scaled value into the uniform.
+export const U_MIN_QUAD_SOLID_ANGLE = U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE;
+
+/**
+ * Resolution-adaptive minimum quad solid angle — mirrors Gaia Sky's
+ * `updateMinQuadSolidAngle` formula from `StarSetQuadComponent.java:68`.
+ * `backBufferHeight` is the render-buffer height in physical pixels.
+ * At 1440p this returns the source baseline `1.8e-9`; at 1080p it
+ * scales up to ~`2.4e-9` (larger floor → brighter faint stars so
+ * single-pixel visibility is preserved on smaller backbuffers).
+ */
+export const computeMinQuadSolidAngle = (backBufferHeight: number): number => {
+  const h = Math.max(backBufferHeight, 1);
+  return (U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE * 1440) / h;
+};
 // Upper clamp is a SOURCE-LITERAL 3.0e-8 in Gaia Sky's
 // star.group.quad.vertex.glsl:105. Not a runtime uniform — inlined in
 // both the shader and the TS mirror below so the atlas cannot
