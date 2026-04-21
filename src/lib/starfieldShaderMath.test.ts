@@ -276,6 +276,94 @@ describe("computeViewportHeightScalar — host DPR feed", () => {
 });
 
 // ---------------------------------------------------------------------------
+// End-to-end pixel-size regression (validation round, 2026-04-20)
+//
+// The user flagged post-θ.1b-initial-ship that all stars rendered as a
+// single pixel — no visible giant/supergiant distinction. Root cause:
+// `u_sizeFactor = 1.0` was 6 orders of magnitude smaller than Gaia Sky's
+// `alphaSizeBr.y = starPointSize × 1e6 × pointScale`
+// (StarSetQuadComponent.java:96). The `1e6` multiplier is a source-
+// literal unit-conversion factor; without it every HYG star's clamped
+// solid angle produces a sub-pixel `gl_PointSize` and the GPU collapses
+// them all to the 1-pixel rasterisation floor, erasing magnitude-ordering.
+// Tests below pin the fixed calibration — Betelgeuse > Sirius > G-dwarf
+// in final pixel size — so a future refactor to `u_sizeFactor` can't
+// silently re-break the giant-distinction invariant.
+// ---------------------------------------------------------------------------
+
+describe("end-to-end pixel-size calibration (Gaia Sky parity post-validation)", () => {
+  // Canonical view: 60° fov, 1080 CSS × 1.5 DPR viewport.
+  const PROJ_MATRIX_11 = 1 / Math.tan(Math.PI / 6); // cot(30°) ≈ 1.732
+  const VIEWPORT_HEIGHT = computeViewportHeightScalar(1080, 1.5); // 1620
+  const PIXELS_PER_RADIAN = computePixelsPerRadian(
+    PROJ_MATRIX_11,
+    VIEWPORT_HEIGHT
+  );
+  // Default u_sizeFactor after the validation fix.
+  const SIZE_FACTOR = 1.0e6;
+  const DIST = 206_265_000.0; // 1 pc in scene units.
+
+  const finalPixelSize = (sizePc: number, distPc: number): number => {
+    const m = starfieldSolidAngleMetrics({
+      size: sizePc * DIST,
+      dist: distPc * DIST,
+    });
+    return m.clampedSolidAngle * SIZE_FACTOR * PIXELS_PER_RADIAN;
+  };
+
+  it("Betelgeuse-class supergiant saturates at the 3e-8 clamp and renders > Sirius", () => {
+    // Betelgeuse: apparentMag 0.42, distance ~168 pc, B-V ≈ 1.85
+    // → Stefan-Boltzmann R ≈ hundreds of solar radii.
+    const rBetelSol = estimateRadiusSolar(0.42, 168, 1.85);
+    expect(rBetelSol).toBeGreaterThan(300);
+    const pxBetel = finalPixelSize(rBetelSol * SOLAR_RADIUS_PC, 168);
+    // Sirius: apparentMag -1.46, 2.64 pc, B-V ≈ 0.0 → R ~ 1.7 solar.
+    const rSiriusSol = estimateRadiusSolar(-1.46, 2.64, 0.0);
+    const pxSirius = finalPixelSize(rSiriusSol * SOLAR_RADIUS_PC, 2.64);
+    // Sun at 10 pc (reference main-sequence G dwarf).
+    const pxSun10pc = finalPixelSize(1 * SOLAR_RADIUS_PC, 10);
+
+    // Expected ordering: supergiant > bright main-sequence > distant dwarf.
+    expect(pxBetel).toBeGreaterThan(pxSirius);
+    expect(pxSirius).toBeGreaterThan(pxSun10pc);
+
+    // Rough magnitudes the calibration needs to hit for a useful
+    // visual result:
+    //   - Supergiant at or near the clamp ceiling (> 30 px).
+    //   - Bright local main-sequence > 10 px.
+    //   - Typical mag-5 G dwarf still visible (> 1 px — mandatory, else
+    //     the whole starfield collapses to single-pixel haze like
+    //     pre-validation).
+    expect(pxBetel).toBeGreaterThan(30);
+    expect(pxSirius).toBeGreaterThan(10);
+    expect(pxSun10pc).toBeGreaterThan(1);
+  });
+
+  it("deep-tail M dwarf at 100 pc renders at sub-pixel (fade-to-invisible)", () => {
+    // Mag-10+ red dwarf — we want these to fade away, NOT render at the
+    // 1-pixel floor as a uniform haze.
+    const rMdwarf = estimateRadiusSolar(10.5, 100, 1.5);
+    const px = finalPixelSize(rMdwarf * SOLAR_RADIUS_PC, 100);
+    expect(px).toBeLessThan(1);
+  });
+
+  it("u_sizeFactor calibration is the pixel-size knob: halving it halves pixels", () => {
+    // Under the current fixed u_sizeFactor = 1e6, Sirius gets ~25 px.
+    // If a future tuning change the user asks for needs smaller stars,
+    // halving the uniform should halve the pixel size linearly.
+    const pxFull = finalPixelSize(1.7 * SOLAR_RADIUS_PC, 2.64);
+    const pxHalf = (() => {
+      const m = starfieldSolidAngleMetrics({
+        size: 1.7 * SOLAR_RADIUS_PC * DIST,
+        dist: 2.64 * DIST,
+      });
+      return m.clampedSolidAngle * (SIZE_FACTOR / 2) * PIXELS_PER_RADIAN;
+    })();
+    approxEq(pxHalf, pxFull / 2, 1e-9);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Star physics — main-sequence lookup (legacy) + Stefan-Boltzmann (primary)
 // ---------------------------------------------------------------------------
 

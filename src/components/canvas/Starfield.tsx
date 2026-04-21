@@ -368,10 +368,20 @@ export const Starfield = () => {
         u_brightnessPower: { value: U_BRIGHTNESS_POWER_DEFAULT },
         u_minQuadSolidAngle: { value: U_MIN_QUAD_SOLID_ANGLE },
         u_LEN0: { value: LEN0 },
-        // User-facing multipliers (replace the old `particleSize`
-        // viewport-adaptive uniform — viewport scaling is now done
-        // intrinsically via projectionMatrix × u_viewportHeight).
-        u_sizeFactor: { value: 1.0 },
+        // `u_sizeFactor` is the atlas equivalent of Gaia Sky's
+        // `u_alphaSizeBr.y = starPointSize × 1e6 × pointScale`
+        // (`StarSetQuadComponent.java:96`). The `1e6` multiplier is a
+        // unit-conversion factor that Gaia Sky applies so the
+        // world-space quadSize computed from physical solid angle
+        // renders at visible pixel sizes on typical displays; without
+        // it every star collapses to sub-pixel and the GPU rasterises
+        // everything at the 1-pixel floor, erasing the giant /
+        // supergiant distinction entirely (validation finding,
+        // 2026-04-20 post-Codex). Default of 1e6 places Sirius at
+        // ~25 px, Betelgeuse (clamped at 3e-8 rad) at ~52 px, mag-5
+        // G-dwarfs at ~2 px, and faints fade to invisible — matching
+        // Gaia Sky's raw vertex output at comparable view.
+        u_sizeFactor: { value: 1.0e6 },
         u_alphaFactor: { value: 1.0 },
         // Seeded below each frame.
         u_viewportHeight: { value: 1.0 },
