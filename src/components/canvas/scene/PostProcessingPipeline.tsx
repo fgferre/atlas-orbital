@@ -1,4 +1,5 @@
 import { memo, useCallback, type RefObject } from "react";
+import * as THREE from "three";
 import {
   EffectComposer,
   Bloom,
@@ -7,6 +8,7 @@ import {
   ToneMapping,
 } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
+import { LensFlareSlot } from "./LensFlareInjector";
 import { LightGlowSlot } from "./LightGlowInjector";
 
 export interface BloomController {
@@ -110,9 +112,22 @@ export const PostProcessingPipeline = memo(
     // selective Bloom below). Reduced-motion gate is internal to the
     // slot component — when active it returns `null` and no
     // LightGlow fragment is compiled into the composer program.
+    // **HDR buffer (§5.1 hard invariant).** The EffectComposer MUST
+    // run on a `HalfFloatType` internal RT so bright-pass based
+    // effects (θ.3 LightGlow, θ.4 pseudo lens flare ghost weighting)
+    // read genuine HDR luminance rather than an early clipped-to-1.0
+    // LDR signal. Without this, Chapman ghost weights collapse and
+    // every ghost renders identically white.
+    // θ.4 Pseudo lens flare + lensdirt starburst. Two chained
+    // effects (`PseudoLensFlareEffect` then `LensDirtEffect`) sit
+    // between LightGlow and Bloom per `phase-gaia-sky.md §5.1` —
+    // ghost-march reads HDR bright-pass before Bloom smears it.
+    // Starburst spike drift is driven by the camera-direction
+    // scalar inside `LensFlareSlot`.
     return (
-      <EffectComposer>
+      <EffectComposer frameBufferType={THREE.HalfFloatType}>
         <LightGlowSlot />
+        <LensFlareSlot />
         {bloomEnabled ? (
           <Bloom
             ref={assignBloomRef}
