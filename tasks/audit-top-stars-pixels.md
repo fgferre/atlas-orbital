@@ -1,7 +1,7 @@
 # θ.1b top-star pixel-size audit
 
 Canonical view: 1080 × 1.5 DPR viewport (backbuffer 1620px), 60° FOV.
-Pipeline: HYG apparent-mag → abs-mag (distance modulus) → pseudo-size (0.15·√10^(-0.4·absMag) pc) → ×DISTANCE_SCALE (206265000) → ×STAR_SIZE_FACTOR (0.00000131526) → solidAngle = a_size / dist → clamp [minQuad=1.600e-9, 3e-8] → × u_sizeFactor (1200000) × pixelsPerRad (1403.0).
+Pipeline: HYG apparent-mag → abs-mag (distance modulus) → pseudo-size (0.15·√10^(-0.4·absMag) pc) → ×DISTANCE_SCALE (206265000) → ×STAR_SIZE_FACTOR (0.00000131526) → solidAngle = a_size / dist → clamp [minQuad=1.600e-9, 3e-8] → billboard width = clampedSA × dist × u_sizeFactor (1200000) → projected pixels = clampedSA × u_sizeFactor × pixelsPerRad (1403.0).
 
 ## Top 15 by HYG apparent magnitude (rank 1 = brightest)
 
@@ -45,7 +45,7 @@ Pipeline: HYG apparent-mag → abs-mag (distance modulus) → pseudo-size (0.15�
 
 ## Diagnostics
 
-- Of the top-15 brightest (apparent mag), **1 saturate the 3e-8 solidAngle clamp** → on-screen pixel size for those is identical (differences are color / bloom only).
+- Of the top-15 brightest (apparent mag), **1 saturate the 3e-8 solidAngle clamp**. Any stars that share this ceiling have identical billboard width; differences then come from color / bloom / selective-HDR gain.
 - 14 are below the clamp ceiling and render at sub-ceiling pixel sizes:
   - Canopus: 43.8 px (raw SA 2.60e-8 vs ceiling 3.00e-8)
   - Arcturus: 33.2 px (raw SA 1.97e-8 vs ceiling 3.00e-8)

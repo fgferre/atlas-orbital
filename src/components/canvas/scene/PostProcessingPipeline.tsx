@@ -61,10 +61,10 @@ export const PostProcessingPipeline = memo(
     //
     // Two correctness constraints the chain has to satisfy:
     //   1. Bloom must read REAL HDR luminance so it only picks up the
-    //      `vfxHdrGain`-lifted starfield fragments and the sun
-    //      MeshBasicMaterial (surfaces on §1.3's HDR-emissive allow-
-    //      list). That's why Bloom is first and tone mapping comes
-    //      AFTER it.
+    //      sun MeshBasicMaterial and surfaces on §1.3's HDR-emissive
+    //      allow-list. The HYG Gaia path intentionally clamps its star
+    //      fragment like Gaia Sky; named-star halos belong to LightGlow.
+    //      That's why Bloom is first and tone mapping comes AFTER it.
     //   2. HueSaturation + BrightnessContrast's `saturation`, `contrast`,
     //      `brightness` values in `config/visualPresets.ts` (per-preset,
     //      PLANET_ORBIT at 0.18 / 0.30 / 0 after the AgX recalibration;
@@ -95,12 +95,11 @@ export const PostProcessingPipeline = memo(
     // The HDR contract stays `luminanceThreshold=1.0` (prompt R1 #2):
     // only surfaces on the HDR-emissive allow-list cross the
     // threshold — planet / atmosphere / cloud / ring / orbit-line
-    // surfaces remain ≤ 1.0 by §1.3 contract. Star visibility is
-    // dialled via `vfxHdrGain` in `qualityProfile.ts`, which the
-    // Wave α UX pass bumped so bright-star sprites emit well above
-    // 1.0 even after the Bloom mipmap pyramid averages them with
-    // their black-sky neighbors. `luminanceSmoothing=0.1` kills
-    // magnitude-stable flicker.
+    // surfaces remain ≤ 1.0 by §1.3 contract. The Gaia HYG starfield
+    // also remains ≤ 1.0 after the fragment saturate; its large named
+    // halos are handled by the Gaia LightGlow/lens-flare waves, not by
+    // selective Bloom. `luminanceSmoothing=0.1` kills stable-threshold
+    // flicker.
     return (
       <EffectComposer>
         {bloomEnabled ? (

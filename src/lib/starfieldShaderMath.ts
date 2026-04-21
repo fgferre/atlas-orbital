@@ -63,6 +63,146 @@ export const starfieldCoreKernel = (r: number): number => {
   );
 };
 
+export type Rgb = readonly [number, number, number];
+
+/**
+ * Gaia Sky `ColorUtils.BVtoRGB` port. The source path converts B-V to
+ * effective temperature with Ballesteros, then to xyY, then XYZ, then
+ * gamma-corrected sRGB, and finally normalizes by max(1, maxChannel).
+ */
+export const gaiaBvToRgb = (bv: number): Rgb => {
+  const t = 4600 * (1 / (0.92 * bv + 1.7) + 1 / (0.92 * bv + 0.62));
+
+  let x = 0;
+  let y = 0;
+
+  if (t >= 1667 && t <= 4000) {
+    x =
+      -0.2661239e9 / (t * t * t) +
+      -0.234358e6 / (t * t) +
+      0.8776956e3 / t +
+      0.17991;
+  } else if (t > 4000 && t <= 25000) {
+    x =
+      -3.0258469e9 / (t * t * t) +
+      2.1070379e6 / (t * t) +
+      0.2226347e3 / t +
+      0.24039;
+  }
+
+  if (t >= 1667 && t <= 2222) {
+    y =
+      -1.1063814 * x * x * x - 1.3481102 * x * x + 2.18555832 * x - 0.20219683;
+  } else if (t > 2222 && t <= 4000) {
+    y =
+      -0.9549476 * x * x * x - 1.37418593 * x * x + 2.09137015 * x - 0.16748867;
+  } else if (t > 4000 && t <= 25000) {
+    y = 3.081758 * x * x * x - 5.8733867 * x * x + 3.75112997 * x - 0.37001483;
+  }
+
+  const Y = y === 0 ? 0 : 1;
+  const X = y === 0 ? 0 : (x * Y) / y;
+  const Z = y === 0 ? 0 : ((1 - x - y) * Y) / y;
+
+  const r = correctGamma(3.2406 * X - 1.5372 * Y - 0.4986 * Z);
+  const g = correctGamma(-0.9689 * X + 1.8758 * Y + 0.0415 * Z);
+  const b = correctGamma(0.0557 * X - 0.204 * Y + 1.057 * Z);
+  const maxChannel = Math.max(1, r, g, b);
+
+  return [
+    Math.max(r / maxChannel, 0),
+    Math.max(g / maxChannel, 0),
+    Math.max(b / maxChannel, 0),
+  ];
+};
+
+const correctGamma = (linear: number): number => {
+  if (linear <= 0.0031308) {
+    return 12.92 * linear;
+  }
+  const a = 0.5;
+  return (1 + a) * Math.pow(linear, 1 / 2.4) - a;
+};
+
+export const GAIA_STAR_COLOR_SATURATION = 0.16;
+
+/**
+ * Gaia Sky `ParticleUtils.saturateColor` equivalent for non-highlighted
+ * stars: RGB -> HSV, add `scene.star.saturate` to S, clamp, back to RGB.
+ */
+export const saturateStarRgb = (
+  rgb: Rgb,
+  amount = GAIA_STAR_COLOR_SATURATION
+): Rgb => {
+  const [h, s, v] = rgbToHsv(rgb);
+  return hsvToRgb(h, clamp(s + amount, 0, 1), v);
+};
+
+const rgbToHsv = ([r, g, b]: Rgb): Rgb => {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  let h = 0;
+
+  if (delta !== 0) {
+    if (max === r) {
+      h = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      h = (b - r) / delta + 2;
+    } else {
+      h = (r - g) / delta + 4;
+    }
+    h /= 6;
+    if (h < 0) h += 1;
+  }
+
+  return [h, max === 0 ? 0 : delta / max, max];
+};
+
+const hsvToRgb = (h: number, s: number, v: number): Rgb => {
+  if (s === 0) return [v, v, v];
+  const sector = h * 6;
+  const i = Math.floor(sector);
+  const f = sector - i;
+  const p = v * (1 - s);
+  const q = v * (1 - s * f);
+  const t = v * (1 - s * (1 - f));
+
+  switch (i % 6) {
+    case 0:
+      return [v, t, p];
+    case 1:
+      return [q, v, p];
+    case 2:
+      return [p, v, t];
+    case 3:
+      return [p, q, v];
+    case 4:
+      return [t, p, v];
+    default:
+      return [v, p, q];
+  }
+};
+
+/**
+ * Gaia Sky `star.group.quad.fragment.glsl` final composite:
+ * `saturate(alpha * vec4(v_col.rgb + core * 2.0, 1.0))`.
+ */
+export const starfieldFragmentRgba = (
+  color: Rgb,
+  alpha: number,
+  core: number,
+  profile: number
+): readonly [number, number, number, number] => {
+  const a = alpha * profile;
+  return [
+    clamp(a * (color[0] + core * 2), 0, 1),
+    clamp(a * (color[1] + core * 2), 0, 1),
+    clamp(a * (color[2] + core * 2), 0, 1),
+    clamp(a, 0, 1),
+  ];
+};
+
 // -----------------------------------------------------------------------------
 // Vertex solid-angle mapping (θ.1b — 2026-04-20)
 // -----------------------------------------------------------------------------
@@ -83,6 +223,10 @@ export const U_SOLID_ANGLE_MAP: readonly [number, number] = [1.0e-10, 2.0e-9];
 export const U_OPACITY_LIMITS: readonly [number, number] = [0.0, 1.0];
 export const U_BRIGHTNESS_POWER_DEFAULT = 1.0;
 export const U_BRIGHTNESS_POWER_RANGE: readonly [number, number] = [0.9, 1.1];
+// Gaia Sky default `u_alphaSizeBr.z`:
+// config.yaml scene.star.brightness=2.22, remapped in StarSetQuadComponent
+// from [0.4, 8.0] to [0, 4].
+export const U_STAR_BRIGHTNESS_DEFAULT = ((2.22 - 0.4) / (8.0 - 0.4)) * 4.0;
 // Gaia Sky `u_minQuadSolidAngle` is RESOLUTION-ADAPTIVE, NOT fixed.
 // Host math: `minQuadSolidAngle = 1.8e-9 × 1440 / backBufferHeight`
 // (`StarSetQuadComponent.java:68`). Keeps the minimum quad at ≈2–3 px
@@ -168,7 +312,7 @@ export interface StarfieldSolidAngleMetrics {
 }
 
 export interface StarfieldSolidAngleInputs {
-  /** Per-star physical radius (parsecs × DISTANCE_SCALE, i.e. scene units). */
+  /** Per-star Gaia pseudo-size (parsecs × DISTANCE_SCALE × STAR_SIZE_FACTOR, i.e. scene units). */
   size: number;
   /** Camera-to-star distance in the same scene units. */
   dist: number;
@@ -243,15 +387,14 @@ export const starfieldSolidAngleMetrics = (
 };
 
 // -----------------------------------------------------------------------------
-// Stack/API adaptations: screen-space pixel conversion + viewport scalar
+// Projection helpers: billboard pixel projection + viewport scalar
 // -----------------------------------------------------------------------------
 //
 // Gaia Sky renders instanced-quad billboards via `snippet/billboard.stretch.glsl`
-// (world-space). Atlas uses `THREE.Points` (pixel-based `gl_PointSize`). The
-// two helpers below encode the stack/API adaptation: convert the Gaia Sky
-// world-quad pixel equivalent for a THREE.Points sprite. Pinned by tests so
-// a future refactor cannot silently drift the conversion (Codex θ.1b review
-// finding #4, 2026-04-20).
+// (world-space). Atlas now uses the same class of screen-facing instanced
+// quads. The helpers below keep the expected pixel projection testable and
+// keep the Gaia Sky resolution-adaptive minimum solid angle wired to the
+// renderer's actual backbuffer height.
 
 /**
  * Pixels-per-radian factor at unit distance from the camera, for a
@@ -261,8 +404,9 @@ export const starfieldSolidAngleMetrics = (
  *
  *   pixels_per_radian = cot(fovY / 2) × viewportHeight / 2
  *
- * The shader multiplies this by `solidAngle * u_sizeFactor` to get the
- * final `gl_PointSize` in pixels.
+ * The billboard shader builds a world/view-space quad of full width
+ * `solidAngle * dist * u_sizeFactor`. After perspective projection, its
+ * expected on-screen width is `solidAngle * u_sizeFactor * pixels_per_radian`.
  */
 export const computePixelsPerRadian = (
   projMatrix11: number,
@@ -272,12 +416,11 @@ export const computePixelsPerRadian = (
 };
 
 /**
- * Compute the viewport-height scalar uploaded as `u_viewportHeight` in
- * the Starfield vertex. Takes CSS-pixel canvas height and the renderer's
- * clamped DPR (via `gl.getPixelRatio()` — L17 literal). The product is
- * the render-buffer height in physical pixels. Exported for unit
- * testing so the host-side DPR feed is pinnable without a live R3F
- * canvas.
+ * Compute the render-buffer height in physical pixels from CSS-pixel canvas
+ * height and the renderer's clamped DPR (via `gl.getPixelRatio()`). Gaia Sky
+ * uses the backbuffer height for `u_minQuadSolidAngle`; Atlas mirrors that
+ * host-side update even though the star sprite itself is now a billboard quad,
+ * not a `gl_PointSize` point.
  */
 export const computeViewportHeightScalar = (
   canvasHeightCss: number,

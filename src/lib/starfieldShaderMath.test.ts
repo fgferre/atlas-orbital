@@ -5,13 +5,18 @@ import {
   computeViewportHeightScalar,
   CORE_SMOOTHSTEP_EDGE_HIGH,
   CORE_SMOOTHSTEP_EDGE_LOW,
+  GAIA_STAR_COLOR_SATURATION,
+  gaiaBvToRgb,
   LEN0,
   MAX_QUAD_SOLID_ANGLE_LITERAL,
+  saturateStarRgb,
+  starfieldFragmentRgba,
   U_BRIGHTNESS_POWER_DEFAULT,
   U_BRIGHTNESS_POWER_RANGE,
   U_MIN_QUAD_SOLID_ANGLE,
   U_OPACITY_LIMITS,
   U_SOLID_ANGLE_MAP,
+  U_STAR_BRIGHTNESS_DEFAULT,
   starfieldCoreKernel,
   starfieldSolidAngleMetrics,
 } from "./starfieldShaderMath";
@@ -77,6 +82,63 @@ describe("starfieldCoreKernel — Gaia Sky star.group.quad.fragment port", () =>
   });
 });
 
+describe("gaiaBvToRgb — Gaia Sky ColorUtils.BVtoRGB port", () => {
+  it("maps hot stars toward blue-white and cool stars toward orange-red", () => {
+    const sirius = gaiaBvToRgb(0.01);
+    const capella = gaiaBvToRgb(0.8);
+    const betelgeuse = gaiaBvToRgb(1.5);
+
+    expect(sirius[2]).toBeGreaterThan(sirius[0]);
+    expect(sirius[2]).toBeGreaterThan(sirius[1]);
+    expect(capella[0]).toBeGreaterThan(capella[2]);
+    expect(betelgeuse[0]).toBe(1);
+    expect(betelgeuse[1]).toBeLessThan(capella[1]);
+    expect(betelgeuse[2]).toBeLessThan(capella[2]);
+  });
+
+  it("pins representative Gaia ColorUtils numeric outputs", () => {
+    const vega = gaiaBvToRgb(0.0);
+    const sunLike = gaiaBvToRgb(0.65);
+    const redGiant = gaiaBvToRgb(1.5);
+
+    approxEq(vega[0], 0.734, 0.005);
+    approxEq(vega[1], 0.8, 0.005);
+    approxEq(vega[2], 1.0, 0.005);
+    approxEq(sunLike[0], 1.0, 0.005);
+    approxEq(sunLike[1], 0.923, 0.005);
+    approxEq(sunLike[2], 0.885, 0.005);
+    approxEq(redGiant[0], 1.0, 0.005);
+    approxEq(redGiant[1], 0.748, 0.005);
+    approxEq(redGiant[2], 0.48, 0.005);
+  });
+
+  it("applies Gaia Sky's default HSV saturation lift", () => {
+    const base = gaiaBvToRgb(0.65);
+    const saturated = saturateStarRgb(base);
+
+    expect(GAIA_STAR_COLOR_SATURATION).toBe(0.16);
+    expect(saturated[0]).toBeCloseTo(base[0], 6);
+    expect(saturated[1]).toBeLessThan(base[1]);
+    expect(saturated[2]).toBeLessThan(base[2]);
+  });
+});
+
+describe("starfieldFragmentRgba — Gaia Sky fragment saturate composite", () => {
+  it("clamps the additive core output to LDR like star.group.quad.fragment.glsl", () => {
+    expect(starfieldFragmentRgba([0.8, 0.7, 0.6], 1, 1, 1)).toEqual([
+      1, 1, 1, 1,
+    ]);
+  });
+
+  it("keeps sub-core halo output premultiplied by alpha and profile", () => {
+    const rgba = starfieldFragmentRgba([0.5, 0.25, 0.125], 0.5, 0, 0.5);
+    approxEq(rgba[0], 0.125, 1e-9);
+    approxEq(rgba[1], 0.0625, 1e-9);
+    approxEq(rgba[2], 0.03125, 1e-9);
+    approxEq(rgba[3], 0.25, 1e-9);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Solid-angle metrics (θ.1b vertex port)
 // ---------------------------------------------------------------------------
@@ -92,6 +154,7 @@ describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () =
     expect(U_BRIGHTNESS_POWER_DEFAULT).toBe(1.0);
     expect(U_BRIGHTNESS_POWER_RANGE[0]).toBe(0.9);
     expect(U_BRIGHTNESS_POWER_RANGE[1]).toBe(1.1);
+    approxEq(U_STAR_BRIGHTNESS_DEFAULT, 0.9578947368, 1e-10);
     expect(MAX_QUAD_SOLID_ANGLE_LITERAL).toBe(3.0e-8);
   });
 
@@ -231,10 +294,10 @@ describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () =
 });
 
 // ---------------------------------------------------------------------------
-// Pixel-space conversion helpers (θ.1b stack/API — Codex #4)
+// Pixel-space projection helpers (θ.1b billboard path)
 // ---------------------------------------------------------------------------
 
-describe("computePixelsPerRadian — shader host-side parity", () => {
+describe("computePixelsPerRadian — billboard projection parity", () => {
   it("pins the cot(fov/2) × height / 2 formula at a canonical perspective", () => {
     // 60° fov → tan(30°) ≈ 0.5774 → cot(30°) = projMatrix[1][1] ≈ 1.7321.
     const projMatrix11 = 1 / Math.tan((60 * Math.PI) / 180 / 2);
@@ -259,7 +322,7 @@ describe("computePixelsPerRadian — shader host-side parity", () => {
   });
 });
 
-describe("computeViewportHeightScalar — host DPR feed", () => {
+describe("computeViewportHeightScalar — minQuadSolidAngle DPR feed", () => {
   it("multiplies CSS height by renderer DPR (L17 literal path)", () => {
     expect(computeViewportHeightScalar(1080, 1.5)).toBe(1620);
     expect(computeViewportHeightScalar(720, 2)).toBe(1440);

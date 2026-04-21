@@ -10,10 +10,9 @@
  *   | a_size (scene) | raw SA (rad) | clampedSA | pixels | Clamped? |
  *
  * Purpose: sanity-check the θ.1b render against the user's visual
- * observations ("Capella looks bigger than Sirius?"). If the math
- * says two stars both hit the 3e-8 clamp, their on-screen pixel
- * size is IDENTICAL; any visual difference comes from color / bloom /
- * selective-HDR gain, not sprite size.
+ * observations ("Capella looks bigger than Sirius?"). The runtime
+ * now renders Gaia-style instanced quads, so these predicted pixel
+ * widths are not subject to WebGL's ALIASED_POINT_SIZE_RANGE cap.
  *
  * Usage: `node scripts/audit-top-stars-pixels.mjs`
  * Output: prints to stdout + writes tasks/audit-top-stars-pixels.md
@@ -186,7 +185,7 @@ const byPixels = [...rows].sort((a, b) => b.pixels - a.pixels);
 
 let md = "# θ.1b top-star pixel-size audit\n\n";
 md += `Canonical view: 1080 × 1.5 DPR viewport (backbuffer ${VIEWPORT_HEIGHT}px), 60° FOV.\n`;
-md += `Pipeline: HYG apparent-mag → abs-mag (distance modulus) → pseudo-size (0.15·√10^(-0.4·absMag) pc) → ×DISTANCE_SCALE (${DISTANCE_SCALE}) → ×STAR_SIZE_FACTOR (${STAR_SIZE_FACTOR}) → solidAngle = a_size / dist → clamp [minQuad=${sci(MIN_QUAD)}, 3e-8] → × u_sizeFactor (${U_SIZE_FACTOR}) × pixelsPerRad (${num(PIXELS_PER_RADIAN, 1)}).\n\n`;
+md += `Pipeline: HYG apparent-mag → abs-mag (distance modulus) → pseudo-size (0.15·√10^(-0.4·absMag) pc) → ×DISTANCE_SCALE (${DISTANCE_SCALE}) → ×STAR_SIZE_FACTOR (${STAR_SIZE_FACTOR}) → solidAngle = a_size / dist → clamp [minQuad=${sci(MIN_QUAD)}, 3e-8] → billboard width = clampedSA × dist × u_sizeFactor (${U_SIZE_FACTOR}) → projected pixels = clampedSA × u_sizeFactor × pixelsPerRad (${num(PIXELS_PER_RADIAN, 1)}).\n\n`;
 
 md += "## Top 15 by HYG apparent magnitude (rank 1 = brightest)\n\n";
 md += "| Rank | Name | HIP | Con | apparentMag | B-V | dist (pc) | absMag | pseudoSize (pc) | raw SA (rad) | clamped SA (rad) | opacity | pixels | Clamped? |\n";
@@ -204,7 +203,7 @@ for (const [i, r] of byPixels.entries()) {
 
 md += "\n## Diagnostics\n\n";
 const clampedCount = rows.filter((r) => r.hitClamp).length;
-md += `- Of the top-15 brightest (apparent mag), **${clampedCount} saturate the 3e-8 solidAngle clamp** → on-screen pixel size for those is identical (differences are color / bloom only).\n`;
+md += `- Of the top-15 brightest (apparent mag), **${clampedCount} saturate the 3e-8 solidAngle clamp**. Any stars that share this ceiling have identical billboard width; differences then come from color / bloom / selective-HDR gain.\n`;
 const notClamped = rows.filter((r) => !r.hitClamp);
 if (notClamped.length > 0) {
   md += `- ${notClamped.length} are below the clamp ceiling and render at sub-ceiling pixel sizes:\n`;

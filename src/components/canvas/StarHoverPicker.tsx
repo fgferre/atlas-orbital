@@ -49,7 +49,7 @@ const MOUSE_THROTTLE_MS = 32; // ~30 Hz
 // constant used in `Starfield.tsx` so the world-space projection lines up
 // with the rendered points.
 const DISTANCE_SCALE = 206_265_000.0;
-// The starfield's root `<points>` node is rotated around X by the J2000
+// The starfield's root billboard mesh is rotated around X by the J2000
 // obliquity; we bake that into the world transform once per mouse move
 // instead of traversing the scene graph.
 const OBLIQUITY_RAD = (23.4 * Math.PI) / 180;
@@ -89,7 +89,7 @@ function buildPickCandidates(
     const py = catalog.positions[i + 1] * DISTANCE_SCALE;
     const pz = catalog.positions[i + 2] * DISTANCE_SCALE;
 
-    // Apply the same R_x(obliquity) the Points node applies in the scene.
+    // Apply the same R_x(obliquity) the starfield mesh applies in the scene.
     const rx = px;
     const ry = py * cosT - pz * sinT;
     const rz = py * sinT + pz * cosT;

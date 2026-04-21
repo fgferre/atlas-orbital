@@ -75,7 +75,7 @@ for:
 - **Wave α committed** — the three-commit spine in `tasks/todo.md`
   under "Wave α — HDR foundation + Graphics panel". Specifically:
   - Commit 2 (R1 #1A/#1B/#2): renderer `NoToneMapping`, composer runs
-    AgX last, `vfxHdrGain` uniform live on both starfields,
+    AgX last, `vfxHdrGain` uniform live on the legacy NASA starfield,
     `luminanceThreshold=1.0` + `luminanceSmoothing=0.1` on the Bloom
     effect.
   - Commit 3 (R2 Wave 1): `graphicsSlice`, `DisplayPanel`,
@@ -264,7 +264,7 @@ restating the rules.
 ### θ.1 — Star sprite kernel refinement
 
 **Goal.** Port Gaia Sky's per-star sprite kernel (sampled radial halo
-texture + razor-thin additive white core) to our `THREE.Points`
+texture + razor-thin additive white core) to our instanced billboard
 starfield. Our current fragment is `pow(d, 5)` — a soft isotropic ball.
 Gaia Sky's `star.group.quad.fragment.glsl` (3.7.x) multiplies a
 baked radial-gaussian texture into the alpha AND stacks a
@@ -318,26 +318,16 @@ memory).
 **Port plan.**
 
 - `src/components/canvas/Starfield.tsx` fragment shader, using the
-  existing `gl_PointCoord` UV:
+  billboard quad UV:
   ```glsl
-  vec2 uv = gl_PointCoord;
+  vec2 uv = vUv;
   float profile = texture2D(u_starTex, uv).r;
   if (profile <= 0.0) discard;
   float r = length(uv - vec2(0.5)) * 2.0;
   float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
   float alpha = vBrightness * profile;
-  // Pre-multiply alpha into rgb INSIDE the fragment, then use true
-  // One/One additive in the material (see CustomBlending setup in
-  // Starfield.tsx). Blend factors then match Gaia Sky's
-  // `BlendMode.ADDITIVE = GL_ONE, GL_ONE` exactly — both on RGB and
-  // on framebuffer alpha accumulation. Gaia Sky's final `saturate()`
-  // clamp is the only structural divergence left, and it is an
-  // intentional pipeline/render-space mismatch (R1 step-5 #2): Wave
-  // α HDR wants `alpha * (rgb + core*2) > 1` to trigger Bloom's
-  // luminanceThreshold = 1 bright pass; AgX tone-maps back into
-  // display range at the end of the composer.
-  vec3 rgb = (vColor + vec3(core * 2.0)) * alpha;
-  gl_FragColor = vec4(rgb, alpha);
+  gl_FragColor = clamp(alpha * vec4(vColor + vec3(core * 2.0), 1.0),
+                       0.0, 1.0);
   ```
 - `u_starTex`: 64×64 R8 radial-gaussian generated via a process-wide
   `Uint8Array` cache uploaded into a `THREE.DataTexture` on first
@@ -364,8 +354,8 @@ memory).
 - Halo texture: 64×64 R8, radial gaussian, `LinearFilter` min/mag,
   `ClampToEdgeWrapping`. Σ tunable in the generator.
 
-**DisplayPanel.** No new slider. "Star size" slider in Wave α still
-drives the existing `particleSize` uniform.
+**DisplayPanel.** No new slider. θ.1 only changes the fragment kernel;
+θ.1b owns the Gaia-style size scalar through `u_sizeFactor`.
 
 **Verification.**
 
@@ -395,8 +385,7 @@ drives the existing `particleSize` uniform.
 
 - L17 literal — Gaia Sky's core smoothstep triggers when
   `distance(vec2(0.5), uv) * 2.0 <= 0.04`, i.e. at UV radius ≤ 0.02.
-  Against our existing NASA-calibrated `[5, 50]` `gl_PointSize` clamp
-  that maps to:
+  Against the post-θ.1b billboard sizes that maps to:
   - at 50 px sprite: core diameter ≈ 2 px, full halo diameter 50 px
     (core is 4 % of sprite width — a razor-thin pinpoint that the
     halo gaussian carries the rest of the sprite around);
@@ -415,9 +404,9 @@ drives the existing `particleSize` uniform.
   `<shaderMaterial uniforms={{...}}>` child. The generated
   `THREE.DataTexture` is stored in a ref / module-scope cache so
   React remounts don't rebuild the gaussian every mount.
-- L17 DPR — the shader does not introduce new pixel math; all size
-  scaling continues to live in the vertex stage via `particleSize`
-  (which already derives from `gl.getPixelRatio()`).
+- L17 DPR — the fragment shader does not introduce pixel math; size
+  scaling lives in the vertex-stage billboard projection and
+  `u_minQuadSolidAngle` is fed from the renderer backbuffer height.
 
 ---
 
@@ -493,7 +482,8 @@ Host defaults from `StarSetQuadComponent.java:46`:
       alpha = 0.0;
   }
   vBrightness = alpha; // fragment already consumes this
-  gl_PointSize = max(quadSize / <NDC-to-pixel conversion>, 0.0);
+  viewPosition.xy += position.xy * quadSize;
+  gl_Position = projectionMatrix * viewPosition;
   ```
 - `a_size` (per-star attribute) — **source-verified pseudo-size, NOT
   physical radius.** Opus audit (2026-04-21) + `AstroUtils.java:463-475`
@@ -531,8 +521,7 @@ Host defaults from `StarSetQuadComponent.java:46`:
   - `u_minQuadSolidAngle` = `1.0e-10`.
   - `u_alphaSizeBr` = `vec3(alpha, size, brightness)` per source.
     Atlas binds `.x` to a global alpha scale (default `1.0`), `.y`
-    to the point-size multiplier replacing the old `particleSize`
-    uniform (default `1.0`, user-scalable), `.z` to a brightness
+    to `u_sizeFactor` / billboard-size scaling, `.z` to a brightness
     multiplier for the final per-star colour. Gaia Sky brightness
     range: `[0.4, 8.0]` (`Constants.java:91,100`), default `1.0`.
   - `saturate = 0.16f` (default colour saturation, StarSettings).
@@ -569,25 +558,21 @@ renderer` commit. NASAStarfield remains accessible via the existing
   `starfieldPointMetrics` + its 23 unit tests; replace with
   `starfieldSolidAngleMetrics` mirroring the new vertex math.
 - **Known visual side-effect, documented not fixed:** post-θ.1b the
-  raw sprite size from `solidAngle × pixelsPerRadian` is sub-pixel
-  for the vast majority of HYG stars (Sirius at 2.64 pc renders at
-  ~2e-4 px; mid-mag stars vanish entirely in raw-pixel terms). This
-  matches Gaia Sky's ACTUAL behaviour — the visible halos in Gaia
-  Sky screenshots come from the `LightGlow` post-process (θ.3),
-  which paints visible glow around each known-light NDC position,
-  not from the raw sprite. Until θ.3 ships, the atlas starfield
-  post-θ.1b will look noticeably sparser than pre-θ.1b; that is
-  parity with Gaia Sky's pre-LightGlow rendering, not a regression.
-  θ.3 is sequenced in §8 specifically to compensate.
+  background-star billboard size is governed by apparent magnitude
+  after the pseudo-size path: in the canonical 1080×1.5-DPR / 60° view,
+  Sirius projects to ~50.5 px, Capella to ~31.7 px, and Betelgeuse to
+  ~26.4 px. LightGlow (θ.3) still adds the Gaia Sky default halo layer
+  for named lights, but it is not responsible for fixing this base
+  magnitude ordering.
 
 **Parameters (ultra defaults).** Above — `u_solidAngleMap`,
 `u_opacityLimits`, `u_brightnessPower`, `u_minQuadSolidAngle`. Per-
 star `a_size` derived via `AstroUtils.absoluteMagnitudeToPseudoSize`
 (1:1 port in `src/lib/starPhysics.ts`).
 
-**DisplayPanel.** Existing "Star size" slider rebinds from
-`particleSize` to `u_alphaFactor` (which multiplies the solid-angle-
-derived size). No new panel row.
+**DisplayPanel.** No new panel row in this diff. The source-equivalent
+size scalar is `u_sizeFactor`; `u_alphaFactor` remains the global alpha
+scale.
 
 **Verification.**
 
@@ -620,8 +605,9 @@ attribute synthesis is the substantive work (~80 LOC in
   removed together.
 - L15 literal — the existing `useMemo`'d ShaderMaterial is extended
   with new uniforms; no JSX `<shaderMaterial>` slip.
-- L17 DPR — `gl_PointSize` needs a NDC-to-pixel conversion that
-  respects `gl.getPixelRatio()` (same rule as pre-θ.1b).
+- L17 DPR — `u_minQuadSolidAngle` needs the renderer backbuffer height,
+  i.e. CSS height × `gl.getPixelRatio()` (same source scalar Gaia Sky
+  uses through `backBufferSize[1]`).
 - Visual regression risk on the Wave α baselines. All current
   starfield Playwright specs + pixel-diff fixtures drop and get
   rebuilt against the post-θ.1b baseline. This is a one-time
@@ -723,8 +709,9 @@ CPU-side camera-velocity tracking. All of it is port, no invention.
 **Risks.**
 
 - L18 / L19 literal — `u_camVel` / `u_dt` are per-frame uniform
-  writes on the memoised ShaderMaterial; same pattern as θ.1's
-  `vfxHdrGain`. Do NOT subscribe the vertex to React store state.
+  writes on the memoised ShaderMaterial; same pattern as θ.1b's
+  time/min-solid-angle uniforms. Do NOT subscribe the vertex to React
+  store state.
 - The atlas's logarithmic depth buffer interacts with
   `obj_next = s_obj_pos - u_camVel * u_dt`. If the predicted
   next-frame position projects past the log-depth far plane, the
@@ -2119,10 +2106,11 @@ as atlas-only.
   parameter, paired with `dist < radius × 2.5 / fovFactor` for the
   surface-mode swap (θ.7 uses both correctly).
 
-**Claims retired.**
+**Claims retired / resolved.**
 
-- "B-V → RGB via CIE xyY / Ballesteros" — still deferred to §9 but
-  its urgency drops after θ.1b revises the whole brightness pipeline.
+- "B-V → RGB via CIE xyY / Ballesteros" — resolved in the 2026-04-21
+  drift audit: HYG now computes Gaia `ColorUtils.BVtoRGB` CPU-side and
+  applies default `scene.star.saturate = 0.16`.
 - "Phong / spherical billboard shading mode for θ.1" — documented
   in §9 but out of scope; we ship emissive only.
 
@@ -2182,9 +2170,6 @@ Added after Codex review (2026-04-20):
   dedicated black-hole mode appears in the product roadmap.
 - **Anaglyph 3D** — Gaia Sky has it; niche accessibility feature,
   not a priority.
-- **B-V → RGB via CIE xyY + Ballesteros** (more accurate in the
-  cool-star regime than our piecewise-linear). See §8.6. Swap only
-  with a Playwright-baseline comparison; low urgency.
 
 Added after θ-audit (2026-04-20):
 
@@ -2247,8 +2232,8 @@ Phase ships when:
    nomes exatos abaixo** (não "Lens" standalone, que conflita com
    "Grading" do θ.6):
    - **Star shader / vertex:** "Star Twinkle" (θ.14). θ.1b is
-     invisible — it rebinds the existing "Star Size" slider from
-     `particleSize` to `u_alphaFactor`.
+     invisible — it replaces the old NASA `particleSize` path with
+     Gaia-style `u_sizeFactor` billboard sizing.
    - **Composer/HDR:** "Star Halo" (θ.3), "Lens Flare" (θ.4 — with
      sub-option "Pseudo Flare / Pseudo Flare + Spikes" covering the
      merged-in diffraction-spike feature), "Motion Blur" (θ.5),

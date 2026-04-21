@@ -3,21 +3,21 @@
  *
  * Consumes the compact binary catalog produced by `scripts/build-hyg-binary.js`
  * (parsed into `HygCatalogData` by `src/utils/hygBinary.ts`) and renders it
- * as a single `Points` primitive with a custom shader.
+ * as a single instanced billboard-quad mesh with a custom shader.
  *
- *   • Real B-V colour (blue/white/yellow/orange/red) derived per star
- *     instead of a single Sun-like default.
+ *   • Gaia Sky B-V colour path (Ballesteros → xyY → XYZ → gamma RGB
+ *     plus default HSV saturation) derived per star instead of a
+ *     single Sun-like default.
  *   • **θ.1b (2026-04-20, revised 2026-04-21):** Gaia-Sky-style
  *     solid-angle vertex math, replacing the NASA-Eyes log-compressed
  *     curve + hard floors. Per-star `a_size` is a Gaia-Sky-style
  *     **pseudo-size** derived from apparent-magnitude → absolute-
  *     magnitude → sqrt(pseudoL) × 0.15 pc (NOT a physical radius —
  *     see src/lib/starPhysics.ts for source-verified semantics).
- *     `solidAngle = a_size / dist` drives both opacity (via
- *     `lint_smoothstep` mapping) and pixel size (scaled by projection
- *     × viewport). Faint distant stars fade to invisibility like
- *     Gaia Sky does; there is no `[5, 50]` size floor or `0.05`
- *     alpha floor in this path.
+ *     `solidAngle = a_size / dist` drives opacity (via `lint_smoothstep`)
+ *     and world-space billboard size. Faint distant stars fade to
+ *     invisibility like Gaia Sky does; there is no `[5, 50]` size floor
+ *     or `0.05` alpha floor in this path.
  *   • **θ.1 (2026-04-20):** Gaia-Sky-style fragment kernel — baked
  *     radial-gaussian halo texture (`u_starTex`) + razor-thin
  *     additive white core via `smoothstep(0.0, 0.04, r)`. See
@@ -29,7 +29,7 @@
  *     simulation time — visible when exploring decades or centuries.
  *
  * Star positions are equatorial J2000 parsecs. The scene is ecliptic,
- * so the Points node is tilted by the J2000 obliquity (~23.4°) to keep
+ * so the billboard mesh is tilted by the J2000 obliquity (~23.4°) to keep
  * constellations in their expected places.
  */
 
@@ -53,11 +53,14 @@ import {
 import {
   computeMinQuadSolidAngle,
   computeViewportHeightScalar,
+  gaiaBvToRgb,
   LEN0,
+  saturateStarRgb,
   U_BRIGHTNESS_POWER_DEFAULT,
   U_MIN_QUAD_SOLID_ANGLE,
   U_OPACITY_LIMITS,
   U_SOLID_ANGLE_MAP,
+  U_STAR_BRIGHTNESS_DEFAULT,
 } from "../../lib/starfieldShaderMath";
 
 // 1 parsec expressed in the scene's unit system (matches the legacy
@@ -89,17 +92,18 @@ const MS_PER_JULIAN_YEAR = 365.25 * 86400 * 1000;
 //      to preserve fp32 precision on values in the 1e-10 band.
 //   5. Smoothstep-fades stars inside `LEN0` (θ.7 hero-star billboard
 //      takeover zone) and nulls the quad when alpha collapses.
-//   6. Converts the world-space quad size to `gl_PointSize` via
-//      `projectionMatrix[1][1] × u_viewportHeight / 2` (pixels per
-//      radian at unit distance).
+//   6. Builds a screen-facing view-space billboard quad with world
+//      size `solidAngle × dist × sizeFactor`, matching Gaia Sky's
+//      instanced-quad path and avoiding driver `gl_PointSize` caps.
 const vertexShader = /* glsl */ `
   #define PI 3.14159265359
   #define TO_DEG12 (180.0e12 / PI)
   #define TO_RAD12 (PI / 180.0e12)
 
+  attribute vec3 starPosition;
   attribute vec3 velocity;
-  attribute float ci;
   attribute float a_size;
+  attribute vec3 starColor;
 
   uniform float yearsSinceJ2000;
 
@@ -117,33 +121,15 @@ const vertexShader = /* glsl */ `
   uniform float u_sizeFactor;
   uniform float u_alphaFactor;
 
-  // Viewport height in pixels (× renderer DPR). Used with
-  // projectionMatrix[1][1] to convert solidAngle → pixels.
-  uniform float u_viewportHeight;
-
   // Boundary fade control (θ.7 hero-star approach takes over inside LEN0).
   uniform float u_LEN0;
 
-  // R1 #1B (Wave α): HDR-linear multiplier baked into vColor so bright
-  // catalogue stars cross the selective-bloom threshold (1.0 in
-  // luminanceThreshold). Tier defaults via qualityProfile.vfxHdrGain.
-  uniform float vfxHdrGain;
+  // Gaia Sky u_alphaSizeBr.z star-brightness multiplier.
+  uniform float u_starBrightness;
 
   varying vec3 vColor;
   varying float vBrightness;
-
-  vec3 bvToRGB(float bv) {
-    float t = clamp((bv + 0.4) / (2.0 + 0.4), 0.0, 1.0);
-    if (t < 0.25) {
-      float r = 0.6 + t * 1.6;
-      float g = 0.6 + t * 1.6;
-      return vec3(r, g, 1.0);
-    } else if (t < 0.5) {
-      return vec3(1.0, 1.0 - (t - 0.25) * 0.8, 1.0 - (t - 0.25) * 1.6);
-    } else {
-      return vec3(1.0, 0.8 - (t - 0.5) * 1.2, 0.2 - (t - 0.5) * 0.4);
-    }
-  }
+  varying vec2 vUv;
 
   // Gaia Sky lib/math.glsl lint() — SMOOTHSTEP-based, NOT linear.
   float lint_ss(float x, float x0, float x1, float y0, float y1) {
@@ -158,9 +144,8 @@ const vertexShader = /* glsl */ `
 
   void main() {
     // Proper motion displacement (same as pre-θ.1b).
-    vec3 animatedPos = position + velocity * yearsSinceJ2000;
+    vec3 animatedPos = starPosition + velocity * yearsSinceJ2000;
     vec4 viewPosition = modelViewMatrix * vec4(animatedPos, 1.0);
-    gl_Position = projectionMatrix * viewPosition;
 
     float dist = length(viewPosition.xyz);
 
@@ -192,20 +177,20 @@ const vertexShader = /* glsl */ `
       solidAngle = 0.0;
     }
 
-    // 6. World-space → screen-space size conversion.
-    // pixelsPerRadian at unit projection = projectionMatrix[1][1] ×
-    // viewportHeight / 2. At a given distance, a billboard of world
-    // size quadSize = solidAngle × dist × sizeFactor subtends
-    // solidAngle × sizeFactor radians from the camera, and
-    // solidAngle × sizeFactor × pixelsPerRadian pixels on screen.
-    float pixelsPerRadian = projectionMatrix[1][1] * u_viewportHeight * 0.5;
-    gl_PointSize = solidAngle * u_sizeFactor * pixelsPerRadian;
+    // 6. Gaia-style billboard quad. The base geometry position.xy
+    // is [-0.5, 0.5], so quadSize is the full billboard width in
+    // view/world units. Projected pixels are then determined by the
+    // camera projection, without the WebGL GL_POINTS size cap.
+    float quadSize = solidAngle * dist * u_sizeFactor;
+    viewPosition.xy += position.xy * quadSize;
+    gl_Position = projectionMatrix * viewPosition;
 
     // vBrightness feeds the fragment's alpha multiplication.
     vBrightness = alpha;
-    // vColor carries B-V tint × HDR lift (so bright stars cross the
-    // Bloom luminanceThreshold = 1.0 pass — Wave α contract).
-    vColor = bvToRGB(ci) * vfxHdrGain;
+    // vColor mirrors Gaia Sky's a_color.rgb * u_alphaSizeBr.z.
+    // B-V conversion + default saturation are done CPU-side like Gaia.
+    vColor = starColor * u_starBrightness;
+    vUv = uv;
   }
 `;
 
@@ -220,9 +205,12 @@ const fragmentShader = /* glsl */ `
 
   varying vec3 vColor;
   varying float vBrightness;
+  varying vec2 vUv;
 
   void main() {
-    vec2 uv = gl_PointCoord;
+    if (vBrightness <= 0.0) discard;
+
+    vec2 uv = vUv;
     float profile = texture2D(u_starTex, uv).r;
     if (profile <= 0.0) discard;
 
@@ -230,8 +218,7 @@ const fragmentShader = /* glsl */ `
     float core = clamp(1.0 - smoothstep(0.0, 0.04, r), 0.0, 1.0);
 
     float alpha = vBrightness * profile;
-    vec3 rgb = (vColor + vec3(core * 2.0)) * alpha;
-    gl_FragColor = vec4(rgb, alpha);
+    gl_FragColor = clamp(alpha * vec4(vColor + vec3(core * 2.0), 1.0), 0.0, 1.0);
   }
 `;
 
@@ -357,19 +344,31 @@ function buildSizeAttribute(catalog: HygCatalogData): Float32Array {
   return sizes;
 }
 
+function buildColorAttribute(catalog: HygCatalogData): Float32Array {
+  const { colorIndices } = catalog;
+  const count = catalog.header.count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const rgb = saturateStarRgb(gaiaBvToRgb(colorIndices[i]));
+    colors[i * 3 + 0] = rgb[0];
+    colors[i * 3 + 1] = rgb[1];
+    colors[i * 3 + 2] = rgb[2];
+  }
+  return colors;
+}
+
 export const Starfield = () => {
   const qualityMode = useStore((state) => state.qualityMode);
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
-  const pointsRef = useRef<THREE.Points>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
 
   // Viewport + DPR read once per frame inside useFrame below. The
   // pre-θ.1b `useStarfieldParticleSize` helper baked `sqrt(max(w,h) *
-  // DPR) / 60` which was a NASA-Eyes-specific viewport scalar; θ.1b's
-  // solid-angle math needs the raw viewport height in pixels instead
-  // (the shader computes pixels-per-radian from projection ×
-  // viewportHeight).
+  // DPR) / 60` which was a NASA-Eyes-specific viewport scalar. θ.1b
+  // no longer uses that for star sizing; we still read raw backbuffer
+  // height to mirror Gaia Sky's resolution-adaptive `u_minQuadSolidAngle`.
   const gl = useThree((state) => state.gl);
   const size = useThree((state) => state.size);
 
@@ -403,11 +402,8 @@ export const Starfield = () => {
         // distribution render at visible pixel counts.
         u_sizeFactor: { value: 1.2e6 },
         u_alphaFactor: { value: 1.0 },
-        // Seeded below each frame.
-        u_viewportHeight: { value: 1.0 },
-        // Wave α HDR lift (kept: bright stars still need `vColor >
-        // 1` to trip the Bloom threshold in the composer).
-        vfxHdrGain: { value: 1.0 },
+        // Gaia Sky default `u_alphaSizeBr.z` star-brightness multiplier.
+        u_starBrightness: { value: U_STAR_BRIGHTNESS_DEFAULT },
         // θ.1 fragment halo texture — process-wide cached.
         u_starTex: { value: getStarSpriteTexture() },
       },
@@ -441,7 +437,7 @@ export const Starfield = () => {
   const geometry = useMemo(() => {
     if (!catalog) return null;
 
-    const { positions, colorIndices } = catalog;
+    const { positions } = catalog;
     const count = catalog.header.count;
 
     const scaledPositions = new Float32Array(count * 3);
@@ -457,17 +453,45 @@ export const Starfield = () => {
     // `a_size` carries the Gaia-Sky-style pseudo-size (scene units ×
     // STAR_SIZE_FACTOR). The NASA-Eyes-era `mag` attribute was retired
     // in the Codex θ.1b follow-up — the solid-angle path reads
-    // `a_size + ci + position` only.
+    // `a_size + starColor + position` only.
     const sizeArray = buildSizeAttribute(catalog);
+    const colorArray = buildColorAttribute(catalog);
 
-    const geom = new THREE.BufferGeometry();
+    const geom = new THREE.InstancedBufferGeometry();
     geom.setAttribute(
       "position",
-      new THREE.BufferAttribute(scaledPositions, 3)
+      new THREE.BufferAttribute(
+        new Float32Array([
+          -0.5, -0.5, 0.0, 0.5, -0.5, 0.0, -0.5, 0.5, 0.0, 0.5, 0.5, 0.0,
+        ]),
+        3
+      )
     );
-    geom.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-    geom.setAttribute("ci", new THREE.BufferAttribute(colorIndices, 1));
-    geom.setAttribute("a_size", new THREE.BufferAttribute(sizeArray, 1));
+    geom.setAttribute(
+      "uv",
+      new THREE.BufferAttribute(
+        new Float32Array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
+        2
+      )
+    );
+    geom.setIndex([0, 1, 2, 2, 1, 3]);
+    geom.instanceCount = count;
+    geom.setAttribute(
+      "starPosition",
+      new THREE.InstancedBufferAttribute(scaledPositions, 3)
+    );
+    geom.setAttribute(
+      "velocity",
+      new THREE.InstancedBufferAttribute(velocities, 3)
+    );
+    geom.setAttribute(
+      "starColor",
+      new THREE.InstancedBufferAttribute(colorArray, 3)
+    );
+    geom.setAttribute(
+      "a_size",
+      new THREE.InstancedBufferAttribute(sizeArray, 1)
+    );
 
     return geom;
   }, [catalog]);
@@ -490,27 +514,22 @@ export const Starfield = () => {
       size.height,
       gl.getPixelRatio()
     );
-    matUniforms.u_viewportHeight.value = vHeight;
-
     // Resolution-adaptive `u_minQuadSolidAngle` — mirrors
     // `StarSetQuadComponent.java:68` (validation finding 2026-04-20).
     // Floors faint stars at ~2-3 px regardless of backbuffer size;
     // keeps blue A-type dwarfs visible instead of fading to sub-pixel.
     matUniforms.u_minQuadSolidAngle.value = computeMinQuadSolidAngle(vHeight);
-
-    // Tier-keyed HDR gain (Wave α R1 #1B). L15 literal: routed through
-    // the memoised uniforms map.
-    matUniforms.vfxHdrGain.value = qualityProfile.vfxHdrGain;
   });
   /* eslint-enable react-hooks/immutability */
 
   if (!geometry) return null;
 
   return (
-    <points
-      ref={pointsRef}
+    <mesh
+      ref={meshRef}
       geometry={geometry}
       material={material}
+      frustumCulled={false}
       rotation={[(23.4 * Math.PI) / 180, 0, 0]}
       raycast={() => null}
       renderOrder={-2}

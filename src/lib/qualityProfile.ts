@@ -58,24 +58,17 @@ export interface ResolvedQualityProfile {
   bloomEnabled: boolean;
   bloomIntensityMultiplier: number;
   /**
-   * Multiplier applied to each starfield fragment's RGB output to lift
-   * bright catalogue stars above the selective-bloom `luminanceThreshold`
-   * (1.0) while leaving the faint tail below it. Landed in Wave α
-   * Commit 2 (R1 #1B) alongside the HDR pipeline contract.
+   * Legacy NASA-starfield RGB gain. The Gaia HYG path no longer uses
+   * this value: it mirrors Gaia Sky's clamped star fragment and fixed
+   * `u_alphaSizeBr.z` default instead.
    *
    * Tier defaults: ultra 4.0 / high 3.0 / balanced 2.5 / constrained 1.0
    * — constrained keeps 1.0 because `bloomEnabled: false` on that tier
-   * makes the gain cosmetic (faint stars in LDR range = no visible shift).
+   * makes the legacy gain cosmetic.
    * The earlier Wave α Commit 2 values (2.0 / 1.8 / 1.5 / 1.0) were
-   * calibrated for per-pixel threshold checks, but the Bloom pass
-   * downsamples through a 6-level mipmap pyramid and averages each
-   * bright sprite with its black neighbours — bright-star sprites
-   * crossed the per-pixel threshold but the pyramid levels the pass
-   * actually reads saw sub-threshold averages. The new gains push
-   * sprite-center luminance high enough that downsampled averages
-   * stay above `luminanceThreshold=1.0` through the mip levels that
-   * drive visible halo. Users can dial back via Display panel Bloom
-   * Intensity × / HDR Gain overrides.
+   * calibrated for the older per-pixel threshold checks. The current
+   * Gaia HYG renderer gets named-star halo weight from LightGlow/lens
+   * flare work, not from this selective-bloom gain.
    *
    * Commit 3 moves these values into the graphics resolver's
    * `PRESET_DEFAULTS`; this field stays on `ResolvedQualityProfile` as
