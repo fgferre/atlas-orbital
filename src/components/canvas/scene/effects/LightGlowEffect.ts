@@ -11,9 +11,9 @@ import { getLightGlowSprite } from "./lightGlowSprite";
  *
  * **Fragment-stage Archimedean spiral sampling.** Gaia Sky's vertex
  * shader computes per-light `v_lums[N]` via an Archimedean spiral
- * around each `u_lightPositions[li]` (30 samples in internal default,
- * `config.yaml samples: 10` for user tier), then passes the array to
- * the fragment via a varying. The computation is uniform-constant per
+ * around each `u_lightPositions[li]` (runtime-forced to 1 sample by
+ * `MainPostProcessor.updateGlow()`), then passes the array to the
+ * fragment via a varying. The computation is uniform-constant per
  * frame, so moving it to fragment-stage is a correctness-preserving
  * re-arrangement (same math, same output). Fragment-stage fits the
  * pmndrs `Effect` base class, which does not expose a custom
@@ -37,7 +37,8 @@ import { getLightGlowSprite } from "./lightGlowSprite";
  * default `bloom.intensity = 0` made the saturate irrelevant there).
  *
  * Source-literal defaults (verified 2026-04-21 against /tmp/gaiasky):
- *   - `u_nSamples = 10`  (config.yaml postprocess.lightGlow.samples)
+ *   - `u_nSamples = 1`   (MainPostProcessor.updateGlow() forces the
+ *     runtime LightGlow sample count to 1 after construction)
  *   - `u_textureScale = 2.22 × (0.055/0.06) × 0.2 = 0.407`
  *     (MainPostProcessor.java:552 getGlowTextureScale with
  *     ss.brightness=2.22, ss.glowFactor=0.055, non-cubemap path)
@@ -49,7 +50,7 @@ import { getLightGlowSprite } from "./lightGlowSprite";
  *   - `u_backbufferScale = 1.0` (non-OpenXR path).
  */
 
-export const LIGHT_GLOW_DEFAULT_SAMPLES = 10;
+export const LIGHT_GLOW_DEFAULT_SAMPLES = 1;
 export const LIGHT_GLOW_DEFAULT_TEXTURE_SCALE = 2.22 * (0.055 / 0.06) * 0.2;
 export const LIGHT_GLOW_DEFAULT_SPIRAL_SCALE = 2.22 * 3.0 * 0.5e-4;
 export const LIGHT_GLOW_DEFAULT_BACKBUFFER_SCALE = 1.0;
@@ -74,9 +75,9 @@ export const LIGHT_GLOW_POLAR_TIME_MULS: Readonly<[number, number, number]> = [
  * rendering 1:1.
  *
  * pmndrs `Effect` convention:
- *   - `mainImage(uv, inputColor, outputColor)` is the hook.
- *   - `uv` is the current fragment's UV in [0, 1].
  *   - `inputColor` is the scene's colour at this UV.
+ *   - `mainImage(inputColor, uv, outputColor)` is the hook.
+ *   - `uv` is the current fragment's UV in [0, 1].
  *   - `outputColor` is what we write; pmndrs blends it per `blendFunction`.
  *   - Samplers we declare are auto-bound.
  *   - `resolution` uniform is auto-provided.

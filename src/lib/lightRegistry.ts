@@ -2,20 +2,16 @@
  * CPU-side light registry for the Gaia Sky LightGlow port (θ.3).
  *
  * Gaia Sky's `LightPositionUpdater.run()` walks the render list once per
- * frame, picks the first N stars in the proximity order, and uploads
- * their normalised screen positions, solid angles, and RGB colours to
- * the LightGlow post-process. Atlas mirrors that here with two small
- * adaptations:
+ * frame, picks the first N billboard stars in the proximity order, and
+ * uploads their normalised screen positions, solid angles, and RGB
+ * colours to the LightGlow post-process. Atlas mirrors that here with
+ * one adaptation:
  *
- *   1. **The Sun is always light #0.** In the atlas heliocentric
- *      scene the Sun sits at world origin; it's visually the most
- *      important light so we guarantee its slot even when other stars
- *      are closer to the view axis.
- *   2. **HYG star selection uses pseudo-size / distance** (Gaia's
- *      `solidAngleApparent`) rather than proximity list order, since
- *      atlas doesn't maintain a frame-by-frame proximity sort in the
- *      first place. Picks the top-(N − 1) stars in the camera
- *      frustum by clamped solid angle.
+ *   **HYG star selection uses pseudo-size / distance** (Gaia's
+ *   `solidAngleApparent`) rather than proximity list order, since
+ *   atlas doesn't maintain a frame-by-frame proximity sort in the
+ *   first place. Picks the top-N stars in the camera frustum by
+ *   clamped solid angle.
  *
  * `MAX_LIGHTS = 8` matches the `#define N 8` hardcoded in
  * `lightglow.vert.glsl` and `lightglow.frag.glsl`.
@@ -28,7 +24,7 @@
  *
  * The registry output format matches Gaia's GlowFilter uniforms:
  *   positions     : Float32Array(N × 2)  — NDC [0, 1]
- *   solidAngles   : Float32Array(N)      — radians, already clamped
+ *   solidAngles   : Float32Array(N)      — apparent view angle radians
  *   colors        : Float32Array(N × 3)  — linear RGB ∈ [0, 1]
  *   nLights       : number               — count of ACTIVE lights this frame
  */
@@ -56,9 +52,6 @@ export const MAX_LIGHTS = 8;
  * projection step.
  */
 export const DISTANCE_SCALE = 206_265_000.0;
-
-/** Sun world position in the heliocentric scene. */
-export const SUN_WORLD_POSITION: Readonly<[number, number, number]> = [0, 0, 0];
 
 /**
  * Default star-brightness multiplier fed into `solidAngleApparent`.
@@ -89,30 +82,6 @@ export const computeFovFactor = (fovDeg: number): number => {
 };
 
 /**
- * Nominal Sun `solidAngleApparent` seed — Gaia Sky computes this
- * dynamically from `body.solidAngle × starBrightness / fovFactor`,
- * which for the Sun at solar-system distances sits in the 1e-2 rad
- * band. The LightGlow shader then applies its own
- * `min(0.0001, viewAngle) × 5e5 → min(1.6, …)` pair, so ANY input
- * ≥ 3.2e-6 rad saturates the halo-size cap. We pick 1e-2 to match
- * Gaia's runtime ballpark and guarantee the Sun's halo renders at
- * full cap size regardless of camera zoom.
- */
-export const SUN_NOMINAL_SOLID_ANGLE_APPARENT = 1e-2;
-
-/**
- * Sun's display colour — warm G2V main sequence via the Gaia BVtoRGB
- * path with saturation lift. The B-V of the Sun is ~0.656; running
- * it through `gaiaBvToRgb + saturateStarRgb` gives a slightly-orange
- * cream that matches the Gaia Sky Sun rendering (and, separately,
- * the `ProceduralSun3D` sphere's own emissive tint).
- */
-export const SUN_RGB: Readonly<[number, number, number]> = (() => {
-  const rgb = saturateStarRgb(gaiaBvToRgb(0.656));
-  return [rgb[0], rgb[1], rgb[2]] as const;
-})();
-
-/**
  * Per-tier `nLights` — matches `Settings.java:672` (`getGlowNLights`)
  * directly. Keeps atlas within the hardcoded shader `#define N 8`
  * budget regardless of tier.
@@ -130,7 +99,7 @@ export const LIGHT_GLOW_N_LIGHTS_BY_TIER: Readonly<
 export interface LightRegistryOutput {
   /** [x0, y0, x1, y1, …] in NDC [0,1]. Length = MAX_LIGHTS × 2. */
   positions: Float32Array;
-  /** Clamped solid angle (rad) per slot. Length = MAX_LIGHTS. */
+  /** Apparent view angle (rad) per slot. Length = MAX_LIGHTS. */
   solidAngles: Float32Array;
   /** Linear RGB per slot. Length = MAX_LIGHTS × 3. */
   colors: Float32Array;
@@ -147,8 +116,8 @@ export const makeEmptyRegistry = (): LightRegistryOutput => ({
 
 /**
  * Project a world-space point into NDC [0, 1] via the supplied camera.
- * Returns `null` when the point is behind the near plane or outside
- * the frustum — those lights never contribute glow.
+ * Returns `null` when the point is outside the Three.js clip volume
+ * (NDC x/y/z each in [-1, 1]) — those lights never contribute glow.
  *
  * Three.js's `Vector3.project(camera)` outputs NDC [-1, 1]; we rescale
  * to [0, 1] to match Gaia's `auxV.x / w` convention from
@@ -168,8 +137,8 @@ export const projectToNdc01 = (
   projectionTarget.project(camera);
   const { x, y, z } = projectionTarget;
   // Gaia skips lights outside the frustum via the camera angle gate;
-  // we use the standard NDC bound instead (±1 on x/y, 0..1 on z).
-  if (z < 0 || z > 1 || x < -1 || x > 1 || y < -1 || y > 1) {
+  // we use Three.js's standard clip-space bounds instead.
+  if (z < -1 || z > 1 || x < -1 || x > 1 || y < -1 || y > 1) {
     return null;
   }
   return [(x + 1) * 0.5, (y + 1) * 0.5];
@@ -315,12 +284,6 @@ export interface UpdateLightRegistryParams {
    */
   nSlots: number;
   /**
-   * Whether to include the Sun. Pass `false` when the LightGlow
-   * effect is disabled for the Sun (e.g. during a dedicated zoom
-   * state).
-   */
-  includeSun: boolean;
-  /**
    * Gaia's `fovFactor = tan(fov/2) / tan(20°)` (AbstractCamera.java:148).
    * Used to divide `solidAngleApparent` per `GraphUpdater.java:182`.
    */
@@ -336,7 +299,7 @@ export interface UpdateLightRegistryParams {
 }
 
 /**
- * Populate `output` with Sun + top HYG stars visible from the camera.
+ * Populate `output` with top HYG stars visible from the camera.
  * Lights outside the frustum are silently skipped (no slot wasted).
  * When fewer than `nSlots` lights are visible, unused slots keep
  * their previous values but `output.nLights` reflects the actual
@@ -350,7 +313,6 @@ export const updateLightRegistry = (
     camera,
     backBufferHeight,
     nSlots,
-    includeSun,
     fovFactor,
     obliquityMatrix,
     output,
@@ -375,22 +337,9 @@ export const updateLightRegistry = (
     written += 1;
   };
 
-  // 1) Sun at world origin, always slot 0 when enabled and visible.
-  if (includeSun && slots > 0) {
-    const sunNdc = projectToNdc01(SUN_WORLD_POSITION, camera);
-    if (sunNdc) {
-      writeSlot(
-        sunNdc[0],
-        sunNdc[1],
-        SUN_NOMINAL_SOLID_ANGLE_APPARENT,
-        SUN_RGB[0],
-        SUN_RGB[1],
-        SUN_RGB[2]
-      );
-    }
-  }
-
-  // 2) Top-(remaining) HYG stars by clamped solid angle.
+  // Top-N HYG stars by clamped solid angle. Gaia's LightPositionUpdater
+  // is attached to the BILLBOARD_STAR render group; Atlas's local Sun
+  // meshes/sprites are intentionally not injected as LightGlow lights.
   const remaining = slots - written;
   if (catalog && remaining > 0) {
     // Pick the top-K candidates. Oversample by a small factor so that

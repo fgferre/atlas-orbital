@@ -3,23 +3,44 @@ import * as THREE from "three";
 /**
  * Baked glow sprite for the Gaia Sky LightGlow port (θ.3).
  *
- * Gaia Sky ships a PNG called "star-tex-01.png" that the LightGlow
- * fragment samples via `u_texture1`. The texture encodes the halo
- * radial profile — a soft, slightly-spiked gaussian. Rather than
- * distribute a binary asset we bake an equivalent texture at startup
- * using a procedural gaussian with a faint radial star pattern. The
- * visual match is close enough for parity; we can swap in the actual
- * Gaia Sky asset later if needed (the shader reads the luma channel
- * only).
+ * Gaia Sky's `u_texture1` for LightGlow comes from
+ * `Settings.scene.star.getGlowTexture()` → `getStarTexture(textureIndexLens)`
+ * → `$GS_DATA/tex/base/star-tex-{XX}-*`. config.yaml ships
+ * `textureIndexLens: 3` which (per the config comment) is the
+ * "horizontal and vertical spikes" asset.
+ *
+ * **The actual Gaia asset is not vendored in this repo** (it lives in
+ * a separate `$GS_DATA` package under Gaia Sky's licensing). Without
+ * the real texture we keep a CONSERVATIVE substitute: a pure radial
+ * gaussian. An earlier attempt to bake procedural cross-spikes
+ * (σ_long = 34 of 128 px) produced visible hard cartesian lines
+ * radiating from every bright star — the actual Gaia asset has
+ * extremely subtle spikes that only become visible at near-ceiling
+ * halo intensities, not the wide strong lobes a procedural
+ * approximation generates.
+ *
+ * Net behaviour: our halo shape is closer to `star-tex-04-*` (radial
+ * profile, which is Gaia's default for the regular billboard `u_texture0`
+ * path). This is fine as a parity target because:
+ *   1. The LightGlow polar-mask modulation already adds soft angular
+ *      variance to the radial disc, which breaks the perfect-circle
+ *      look and gives the "alive" animation.
+ *   2. Both Gaia textures (03 spikes and 04 radial) share the same
+ *      soft gaussian core — the spikes are an overlay on top. Without
+ *      the overlay we lose only the cross character, not the halo.
+ *   3. Shipping the real asset is a one-line swap later if licensing
+ *      allows.
  *
  * Texture characteristics:
  *   - 128 × 128 px (larger than θ.1's 64² because the LightGlow halo
- *     covers a meaningfully bigger footprint).
- *   - R8 single-channel. The LightGlow fragment reads `.r` via
- *     `starImage(tc).rgb`, but in the single-channel case, `brightness`
- *     reduces to `dot(rrr, luma_weights) = r` which is what we want.
- *   - Center-weighted gaussian, σ = 20 px so the falloff reaches
- *     ≈5 % at the edge (Gaia's asset has similar extent).
+ *     covers a meaningfully bigger footprint when the halo-size cap
+ *     saturates).
+ *   - RGBA with identical RGB channels so `brightness = dot(rgb, luma)`
+ *     reduces to the red channel value. pmndrs `EffectPass` requires
+ *     RGBA sampling on some WebGL paths, so single-channel RED is
+ *     out.
+ *   - Center-weighted gaussian, σ = 20 px (~16 % of the texture
+ *     extent) so the halo falls off to near-zero at the corners.
  */
 
 const GLOW_SPRITE_SIZE = 128;
@@ -30,8 +51,6 @@ let glowSpriteCache: THREE.DataTexture | null = null;
 function bakeGlowSprite(): THREE.DataTexture {
   const size = GLOW_SPRITE_SIZE;
   const sigma = GLOW_SIGMA;
-  // RGB channels identical (single-channel equivalence — pmndrs
-  // EffectPass requires RGBA sampling on some WebGL paths).
   const data = new Uint8Array(size * size * 4);
   const center = (size - 1) / 2;
   const twoSigmaSq = 2 * sigma * sigma;

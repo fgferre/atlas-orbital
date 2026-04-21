@@ -31,7 +31,7 @@ import {
  * `tasks/phase-gaia-sky.md §5.1`).
  *
  * Per-frame responsibilities:
- *   - Walk the HYG catalog + Sun position through
+ *   - Walk the HYG billboard-star catalog through
  *     `updateLightRegistry()` into a single Float32Array buffer.
  *   - Push the buffer into the effect's uniforms.
  *   - Advance `u_timeSeconds` for the polar-mask animation.
@@ -168,7 +168,6 @@ export function LightGlowSlot(): JSX.Element | null {
       camera,
       backBufferHeight,
       nSlots,
-      includeSun: true,
       fovFactor,
       obliquityMatrix,
       output: registry,

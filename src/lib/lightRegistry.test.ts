@@ -11,9 +11,6 @@ import {
   MAX_LIGHTS,
   projectToNdc01,
   STAR_BRIGHTNESS_DEFAULT,
-  SUN_NOMINAL_SOLID_ANGLE_APPARENT,
-  SUN_RGB,
-  SUN_WORLD_POSITION,
   updateLightRegistry,
 } from "./lightRegistry";
 import type { HygCatalogData } from "./starfield";
@@ -103,21 +100,6 @@ describe("lightRegistry — Gaia Sky LightPositionUpdater port", () => {
     expect(LIGHT_GLOW_N_LIGHTS_BY_TIER.ultra).toBe(8);
   });
 
-  it("Sun fallback RGB is finite and saturation-lifted (not pure white)", () => {
-    expect(SUN_RGB.every((c) => Number.isFinite(c) && c >= 0 && c <= 1)).toBe(
-      true
-    );
-    // Warm cream — green + blue channels should be lower than red.
-    expect(SUN_RGB[0]).toBeGreaterThan(SUN_RGB[2]);
-  });
-
-  it("Sun solidAngleApparent saturates the LightGlow halo-size cap", () => {
-    // LightGlow fragment clamps viewAngle to [0, 1e-4] then multiplies
-    // by 5e5. Any input ≥ 3.2e-6 rad hits the halo-size cap (1.6).
-    // Sun default of 1e-2 is well above this threshold.
-    expect(SUN_NOMINAL_SOLID_ANGLE_APPARENT).toBeGreaterThanOrEqual(3.2e-6);
-  });
-
   it("STAR_BRIGHTNESS_DEFAULT matches config.yaml scene.star.brightness (2.22)", () => {
     expect(STAR_BRIGHTNESS_DEFAULT).toBe(2.22);
   });
@@ -135,7 +117,7 @@ describe("lightRegistry — Gaia Sky LightPositionUpdater port", () => {
 describe("projectToNdc01 — Gaia LightPositionUpdater NDC math", () => {
   it("projects world origin into the center of the viewport (0.5, 0.5)", () => {
     const cam = makeCamera();
-    const ndc = projectToNdc01(SUN_WORLD_POSITION, cam);
+    const ndc = projectToNdc01([0, 0, 0], cam);
     expect(ndc).not.toBeNull();
     expect(ndc![0]).toBeCloseTo(0.5, 5);
     expect(ndc![1]).toBeCloseTo(0.5, 5);
@@ -147,6 +129,19 @@ describe("projectToNdc01 — Gaia LightPositionUpdater NDC math", () => {
     const behind: [number, number, number] = [0, 0, DISTANCE_SCALE * 10];
     const ndc = projectToNdc01(behind, cam);
     expect(ndc).toBeNull();
+  });
+
+  it("keeps visible points with negative NDC z inside the near half of the frustum", () => {
+    const cam = new THREE.PerspectiveCamera(60, 16 / 9, 1, 100);
+    cam.position.set(0, 0, 0);
+    cam.lookAt(0, 0, -1);
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+
+    const ndc = projectToNdc01([0, 0, -1.5], cam);
+    expect(ndc).not.toBeNull();
+    expect(ndc![0]).toBeCloseTo(0.5, 5);
+    expect(ndc![1]).toBeCloseTo(0.5, 5);
   });
 
   it("returns null for points outside the NDC clip volume", () => {
@@ -179,8 +174,8 @@ describe("clampSolidAngle — resolution-adaptive floor, 3e-8 ceiling", () => {
   });
 });
 
-describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
-  it("populates slot 0 with the Sun when includeSun is true", () => {
+describe("updateLightRegistry — top-N HYG ranking", () => {
+  it("emits no lights without a HYG billboard-star catalog", () => {
     const output = makeEmptyRegistry();
     const cam = makeCamera();
     updateLightRegistry({
@@ -188,30 +183,6 @@ describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 4,
-      includeSun: true,
-      fovFactor: 1,
-      obliquityMatrix: null,
-      output,
-    });
-    expect(output.nLights).toBe(1);
-    expect(output.positions[0]).toBeCloseTo(0.5, 5);
-    expect(output.positions[1]).toBeCloseTo(0.5, 5);
-    // Float32Array quantizes — compare within fp32 precision.
-    expect(output.solidAngles[0]).toBeCloseTo(
-      SUN_NOMINAL_SOLID_ANGLE_APPARENT,
-      8
-    );
-  });
-
-  it("omits the Sun when includeSun is false", () => {
-    const output = makeEmptyRegistry();
-    const cam = makeCamera();
-    updateLightRegistry({
-      catalog: null,
-      camera: cam,
-      backBufferHeight: 1440,
-      nSlots: 4,
-      includeSun: false,
       fovFactor: 1,
       obliquityMatrix: null,
       output,
@@ -240,7 +211,6 @@ describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
-      includeSun: false,
       fovFactor: 1,
       obliquityMatrix: null,
       output,
@@ -266,7 +236,6 @@ describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
-      includeSun: false,
       fovFactor: 1,
       obliquityMatrix: null,
       output,
@@ -288,7 +257,6 @@ describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
-      includeSun: false,
       fovFactor: 1,
       obliquityMatrix: null,
       output,
@@ -304,7 +272,6 @@ describe("updateLightRegistry — Sun-first + top-N HYG ranking", () => {
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 0,
-      includeSun: true,
       fovFactor: 1,
       obliquityMatrix: null,
       output,

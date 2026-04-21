@@ -535,9 +535,9 @@ Host defaults from `StarSetQuadComponent.java:46`:
     for stricter parity, a future polish could download the actual
     asset and ship it under `public/textures/`. Note in θ.1b
     commit message.
-  - LightGlow texture asset: `textureIndexLens = 1` →
-    `tex/base/star-tex-01.{jpg,png}`. θ.3 references this
-    separately.
+  - LightGlow texture asset: `textureIndexLens = 3` →
+    `tex/base/star-tex-03.{jpg,png}` (horizontal + vertical spikes).
+    θ.3 references this separately.
 - Boundary fade `LEN0 = 20000 / DISTANCE_SCALE` (scale to our units)
   fades stars out when camera gets within that distance (θ.7 hero-
   star approach takes over).
@@ -781,7 +781,8 @@ halo breathes.
   shader).
 - `assets/conf/config.yaml` — `lightGlow.active: true`,
   `samples: 10`, `scene.star.brightness: 2.22`, `star.glowFactor:
-0.055`, `star.pointSize: 3.0`.
+0.055`, `star.pointSize: 3.0`; runtime `MainPostProcessor.updateGlow()`
+  overrides `LightGlow.setNSamples(1)`.
 - `core/src/gaiasky/util/Settings.java:672` — `getGlowNLights()`
   maps quality tier → (low 4 / normal 5 / high 6 / ultra 8).
 
@@ -844,12 +845,15 @@ pass buffer, to work at all.)
   uniform-constant per frame, so vertex-stage vs fragment-stage
   produces identical output; pmndrs `Effect` does not expose a
   vertex shader slot for full-screen passes).
-- Light registry: `src/lib/lightRegistry.ts` walks the HYG catalog +
-  Sun origin each frame, projects to NDC [0, 1] via
+- Light registry: `src/lib/lightRegistry.ts` walks the HYG
+  billboard-star catalog each frame, projects to NDC [0, 1] via
   `camera.project()`, and writes positions / solidAngleApparent /
-  RGB into packed Float32Arrays. Sun is always slot 0 when visible;
-  remaining slots filled with top-N HYG by clamped solid angle.
-  Selection tier matches Gaia (4/5/6/8 for low/normal/high/ultra).
+  RGB into packed Float32Arrays. Gaia Sky attaches
+  `LightPositionUpdater` to the `BILLBOARD_STAR` render group; Atlas
+  therefore does not inject the local Sun mesh/procedural renderer as
+  a LightGlow light. Slots are filled with top-N HYG by clamped solid
+  angle. Selection tier matches Gaia (4/5/6/8 for
+  low/normal/high/ultra).
 - **Drift caught during self-check (fixed pre-ship):** initial
   implementation fed the post-3e-8-clamp solid angle to
   `u_lightViewAngles[]`. Gaia uses `body.solidAngleApparent`, which
@@ -858,9 +862,16 @@ pass buffer, to work at all.)
   wrong value, the shader's `min(0.0001, viewAngle) × 5.0e5`
   saturation math produced halos ≈ 0.6 % of the max cap (3e-8 ×
   5e5 = 0.015 vs the shader's 1.6 ceiling). Fixed by emitting
-  `rawSolidAngle × STAR_BRIGHTNESS_DEFAULT` from the registry; the
-  shader's own clamps then produce full-cap halos for every
-  bright star / Sun — matching Gaia.
+- `rawSolidAngle × STAR_BRIGHTNESS_DEFAULT / fovFactor` from the
+  registry; the shader's own clamps then produce full-cap halos for
+  bright billboard stars — matching Gaia.
+- **Drift caught after visual review (fixed 2026-04-21):** an Atlas
+  adaptation injected the local Sun as LightGlow slot 0 with a fixed
+  `solidAngleApparent = 1e-2`, making the solar halo saturate at full
+  size regardless of camera distance and stacking it on top of
+  `ProceduralSun3D` / `SunScreenFlare`. Gaia Sky's LightGlow updater
+  is attached to `BILLBOARD_STAR`, so the local solar renderer is not
+  force-registered into this post effect. Removed the Sun slot.
 - **HDR preservation.** Gaia's literal final step is
   `fragColor.rgb = saturate(effectColor + scene.rgb)`; we emit only
   the `effectColor` and let the pmndrs composer ADD-blend it via
@@ -868,15 +879,22 @@ pass buffer, to work at all.)
   never fires in their default config (Bloom off) but would clip
   our HDR Bloom downstream if left in. Zero visual change vs Gaia
   in typical views.
-- Glow sprite: procedural gaussian in
+- Glow sprite: procedural radial + cross-spike substitute in
   `src/components/canvas/scene/effects/lightGlowSprite.ts`
-  (128 × 128, σ = 20). Swaps 1:1 for Gaia's `star-tex-01.png`
-  without distributing a binary asset. Luma-only sampling means
-  the R/G/B channels can be identical.
-- Executable math mirror: `lightGlowMath.ts` + 19 test cases pin
+  (128 × 128, σ = 20, horizontal/vertical lobes). Substitutes Gaia's
+  `star-tex-03` without distributing a binary asset. Luma-only
+  sampling means the R/G/B channels can be identical.
+- Executable math mirror: `lightGlowMath.ts` + tests pin
   polar-mask frequencies, time multipliers, minVal floor, halo-
   size formula, Archimedean sample curve — a safety net against
   future silent drift.
+- **Visual drift caught after screenshot review (fixed 2026-04-21):**
+  the straight horizontal/vertical lines apparently "from the Sun"
+  were not LightGlow or the procedural Sun. They were Atlas'
+  `EclipticGrid` axes (`axisX`/`axisZ`) crossing the world origin.
+  Gaia Sky's default `config.yaml` has `Ecliptic: false` and
+  `RecursiveGrid: false`, so Atlas now keeps the ecliptic guide as a
+  user toggle but defaults it off.
 - Reduced-motion gate: `<LightGlowSlot>` returns `null` when
   `state.accessibility.reducedMotion === true`, so the effect is
   never compiled into the composer's program. No fragment cost +

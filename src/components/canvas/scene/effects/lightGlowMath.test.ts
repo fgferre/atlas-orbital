@@ -9,14 +9,18 @@ import {
   LIGHT_GLOW_POLAR_MASK_MIN_VAL,
   LIGHT_GLOW_POLAR_TIME_MULS,
 } from "./LightGlowEffect";
+import { getLightGlowSprite, LIGHT_GLOW_SPRITE_SIZE } from "./lightGlowSprite";
 
 const approxEq = (actual: number, expected: number, tol = 1e-6) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
 };
 
 describe("LightGlow constants — pinned to Gaia Sky source", () => {
-  it("samples default equals config.yaml postprocess.lightGlow.samples (10)", () => {
-    expect(LIGHT_GLOW_DEFAULT_SAMPLES).toBe(10);
+  it("samples default matches Gaia Sky runtime updateGlow() override (1)", () => {
+    // config.yaml declares 10, but MainPostProcessor.updateGlow()
+    // immediately sets LightGlow.setNSamples(1) and writes the same
+    // value back to Settings.settings.postprocess.lightGlow.samples.
+    expect(LIGHT_GLOW_DEFAULT_SAMPLES).toBe(1);
   });
 
   it("polar mask frequencies match lightglow.frag.glsl:50-52 literals (12, 37, 59)", () => {
@@ -136,5 +140,41 @@ describe("archimedesSpiralSamples — fx/fy parametric curve", () => {
       const cur = Math.sqrt(samples[i].fxVal ** 2 + samples[i].fyVal ** 2);
       expect(cur).toBeGreaterThanOrEqual(prev - 1e-9);
     }
+  });
+});
+
+describe("LightGlow sprite — conservative radial gaussian", () => {
+  const sampleRed = (x: number, y: number): number => {
+    const tex = getLightGlowSprite();
+    const data = tex.image.data as Uint8Array;
+    return data[(y * LIGHT_GLOW_SPRITE_SIZE + x) * 4];
+  };
+
+  it("peaks at the centre and falls off monotonically along the axes", () => {
+    const c = Math.floor(LIGHT_GLOW_SPRITE_SIZE / 2);
+    // Radial profile: centre brighter than any offset.
+    const centerVal = sampleRed(c, c);
+    const r10 = sampleRed(c + 10, c);
+    const r20 = sampleRed(c + 20, c);
+    const r40 = sampleRed(c + 40, c);
+    expect(centerVal).toBeGreaterThan(r10);
+    expect(r10).toBeGreaterThan(r20);
+    expect(r20).toBeGreaterThan(r40);
+  });
+
+  it("is radially symmetric — horizontal offset equals diagonal+vertical at the same Euclidean radius", () => {
+    // Pure gaussian is a function of r² only; cross-axis and diagonal
+    // samples at the same distance must match (within integer
+    // quantization). Protects against accidental re-introduction of
+    // procedural spike lobes (which the Gaia `star-tex-03-*` asset
+    // does NOT have in this conservative substitute).
+    const c = Math.floor(LIGHT_GLOW_SPRITE_SIZE / 2);
+    const radius = 20;
+    const horizontal = sampleRed(c + radius, c);
+    const diagonalHalfRadius = sampleRed(
+      c + Math.round(radius / Math.SQRT2),
+      c + Math.round(radius / Math.SQRT2)
+    );
+    expect(Math.abs(horizontal - diagonalHalfRadius)).toBeLessThanOrEqual(2);
   });
 });
