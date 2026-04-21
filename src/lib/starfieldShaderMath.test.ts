@@ -18,6 +18,7 @@ import {
 import {
   absoluteMagnitudeToPseudoSize,
   apparentToAbsMag,
+  GAIA_PSEUDO_SIZE_CEILING_PC,
   GAIA_PSEUDO_SIZE_COEFFICIENT_PC,
   pseudoSizeFromApparentMag,
   STAR_SIZE_FACTOR,
@@ -460,11 +461,21 @@ describe("absoluteMagnitudeToPseudoSize — Gaia Sky AstroUtils port", () => {
     expect(absoluteMagnitudeToPseudoSize(-Infinity)).toBe(0);
   });
 
-  it("clamps at the Gaia Sky 1e10 internal-unit ceiling", () => {
-    // absMag very negative → pseudoL explodes → sqrt × 0.15 might
-    // exceed 1e10 pc. Gaia Sky caps at 1e10 internal units; we mirror
-    // the `min(..., 1e10)` literal for 1:1 parity.
-    const result = absoluteMagnitudeToPseudoSize(-60);
-    expect(result).toBeLessThanOrEqual(1e10);
+  it("clamps at the Gaia Sky ceiling (1e10 internal u ≈ 324.08 pc)", () => {
+    // Gaia Sky caps at 1e10 internal units — in parsec-space that's
+    // ≈324.08 pc (Codex 2026-04-21 finding: the earlier ship clamped
+    // at 1e10 *pc* which is ~8 orders of magnitude too high). Needs
+    // absMag < ~-17 to fire (brighter than any real HYG star), but
+    // pinned for strict 1:1 parity.
+    // Tolerance ~0.01 pc accounts for PC_TO_M float-multiplication
+    // precision (underlying constant 1e10 / (3.0857e16 × 1e-9)).
+    approxEq(GAIA_PSEUDO_SIZE_CEILING_PC, 324.08, 0.1);
+    expect(absoluteMagnitudeToPseudoSize(-60)).toBe(
+      GAIA_PSEUDO_SIZE_CEILING_PC
+    );
+    // Normal-brightness stars stay well below the ceiling.
+    expect(absoluteMagnitudeToPseudoSize(-5.71)).toBeLessThan(
+      GAIA_PSEUDO_SIZE_CEILING_PC
+    );
   });
 });

@@ -56,6 +56,23 @@ export const STAR_SIZE_FACTOR = 1.31526e-6;
 export const GAIA_PSEUDO_SIZE_COEFFICIENT_PC = 0.15;
 
 /**
+ * Gaia Sky's pseudo-size ceiling, expressed in parsecs. Java source:
+ * `FastMath.min(Math.pow(pseudoL, 0.5) * sizeFactor, 1e10)` — the
+ * `1e10` literal is in Gaia internal units (post `sizeFactor` multiply,
+ * where `sizeFactor = PC_TO_M × ORIGINAL_M_TO_U × 0.15`). Converting
+ * back to parsecs:
+ *   1e10 internal_u / (PC_TO_M × ORIGINAL_M_TO_U)
+ *   = 1e10 / (3.0857e16 × 1e-9)
+ *   = 324.0787... pc
+ *
+ * In practice this clamp only fires for absolute magnitudes more
+ * negative than ≈ -17 (brighter than any real HYG star), but the
+ * literal matters for strict 1:1 parity — flagged by Codex audit
+ * 2026-04-21.
+ */
+export const GAIA_PSEUDO_SIZE_CEILING_PC = 1e10 / (3.0857e16 * 1e-9);
+
+/**
  * Distance modulus — convert apparent magnitude to absolute magnitude
  * given heliocentric distance in parsecs.
  *   absMag = apparentMag − 5 · log10(distPc / 10)
@@ -111,12 +128,10 @@ export const absoluteMagnitudeToPseudoSize = (absMag: number): number => {
   if (!Number.isFinite(absMag)) return 0;
   const pseudoL = Math.pow(10, -0.4 * absMag);
   const sizePc = Math.sqrt(pseudoL) * GAIA_PSEUDO_SIZE_COEFFICIENT_PC;
-  // Gaia Sky clamps at 1e10 internal units (post sizeFactor multiply).
-  // In parsec-space with the 0.15 coefficient stripped, that's an
-  // absurd ceiling; `Number.isFinite` catches degenerate absMag
-  // inputs upstream, so we mirror the `min(... , 1e10)` literal for
-  // strict 1:1 parity even if it rarely fires in practice.
-  return Math.min(sizePc, 1e10);
+  // Gaia Sky's `min(..., 1e10)` in internal units → 324.08 pc in
+  // parsec-space. Rarely fires (needs absMag < -17), but pinned for
+  // strict 1:1 parity (Codex audit 2026-04-21).
+  return Math.min(sizePc, GAIA_PSEUDO_SIZE_CEILING_PC);
 };
 
 /**
