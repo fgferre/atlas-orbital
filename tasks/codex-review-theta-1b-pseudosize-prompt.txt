@@ -1,0 +1,125 @@
+You are auditing a Gaia-Sky → atlas-orbital porting commit for 1:1
+parity. Your goal is to independently verify the correctness of this
+fix against the Gaia Sky source, and call out any remaining drifts
+that would prevent parity.
+
+## Context
+
+The atlas-orbital project ports Gaia Sky's star rendering subsystem to
+Three.js / R3F / TypeScript. Phase θ.1b is the vertex solid-angle port
+(`star.group.quad.vertex.glsl`). An earlier ship (2026-04-20) used
+Stefan-Boltzmann physical radii for the `a_size` attribute, producing
+visually wrong results (Betelgeuse sprites larger than the Sun).
+
+A second-opinion audit (Opus, 2026-04-21) flagged that Gaia Sky's
+`a_size` is NOT a physical radius — it's a pseudo-size derived from
+absolute magnitude:
+
+  pseudoL = 10^(-0.4 · absMag)
+  size    = sqrt(pseudoL) × 0.15 pc
+
+Source: `AstroUtils.absoluteMagnitudeToPseudoSize` — JavaDoc explicitly
+says "has no physical meaning and has no relation to the actual
+physical size of the star."
+
+This commit replaces the Stefan-Boltzmann path with the pseudo-size
+port, fixes `u_sizeFactor` 1e6 → 1.2e6 (matches Gaia Sky default
+`starPointSize × 1e6 × pointScale`), and rewrites the regression tests.
+
+## Your Task
+
+Audit this commit with ONLY these questions in mind:
+
+1. **Pseudo-size formula correctness.** Does
+   `src/lib/starPhysics.ts absoluteMagnitudeToPseudoSize` match the
+   Java source at `AstroUtils.absoluteMagnitudeToPseudoSize`? Any
+   sign errors, constant mismatches, unit drifts?
+
+2. **STAR_SIZE_FACTOR constant.** Is `1.31526e-6` the correct literal
+   from `Constants.java:51`? Is it applied at the right point in the
+   pipeline (should be on the BUFFER-WRITE side, matching
+   `StarSetInstancedRenderer.java:143`)?
+
+3. **u_sizeFactor calibration.** Is `1.2e6` the correct Gaia Sky
+   default? Trace through:
+   - `config.yaml pointSize: 3.0`
+   - `StarSetQuadComponent.updateStarPointSize`: `starPointSize = ps × 0.4 = 1.2`
+   - `StarSetQuadComponent.updateSizeAggregate`: `alphaSizeBr[1] = starPointSize × 1e6 × pointScale`
+   - default `pointScale = 1.0`
+   Confirm 1.2e6 is right, or flag if something else.
+
+4. **Pipeline ordering.** Does
+   `Starfield.tsx buildSizeAttribute` apply operations in the same
+   order as Gaia Sky does? Specifically:
+   - Gaia Sky: `catalog stores sizePc = absMagToPseudoSize(absMag)`
+     → `a_size = size × STAR_SIZE_FACTOR × sizeFactor` at render.
+   - Atlas: computes `pseudoSizePc` at build time, multiplies by
+     `DISTANCE_SCALE × STAR_SIZE_FACTOR`. Does this match 1:1 given
+     that atlas's `DISTANCE_SCALE = 206_265_000` plays the role of
+     the parsec→internal-u conversion?
+
+5. **Test semantics.** Do the rewritten tests correctly reflect the
+   pseudo-size invariants? Specifically the critical one:
+   "Sirius renders LARGER than Betelgeuse at the typical view"
+   (reversal of Stefan-Boltzmann ordering).
+
+6. **Regressions.** Is there anything the prior θ.1b tests pinned
+   that the rewrite silently dropped? (The commit deletes
+   `bvToSolarRadius`, `estimateRadiusPc`, etc. — those were the
+   Stefan-Boltzmann path, not used anywhere else. Verify.)
+
+## Scope Boundaries
+
+- Opus identified two further drifts deliberately NOT fixed in this
+  commit (documented in the commit body):
+  - Color: `bvToRGB` piecewise vs Gaia Sky `ColorUtils.BVtoRGB`
+    (Ballesteros Teff → xyY → XYZ → gamma RGB)
+  - Fragment: atlas dropped Gaia's `saturate()` wrap for HDR/Bloom
+  Flag if you find NEW drifts we should add to that deferral list.
+  Do NOT block on these two — they're out of scope for this commit.
+
+- Do NOT suggest reverting to Stefan-Boltzmann. The pseudo-size path
+  is source-authoritative per `AstroUtils.absoluteMagnitudeToPseudoSize`
+  JavaDoc and verified numerically.
+
+## Output Format
+
+Write your findings as a short audit report with sections:
+  - Summary (1-2 sentences: does the commit achieve 1:1 parity?)
+  - Verified claims (things you cross-checked and confirmed)
+  - Drifts found (if any, by priority)
+  - Questions / uncertainties
+
+Be precise — cite Gaia Sky source file lines when making claims, and
+cite atlas file lines when flagging drifts. Each finding should
+answer "does applying this move atlas closer to or further from 1:1
+with Gaia Sky?"
+
+## Files for Review
+
+The Gaia Sky source tree lives at `/tmp/gaiasky` (clone current). The
+atlas-orbital repo is the working directory. Key files:
+
+Gaia Sky (reference, source of truth):
+ - `/tmp/gaiasky/core/src/gaiasky/util/coord/AstroUtils.java`
+   (the pseudo-size formula, lines 463-475)
+ - `/tmp/gaiasky/core/src/gaiasky/util/Constants.java`
+   (STAR_SIZE_FACTOR on line 51)
+ - `/tmp/gaiasky/core/src/gaiasky/data/group/BinaryPointDataProvider.java`
+   (catalog-load site, line 262)
+ - `/tmp/gaiasky/core/src/gaiasky/scene/system/render/draw/StarSetInstancedRenderer.java`
+   (buffer-write site, line 143)
+ - `/tmp/gaiasky/core/src/gaiasky/scene/system/render/draw/StarSetQuadComponent.java`
+   (alphaSizeBr aggregate, line 96)
+ - `/tmp/gaiasky/assets/shader/star.group.quad.vertex.glsl`
+   (the shader using `a_size / dist`)
+ - `/tmp/gaiasky/assets/conf/config.yaml`
+   (defaults: pointSize=3.0, opacityLimits=[0,1], etc.)
+
+atlas (the port under audit):
+ - `src/lib/starPhysics.ts` (the pseudo-size formula in TS)
+ - `src/components/canvas/Starfield.tsx` (the shader + buildSizeAttribute)
+ - `src/lib/starfieldShaderMath.test.ts` (regression tests)
+
+The commit SHA for this audit is HEAD (f8d8bff). `git show f8d8bff`
+returns the full diff.
