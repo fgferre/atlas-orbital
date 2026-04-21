@@ -3,7 +3,7 @@
 **Single source of truth for where we are in the Gaia Sky visual port.**
 Read this first before touching shader / VFX code.
 
-_Last updated: 2026-04-21 (after `fa23a27` LEN0 unit-drift fix — Math audit D1)._
+_Last updated: 2026-04-21 (after `db407dc` — θ.4 pseudo lens flare + lensdirt starburst shipped)._
 
 ---
 
@@ -27,46 +27,56 @@ you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                               | Shipped                 | Commits                                                                                                      | What it delivers                                                                                                                                                                                                                                                                                                           |
-| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1** — Star sprite kernel       | 2026-04-20              | `2662f08`, `13e501e`                                                                                         | Gaia fragment kernel: gaussian halo texture + razor white core via `smoothstep(0.0, 0.04, r)` on premul additive blend                                                                                                                                                                                                     |
-| **θ.1b** — Vertex solid-angle port | 2026-04-20 → 2026-04-21 | `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`, `fa23a27` | Pseudo-size `a_size` from absMag + `solidAngle = a_size/dist` + `lint_smoothstep` opacity + `degrees12/radians12` precision + `[minQuad, 3e-8]` clamp + billboard-quad rendering + full Gaia color pipeline (Ballesteros→xyY→XYZ→γRGB +0.16 HSV) + fragment saturate + LEN0 unit-conversion fix (Math audit D1, `fa23a27`) |
-| **θ.3** — LightGlow post-process   | 2026-04-21              | `a27dc42`, `fdb66ae`                                                                                         | `lightglow.frag.glsl` port as pmndrs Effect: Archimedean-spiral luma gate + polar-mask time-animated halo on top-N HYG billboard stars. Sun NOT in registry (Gaia: Sun is planet/model, not HIP-billboard). FOV-factor aware. Reduced-motion gates the mount. Runtime `nSamples=1` override honoured.                      |
+| Onda                                   | Shipped                 | Commits                                                                                                      | What it delivers                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1** — Star sprite kernel           | 2026-04-20              | `2662f08`, `13e501e`                                                                                         | Gaia fragment kernel: gaussian halo texture + razor white core via `smoothstep(0.0, 0.04, r)` on premul additive blend                                                                                                                                                                                                                                                                                                                                                    |
+| **θ.1b** — Vertex solid-angle port     | 2026-04-20 → 2026-04-21 | `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`, `fa23a27` | Pseudo-size `a_size` from absMag + `solidAngle = a_size/dist` + `lint_smoothstep` opacity + `degrees12/radians12` precision + `[minQuad, 3e-8]` clamp + billboard-quad rendering + full Gaia color pipeline (Ballesteros→xyY→XYZ→γRGB +0.16 HSV) + fragment saturate + LEN0 unit-conversion fix (Math audit D1, `fa23a27`)                                                                                                                                                |
+| **θ.3** — LightGlow post-process       | 2026-04-21              | `a27dc42`, `fdb66ae`                                                                                         | `lightglow.frag.glsl` port as pmndrs Effect: Archimedean-spiral luma gate + polar-mask time-animated halo on top-N HYG billboard stars. Sun NOT in registry (Gaia: Sun is planet/model, not HIP-billboard). FOV-factor aware. Reduced-motion gates the mount. Runtime `nSamples=1` override honoured.                                                                                                                                                                     |
+| **θ.4** — Pseudo lens flare + lensdirt | 2026-04-21              | `db407dc`                                                                                                    | Merged pmndrs Effect porting `bias.frag.glsl` + `pseudolensflare.frag.glsl` + `lensdirt.frag.glsl`. Chapman ghosts + halo + chromatic aberration + 1D lens-colour + 2D dirt + 4-peak 1D starburst spikes. `flareIntensity = 0.03` atlas-tuned (Gaia literal 0.15; compensates for omitted 35-pass blur). Starburst drifts with `camera.direction` sum (`MainPostProcessor.java:911`). HDR HalfFloat composer buffer prerequisite. Reduced-motion freezes starburst drift. |
 
 ---
 
-## → Next up: **θ.1c — Star billboard motion trails**
+## → Next up: **θ.6 — Grading finishes (CA + vignette + film grain)**
 
 **Status**: pending, ready to start.
-**Effort**: M (estimated ~200-400 LOC).
-**Plan section**: `tasks/phase-gaia-sky.md §5 θ.1c` (line 622).
-**Dependency**: θ.1b's `quadSize` path is stable (shipped).
+**Effort**: S (estimated ~200 LOC).
+**Plan section**: `tasks/phase-gaia-sky.md §5 θ.6`.
+**Dependency**: none shader-level. Slots into the composer chain as a
+post-Bloom grade pass.
 
-**Scope summary**: port Gaia Sky's `billboard.stretch.glsl` snippet. The
-current billboard-quad mesh (shipped in θ.1b closure `0961591`) is flat
-screen-aligned. θ.1c adds the stretch along the camera velocity vector
-so stars leave a subtle motion trail during fast camera panning /
-cinematic moves — the characteristic "streaking" look in Gaia Sky when
-you zoom through space.
+**User preference**: θ.1c motion trails is on-deck (not chosen) — user
+deprioritized motion trails in favour of lens effects (shipped as θ.4).
+θ.6 is the next smallest composer item and matches Gaia Sky's default
+grading finish. θ.1c stays on the pending list but moves down.
+
+**Scope summary**: port three independent toggles from Gaia's
+post-process chain — `chromaticAberration`, `vignette`, and `filmGrain`
+shaders. Small, display-referred (LDR post-tone-map), and independently
+tier-gated per `§4.1`. Replaces the earlier ad-hoc grade layer with
+direct 1:1 Gaia port.
 
 **Gaia Sky source to read first (R1 protocol)**:
 
-- `/tmp/gaiasky/assets/shader/snippet/billboard.stretch.glsl` — the
-  stretch math itself (camera-relative up/right vectors, velocity
-  projection, quaternion blend).
-- `/tmp/gaiasky/core/src/gaiasky/scene/system/render/draw/StarSetInstancedRenderer.java`
-  — where the stretch snippet is `#include`-d into the star shader.
-- Whatever uniform feeds `u_camVel` and `u_dt` — Gaia's camera velocity
-  tracking lives in `CameraManager`.
+- `/tmp/gaiasky/assets/shader/postprocess/chromaticaberration.frag.glsl`
+- `/tmp/gaiasky/assets/shader/postprocess/vignetting.frag.glsl`
+- `/tmp/gaiasky/assets/shader/postprocess/filmgrain.frag.glsl`
+- `/tmp/gaiasky/core/src/gaiasky/render/MainPostProcessor.java`
+  `postProcessGradingChain` or similar — confirm slot + defaults
+- `/tmp/gaiasky/assets/conf/config.yaml` `chromaticAberration` +
+  `filmGrain` + `levels.vignette` sections.
 
 **Atlas-side surface expected**:
 
-- `src/components/canvas/Starfield.tsx` — inline the stretch snippet
-  into the θ.1b vertex shader OR add a second attribute pass.
-- New module for camera-velocity tracking if θ.8's "camera feel" hasn't
-  shipped yet (it hasn't — still pending).
-- Reduced-motion gate hard-off (§4.2) — stretch trails are clearly
-  motion-sensitive.
+- New effects in `src/components/canvas/scene/effects/`:
+  `ChromaticAberrationEffect.ts`, `VignetteEffect.ts`,
+  `FilmGrainEffect.ts` (or reuse pmndrs built-ins where 1:1
+  compatible).
+- `PostProcessingPipeline.tsx` — slot all three after AgX tone
+  mapping (display-referred).
+- `DisplayPanel` — three toggles "Chromatic Aberration / Vignette /
+  Film Grain".
+- Reduced-motion gate does NOT hard-disable θ.6 (none of the three
+  are motion-sensitive).
 
 ---
 
@@ -74,21 +84,20 @@ you zoom through space.
 
 Order from `phase-gaia-sky.md §8` (post-θ.3-ship):
 
-| #   | Onda | Subsystem      | Effort | Notes                                         |
-| --- | ---- | -------------- | ------ | --------------------------------------------- |
-| 1   | θ.1c | Star vertex    | M      | Billboard motion-trail stretch (NEXT)         |
-| 2   | θ.6  | Composer       | S      | Grading finishes (CA + vignette + film grain) |
-| 3   | θ.9  | Scene-graph    | M      | Orbit-lines glow shader                       |
-| 4   | θ.10 | Scene-graph    | M      | Constellations lines + MSDF labels            |
-| 5   | θ.12 | Scene-graph    | S      | Named star labels via troika                  |
-| 6   | θ.8  | Camera         | M      | Cinematic damping + FoV easing + surfaceMode  |
-| 7   | θ.5  | Composer+Depth | M      | Camera motion blur (velocity-based)           |
-| 8   | θ.4  | Composer       | M-L    | Pseudo lens flare + lensdirt starburst        |
-| 9   | θ.15 | Composer       | M      | NFAA + FXAA + LumaSharpen (no SMAA)           |
-| 10  | θ.14 | Star vertex    | S      | Alive-sky twinkle (depends on θ.1b)           |
-| 11  | θ.11 | Backdrop       | M-H    | Milky Way cubemap + dust                      |
-| 12  | θ.7a | Hero-LOD       | M      | Hero-star corona billboard                    |
-| 13  | θ.7b | Hero-LOD       | L      | Procedural surface + cross-fade               |
+| #   | Onda | Subsystem      | Effort | Notes                                                        |
+| --- | ---- | -------------- | ------ | ------------------------------------------------------------ |
+| 1   | θ.6  | Composer       | S      | Grading finishes — CA + vignette + film grain (NEXT)         |
+| 2   | θ.9  | Scene-graph    | M      | Orbit-lines glow shader                                      |
+| 3   | θ.10 | Scene-graph    | M      | Constellations lines + MSDF labels                           |
+| 4   | θ.12 | Scene-graph    | S      | Named star labels via troika                                 |
+| 5   | θ.8  | Camera         | M      | Cinematic damping + FoV easing + surfaceMode                 |
+| 6   | θ.1c | Star vertex    | M      | Billboard motion-trail stretch (deprioritized — user intent) |
+| 7   | θ.5  | Composer+Depth | M      | Camera motion blur (velocity-based)                          |
+| 8   | θ.15 | Composer       | M      | NFAA + FXAA + LumaSharpen (no SMAA)                          |
+| 9   | θ.14 | Star vertex    | S      | Alive-sky twinkle (depends on θ.1b)                          |
+| 10  | θ.11 | Backdrop       | M-H    | Milky Way cubemap + dust                                     |
+| 11  | θ.7a | Hero-LOD       | M      | Hero-star corona billboard                                   |
+| 12  | θ.7b | Hero-LOD       | L      | Procedural surface + cross-fade                              |
 
 Canonical full table (with tier visibility, ship-order rationale, and
 notes per onda) lives in `tasks/phase-gaia-sky.md §8`.
