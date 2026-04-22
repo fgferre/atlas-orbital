@@ -130,40 +130,101 @@ Fixes visible in user's reference screenshot comparison.
   mode cannot arise from removing a sprite layer).
 - **Status**: done — commit `cd626dc`.
 
-### T2.1 — Port COMPLEX lens flare (**D2 resolved → option (a)**)
+### T2.1 — Port COMPLEX lens flare ⭐ **NEXT UP** (promoted over T2.2 on 2026-04-22)
 
-- **Finding**: Gaia's default ships `lensFlare.type: COMPLEX`
-  (`MainPostProcessor.java:280-312`), which uses
-  `assets/shader/postprocess/lensflare.frag.glsl` — a different shader
-  from the PSEUDO variant (`pseudolensflare.frag.glsl`) that θ.4 ported.
-- **Evidence**: user's Gaia screenshot shows rainbow dispersive spikes
-  spanning the screen — this is COMPLEX output, not PSEUDO. Atlas
-  never had this.
-- **Resolution** (Gaia-fidelity rule, 2026-04-22): **port COMPLEX**.
-  Add `LensFlareEffect.ts` based on `lensflare.frag.glsl`. Keep
-  PSEUDO registered as secondary variant (user-selectable) until
-  visual tuning is complete; do not rip θ.4 out yet.
-- **Effort**: 3-5 days (port + calibration + DIFF GATE per L22 +
-  runtime smoke).
-- **Dependencies**: none.
+- **Finding**: Gaia's **default** is `lensFlare.type: COMPLEX`
+  (`config.yaml:606`). `MainPostProcessor.java:268-312` branches
+  in two entirely separate pipelines:
+  - `type == PSEUDO` → `PseudoLensFlare` effect (`pseudolensflare.frag.glsl`
+    - 35-pass blur + dirt + combine). What θ.4 ported.
+  - otherwise → `LensFlare` effect (`lensflare.frag.glsl`, SIMPLE
+    or COMPLEX depending on `type.ordinal()`). **This is the
+    default.** Uses a single all-in-one frag shader driven by
+    `u_lightPositions[MAX_LIGHTS=10]` + `u_lightIntensities` +
+    `u_viewport` + `u_color`, followed by optional dirt ×
+    starburst and combine. **No blur chain** —
+    `LensFlare.java:112-141` goes flare → dirt → combine,
+    period.
+- **Evidence**: user's reference Gaia screenshot shows rainbow
+  dispersive spikes spanning the screen — that's COMPLEX output.
+  Atlas renders PSEUDO (θ.4), which draws ghosts + halo + CA +
+  dirt stripe, a fundamentally different visual signature.
+- **Resolution** (Gaia-fidelity rule, 2026-04-22): **port COMPLEX
+  and make it the atlas default**, matching `config.yaml:606`.
+  PSEUDO (θ.4) stays registered as opt-in alternate — do not rip
+  it out; users who prefer its subtle character should still be
+  able to pick it. Atlas gains a variant selector (similar to
+  Gaia's `type` config key) that defaults to COMPLEX.
+- **Driver wiring** (from `LensFlare.java:65-67`):
+  `flare.setLightPositions(nLights, positions, intensities)` — atlas
+  needs a per-frame useFrame block that projects the Sun (and any
+  other high-emissive source) into NDC, filters visibility, and
+  pushes the array into the effect. Similar pattern to
+  `LightGlowInjector.tsx:141-186` (FOV factor) but for multi-light
+  screen-space positions.
+- **Port structure**:
+  1. New `LensFlareEffect.ts` (pmndrs `Effect` subclass).
+     Frag shader literally a port of `lensflare.frag.glsl` SIMPLE
+     - COMPLEX branches, gated by compile-time `#define` so the
+       shader compiles only the branch atlas ships. Uniforms:
+       `u_intensity`, `u_viewport`, `u_lightPositions[10]`,
+       `u_lightIntensities[10]`, `u_nLights`, `u_color`, + dirt
+       samplers carried over from T2.3a.
+  2. New `LensFlareInjector` behaviour (or extend the existing
+     `LensFlareInjector.tsx`): per-frame, read the scene-graph
+     Sun world-pos, project to clip → NDC → uv, compute
+     intensity from Sun's apparent brightness or a fixed 1.0,
+     push array.
+  3. Register COMPLEX as the default variant. PSEUDO remains
+     importable but behind an explicit toggle (user setting or
+     debug flag — match atlas conventions).
+- **Effort**: 3-5 days (port + multi-light driver + calibration
+  - DIFF GATE per L22 + SUBAGENT VERIFY + runtime smoke).
+- **Dependencies**: T2.3a (`51750c3`) for the shared `lensdirt`
+  - `lensstarburst` texture surface — COMPLEX's `useLensDirt`
+    branch (`LensFlare.java:55-58, 77-93`) consumes the same two
+    assets PSEUDO does, so T2.3a's loader wiring already covers
+    both variants. No blur chain dependency — COMPLEX doesn't
+    have one.
 
-### T2.2 — PseudoLensFlare 35-pass blur
+### T2.2 — PseudoLensFlare 35-pass blur (**demoted to opt-in on 2026-04-22**)
 
-- **Gaia**: `PseudoLensFlare.java` (Gaia Java wrapper) applies 35
-  successive gaussian blur passes before the combine step. See
-  `PseudoLensFlareFilter` or equivalent in Gaia's postprocess filters.
-- **Atlas**: blur chain omitted (pmndrs Effect architectural limits
-  noted in `PseudoLensFlareEffect.ts:49-53`). Intensity reduced
-  0.15 → 0.03 (5×) to hide hard-edged artifacts at periphery.
-- **Options**:
-  - Port the blur chain (non-trivial in pmndrs; may need a multi-pass
-    wrapper Effect).
-  - Keep current, document intensity tuning as atlas-native.
-- **Effort**: 2-3 days to port blur; hours to document.
-- **Dependencies**: T2.0 (stacking removed so the blur's effect is
-  isolable), T2.3 (final asset shapes drive blur calibration —
-  tuning against procedural placeholders wastes work). Not
-  architecturally dependent on T2.1; COMPLEX is a separate shader.
+- **Demotion rationale**: T2.2 re-verification against
+  `/tmp/gaiasky/` exposed that the 35-pass blur lives **inside**
+  `PseudoLensFlare.java:197-212` (between the flare and dirt
+  stages), not "between `PseudoLensFlareEffect` and Bloom" as the
+  original ROADMAP text claimed. More importantly: it runs only
+  when `lensFlare.type == PSEUDO`, which is **NOT** Gaia's default
+  (`config.yaml:606: type: COMPLEX`). Under
+  `feedback_default_gaia_fidelity.md`, polishing a non-default
+  variant before porting the default violates 1:1 fidelity. T2.1
+  (COMPLEX port) now holds the default-path seat; T2.2 becomes
+  optional follow-up that's only meaningful for users who
+  explicitly switch atlas into the PSEUDO variant.
+- **Gaia**: `PseudoLensFlare.java:197-212` pipeline is
+  `bias → flare → BLUR (N passes of separable Gaussian) → dirt →
+combine`. The blur uses `BlurFilter` with type `Gaussian5x5b`
+  (bilinear 5-tap variant, `PseudoLensFlare.java:270`) — NOT the
+  generic `Gaussian5x5` default of `BlurFilter.java:41`. Count
+  of passes comes from `config.yaml:614 blurPasses: 35`, and
+  the blur FBO runs at `config.yaml:621 fboScale: 0.4` (40% of
+  viewport), so cost ≈ 35 × 2 separable passes × 0.16 × fullres.
+- **Atlas**: blur chain omitted (pmndrs Effect architectural
+  limits noted in current `PseudoLensFlareEffect.ts:49-53`).
+  Intensity reduced 0.15 → 0.03 (5×) to hide hard-edged artifacts
+  at periphery when PSEUDO is active.
+- **Options** (only matter if user selects PSEUDO variant):
+  - Port the blur chain as a pmndrs `Pass` subclass with an
+    internal ping-pong buffer (can't be a plain `Effect` — the
+    composer's linear chain can't host multi-pass blur cleanly).
+  - Keep current tuned intensity 0.03, document as atlas-native
+    (PSEUDO rendering then diverges from Gaia's PSEUDO output
+    until a user flips a config).
+- **Effort**: 2-3 days to port blur; hours to document the
+  atlas-native tuning path.
+- **Dependencies**: T2.0 ✅ (`cd626dc`), T2.3a ✅ (`51750c3`),
+  T2.1 (COMPLEX must be the default before we re-tune the
+  alternate). Not architecturally blocking anything else.
 
 ### T2.3 — Native CC-BY-4.0 lens sprite assets (**D3 resolved → option (a)**)
 

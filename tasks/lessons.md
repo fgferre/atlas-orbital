@@ -1080,3 +1080,73 @@ claim that scopes work — user memory included.
 **Code marker**: T2.0 in `tasks/ROADMAP.md` (new onda removes the
 stacking). Kickoff prompt gains step 5 PREDECESSOR SWEEP in
 `STATUS.md`.
+
+## L30 — ROADMAP wave ordering must be verified against `config.yaml` defaults, not against which variant atlas currently ships
+
+**2026-04-22. Caught when user pushed back on starting T2.2
+("maybe the roadmap is wrong, better re-verify the repo") before
+I committed 2-3 days of work to porting a non-default blur chain.**
+
+Lens Closure Wave shipped T2.0 (`cd626dc`) and T2.3a (`51750c3`)
+in order. Wave table in STATUS.md then pointed at T2.2 next:
+_"Port Gaia's 35-pass Gaussian blur; raise intensity from 0.03
+to 0.15"_. I was about to start the 2-3 d pmndrs `Pass` subclass
+rewrite when the user said "re-verify".
+
+Re-verification against `/tmp/gaiasky/` found two drifts:
+
+1. **Deriva #1 — scope language.** ROADMAP said the blur was
+   "between `PseudoLensFlareEffect` and Bloom". Actual
+   `PseudoLensFlare.java:197-212` shows the blur is **internal**
+   to PseudoLensFlare, sandwiched between the flare and dirt
+   stages — same effect, not two composer slots. Architecturally
+   different port target.
+
+2. **Deriva #2 — default-path violation.** `config.yaml:606`
+   ships `type: COMPLEX` as Gaia's out-of-box lens flare.
+   `MainPostProcessor.java:268-312` branches: PSEUDO gets the
+   35-pass blur pipeline (`PseudoLensFlare.java`); COMPLEX/SIMPLE
+   get `LensFlare.java` with `lensflare.frag.glsl` — a completely
+   different shader with **no blur chain at all**. Atlas today
+   ships PSEUDO (θ.4) — so we were shipping Gaia's _secondary_
+   variant. Polishing PSEUDO's 35-pass blur before porting
+   COMPLEX tunes the non-default before the default exists — a
+   direct violation of `feedback_default_gaia_fidelity.md`
+   (resolve D-type decisions silently toward Gaia-default).
+
+Both drifts were present in the same ROADMAP entry. Had I
+proceeded with T2.2, I'd have spent 2-3 days optimising the
+wrong shader path. User caught it by pattern-matching: the
+shape of the story didn't feel right to them, so they asked
+for a re-verify.
+
+**Rule.** Every Lens Closure Wave (and any wave that re-orders
+ondas) must be reviewed against `config.yaml` defaults AND the
+post-processor branching logic BEFORE STATUS.md §Wave order is
+treated as canonical. Specifically:
+
+1. **Default check.** For every onda that tunes or ports a
+   configurable effect, look up the variant's selector in
+   `config.yaml` and trace `MainPostProcessor.java` to the
+   branch that instantiates it. If the onda operates on a
+   non-default branch, mark it opt-in and demote it behind any
+   onda that operates on the default branch.
+2. **Scope language check.** Any ROADMAP phrase of the form
+   "between X and Y" or "before/after Z" must cite
+   `file:line` of the Java render method that orchestrates the
+   order. Prose shortcuts that collapse multi-stage pipelines
+   into "between" relationships are a drift risk.
+3. **Order lock.** STATUS.md §Wave order is tied to the
+   config/branch snapshot at the time the wave was designed.
+   When new findings arrive, the wave REORDERS — don't patch
+   the old order to make the misplaced onda work.
+
+**Process corollary — trust user pattern-matching.** The user's
+"maybe the roadmap is wrong" intervention saved a 2-3 d
+mis-investment. That kind of vague pushback isn't noise, it's
+signal — treat it like a cross-AI review (L29): pause, re-verify
+from source, report what you found, then proceed.
+
+**Code marker**: STATUS.md reorder of 2026-04-22 (T2.1 promoted
+over T2.2) + ROADMAP.md §T2.1 "⭐ NEXT UP" header + ROADMAP.md
+§T2.2 "demoted to opt-in" header.

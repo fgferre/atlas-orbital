@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after **T2.3a shipped** (`51750c3`) — procedural `DataTexture` bakes in `lensFlareSprites.ts` replaced by `THREE.TextureLoader().load(...)` calls reading the 3 Gaia-original placeholders from gitignored `public/textures/lens/`. Placeholder sha256 fingerprints recorded in ROADMAP §T2.3a match exactly. Shader sampling contract (filter/wrap/colorSpace/mipmap) pinned by new jsdom-env test file `lensFlareSprites.test.ts` (7 tests). Lens Closure Wave advances to **T2.2 — 35-pass Gaussian blur** next. T2.0 shipped earlier today in `cd626dc`._
+_Last updated: 2026-04-22 after **wave reorder under Gaia-fidelity rule**. T2.2 re-verification against `/tmp/gaiasky/` surfaced two ROADMAP drifts: (1) Gaia's default `type: COMPLEX` (`config.yaml:606`), NOT PSEUDO — so the 35-pass blur we'd tune in T2.2 belongs to a **non-default** pipeline and polishing it before porting COMPLEX violates `feedback_default_gaia_fidelity.md`; (2) T2.2 scope described the blur as "between PseudoLensFlareEffect and Bloom" — actually it's internal to `PseudoLensFlare.java:197-212`, between the flare and dirt stages. Wave reordered: **T2.1 (COMPLEX port) is now next**, T2.2 demoted to optional follow-up for users who opt into PSEUDO. T2.3a shipped `51750c3`, T2.0 shipped `cd626dc`._
 
 ---
 
@@ -92,7 +92,53 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: Lens Closure Wave — **T2.2 35-pass Gaussian blur** (T2.0 ✅ `cd626dc`, T2.3a ✅ `51750c3`; remaining: T2.2 → T2.1; T2.3b hot-swap on asset delivery)
+## → Next up: Lens Closure Wave — **T2.1 COMPLEX lens flare port** (T2.0 ✅ `cd626dc`, T2.3a ✅ `51750c3`; remaining: T2.1 → [T2.2 demoted] → T2.3b hot-swap on asset delivery)
+
+**Wave reorder rationale (2026-04-22)**: the original order
+T2.2 → T2.1 put PSEUDO's 35-pass blur before the COMPLEX port.
+Re-verification against `/tmp/gaiasky/` exposed that as a
+Gaia-fidelity violation:
+
+- **Gaia's default** is `lensFlare.type: COMPLEX` per
+  `config.yaml:606`. The COMPLEX pipeline (`lensflare.frag.glsl`)
+  is the shader Gaia Sky renders out of the box — and is a
+  **completely different shader** from PSEUDO's
+  `pseudolensflare.frag.glsl`.
+- **Atlas today ships only PSEUDO** (θ.4). Out-of-box atlas
+  therefore diverges from out-of-box Gaia. This is the divergence
+  the user's cross-AI review was actually describing.
+- **The 35-pass blur is PSEUDO-only**. `MainPostProcessor.java:268-312`
+  branches: if `type == PSEUDO` → `PseudoLensFlare` (with the blur);
+  else → `LensFlare` (COMPLEX/SIMPLE, **no blur chain**).
+  `PseudoLensFlare.java:197-212` shows the blur is **internal**
+  to PseudoLensFlare, sandwiched between the flare and dirt
+  stages — **not** "between PseudoLensFlareEffect and Bloom" as
+  ROADMAP claimed.
+- Spending 2-3 d polishing PSEUDO's blur before COMPLEX exists
+  would be tuning the secondary variant before the primary even
+  lands. Under `feedback_default_gaia_fidelity.md`, D-type
+  decisions resolve silently toward Gaia-default ⇒ T2.1 first.
+
+**T2.2 status**: **demoted** from Lens Closure Wave to optional
+follow-up. Only relevant if user explicitly opts the atlas
+variant-selector into PSEUDO. Remains tracked in ROADMAP for
+that scenario; no longer blocks any default-path onda.
+
+**T2.3a landed 2026-04-22 (`51750c3`)** —
+`src/components/canvas/scene/effects/lensFlareSprites.ts`
+procedural `DataTexture` bakes replaced by
+`THREE.TextureLoader().load(...)` reading from
+`public/textures/lens/{lenscolor.png, lensdirt-low.jpg, lensstarburst.jpg}`
+(gitignored placeholders — Gaia originals, sha256 matches ROADMAP
+§T2.3a fingerprint). Shader sampling contract (LinearFilter,
+ClampToEdge except starburst wrapS=Repeat, NoColorSpace, no
+mipmaps) pinned by new `lensFlareSprites.test.ts` under
+`// @vitest-environment jsdom`. `LENS_*_SPRITE_SIZE` exports
+dropped — dimensions now come from the asset (real Gaia sizes
+differ from the old procedural bake). T2.3a also pre-wires the
+placeholder `lensstarburst.jpg` that COMPLEX will consume via
+`LensFlare.java:77-93` when dirt is enabled, so T2.1's dirt path
+inherits the same asset surface.
 
 **T2.3a landed 2026-04-22 (`51750c3`)** —
 `src/components/canvas/scene/effects/lensFlareSprites.ts`
@@ -153,16 +199,18 @@ agent can prove by mtime-delta that the swap actually happened.
 
 ### Wave order (smallest diff first; each onda a separate 12-step ship)
 
-| Onda          | Scope                                                                                                                                                                                                                                                                                                       | Effort |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| ~~**T2.0**~~  | ✅ **Shipped `cd626dc`** — `SunScreenFlare.tsx` + `Planet.tsx:21` import + mount at `Planet.tsx:839-845` deleted. Orphan helpers (`createRadialGradientTexture`, `createStarburstTexture`) gone with the file.                                                                                              | done   |
-| ~~**T2.3a**~~ | ✅ **Shipped `51750c3`** — `lensFlareSprites.ts` rewritten on top of `THREE.TextureLoader().load(...)`; Gaia-original placeholders copied to `public/textures/lens/`; targeted `*.{png,jpg}` rule added to `.gitignore`; `LENS_*_SPRITE_SIZE` dead code removed; 7 jsdom-env contract tests added.          | done   |
-| **T2.2**      | Port Gaia's 35-pass Gaussian blur (between `PseudoLensFlareEffect` and Bloom); raise `PSEUDO_LENS_FLARE_DEFAULT_INTENSITY` from `0.03` back to Gaia literal `0.15`; verify no periphery rings.                                                                                                              | 2-3 d  |
-| **T2.1**      | Port COMPLEX variant (D2-resolved) — `lensflare.frag.glsl` is a different shader from PSEUDO. New `LensFlareEffect.ts`; register PSEUDO as alternate variant.                                                                                                                                               | 3-5 d  |
-| **T2.3b**     | **CC-BY-4.0 asset swap** (BLOCKS on user AI-gen delivery). When user drops replacements into `references/gaia-sky-source/` (verify by hash-delta AND mtime ≥ `2026-04-22`): copy to `public/textures/lens/`, remove the gitignore rule, add credits to root `README.md` + new `public/textures/CREDITS.md`. | 2-4 h  |
+| Onda             | Scope                                                                                                                                                                                                                                                                                                                                                                                                        | Effort         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| ~~**T2.0**~~     | ✅ **Shipped `cd626dc`** — `SunScreenFlare.tsx` + `Planet.tsx:21` import + mount at `Planet.tsx:839-845` deleted. Orphan helpers (`createRadialGradientTexture`, `createStarburstTexture`) gone with the file.                                                                                                                                                                                               | done           |
+| ~~**T2.3a**~~    | ✅ **Shipped `51750c3`** — `lensFlareSprites.ts` rewritten on top of `THREE.TextureLoader().load(...)`; Gaia-original placeholders copied to `public/textures/lens/`; targeted `*.{png,jpg}` rule added to `.gitignore`; `LENS_*_SPRITE_SIZE` dead code removed; 7 jsdom-env contract tests added.                                                                                                           | done           |
+| **T2.1**         | Port COMPLEX variant — Gaia's **default** `lensFlare.type` per `config.yaml:606`. Ships `lensflare.frag.glsl` as a new pmndrs `Effect`; wires `u_lightPositions`/`u_lightIntensities` arrays per `LensFlare.java:65-67`; switches atlas's default flare slot from PSEUDO to COMPLEX; keeps PSEUDO (θ.4) registered as opt-in alternate. No blur chain — COMPLEX doesn't have one.                            | 3-5 d          |
+| _T2.2 (demoted)_ | Port PSEUDO's 35-pass Gaussian blur chain (internal to `PseudoLensFlare.java:197-212`, between the flare and dirt stages); raise `PSEUDO_LENS_FLARE_DEFAULT_INTENSITY` from `0.03` back to Gaia literal `0.15`; verify no periphery rings. **Only relevant if user opts atlas into PSEUDO variant**; not on the default path. Previously listed before T2.1 — reordered 2026-04-22 under Gaia-fidelity rule. | 2-3 d (opt-in) |
+| **T2.3b**        | **CC-BY-4.0 asset swap** (BLOCKS on user AI-gen delivery). When user drops replacements into `references/gaia-sky-source/` (verify by hash-delta AND mtime ≥ `2026-04-22`): copy to `public/textures/lens/`, remove the gitignore rule, add credits to root `README.md` + new `public/textures/CREDITS.md`.                                                                                                  | 2-4 h          |
 
-Total Lens Closure Wave: ~1-2 weeks. Full scope / evidence /
-dependencies per onda in `ROADMAP.md §T2.0-T2.3`.
+Total Lens Closure Wave (default path): ~4-6 days after T2.3a.
+Full scope / evidence / dependencies per onda in
+`ROADMAP.md §T2.0-T2.3`. T2.2 (opt-in, 2-3 d) is tracked outside
+the default-path total.
 
 **Parked during the wave**: T3.3 (eclipse geometry, 3-5 d) — was
 Next up pre-pivot; remains the front-runner once the wave closes.
