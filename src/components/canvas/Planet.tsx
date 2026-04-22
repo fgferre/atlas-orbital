@@ -41,6 +41,8 @@ const MAX_ORBIT_CACHE_ENTRIES = 256;
 const TMP_WORLD_POS = new THREE.Vector3();
 const TMP_RING_INV_MATRIX = new THREE.Matrix4();
 const TMP_RING_SUN_LOCAL = new THREE.Vector3();
+const TMP_PLANET_INV_MATRIX = new THREE.Matrix4();
+const TMP_PLANET_SUN_LOCAL = new THREE.Vector3();
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -262,6 +264,25 @@ const PlanetVisual = ({
 
         ringMaterial.userData.shader.uniforms.uSunPosition.value.copy(
           parallelSunLocalPosRing
+        );
+      }
+
+      // Update Planet Material (Ring Shadow on Planet) — ringed non-Earth planets.
+      // The fragment shader at usePlanetMaterials.ts:289-362 intersects
+      // a ring plane using `vPos = position` (object-space). `uSunPosition`
+      // must live in the SAME frame, or the ray/plane math mixes frames
+      // and only coincides under an identity model matrix — Saturn's
+      // 26.73° tilt and orbital translation both break that (T1.2).
+      if (
+        textureRing &&
+        planetMaterial &&
+        planetMaterial.userData.shader &&
+        body.ringSystem
+      ) {
+        TMP_PLANET_INV_MATRIX.copy(rotationRef.current.matrixWorld).invert();
+        TMP_PLANET_SUN_LOCAL.set(0, 0, 0).applyMatrix4(TMP_PLANET_INV_MATRIX);
+        planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
+          TMP_PLANET_SUN_LOCAL
         );
       }
     }
