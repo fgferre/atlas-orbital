@@ -55,7 +55,7 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L24).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L25).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
