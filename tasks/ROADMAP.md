@@ -169,13 +169,15 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
     Static-default uniforms produced saturated output that flickered
     against the cloud layer's transparent-sort. Lesson L26 captured;
     re-planned as combined θ.5b+c.
-  - 🟡 **θ.5b+c** (next, combined) — rewrite `atmosphereShader.ts`
-    AND wire per-frame uniforms (`v3CameraPos`, `v3LightPos`,
-    `fCameraHeight`) from real scene state in a single ship. Mirrors
-    T1.2 ring-shadow inverse-matrix pattern at `Planet.tsx:247-284`.
-    Earth-default scattering coefficients hard-wired.
-  - 🔲 **θ.5d** — per-body Rayleigh/Mie/scale-height config from body
-    record; Mars + candidates get their own params; final gates; ship.
+  - ✅ **θ.5b+c** — `bc0a429` — combined shader rewrite + per-frame
+    uniforms. Earth's atmosphere renders Nishita Rayleigh+Mie with
+    `v3CameraPos` / `v3LightPos` / `fCameraHeight` driven from real
+    scene state in Earth-local frame (T1.2 inverse-matrix pattern).
+    Multi-frame smoke (L26): maxDelta=0 over 60 frames. Pending
+    user live-watch confirmation.
+  - 🟡 **θ.5d** (next) — per-body Rayleigh/Mie/scale-height config
+    from body record; Mars + candidates get their own params; final
+    gates; ship completes T3.1.
 - **Dependencies**: port `atmscattering.frag.glsl` snippet first as
   shared include.
 
