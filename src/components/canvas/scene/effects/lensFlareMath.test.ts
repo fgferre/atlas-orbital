@@ -8,14 +8,6 @@ import {
   starburstOffsetFromCameraDirection,
 } from "./lensFlareMath";
 import {
-  getLensColorSprite,
-  getLensDirtSprite,
-  getLensStarburstSprite,
-  LENS_COLOR_SPRITE_SIZE,
-  LENS_DIRT_SPRITE_SIZE,
-  LENS_STARBURST_SPRITE_SIZE,
-} from "./lensFlareSprites";
-import {
   PSEUDO_LENS_FLARE_DEFAULT_ABERRATION,
   PSEUDO_LENS_FLARE_DEFAULT_BIAS,
   PSEUDO_LENS_FLARE_DEFAULT_GHOST_DISPERSAL,
@@ -271,28 +263,8 @@ describe("PseudoLensFlare default starburst offset", () => {
   });
 });
 
-describe("lens-flare sprites — asset contract pins", () => {
-  it("lensColor is a 1D-like horizontal strip (256×1 equivalent)", () => {
-    expect(LENS_COLOR_SPRITE_SIZE).toBe(256);
-    const tex = getLensColorSprite();
-    const image = tex.image as { width: number; height: number };
-    expect(image.width).toBe(256);
-    expect(image.height).toBe(1);
-  });
-
-  it("lensDirt is 2D 512×512", () => {
-    expect(LENS_DIRT_SPRITE_SIZE).toBe(512);
-    const tex = getLensDirtSprite();
-    const image = tex.image as { width: number; height: number };
-    expect(image.width).toBe(512);
-    expect(image.height).toBe(512);
-  });
-
-  it("lensStarburst is 1D 256×1", () => {
-    expect(LENS_STARBURST_SPRITE_SIZE).toBe(256);
-    const tex = getLensStarburstSprite();
-    const image = tex.image as { width: number; height: number };
-    expect(image.width).toBe(256);
-    expect(image.height).toBe(1);
-  });
-});
+// Sprite shader-sampling contract lives in a separate jsdom-env file
+// (`lensFlareSprites.test.ts`): TextureLoader instantiates an Image
+// via `document.createElementNS`, which requires a DOM. The math
+// tests above run in the project-default node env and must stay
+// DOM-free.

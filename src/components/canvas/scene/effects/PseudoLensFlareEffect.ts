@@ -5,7 +5,6 @@ import {
   getLensColorSprite,
   getLensDirtSprite,
   getLensStarburstSprite,
-  LENS_COLOR_SPRITE_SIZE,
 } from "./lensFlareSprites";
 
 /**
@@ -322,5 +321,3 @@ export class PseudoLensFlareEffect extends Effect {
     if (u) u.value = offset;
   }
 }
-
-export { LENS_COLOR_SPRITE_SIZE };
