@@ -43,6 +43,10 @@ const TMP_RING_INV_MATRIX = new THREE.Matrix4();
 const TMP_RING_SUN_LOCAL = new THREE.Vector3();
 const TMP_PLANET_INV_MATRIX = new THREE.Matrix4();
 const TMP_PLANET_SUN_LOCAL = new THREE.Vector3();
+const TMP_ATMO_INV_MATRIX = new THREE.Matrix4();
+const TMP_ATMO_CAMERA_WORLD = new THREE.Vector3();
+const TMP_ATMO_CAMERA_LOCAL = new THREE.Vector3();
+const TMP_ATMO_SUN_LOCAL = new THREE.Vector3();
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -284,6 +288,44 @@ const PlanetVisual = ({
         planetMaterial.userData.shader.uniforms.uSunPosition.value.copy(
           TMP_PLANET_SUN_LOCAL
         );
+      }
+
+      // Update Atmosphere Shader uniforms (Earth only) — θ.5b+c.
+      // Mirrors T1.2's ring-shadow transform: camera world-pos + Sun
+      // world-origin both enter the planet-local frame via the inverse
+      // of `rotationRef.matrixWorld`. The Nishita integrator in
+      // `atmosphereShader.ts` expects every position in the same
+      // unit-sphere frame (fInnerRadius=1.0, fOuterRadius=1.025).
+      // Static defaults here flicker against the cloud layer's
+      // transparent-sort (see lesson L26) — per-frame writes are
+      // mandatory.
+      if (
+        body.id === "earth" &&
+        atmosphereMaterial &&
+        atmosphereMaterial instanceof THREE.ShaderMaterial
+      ) {
+        const atmoUniforms = atmosphereMaterial.uniforms;
+        TMP_ATMO_INV_MATRIX.copy(rotationRef.current.matrixWorld).invert();
+
+        // v3CameraPos: camera world → planet-local.
+        camera.getWorldPosition(TMP_ATMO_CAMERA_WORLD);
+        TMP_ATMO_CAMERA_LOCAL.copy(TMP_ATMO_CAMERA_WORLD).applyMatrix4(
+          TMP_ATMO_INV_MATRIX
+        );
+        atmoUniforms.v3CameraPos.value.copy(TMP_ATMO_CAMERA_LOCAL);
+
+        // v3LightPos: unit direction from Earth center to Sun (at world
+        // origin). Gaia uses v3LightPos as a NORMALIZED direction despite
+        // the "Pos" name — see `atmscattering.frag.glsl:180,197`.
+        TMP_ATMO_SUN_LOCAL.set(0, 0, 0).applyMatrix4(TMP_ATMO_INV_MATRIX);
+        atmoUniforms.v3LightPos.value.copy(TMP_ATMO_SUN_LOCAL).normalize();
+
+        // fCameraHeight in the same local frame. Scalar uniforms require
+        // direct assignment (no `.copy()` path for floats); atlas
+        // convention for this is the per-line eslint-disable below —
+        // mirrors the block-level disable at Starfield.tsx:499-523.
+        // eslint-disable-next-line react-hooks/immutability -- scalar uniform update is the intended per-frame Three.js pattern
+        atmoUniforms.fCameraHeight.value = TMP_ATMO_CAMERA_LOCAL.length();
       }
     }
   });
