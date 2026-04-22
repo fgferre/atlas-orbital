@@ -74,23 +74,37 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **Tier 1 is clear — pick a Tier 2 item** (`ROADMAP.md §Tier 2`)
+## → Next up: **Blocked — needs user decision (D2, D3, D4, and/or D5)**
 
-T1.1 shipped in `4cc35cb` (starburst Y-coord). T1.2 shipped in
-`6c0f82f` (ring-shadow frame alignment). T1.3 (FOV-aware spiral)
-was stale on audit — already shipped as part of θ.3's original
-`a27dc42` commit; per-frame driver lives at
-`src/components/canvas/scene/LightGlowInjector.tsx:141-186` and
-`src/lib/lightRegistry.ts:78-82`.
+Tier 1 is fully clear:
 
-Next candidate ondas live in Tier 2:
+- T1.1 shipped in `4cc35cb` (starburst Y-coord).
+- T1.2 shipped in `6c0f82f` (ring-shadow frame alignment).
+- T1.3 was stale on audit — already shipped in θ.3's original
+  `a27dc42` commit; per-frame driver at
+  `src/components/canvas/scene/LightGlowInjector.tsx:141-186`
+  and `src/lib/lightRegistry.ts:78-82`.
+
+All of Tier 2 is decision-gated:
 
 - **T2.1** — Lens-flare variant (COMPLEX vs PSEUDO) — **blocked by D2**.
-- **T2.2** — Dithering in tonemap (see `ROADMAP.md §T2.2`).
-- **T2.3** — Lens sprite assets — **blocked by D3**.
-- **T2.4** — Tone-map + bloom defaults — **blocked by D5**.
+- **T2.2** — PseudoLensFlare 35-pass blur — **blocked by T2.1 → D2**.
+- **T2.3** — Lens sprite assets (provenance) — **blocked by D3**.
+- **T2.4** — Tone-map + bloom default alignment — **blocked by D5**.
 
-Unblocked starter: T2.2 (tonemap dithering) has no pending decision.
+Tier 3 has small unblocked items (T3.5 night-lights 2 h;
+T3.6 cloud-additive gate 2-4 h; T3.7 atm-exponent 1 h) **but all of
+Tier 3 is gated by D4** (tier-order decision: sequential 1→4 vs
+prioritize T3 for scene impact).
+
+**Action required**: answer D2 (and ideally D4) before the next loop
+iteration. Recommended: per ROADMAP §T2.1 the author already
+recommended option (a) "port COMPLEX" — user's Gaia reference
+screenshot shows COMPLEX output, which atlas never had. If the user
+confirms D2=(a), T2.1 is a 3-5 day port (`lensflare.frag.glsl`).
+If the user prefers scene-impact first, flip D4 to "prioritize T3"
+and T3.1 (Rayleigh+Mie atmosphere, ⭐ highest visual impact) becomes
+the next onda.
 
 ---
 
