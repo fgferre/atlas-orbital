@@ -194,26 +194,34 @@ Fixes visible in user's reference screenshot comparison.
   verification without waiting for the external AI-generation
   pipeline, T2.3 splits into two phases:
 
-  **T2.3a — Placeholder wiring** (executable now; prerequisite
-  T2.0). Copy the 3 Gaia originals from
-  `references/gaia-sky-source/` (`lenscolor.png`,
-  `lensdirt-low.jpg`, `lensstarburst.jpg`) into
-  `public/textures/lens/`. Add a targeted
-  `public/textures/lens/*.{png,jpg}` rule to `.gitignore` so the
-  binaries never enter git. Replace the procedural `DataTexture`
-  bakes in
-  `src/components/canvas/scene/effects/lensFlareSprites.ts` with
-  `THREE.TextureLoader().load(...)` calls reading from those
-  paths. Run smoke tests. This validates the texture↔shader
-  contract end-to-end against final-shape assets so T2.2 blur
-  tuning and T2.1 COMPLEX port don't have to re-calibrate later.
-  **Effort**: 4-8 h. **Blocker status**: files in
-  `public/textures/lens/` are license-ambiguous Gaia originals
-  used as placeholders — MUST NOT be published, committed, or
-  bundled into any release. The `.gitignore` rule is the safety
+  **T2.3a — Placeholder wiring ✅ SHIPPED (`51750c3`).** The 3
+  Gaia originals from `references/gaia-sky-source/` are now at
+  `public/textures/lens/{lenscolor.png, lensdirt-low.jpg,
+lensstarburst.jpg}` (gitignored via
+  `public/textures/lens/*.{png,jpg}`, added to `.gitignore`
+  alongside the pre-existing `references/` rule). The procedural
+  `DataTexture` bakes in
+  `src/components/canvas/scene/effects/lensFlareSprites.ts` are
+  replaced by `THREE.TextureLoader().load(...)` that reads
+  `${import.meta.env.BASE_URL}textures/lens/...`. The shader
+  sampling contract (LinearFilter / generateMipmaps=false /
+  ClampToEdge wrap except starburst wrapS=RepeatWrapping for the
+  `mod(abs(..),1)` sampling at `lensdirt.frag.glsl:24-26` /
+  colorSpace=NoColorSpace matching Gaia's libGDX default) is
+  pinned by 7 tests in the new jsdom-env file
+  `lensFlareSprites.test.ts`. `LENS_*_SPRITE_SIZE` exports dropped
+  (baking-era detail). Runtime smoke confirms all 3 URLs serve
+  200 OK under Vite's `base: "/atlas-orbital/"`; loaded images
+  arrive at their real Gaia sizes (256×1, 819×461, 502×60 — the
+  bakes' 256×1 / 512×512 / 256×1 were atlas inventions). Scene
+  renders cleanly at 59.5 FPS with zero console errors.
+  **Blocker status**: files at `public/textures/lens/*` are the
+  license-ambiguous Gaia originals — MUST NOT be published,
+  committed, or bundled. The `.gitignore` rule is the safety
   rail; T2.3b is the remediation. **Placeholder provenance
-  fingerprint** (recorded so a future agent can prove by
-  hash-delta that the swap happened in T2.3b):
+  fingerprint** (verified matching at ship time by `sha256sum`
+  so a future agent can prove by hash-delta that T2.3b actually
+  swapped):
 
   ```
   lenscolor.png         3200 bytes  sha256 d59b923b...  mtime 2023-09-29
