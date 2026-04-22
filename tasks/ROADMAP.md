@@ -186,18 +186,42 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 - **Dependencies**: port `atmscattering.frag.glsl` snippet first as
   shared include.
 
-### T3.2 — PBR metallic/roughness texture reads
+### T3.2 — PBR metalness + AO hooks (partially stale; re-audited 2026-04-22 during T3.5 planning)
 
-- **Gaia**: reads R=metallic, G=roughness, B=AO from packed OMR
-  textures. Energy-conservative Fresnel-Schlick with F0 blending.
-- **Atlas**: `MeshStandardMaterial` with scalar
-  `metalness` / `roughness` only — does not read per-pixel textures.
-- **Visual impact**: water specular on Earth oceans, metallic surfaces,
-  dielectric variation all rendered identically dull.
-- **Effort**: 2-3 days per body that has PBR textures.
-- **Dependencies**: none.
-- **Note**: this is the work that `pbr-*` docs (now deleted) researched
-  in April and never shipped. Re-research not needed — just implement.
+- **Gaia**: `pbr.fragment.glsl:268,286,300` reads from a packed
+  ORM texture with channel order **R=AO, G=roughness, B=metallic**
+  (glTF 2.0 / Three.js convention; ROADMAP's original "R=metallic,
+  G=roughness, B=AO" claim was wrong). Energy-conservative
+  Fresnel-Schlick `F0 = mix(vec3(0.04), diffuse, metallic)` is
+  computed at `pbr.fragment.glsl:510`.
+- **Atlas (actual, verified 2026-04-22)**:
+  - `MeshStandardMaterial` is Fresnel-Schlick by design — atlas
+    ALREADY gets correct dielectric specular "for free" from Three's
+    built-in shader chunks.
+  - `usePlanetMaterials.ts:217-226` wires `map` (albedo),
+    `normalMap`, and `roughnessMap` for Earth. `8k_earth_roughness_map.jpg`
+    is a dedicated single-channel map in `public/textures/`, not a
+    packed ORM texture.
+  - `usePlanetMaterials.ts` does NOT wire `metalnessMap` or `aoMap`
+    — atlas has no packed ORM textures and no metalness texture for
+    any body.
+- **Actual gap**: narrower than ROADMAP claim. Two pieces:
+  - **Plumbing**: add `metalnessMap` + `aoMap` hooks in
+    `usePlanetMaterials.ts`. Trivial (~30 min) once we have
+    textures that populate those fields.
+  - **Assets**: atlas needs packed ORM (or dedicated metalness + AO)
+    textures per body. None exist today. Earth ocean specular
+    (probably the main visual gap) would come from pairing a
+    metalness≈0 map with a very-low-roughness ocean mask. That's an
+    asset-creation project — hours to make a procedural mask for
+    Earth, day or more to hand-paint a proper ORM.
+- **Effort**: 1-2 days total. Code plumbing 30 min; Earth ORM asset
+  creation ~1 day; per-body repeat as assets become available.
+- **Dependencies**: none for plumbing; per-body asset work blocks
+  each body's visual delta.
+- **Status**: pending — deprioritized vs smaller wins (T3.5 shipped,
+  T3.6 small next) because plumbing without assets yields zero
+  visual change.
 
 ### T3.3 — Eclipse geometry (umbra / penumbra / diffraction)
 
@@ -216,14 +240,22 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 - **Effort**: 1-2 days.
 - **Dependencies**: none.
 
-### T3.5 — Earth night-lights terminator tightening
+### T3.5 — Earth night-lights terminator tightening ✅ **SHIPPED (`33807b6`)**
 
-- **Atlas**: `usePlanetMaterials.ts:268-285` computes
-  `nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity)`. Band is too
-  wide — night lights bleed into day side.
-- **Gaia**: hard gate `sunDot < threshold`.
-- **Effort**: 2 h.
-- **Dependencies**: none.
+- **Atlas (before)**: `usePlanetMaterials.ts:268-285` used
+  `nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity)` — cubic
+  smoothing over a 0.4-wide band. Leaked 15.6% of night-lights
+  texture onto day side at `intensity=0.1` (sun ~5.7° above horizon).
+- **Gaia**: `pbr.glsl:98-99` uses `linstep(-0.1, 0.1, -NdotL)` —
+  linear ramp over a 0.2-wide band centered on the terminator
+  (`linstep` def at `math.glsl:58-61`).
+- **Fix shipped**: `nightFactor = linstep(-0.1, 0.1, -intensity)`;
+  `linstep` helper inlined into the shader patch; new
+  `src/components/canvas/planet/nightLightsMath.{ts,test.ts}` mirrors
+  the formula with 9 pinned values. Documented divergence: atlas
+  skips Gaia's `selfShadow *= dayFactor` (`pbr.glsl:102`), which is
+  ring-surface scope and not needed for Earth.
+- **Status**: done — commit `33807b6`.
 
 ### T3.6 — Cloud additive blending terminator gate
 

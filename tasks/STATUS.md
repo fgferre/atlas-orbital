@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after θ.5d ship (`f64411e`) — per-body `AtmosphereScatteringConfig` + 3 θ.5b+c drifts fixed (fG, nSamples, eSun). T3.1 complete. Pending user live-watch; next = T3.2 (PBR) by D4 fidelity-gap ranking._
+_Last updated: 2026-04-22 after T3.5 ship (`33807b6`) — Earth night-lights terminator narrowed from 0.4 to Gaia's 0.2 band (linstep not smoothstep). T3.2 audit found staleness (atlas already reads roughnessMap; real gap narrower) — corrected inline, repriced as smaller item. Next = T3.6 or T3.4 by effort/fidelity ratio._
 
 ---
 
@@ -77,40 +77,40 @@ After reading, the **→ Next up** section tells you exactly what to do.
 | **θ.3 — LightGlow**                        | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit).                                                                                                    | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
 | **θ.4 — PseudoLensFlare**                  | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                                                                                                                                  | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
 | **θ.5a — atmscattering snippet**           | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.                                                                                                               | Building-block ship — consumed by θ.5b+c at `bc0a429`. No runtime behavior change at this commit.                                                                                                                                                                                                                                                                      |
+| **T3.5 — night-lights terminator**         | `33807b6`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). `linstep(-0.1, 0.1, -intensity)` mirrors `pbr.glsl:98-99`. 9 pinned test values cover every break point. Old atlas smoothstep leaked 15.6% night-lights at sun=5.7° above horizon; now 0.                                      | None. Scope limited to the night-lights emissive gate for Earth's `body.id === "earth"` branch. Gaia's `selfShadow *= dayFactor` at `pbr.glsl:102` is ring-surface-specific and not ported (documented in shader-patch comment).                                                                                                                                       |
 | **θ.5b+c — atmosphere + per-frame wiring** | `bc0a429` (prior `56d0e38` **reverted `422d794`**)                           | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke + user live-watch) at ship time. θ.5d R1 re-read later caught 3 numerical drifts (fG=-0.85 not +0.76; nSamples=5 not 23; implicit eSun=20 not 10) that had slipped past the original checks — fixed in θ.5d, see lesson **L27**. | Scope limited to Earth — uniform bundle `buildEarthAtmosphereUniforms()` hard-wires Earth's Nishita coefficients. Mars/Venus/others wait for θ.5d's per-body config layer.                                                                                                                                                                                             |
 
 ---
 
-## → Next up: **T3.2 — PBR metallic/roughness texture reads** (`ROADMAP.md §T3.2`)
+## → Next up: pick from the remaining unblocked set
 
-**T3.1 is done** (Rayleigh + Mie atmospheric scattering, ROADMAP's ⭐
-#1 cinematic gap): θ.5a `c2f05a6` + θ.5b+c `bc0a429` + θ.5d `f64411e`.
-Pending user live-watch of θ.5d — the fG sign flip (−0.85→+0.76) and
-eSun halving (20→10) will shift the atmosphere's visual character
-toward Gaia-accurate rendering; earlier θ.5b+c look was based on
-numerically wrong defaults (see **L27**).
+**T3.5 shipped** (`33807b6`). Pending user live-watch — subtle
+change (tighter dawn/dusk gradient on Earth's city-lights band),
+multi-frame smoke green, no shader errors.
 
-Per D4 (rank unblocked work by fidelity-gap size), the next biggest
-gap is **T3.2 — PBR metallic/roughness texture reads**. atlas's
-`MeshStandardMaterial` uses scalar `metalness`/`roughness` only;
-Gaia reads packed R=metallic, G=roughness, B=AO from OMR textures
-with energy-conservative Fresnel-Schlick F0 blending. Visible on
-Earth (ocean specular), Mars (dust dryness), any planet with water
-or metallic surfaces. Effort: 2-3 days per body that has PBR maps.
+**T3.2 repriced** during this iteration: ROADMAP claim "atlas
+MeshStandardMaterial uses scalar metalness/roughness only" was
+partially stale per L25. Atlas already wires `map`, `normalMap`,
+`roughnessMap` for Earth; only `metalnessMap` + `aoMap` are
+unwired, and there's no Earth metalness-or-AO texture in
+`public/textures/`. Also ROADMAP's channel order ("R=metallic,
+G=roughness, B=AO") is inverted from Gaia's actual convention —
+`pbr.fragment.glsl:268,286,300` shows ORM (R=AO, G=roughness,
+B=metallic), same as glTF 2.0. See inline correction in ROADMAP §T3.2.
 
-Alternatives (also unblocked):
+Remaining unblocked items ranked by fidelity-gap per day:
 
-- T3.3 Eclipse geometry (3-5 d)
-- T3.4 Cloud / ring shadow cleanup (1-2 d)
-- **T3.5** Earth night-lights terminator tightening (2 h, SMALL)
-- **T3.6** Cloud additive blending terminator gate (2-4 h)
-- T3.7 Atmosphere exponent parameterization (1 h — **obsoleted** by
-  T3.1 ship; the old `pow(max(...), 4.0)` is gone, parameterization
-  now lives inside `AtmosphereScatteringConfig`)
-- Or revisit Tier 2: T2.1 COMPLEX lens flare (D2 resolved → go)
+| Item                                             | Effort                        | Notes                                                                                                                 |
+| ------------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **T3.3** Eclipse geometry                        | 3-5 d                         | `lib/eclipses.glsl` (~80 LOC); ports the umbra/penumbra/diffraction spectrum. Nothing rendered today during syzygies. |
+| **T3.6** Cloud additive blending terminator gate | 2-4 h                         | Small. `usePlanetMaterials.ts:56` `AdditiveBlending` over-brightens cloud terminator on night side.                   |
+| **T3.4** Cloud/ring shadow cleanup               | 1-2 d                         | Fixes cloud silhouette drift vs visible cloud material.                                                               |
+| T3.2 PBR metalness/AO hooks                      | 1-2 d (narrower than ROADMAP) | No textures yet in public/. Code plumbing is cheap; asset work is the blocker.                                        |
+| T2.1 COMPLEX lens flare                          | 3-5 d                         | Biggest visible Gaia gap in Tier 2.                                                                                   |
 
-Recommendation: **T3.2** for biggest fidelity gap per day. A small
-T3.5 or T3.6 fix fits as a palate cleanser between larger ports.
+Recommendation: **T3.6** next (short; matches the same pattern just
+used for T3.5; keeps velocity high). Or **T3.3** if ready for a
+longer port.
 
 Under the Gaia-fidelity rule (memory
 `feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 remain resolved —
