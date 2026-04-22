@@ -4,7 +4,6 @@ import { type CelestialBody } from "../../../lib/astrophysics";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
-  buildEarthAtmosphereUniforms,
 } from "../shaders/atmosphereShader";
 import {
   planetShadowVertexPatch,
@@ -152,13 +151,13 @@ export function usePlanetMaterials({
     };
   }, [cloudShadowMaterial]);
 
-  // Atmosphere Shader — Rayleigh+Mie multi-scatter port (θ.5b).
-  // Ports Gaia `atm.{fragment,vertex}.glsl`; uniform bundle comes from
-  // `buildEarthAtmosphereUniforms()` in atmosphereShader.ts. θ.5c will
-  // wire per-frame v3CameraPos / v3LightPos / fCameraHeight updates.
+  // Atmosphere Shader (Fresnel Glow)
   const atmosphereMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      uniforms: buildEarthAtmosphereUniforms(),
+      uniforms: {
+        color: { value: new THREE.Color(0x00aaff) },
+        viewVector: { value: new THREE.Vector3(0, 0, 0) },
+      },
       vertexShader: atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
       transparent: true,
