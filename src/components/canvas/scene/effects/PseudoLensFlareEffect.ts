@@ -106,6 +106,15 @@ export const PSEUDO_LENS_FLARE_DEFAULT_INTENSITY = 0.03;
  */
 export const GAIA_PSEUDO_LENS_FLARE_INTENSITY_GAIA_LITERAL = 0.15;
 export const PSEUDO_LENS_FLARE_DEFAULT_STARBURST_OFFSET = 0.0;
+/**
+ * Y-coordinate used to sample the 1D starburst strip. Pinned to 0.0
+ * per Gaia `lensdirt.frag.glsl:29,30`. The atlas procedural starburst
+ * sprite is currently 256×1, so 0.0 and 0.5 sample the same row in
+ * practice — but matching Gaia's literal guarantees 1:1 behaviour if
+ * the asset ever becomes 2D (matches `lensstarburst.jpg` semantics).
+ * Previously shipped at 0.5 (undocumented drift — fixed in T1.1).
+ */
+export const PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0;
 
 const fragmentShader = /* glsl */ `
   uniform int u_ghosts;
@@ -189,17 +198,19 @@ const fragmentShader = /* glsl */ `
     // Clamp to the "too strong halo" hack (pseudolensflare.frag.glsl:61).
     result = min(vec4(0.7), result);
 
-    // LensDirt + starburst modulation on the flare layer only.
+    // LensDirt + starburst modulation on the flare layer only. Y-coord
+    // interpolated from PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD — see its
+    // docstring for the lensdirt.frag.glsl:29,30 citation.
     vec2 centerVec = uv - vec2(0.5);
     float d = length(centerVec);
     float radial = d > 1e-6 ? centerVec.x / d : 0.0;
     float s1 = texture2D(
       u_lensStarburstTexture,
-      vec2(mod(abs(radial - u_starburstOffset), 1.0), 0.5)
+      vec2(mod(abs(radial - u_starburstOffset), 1.0), ${PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD.toFixed(1)})
     ).r;
     float s2 = texture2D(
       u_lensStarburstTexture,
-      vec2(mod(abs(-radial + u_starburstOffset), 1.0), 0.5)
+      vec2(mod(abs(-radial + u_starburstOffset), 1.0), ${PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD.toFixed(1)})
     ).r;
     float starburst = clamp(
       s1 * s2 + (1.0 - smoothstep(0.0, 0.3, d)),

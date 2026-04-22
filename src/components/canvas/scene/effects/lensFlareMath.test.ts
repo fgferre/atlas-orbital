@@ -23,6 +23,7 @@ import {
   PSEUDO_LENS_FLARE_DEFAULT_HALO_WIDTH,
   PSEUDO_LENS_FLARE_DEFAULT_INTENSITY,
   PSEUDO_LENS_FLARE_DEFAULT_STARBURST_OFFSET,
+  PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD,
 } from "./PseudoLensFlareEffect";
 
 const approxEq = (a: number, b: number, tol = 1e-9) => {
@@ -57,6 +58,15 @@ describe("PseudoLensFlare constants — pinned to Gaia Sky source", () => {
     // comparable subtle flare character without periphery-ring
     // artifacts. See PSEUDO_LENS_FLARE_DEFAULT_INTENSITY docstring.
     expect(PSEUDO_LENS_FLARE_DEFAULT_INTENSITY).toBe(0.03);
+  });
+
+  it("starburst sample Y-coord matches lensdirt.frag.glsl:29,30 literal (0.0)", () => {
+    // T1.1 regression pin. Earlier atlas shipped Y=0.5 — undocumented
+    // drift caught by the P10 mechanical diff in the 19-pass audit.
+    // The procedural starburst is 256×1 so 0.0 and 0.5 sample the same
+    // row in practice, but pinning the literal here catches any future
+    // reversion and guarantees 1:1 behaviour if the asset becomes 2D.
+    expect(PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD).toBe(0.0);
   });
 });
 
