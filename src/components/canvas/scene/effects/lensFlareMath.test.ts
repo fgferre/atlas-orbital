@@ -2,8 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   biasedSample,
+  computeLightIntensityAlpha,
   ghostWeight,
+  LENS_FLARE_FULL_ALPHA_ANGLE,
+  LENS_FLARE_SPIRAL_AMPLITUDE_REF,
+  LENS_FLARE_SPIRAL_N_SAMPLES_REF,
+  LENS_FLARE_SPIRAL_STEP_RADIANS_REF,
+  LENS_FLARE_ZERO_ALPHA_ANGLE,
   lensDirtComposite,
+  lensFlareSpiralSamplePositions,
+  ndcToLensFlareUv,
   starburstIntensity,
   starburstOffsetFromCameraDirection,
 } from "./lensFlareMath";
@@ -268,3 +276,124 @@ describe("PseudoLensFlare default starburst offset", () => {
 // via `document.createElementNS`, which requires a DOM. The math
 // tests above run in the project-default node env and must stay
 // DOM-free.
+
+describe("ndcToLensFlareUv — COMPLEX lens-flare driver projection", () => {
+  it("maps NDC (0, 0) to UV (0.5, 0.5) — scene centre", () => {
+    const { uv, onScreen } = ndcToLensFlareUv([0, 0, 0]);
+    expect(uv[0]).toBe(0.5);
+    expect(uv[1]).toBe(0.5);
+    expect(onScreen).toBe(true);
+  });
+
+  it("maps NDC corners to UV [0, 0] / [1, 1] without Y flip", () => {
+    // Gaia's shader reads GL texture UV with y=0 at bottom. Three.js
+    // NDC y=-1 at bottom. Same convention — no flip.
+    expect(ndcToLensFlareUv([-1, -1, 0]).uv).toEqual([0, 0]);
+    expect(ndcToLensFlareUv([1, 1, 0]).uv).toEqual([1, 1]);
+    expect(ndcToLensFlareUv([-1, 1, 0]).uv).toEqual([0, 1]);
+    expect(ndcToLensFlareUv([1, -1, 0]).uv).toEqual([1, 0]);
+  });
+
+  it("flags off-screen when NDC X/Y outside [-1, 1] OR Z outside clip", () => {
+    expect(ndcToLensFlareUv([-1.1, 0, 0]).onScreen).toBe(false);
+    expect(ndcToLensFlareUv([1.1, 0, 0]).onScreen).toBe(false);
+    expect(ndcToLensFlareUv([0, -1.1, 0]).onScreen).toBe(false);
+    expect(ndcToLensFlareUv([0, 1.1, 0]).onScreen).toBe(false);
+    expect(ndcToLensFlareUv([0, 0, -1.1]).onScreen).toBe(false);
+    expect(ndcToLensFlareUv([0, 0, 1.1]).onScreen).toBe(false);
+  });
+});
+
+describe("computeLightIntensityAlpha — MainPostProcessor.java:643-655", () => {
+  it("constants match Gaia source literals", () => {
+    expect(LENS_FLARE_FULL_ALPHA_ANGLE).toBe(1e-6);
+    expect(LENS_FLARE_ZERO_ALPHA_ANGLE).toBe(0.5e-7);
+  });
+
+  it("returns 0 at or below the zero-alpha angle (light culled)", () => {
+    expect(computeLightIntensityAlpha(0)).toBe(0);
+    expect(computeLightIntensityAlpha(LENS_FLARE_ZERO_ALPHA_ANGLE)).toBe(0);
+    expect(computeLightIntensityAlpha(-1)).toBe(0);
+  });
+
+  it("returns 1 at or above the full-alpha angle (typical Sun in view)", () => {
+    expect(computeLightIntensityAlpha(LENS_FLARE_FULL_ALPHA_ANGLE)).toBe(1);
+    expect(computeLightIntensityAlpha(1e-5)).toBe(1);
+    // Sun viewed from Earth ~5.97e-5 sr: comfortably full alpha.
+    expect(computeLightIntensityAlpha(5.97e-5)).toBe(1);
+  });
+
+  it("linearly interpolates between the two thresholds", () => {
+    const mid = (LENS_FLARE_FULL_ALPHA_ANGLE + LENS_FLARE_ZERO_ALPHA_ANGLE) / 2;
+    const alpha = computeLightIntensityAlpha(mid);
+    expect(alpha).toBeCloseTo(0.5, 10);
+  });
+
+  it("monotonically non-decreasing across the fade window", () => {
+    const window = [
+      LENS_FLARE_ZERO_ALPHA_ANGLE,
+      6e-8,
+      7e-8,
+      8e-8,
+      9e-8,
+      1e-7,
+      2e-7,
+      5e-7,
+      8e-7,
+      LENS_FLARE_FULL_ALPHA_ANGLE,
+    ];
+    let prev = -1;
+    for (const angle of window) {
+      const a = computeLightIntensityAlpha(angle);
+      expect(a).toBeGreaterThanOrEqual(prev);
+      expect(a).toBeLessThanOrEqual(1);
+      prev = a;
+    }
+  });
+});
+
+describe("lensFlareSpiralSamplePositions — lensflare.frag.glsl:186-194", () => {
+  it("N_SAMPLES matches Gaia #define at line 173", () => {
+    expect(LENS_FLARE_SPIRAL_N_SAMPLES_REF).toBe(6);
+  });
+
+  it("amplitude constant matches Gaia literal at line 187", () => {
+    expect(LENS_FLARE_SPIRAL_AMPLITUDE_REF).toBe(0.01);
+  });
+
+  it("dt matches Gaia literal 3π / N_SAMPLES at line 188", () => {
+    // Pin against the float-literal form Gaia uses: `3.0 * 3.14159 / 6`.
+    // We use Math.PI (slightly more precise than 3.14159); the runtime
+    // cost of the difference is negligible, but the formula IS what's
+    // canonical.
+    expect(LENS_FLARE_SPIRAL_STEP_RADIANS_REF).toBeCloseTo(
+      (3 * Math.PI) / 6,
+      12
+    );
+  });
+
+  it("returns the expected 6 Archimedean-spiral samples at aspect=1", () => {
+    const samples = lensFlareSpiralSamplePositions(1);
+    expect(samples).toHaveLength(6);
+    // First sample at t=0 sits at origin (fx = 0·cos(0) = 0,
+    // fy = 0·sin(0) = 0).
+    expect(samples[0]).toEqual([0, 0]);
+    // All subsequent samples lie within |r| ≤ a × t_max = 0.01 × 5dt ≈ 0.0785.
+    const tMax = 5 * LENS_FLARE_SPIRAL_STEP_RADIANS_REF;
+    const rMax = LENS_FLARE_SPIRAL_AMPLITUDE_REF * tMax;
+    for (const [sx, sy] of samples) {
+      expect(Math.hypot(sx, sy)).toBeLessThanOrEqual(rMax + 1e-12);
+    }
+  });
+
+  it("applies aspect-ratio correction to X only (matches shader's fx/ar division)", () => {
+    const square = lensFlareSpiralSamplePositions(1);
+    const wide = lensFlareSpiralSamplePositions(2); // ar=2
+    // X components of wide should be exactly half of square X;
+    // Y components unchanged.
+    for (let i = 0; i < square.length; i++) {
+      expect(wide[i][0]).toBeCloseTo(square[i][0] / 2, 12);
+      expect(wide[i][1]).toBeCloseTo(square[i][1], 12);
+    }
+  });
+});
