@@ -741,3 +741,60 @@ are easy to detect. Mandate `file:line` citations; require
 align each pass's output to a consistent table schema so
 diffing pass outputs is mechanical. Loose prose summaries
 hide contradictions.
+
+## L25 — ROADMAP items can be stale; R1 BOTH Gaia source AND current atlas state
+
+**2026-04-22. Caught during T1.3 iteration.**
+
+Ship-protocol step 2 says "Read `tasks/ROADMAP.md` for that item's
+Gaia source citation and effort" and step 3 says "R1 source-read:
+open the cited Gaia source and quote the relevant lines back."
+Both steps treated the ROADMAP claim about atlas-side state
+(`LightGlowEffect.ts:45-46` hardcodes `fovFactor=1.0`; halo size
+constant across zooms) as ground truth. It wasn't. The live atlas
+code in `src/components/canvas/scene/LightGlowInjector.tsx:141-186`
+already drives
+`effect.setSpiralScale(LIGHT_GLOW_DEFAULT_SPIRAL_SCALE / fovFactor)`
+per frame via `computeFovFactor(camera.fov)` from
+`src/lib/lightRegistry.ts:78-82` — a byte-identical mirror of
+`AbstractCamera.java:148`. The entire T1.3 "fix" had already
+shipped in `a27dc42` (the original θ.3 feature commit). Only
+luck made the discovery cheap: I loaded the injector file as
+part of R1, noticed the per-frame driver, and bailed before
+writing code. If I had trusted ROADMAP and jumped straight to
+implementing `u_fovFactor`, I'd have duplicated the driver, broken
+the pinned `lightRegistry.test.ts` assertions, and had to roll
+back. How the audit went wrong: P10 looked at the `LightGlowEffect.ts:45-46`
+docstring on `LIGHT_GLOW_DEFAULT_SPIRAL_SCALE` — the default base
+constant — which correctly states it assumes `fovFactor=1.0`, and
+read it as "runtime hardcodes fovFactor=1.0". The runtime sits in
+the injector, one layer up, and divides by the live fovFactor
+before setting it on the effect. The constant and the runtime
+value are not the same thing.
+
+**Rule.** R1 source-read is **two reads, not one**: (a) the cited
+Gaia source, AND (b) the current atlas implementation of the
+alleged drift. Before writing any code, verify the atlas side of
+the ROADMAP claim is still accurate — grep `git log` on the cited
+atlas file to check for fixes that landed after the audit was
+written; open the full per-frame driver chain (React effect →
+`useFrame` → uniform setters), not just the `Effect` subclass
+constructor. A ROADMAP "Atlas: hardcodes X" line is a SNAPSHOT of
+atlas state at the moment the audit ran. Later commits may have
+shipped the fix — the ROADMAP is not auto-synced to the repo.
+
+**Process corollary.** When the cited atlas file has had commits
+since the audit note was written, treat that as a **high-priority
+check** and read the whole driver chain, not just the docstring
+or the immediate accessor. L23 is the inverse (spot-check subagent
+synthesis); this is: spot-check the task list itself before acting
+on it. If the check reveals the fix already shipped, ship a
+doc-only correction (STATUS.md + ROADMAP.md marked SHIPPED with
+commit SHA + a line explaining how the audit went wrong) and add
+a lesson — don't silently move on, the stale entry will trip the
+next agent.
+
+**Code marker.** T1.3 — `LightGlowInjector.tsx:141-186` +
+`lightRegistry.ts:78-82` + `lightRegistry.test.ts:107-114`, all
+shipped in `a27dc42`. ROADMAP §T1.3 claimed "unfixed"; was
+corrected 2026-04-22.

@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after T1.2 ship (6c0f82f) — ring-shadow frame alignment resolved._
+_Last updated: 2026-04-22 after T1.3 audit — discovered already-shipped in `a27dc42`; Tier 1 now fully clear._
 
 ---
 
@@ -66,25 +66,31 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                            | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                        | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1 + θ.1b — star billboard** | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                               | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
-| **θ.3 — LightGlow**             | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. Spiral scale not FOV-aware — `LightGlowEffect.ts:45-46` hardcodes assuming `fovFactor=1.0`; Gaia `MainPostProcessor.java:562` divides by dynamic fovFactor.                                                                                               |
-| **θ.4 — PseudoLensFlare**       | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                            | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
+| Onda                            | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                           | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1 + θ.1b — star billboard** | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                  | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
+| **θ.3 — LightGlow**             | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit). | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
+| **θ.4 — PseudoLensFlare**       | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                               | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
 
 ---
 
-## → Next up: **T1.3 — Wire LightGlow spiral to FOV factor** (`ROADMAP.md §T1.3`)
+## → Next up: **Tier 1 is clear — pick a Tier 2 item** (`ROADMAP.md §Tier 2`)
 
-Last remaining Tier 1 bug. `LightGlowEffect.ts:45-46` hardcodes
-`u_spiralScale` assuming `fovFactor=1.0`; halo size is constant across
-all zooms. Gaia (`MainPostProcessor.java:562`) feeds
-`fovFactor = tan(FOV/2) / tan(20°)` (`AbstractCamera.java:148`) per frame.
+T1.1 shipped in `4cc35cb` (starburst Y-coord). T1.2 shipped in
+`6c0f82f` (ring-shadow frame alignment). T1.3 (FOV-aware spiral)
+was stale on audit — already shipped as part of θ.3's original
+`a27dc42` commit; per-frame driver lives at
+`src/components/canvas/scene/LightGlowInjector.tsx:141-186` and
+`src/lib/lightRegistry.ts:78-82`.
 
-Fix: add `u_fovFactor` uniform, compute per frame, divide spiral
-sample radius by it. Effort: ~2 h.
+Next candidate ondas live in Tier 2:
 
-(T1.1 shipped in `4cc35cb`; T1.2 shipped in `6c0f82f`.)
+- **T2.1** — Lens-flare variant (COMPLEX vs PSEUDO) — **blocked by D2**.
+- **T2.2** — Dithering in tonemap (see `ROADMAP.md §T2.2`).
+- **T2.3** — Lens sprite assets — **blocked by D3**.
+- **T2.4** — Tone-map + bloom defaults — **blocked by D5**.
+
+Unblocked starter: T2.2 (tonemap dithering) has no pending decision.
 
 ---
 

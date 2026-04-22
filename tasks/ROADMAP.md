@@ -44,18 +44,33 @@ Small diffs, direct source citations, no new foundations.
   including a Saturn-like tilt+translation regression).
 - **Status**: done — commit `6c0f82f`.
 
-### T1.3 — LightGlow spiral not FOV-aware
+### T1.3 — LightGlow spiral not FOV-aware ✅ **SHIPPED (`a27dc42`, original θ.3 feature commit) — audit was stale**
 
 - **Gaia**: `MainPostProcessor.java:562` wires
   `getGlowSpiralScale(..., fovFactor)` where
-  `fovFactor = tan(FOV/2) / tan(20°)` (`AbstractCamera.java:148`).
-- **Atlas**: `src/components/canvas/scene/effects/LightGlowEffect.ts:45-46`
-  hardcodes `u_spiralScale` assuming `fovFactor=1.0`. Halo size is
-  constant across all zooms.
-- **Fix**: add `u_fovFactor` uniform; compute `tan(camera.fov/2)/tan(20°)`
-  per frame; divide spiral sample radius by it.
-- **Effort**: 2 h.
-- **Dependencies**: none.
+  `fovFactor = tan(FOV/2) / tan(20°)` (`AbstractCamera.java:148`;
+  `TAN_REF_FOV = tan(40°/2)` at `AbstractCamera.java:42`).
+- **Atlas (actual, verified 2026-04-22)**: FOV-aware from day one of θ.3.
+  - `src/lib/lightRegistry.ts:78-82` — `computeFovFactor(fovDeg)` =
+    `tan(fovDeg/2) / tan(GAIA_FOV_FACTOR_REFERENCE_DEG/2)`, i.e.
+    `tan(fov/2) / tan(20°)`. Byte-identical formula to
+    `AbstractCamera.java:148`. Pinned by
+    `src/lib/lightRegistry.test.ts:107-114` (40°→1.0, 45°→1.138,
+    60°→1.586).
+  - `src/components/canvas/scene/LightGlowInjector.tsx:141-186` —
+    per-frame `useFrame`: reads `camera.fov`, calls
+    `computeFovFactor`, then
+    `effect.setSpiralScale(LIGHT_GLOW_DEFAULT_SPIRAL_SCALE / fovFactor)`.
+    Direct mirror of Gaia's `brightness × pointSize × 5e-5 / fovFactor`.
+- **How the audit went wrong**: P10 read the docstring on
+  `LightGlowEffect.ts:45-46`, which documents that the CONSTANT
+  `LIGHT_GLOW_DEFAULT_SPIRAL_SCALE` assumes `fovFactor = 1.0`, and
+  interpreted it as "runtime hardcodes 1.0". Missed that
+  `LightGlowInjector.tsx` divides by the live fovFactor before
+  pushing the value to the effect. See lesson **L25** in
+  `tasks/lessons.md`.
+- **Status**: done — no code change required. Doc-only correction
+  shipped in this audit turn.
 
 ---
 
