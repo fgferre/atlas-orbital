@@ -1,8 +1,22 @@
 import * as THREE from "three";
+import type { AtmosphereScatteringConfig } from "../../../lib/astrophysics";
 import {
   ATMSCATTERING_FRAG_GLSL,
   ATMSCATTERING_VERT_GLSL,
 } from "./atmscatteringSnippet";
+
+// Gaia class-level atmosphere defaults, mirrored from
+// `/tmp/gaiasky/core/src/gaiasky/scene/record/AtmosphereComponent.java`.
+// Used whenever a body's `AtmosphereScatteringConfig` leaves an
+// optional field unset. Cited line numbers are source-of-truth for
+// future audits.
+const GAIA_DEFAULT_E_SUN = 10.0; // AtmosphereComponent.java:55
+const GAIA_DEFAULT_MIE_ASYMMETRY_G = 0.76; // AtmosphereComponent.java:112
+const GAIA_DEFAULT_SAMPLE_COUNT = 23; // AtmosphereComponent.java:56
+const GAIA_DEFAULT_SCALE_DEPTH = 0.25; // AtmosphereComponent.java:120
+const GAIA_DEFAULT_OUTER_RADIUS_RATIO = 1.025; // AtmosphereComponent.java:118
+const GAIA_DEFAULT_ALPHA = 1.0; // AtmosphereComponent.java:130
+const FOUR_PI = 4.0 * Math.PI;
 
 // θ.5b+c — Rayleigh + Mie atmospheric scattering port + per-frame wiring,
 // combined ship of T3.1.
@@ -118,47 +132,68 @@ void main(void) {
 }
 `;
 
-// Earth-default uniform bundle. Per-frame fields (`v3CameraPos`,
+// Build the atmosphere `ShaderMaterial.uniforms` bundle from a body's
+// `AtmosphereScatteringConfig`. Per-frame fields (`v3CameraPos`,
 // `v3LightPos`, `v3PlanetPos`, `fCameraHeight`) carry INITIAL placeholder
 // values — the caller MUST overwrite them every frame in `useFrame` using
 // the inverse model-matrix pattern. See `Planet.tsx` atmosphere block and
 // the file header above for why static defaults are non-shippable.
 //
-// Scattering coefficients track Nishita (1993) values used by Gaia's
-// Earth preset:
-//   - `v3InvWavelength`: 1/λ⁴ at λ=(650, 570, 475) nm → (5.602, 9.473, 19.644)
-//   - `fKr = 0.0025`, `fKm = 0.0015`, `fESun = 20.0`
-//     → `fKrESun = 0.05`, `fKmESun = 0.03`, `fKr4PI ≈ 0.0314`, `fKm4PI ≈ 0.0188`
-//   - `fScaleDepth = 0.25` (scale-height / atmosphere-height ratio)
-//   - `fG = -0.85` (Mie asymmetry, backward-scattering Earth haze)
+// Optional `config` fields fall through to Gaia's class-level defaults
+// from `AtmosphereComponent.java` (constants at top of this file). All
+// derived values (`fKr4PI`, `fKmESun`, etc.) are recomputed here from
+// the primitive fields in the config — matches Gaia's
+// `setUpAtmosphericScatteringMaterial()` at
+// `AtmosphereComponent.java:107-159`.
 //
-// `fOuterRadius = 1.025` matches the atmosphere mesh scale at
-// `Planet.tsx:320`. `fInnerRadius = 1.0` = planet surface in atlas
-// model-space (unit sphere under the `rotationRef` group). `fScale = 40`
-// = `1/(fOuterRadius - fInnerRadius)`, `fScaleOverScaleDepth = 160` =
-// `fScale / fScaleDepth`.
-//
-// `nSamples = 5` is the baseline integrator sample count (Gaia uses 10-64;
-// atlas starts at 5 for perf and uplifts in θ.5d if needed).
-export const buildEarthAtmosphereUniforms = () => ({
-  // Per-frame dynamic state (overwritten each frame by Planet.tsx):
-  v3PlanetPos: { value: new THREE.Vector3(0, 0, 0) },
-  v3CameraPos: { value: new THREE.Vector3(0, 0, 2) },
-  v3LightPos: { value: new THREE.Vector3(1, 0, 0) },
-  fCameraHeight: { value: 2.0 },
+// Required config trio: `kRayleigh`, `kMie`, `wavelengthsUm`. See
+// `AtmosphereScatteringConfig` JSDoc for why these have no Gaia-source
+// default.
+export const buildAtmosphereUniforms = (config: AtmosphereScatteringConfig) => {
+  const eSun = config.eSun ?? GAIA_DEFAULT_E_SUN;
+  const mieAsymmetryG = config.mieAsymmetryG ?? GAIA_DEFAULT_MIE_ASYMMETRY_G;
+  const sampleCount = config.sampleCount ?? GAIA_DEFAULT_SAMPLE_COUNT;
+  const scaleDepth = config.scaleDepth ?? GAIA_DEFAULT_SCALE_DEPTH;
+  const outerRadiusRatio =
+    config.outerRadiusRatio ?? GAIA_DEFAULT_OUTER_RADIUS_RATIO;
+  const alpha = config.alpha ?? GAIA_DEFAULT_ALPHA;
 
-  // Static Earth scattering coefficients (Nishita 1993):
-  v3InvWavelength: { value: new THREE.Vector3(5.602, 9.473, 19.644) },
-  fOuterRadius: { value: 1.025 },
-  fInnerRadius: { value: 1.0 },
-  fKrESun: { value: 0.05 },
-  fKmESun: { value: 0.03 },
-  fKr4PI: { value: 0.031415927 },
-  fKm4PI: { value: 0.018849556 },
-  fScale: { value: 40.0 },
-  fScaleDepth: { value: 0.25 },
-  fScaleOverScaleDepth: { value: 160.0 },
-  fAlpha: { value: 1.0 },
-  fG: { value: -0.85 },
-  nSamples: { value: 5 },
-});
+  // Derived scalars, mirroring Gaia `AtmosphereComponent.java:109-122`.
+  const fKr4PI = config.kRayleigh * FOUR_PI;
+  const fKm4PI = config.kMie * FOUR_PI;
+  const fKrESun = config.kRayleigh * eSun;
+  const fKmESun = config.kMie * eSun;
+  const fInnerRadius = 1.0; // Planet surface in atlas unit-sphere model-space.
+  const fOuterRadius = outerRadiusRatio;
+  const fScale = 1.0 / (fOuterRadius - fInnerRadius);
+  const fScaleOverScaleDepth = fScale / scaleDepth;
+
+  // InvWavelength: 1/λ⁴ per channel (Gaia `AtmosphereComponent.java:126-128`).
+  const [wr, wg, wb] = config.wavelengthsUm;
+  const invR = 1.0 / Math.pow(wr, 4);
+  const invG = 1.0 / Math.pow(wg, 4);
+  const invB = 1.0 / Math.pow(wb, 4);
+
+  return {
+    // Per-frame dynamic state (overwritten each frame by Planet.tsx):
+    v3PlanetPos: { value: new THREE.Vector3(0, 0, 0) },
+    v3CameraPos: { value: new THREE.Vector3(0, 0, 2) },
+    v3LightPos: { value: new THREE.Vector3(1, 0, 0) },
+    fCameraHeight: { value: 2.0 },
+
+    // Static scattering coefficients, derived from the config:
+    v3InvWavelength: { value: new THREE.Vector3(invR, invG, invB) },
+    fOuterRadius: { value: fOuterRadius },
+    fInnerRadius: { value: fInnerRadius },
+    fKrESun: { value: fKrESun },
+    fKmESun: { value: fKmESun },
+    fKr4PI: { value: fKr4PI },
+    fKm4PI: { value: fKm4PI },
+    fScale: { value: fScale },
+    fScaleDepth: { value: scaleDepth },
+    fScaleOverScaleDepth: { value: fScaleOverScaleDepth },
+    fAlpha: { value: alpha },
+    fG: { value: mieAsymmetryG },
+    nSamples: { value: sampleCount },
+  };
+};

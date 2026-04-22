@@ -74,6 +74,48 @@ export interface VisualProvenance {
   }>;
 }
 
+/**
+ * Nishita-1993 atmospheric scattering parameters consumed by
+ * `src/components/canvas/shaders/atmosphereShader.ts`. Mirror of Gaia
+ * Sky's `AtmosphereComponent` (`/tmp/gaiasky/core/src/gaiasky/scene/record/AtmosphereComponent.java`):
+ *
+ * - **Required** fields (`kRayleigh`, `kMie`, `wavelengthsUm`) have no
+ *   Gaia source default — `AtmosphereComponent.java:48,52` declares
+ *   them as public fields that must be set per body (Gaia loads them
+ *   from `$GS_DATA` scene descriptors that aren't in the MPL-licensed
+ *   source tree). Atlas's default values here are standard Nishita
+ *   Earth literature values.
+ * - **Optional** fields fall back to Gaia's class-level defaults per
+ *   `AtmosphereComponent.java`: `sampleCount=23` (line 56),
+ *   `eSun=10` (line 55), `mieAsymmetryG=0.76` (line 112 constant),
+ *   `scaleDepth=0.25` (line 120 constant),
+ *   `outerRadiusRatio=1.025` (line 118 constant), `alpha=1.0` (line 130).
+ *
+ * Body opts in by setting this field on its `CelestialBody` record;
+ * `Planet.tsx` renders the atmosphere mesh and drives per-frame
+ * uniforms only when present.
+ */
+export interface AtmosphereScatteringConfig {
+  /** Nishita Rayleigh scattering coefficient. Earth standard: 0.0025. */
+  kRayleigh: number;
+  /** Nishita Mie scattering coefficient. Earth standard: 0.0015. */
+  kMie: number;
+  /** RGB wavelengths in MICROMETERS. Earth standard: [0.650, 0.570, 0.475]. */
+  wavelengthsUm: readonly [number, number, number];
+  /** Sun brightness. Default = Gaia `AtmosphereComponent.java:55` → 10. */
+  eSun?: number;
+  /** Mie Henyey-Greenstein asymmetry. Default = Gaia `AtmosphereComponent.java:112` → +0.76. */
+  mieAsymmetryG?: number;
+  /** Integrator samples per fragment. Default = Gaia `AtmosphereComponent.java:56` → 23. */
+  sampleCount?: number;
+  /** Scale-height / atmosphere-height ratio. Default = Gaia `AtmosphereComponent.java:120` → 0.25. */
+  scaleDepth?: number;
+  /** Outer-atmosphere radius (inner=1.0). Default = Gaia `AtmosphereComponent.java:118` → 1.025. */
+  outerRadiusRatio?: number;
+  /** Opacity multiplier. Default = Gaia `AtmosphereComponent.java:130` → 1.0. */
+  alpha?: number;
+}
+
 export interface CelestialBody {
   id: string;
   parentId?: string;
@@ -129,6 +171,14 @@ export interface CelestialBody {
     innerRadius: number; // In planetary radii
     outerRadius: number; // In planetary radii
   };
+
+  /**
+   * Opt-in Rayleigh+Mie atmospheric scattering config (θ.5b-d).
+   * Presence of this field switches on the atmosphere mesh + per-frame
+   * uniform wiring in `Planet.tsx`. See `AtmosphereScatteringConfig`
+   * JSDoc for field semantics + Gaia source citations.
+   */
+  atmosphereScattering?: AtmosphereScatteringConfig;
 
   // Optional non-uniform scale for observation-based ellipsoids.
   shapeScale?: [number, number, number];

@@ -4,7 +4,7 @@ import { type CelestialBody } from "../../../lib/astrophysics";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
-  buildEarthAtmosphereUniforms,
+  buildAtmosphereUniforms,
 } from "../shaders/atmosphereShader";
 import {
   planetShadowVertexPatch,
@@ -152,14 +152,16 @@ export function usePlanetMaterials({
     };
   }, [cloudShadowMaterial]);
 
-  // Atmosphere Shader — Rayleigh+Mie multi-scatter port (θ.5b+c).
-  // Ports Gaia `atm.{fragment,vertex}.glsl`. Uniforms are initialized
-  // from `buildEarthAtmosphereUniforms()`; per-frame dynamic fields
-  // (v3CameraPos, v3LightPos, v3PlanetPos, fCameraHeight) are
-  // overwritten every frame by `Planet.tsx`'s useFrame for Earth.
+  // Atmosphere Shader — Rayleigh+Mie multi-scatter port (θ.5b-d).
+  // Ports Gaia `atm.{fragment,vertex}.glsl`. Material is instantiated
+  // only for bodies with an `atmosphereScattering` config on their
+  // `CelestialBody` record; per-frame dynamic fields (v3CameraPos,
+  // v3LightPos, v3PlanetPos, fCameraHeight) are overwritten every
+  // frame by `Planet.tsx`'s useFrame.
   const atmosphereMaterial = useMemo(() => {
+    if (!body.atmosphereScattering) return null;
     return new THREE.ShaderMaterial({
-      uniforms: buildEarthAtmosphereUniforms(),
+      uniforms: buildAtmosphereUniforms(body.atmosphereScattering),
       vertexShader: atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
       transparent: true,
@@ -167,7 +169,7 @@ export function usePlanetMaterials({
       side: THREE.BackSide, // Render on the inside of a slightly larger sphere
       depthWrite: false,
     });
-  }, []);
+  }, [body.atmosphereScattering]);
 
   useEffect(() => {
     return () => {

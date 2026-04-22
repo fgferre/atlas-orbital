@@ -290,17 +290,18 @@ const PlanetVisual = ({
         );
       }
 
-      // Update Atmosphere Shader uniforms (Earth only) — θ.5b+c.
-      // Mirrors T1.2's ring-shadow transform: camera world-pos + Sun
-      // world-origin both enter the planet-local frame via the inverse
-      // of `rotationRef.matrixWorld`. The Nishita integrator in
-      // `atmosphereShader.ts` expects every position in the same
-      // unit-sphere frame (fInnerRadius=1.0, fOuterRadius=1.025).
+      // Update Atmosphere Shader uniforms — θ.5b-d. Runs for any body
+      // whose record opts into Rayleigh+Mie scattering via
+      // `atmosphereScattering`. Mirrors T1.2's ring-shadow transform:
+      // camera world-pos + Sun world-origin both enter the planet-local
+      // frame via the inverse of `rotationRef.matrixWorld`. The Nishita
+      // integrator expects every position in the same unit-sphere frame
+      // (fInnerRadius=1.0; fOuterRadius = config.outerRadiusRatio).
       // Static defaults here flicker against the cloud layer's
       // transparent-sort (see lesson L26) — per-frame writes are
       // mandatory.
       if (
-        body.id === "earth" &&
+        body.atmosphereScattering &&
         atmosphereMaterial &&
         atmosphereMaterial instanceof THREE.ShaderMaterial
       ) {
@@ -357,9 +358,18 @@ const PlanetVisual = ({
             </mesh>
           ) : null}
 
-          {/* 3. Atmosphere Layer (Larger still) */}
-          {body.id === "earth" && (
-            <mesh scale={[1.025, 1.025, 1.025]}>
+          {/* 3. Atmosphere Layer (Larger still) — θ.5d: any body with an
+              `atmosphereScattering` config on its record renders the
+              shell. Outer-radius ratio defaults to 1.025 (Gaia default)
+              but can be overridden per body via `outerRadiusRatio`. */}
+          {body.atmosphereScattering && atmosphereMaterial && (
+            <mesh
+              scale={[
+                body.atmosphereScattering.outerRadiusRatio ?? 1.025,
+                body.atmosphereScattering.outerRadiusRatio ?? 1.025,
+                body.atmosphereScattering.outerRadiusRatio ?? 1.025,
+              ]}
+            >
               <sphereGeometry args={[1, 64, 64]} />
               <primitive object={atmosphereMaterial} attach="material" />
             </mesh>

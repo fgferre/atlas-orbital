@@ -194,6 +194,18 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       normal: TEXTURE_PATH + "8k_earth_normal_map.jpg",
       roughness: TEXTURE_PATH + "8k_earth_roughness_map.jpg",
     },
+    // Rayleigh+Mie atmospheric scattering (θ.5b-d). Opting Earth in;
+    // optional fields fall through to Gaia's `AtmosphereComponent`
+    // class-level defaults (eSun=10, mieAsymmetryG=+0.76,
+    // sampleCount=23, scaleDepth=0.25, outerRadiusRatio=1.025).
+    // Required trio: Nishita Earth literature values — no Gaia source
+    // ground truth (Gaia loads Earth's Kr/Km/wavelengths from
+    // `$GS_DATA`, not from the MPL-licensed repo).
+    atmosphereScattering: {
+      kRayleigh: 0.0025,
+      kMie: 0.0015,
+      wavelengthsUm: [0.65, 0.57, 0.475],
+    },
   },
   {
     id: "mars",
