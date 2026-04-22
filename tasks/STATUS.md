@@ -17,8 +17,10 @@ automatically.
 1.  Read tasks/STATUS.md fully, then the docs it references
     (AGENTS.md, CLAUDE.md, tasks/ROADMAP.md, tasks/lessons.md,
     /tmp/gaiasky/). Identify §Next up.
-2.  Read tasks/ROADMAP.md for that item's Gaia source citation
-    and effort.
+2.  Read tasks/ROADMAP.md for that item's Gaia source citation,
+    effort, and Dependencies. If STATUS §Next up conflicts with
+    ROADMAP Dependencies (stale audit), fix STATUS before
+    proceeding (L25).
 3.  R1 source-read: open the cited Gaia source and quote the
     relevant lines back as evidence.
 4.  Implement port with the smallest diff that matches source.
