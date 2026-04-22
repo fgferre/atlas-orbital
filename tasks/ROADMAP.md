@@ -78,6 +78,58 @@ Small diffs, direct source citations, no new foundations.
 
 Fixes visible in user's reference screenshot comparison.
 
+### T2.0 — Remove `SunScreenFlare` stacking ✅ **SHIPPED (`cd626dc`)**
+
+- **Finding**: atlas runs two lens-flare systems simultaneously for
+  the Sun. Discovered via cross-AI review of Phase θ shipped work
+  (lesson L29).
+  - **System A**: `src/components/canvas/planet/SunScreenFlare.tsx`
+    — 3 sprites (core radial gradient, halo radial gradient, rays
+    starburst canvas). Object-space, `AdditiveBlending`,
+    `toneMapped=false` (legitimate HDR emissive per L28),
+    `depthTest=true` (post-L28 fix). Mounted in `Planet.tsx:839-845`
+    for `body.type === "star"`; import on `Planet.tsx:21`.
+  - **System B**: `src/components/canvas/scene/effects/PseudoLensFlareEffect.ts`
+    — Gaia θ.4 post-process port (bias → ghosts → CA → halo → dirt
+    × starburst). Mounted in `PostProcessingPipeline.tsx:130` via
+    `<LensFlareSlot />` (`scene/LensFlareInjector.tsx:30-55`).
+- **Why system A must go**:
+  1. **Replace-don't-stack rule** (memory
+     `feedback_no_effect_stacking.md`): a Phase θ port REPLACES
+     the pre-existing atlas-native equivalent. θ.4 shipped with
+     the delete step missed — this is retroactive cleanup.
+  2. **Gaia has no object-space sprite layer for the Sun**. Only
+     the billboard + the post-process. Keeping `SunScreenFlare`
+     is an atlas invention that violates Gaia-fidelity (memory
+     `feedback_default_gaia_fidelity.md`).
+  3. **Post-process is a strict superset**: bias-thresholded ghost
+     march + halo + CA + dirt + starburst covers every feature
+     `SunScreenFlare` provides (radial gradient, halo, star spikes).
+  4. **Calibration blocker**: every planned lens improvement (T2.3
+     assets, T2.2 blur + intensity raise, T2.1 COMPLEX port) tunes
+     the pipeline's output. With sprites stacked on top, we'd be
+     calibrating the sum and the tuning drifts as sprites render.
+- **Fix shipped** (`cd626dc`):
+  1. Mount at `Planet.tsx:838-845` removed (the `{body.type === "star" && (...)}` block).
+  2. `import { SunScreenFlare } from "./planet/SunScreenFlare"` at
+     `Planet.tsx:21` removed.
+  3. `src/components/canvas/planet/SunScreenFlare.tsx` deleted (275 LOC).
+  4. Orphan sweep: `createRadialGradientTexture` +
+     `createStarburstTexture` were file-local; gone with the file.
+     Grep `src/` confirms zero remaining refs.
+  5. Gates green: `npm test -- --run` 873/873, `npm run lint` clean,
+     `npm run build` clean (pre-existing chunk-size warnings only).
+- **Runtime smoke**: Claude Preview MCP — scene renders full
+  solar-system view with Sun visible as `ProceduralSun3D` billboard
+  (no ghost sprite halo); 55-56 FPS sustained across two
+  consecutive 2-second windows; zero console errors; WebGL context
+  alive. Per-pixel temporal sampling via `readPixels` / `drawImage`
+  returns zeros because Three.js sets `preserveDrawingBuffer: false`
+  — acceptable fallback for this onda because T2.0 is a pure
+  deletion adding no shader/uniform surface (L26's flicker failure
+  mode cannot arise from removing a sprite layer).
+- **Status**: done — commit `cd626dc`.
+
 ### T2.1 — Port COMPLEX lens flare (**D2 resolved → option (a)**)
 
 - **Finding**: Gaia's default ships `lensFlare.type: COMPLEX`
@@ -108,24 +160,89 @@ Fixes visible in user's reference screenshot comparison.
     wrapper Effect).
   - Keep current, document intensity tuning as atlas-native.
 - **Effort**: 2-3 days to port blur; hours to document.
-- **Dependencies**: T2.1 decision. If COMPLEX is ported, PSEUDO's blur
-  matters less.
+- **Dependencies**: T2.0 (stacking removed so the blur's effect is
+  isolable), T2.3 (final asset shapes drive blur calibration —
+  tuning against procedural placeholders wastes work). Not
+  architecturally dependent on T2.1; COMPLEX is a separate shader.
 
 ### T2.3 — Native CC-BY-4.0 lens sprite assets (**D3 resolved → option (a)**)
 
 - **Finding**: `lensstarburst.jpg`, `lensdirt.jpg`, `lenscolor.png`,
   `star-tex-03-*` are in Gaia's `$GS_DATA` bundle. No public license
   stated in `/tmp/gaiasky/ACKNOWLEDGEMENTS.md`.
+- **Asset reality check** (2026-04-22, during Lens Closure Wave
+  scoping): user initially believed Gaia hosted a ~285MB data pack
+  containing the lens PNGs. Verified against
+  `gaiasky.space/resources/datasets/`: public packs are
+  `default-data` (v62, 73 MiB — solar system data only) and
+  `hi-res-textures` (v15, 248 MiB — 4K/8K planet surfaces only).
+  Neither includes lens PNGs. The `gaiasky.space/licenses/` page
+  categorizes software (MPL 2.0), audiovisual (CC-BY), and datasets
+  (CC-BY / original) but does NOT cover `tex/base/*.png|jpg` image
+  textures. Direct vendoring is therefore not license-safe. Per
+  `Settings.java:4351-4353`, the three PNGs live at
+  `Constants.DATA_LOCATION_TOKEN + "tex/base/lens{color.png,dirt*.jpg,starburst.jpg}"`
+  inside an installed Gaia runtime — NOT in any public download.
+  **Reconstruct-natively path confirmed correct.**
 - **Resolution** (Gaia-fidelity rule, 2026-04-22): **option (a)**.
   Reconstruct each sprite natively under CC-BY-4.0 to reproduce
   Gaia's visual output (not "stay procedural with a disclaimer" —
   that is the opposite of max fidelity). The permission-request
   path (c) was rejected for latency; no reconstruction blocker
   justifies it.
-- **Effort**: 1-2 days (one session per sprite: study Gaia's visual,
-  recreate procedurally or by hand-painting, smoke-test against
-  the shader that samples it).
-- **Dependencies**: none.
+- **Ship phasing** (2026-04-22 user decision): to unblock pipeline
+  verification without waiting for the external AI-generation
+  pipeline, T2.3 splits into two phases:
+
+  **T2.3a — Placeholder wiring** (executable now; prerequisite
+  T2.0). Copy the 3 Gaia originals from
+  `references/gaia-sky-source/` (`lenscolor.png`,
+  `lensdirt-low.jpg`, `lensstarburst.jpg`) into
+  `public/textures/lens/`. Add a targeted
+  `public/textures/lens/*.{png,jpg}` rule to `.gitignore` so the
+  binaries never enter git. Replace the procedural `DataTexture`
+  bakes in
+  `src/components/canvas/scene/effects/lensFlareSprites.ts` with
+  `THREE.TextureLoader().load(...)` calls reading from those
+  paths. Run smoke tests. This validates the texture↔shader
+  contract end-to-end against final-shape assets so T2.2 blur
+  tuning and T2.1 COMPLEX port don't have to re-calibrate later.
+  **Effort**: 4-8 h. **Blocker status**: files in
+  `public/textures/lens/` are license-ambiguous Gaia originals
+  used as placeholders — MUST NOT be published, committed, or
+  bundled into any release. The `.gitignore` rule is the safety
+  rail; T2.3b is the remediation. **Placeholder provenance
+  fingerprint** (recorded so a future agent can prove by
+  hash-delta that the swap happened in T2.3b):
+
+  ```
+  lenscolor.png         3200 bytes  sha256 d59b923b...  mtime 2023-09-29
+  lensdirt-low.jpg     59191 bytes  sha256 c61a00d7...  mtime 2023-09-29
+  lensstarburst.jpg    10710 bytes  sha256 71da64eb...  mtime 2023-09-29
+  ```
+
+  **T2.3b — CC-BY-4.0 asset swap** (blocks on user delivery).
+  When the user drops AI-generated replacements into
+  `references/gaia-sky-source/` (validate by hash-delta against
+  the fingerprint above AND mtime check — genuine replacements
+  MUST show mtimes ≥ `2026-04-22`; failing either check means
+  the files are still the originals and the swap is a no-op):
+  1. Copy the new files to `public/textures/lens/` overwriting
+     the placeholders.
+  2. Remove the targeted `public/textures/lens/*.{png,jpg}` rule
+     from `.gitignore` so git tracks the new binaries.
+  3. Add a CC-BY-4.0 credit line to the root `README.md` and to
+     `public/textures/CREDITS.md` (create if absent).
+  4. Run `git status` to verify the `.gitignore` removal does
+     not accidentally un-ignore unrelated files.
+     **Effort**: 2-4 h.
+
+- **Effort**: total T2.3 = 6-12 h after T2.0 lands, across the two
+  phases above.
+- **Dependencies**: T2.0 (remove stacking before calibrating new
+  assets — otherwise the assets tune against the sum of two
+  effects and the calibration drifts when sprites go away later).
+  T2.3b additionally blocks on user delivery of CC-BY-4.0 assets.
 - **Note**: Milky Way panorama separately available from ESO under
   CC-BY-4.0 — can be vendored for T4.7.
 

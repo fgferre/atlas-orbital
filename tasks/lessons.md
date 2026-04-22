@@ -995,3 +995,88 @@ unrelated mesh can ruin an otherwise-correct flare port.
 `SunScreenFlare.tsx:242,254,266` to `depthTest={true}` and
 `PlanetMotionOverlays.tsx:30,43` to `toneMapped={true}`. Atlas
 convention for HDR sprites now aligned with `ProceduralSun3D.tsx:419,445,475`.
+
+## L29 — Cross-AI review catches framing blind spots the 3-layer protocol misses
+
+\*\*2026-04-22. Caught when an external AI review of Phase θ surfaced
+a `SunScreenFlare` + `PseudoLensFlareEffect` stacking that DIFF GATE
+
+- SUBAGENT VERIFY + MATH TESTS had all let through.\*\*
+
+After θ.4 (pseudo-lens-flare post-process port, `db407dc` + `4cc35cb`)
+shipped and passed all three verification layers, a user-requested
+external-AI review (cold — no conversation context, given only repo
+URL + commit SHAs) surfaced that atlas still renders two lens-flare
+systems on top of each other for the Sun:
+
+1. `src/components/canvas/planet/SunScreenFlare.tsx` — 3 sprite
+   meshes (core / halo / rays) with `AdditiveBlending`, mounted for
+   `body.type === "star"` in `Planet.tsx:839-845`. Pre-θ.4
+   atlas-native implementation.
+2. `src/components/canvas/scene/effects/PseudoLensFlareEffect.ts` —
+   the θ.4 post-process port, mounted at
+   `PostProcessingPipeline.tsx:130` via `<LensFlareSlot />`.
+
+Both draw on the Sun simultaneously. This violates the
+`feedback_no_effect_stacking.md` memory rule (Replace, don't stack).
+The θ.4 ship should have deleted `SunScreenFlare` as the final step
+of the port — that cleanup was missed.
+
+**Why the 3-layer verification protocol didn't catch it**:
+
+- **DIFF GATE** scope is "does the port match Gaia GLSL
+  line-by-line?" It did. Nothing about the port itself drifted.
+- **SUBAGENT VERIFY** inherits the DIFF GATE scope — the prompt
+  framed verification as "compare atlas shader X to Gaia shader Y".
+  The subagent never examined `Planet.tsx` to see what other meshes
+  coexisted at the Sun's position.
+- **MATH TESTS** pin shader numeric behavior in isolation. Stacking
+  between object-space meshes and post-process effects is outside
+  any unit-test scope.
+
+The cross-AI review asked a different question: "what shaders does
+Gaia use, and does atlas replicate them?" That framing implicitly
+widened scope from "single-shader port" to "lens-flare architecture"
+and surfaced the stacking immediately.
+
+**Rule.** When porting a Gaia Sky effect with a pre-existing
+atlas-native equivalent, the ship-protocol checklist MUST include
+an explicit **PREDECESSOR SWEEP** step before DIFF GATE — grep for
+the atlas-native predecessor (sprite-based flare, procedural shader,
+manual implementation); delete it in the same commit as the port,
+or document in the commit message why it stays. Added as step 5 of
+the kickoff prompt in `STATUS.md` and to the "Ship protocol
+(enforced)" section.
+
+**Process corollary — cross-AI review is a qualitatively distinct
+verification layer.** Dispatching a cold external agent with only
+the repo URL + commit SHAs (no conversation context, no in-session
+priming) answers a qualitatively different question from DIFF GATE
+
+- SUBAGENT VERIFY. DIFF GATE / SUBAGENT VERIFY answer "does the
+  port match source?" Cross-AI review answers "is the port the right
+  thing to have in the first place?" Schedule cross-AI review at
+  phase boundaries (end of θ, end of Tier 2, etc.), not per-onda.
+
+**Be critical of cross-AI review output too.** External AIs
+hallucinate. The review that surfaced this stacking ALSO contained
+a Part 2 that falsely claimed atlas had NONE of the post-process
+pipeline implemented — corrected only in Part 3 after the reviewer
+actually read `PseudoLensFlareEffect.ts`. Apply the same
+`file:line` verification standard to external reviews as to
+internal subagents (L23). Contradictions between review sections
+are signal, not noise (L24).
+
+**Also verify user-asserted facts before scoping.** During this
+same pivot, user recalled a ~285MB Gaia data pack containing the
+lens PNGs. WebFetch of `gaiasky.space/resources/datasets/` showed
+the actual packs are `default-data` (73 MiB, no lens assets) and
+`hi-res-textures` (248 MiB, planet surfaces only) — neither
+includes the PNGs. Had I scoped T2.3 around "vendor the 285MB
+pack" without verifying, the onda would have stalled at asset
+download time. Apply L23's spot-check rule to **every** external
+claim that scopes work — user memory included.
+
+**Code marker**: T2.0 in `tasks/ROADMAP.md` (new onda removes the
+stacking). Kickoff prompt gains step 5 PREDECESSOR SWEEP in
+`STATUS.md`.

@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after lens-flare drift fix (`1d6cc30`) — Sun sprite depthTest + prograde vector toneMap. Two user-reported bugs root-caused to `depthTest={false}` / `toneMapped={false}` on HDR-contributing sprites. L28 added. Next = T3.3 (eclipse geometry)._
+_Last updated: 2026-04-22 after **T2.0 shipped** (`cd626dc`) — `SunScreenFlare` predecessor deleted; Sun now renders through `ProceduralSun3D` billboard + θ.4 `PseudoLensFlareEffect` post-process only (no object-space sprite stacking). Lens Closure Wave advances to **T2.3a placeholder wiring** next. Cross-AI review of lens-flare closure that surfaced the stacking drove L29 + the wave pivot._
 
 ---
 
@@ -26,25 +26,31 @@ automatically.
 4.  Implement port with the smallest diff that matches source.
     Extract the math to TypeScript (pattern: foo.ts + foo.test.ts)
     and pin sample input/output values against Gaia behavior.
-5.  DIFF GATE — self-run a line-by-line diff between the Gaia
+5.  PREDECESSOR SWEEP (L29) — grep for any atlas-native equivalent
+    the port is replacing (sprite-based flare, procedural shader,
+    manual implementation). Delete it in the same commit OR
+    document in the commit message why it stays
+    (`feedback_no_effect_stacking.md`). Skipping this step is how
+    θ.4 shipped with `SunScreenFlare` stacking intact.
+6.  DIFF GATE — self-run a line-by-line diff between the Gaia
     source shader and the atlas port. Every divergence carries a
     one-line rationale comment in the atlas code. Undocumented
     divergence is a ship blocker.
-6.  SUBAGENT VERIFY — dispatch an Explore subagent (Sonnet) with
+7.  SUBAGENT VERIFY — dispatch an Explore subagent (Sonnet) with
     no context from this session. Prompt: "Re-diff <atlas port
     file> against Gaia source at <file:line>. Cite file:line for
     every divergence. Flag any undocumented divergence." Resolve
     findings before proceeding.
-7.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
-8.  Runtime smoke: Claude Preview MCP — confirm no shader compile
+8.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
+9.  Runtime smoke: Claude Preview MCP — confirm no shader compile
     errors AND scene renders AND **does not flicker over time**
     (L26: screenshots don't catch temporal bugs; use multi-frame
     pixel sampling via preview_eval+rAF for ≥30 frames, or ask the
     user to watch live, before marking smoke passed).
-9.  Commit with source-file citations in the message.
-10. Update tasks/STATUS.md (shipped row + §Next up) and
+10. Commit with source-file citations in the message.
+11. Update tasks/STATUS.md (shipped row + §Next up) and
     tasks/ROADMAP.md (item → done + commit SHA).
-11. Update tasks/lessons.md only if a new engineering failure
+12. Update tasks/lessons.md only if a new engineering failure
     mode was discovered in this iteration.
 
 Stop and check in before any non-reversible step (destructive git,
@@ -71,48 +77,82 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                                       | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                                                                                                                                   | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1 + θ.1b — star billboard**            | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                                                                                                                          | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
-| **θ.3 — LightGlow**                        | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit).                                                                                                         | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
-| **θ.4 — PseudoLensFlare**                  | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                                                                                                                                       | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
-| **θ.5a — atmscattering snippet**           | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.                                                                                                                    | Building-block ship — consumed by θ.5b+c at `bc0a429`. No runtime behavior change at this commit.                                                                                                                                                                                                                                                                      |
-| **T3.5 — night-lights terminator**         | `33807b6`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). `linstep(-0.1, 0.1, -intensity)` mirrors `pbr.glsl:98-99`. 9 pinned test values cover every break point. Old atlas smoothstep leaked 15.6% night-lights at sun=5.7° above horizon; now 0.                                           | None. Scope limited to the night-lights emissive gate for Earth's `body.id === "earth"` branch. Gaia's `selfShadow *= dayFactor` at `pbr.glsl:102` is ring-surface-specific and not ported (documented in shader-patch comment).                                                                                                                                       |
-| **θ.5b+c — atmosphere + per-frame wiring** | `bc0a429` (prior `56d0e38` **reverted `422d794`**)                           | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke + user live-watch) at ship time. θ.5d R1 re-read later caught 3 numerical drifts (fG=-0.85 not +0.76; nSamples=5 not 23; implicit eSun=20 not 10) that had slipped past the original checks — fixed in θ.5d, see lesson **L27**.      | Scope limited to Earth — uniform bundle `buildEarthAtmosphereUniforms()` hard-wires Earth's Nishita coefficients. Mars/Venus/others wait for θ.5d's per-body config layer.                                                                                                                                                                                             |
-| **T3.6 — cloud terminator**                | `785c925`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). Blending `AdditiveBlending → CustomBlending(ONE, ONE_MINUS_SRC_COLOR)` = Gaia `BlendMode.COLOR`. Formula `1 − linstep(-0.25, 0.12, -NL)` + `clamp(_, 0.03, 1.0)` mirrors `cloud.fragment.glsl:144,165`. 8 pinned tests.             | Atlas uses scalar `cloudDayFactor` not Gaia's RGB vector-length — acceptable under single-Sun assumption. Atlas does NOT re-implement Gaia's multi-light loop; Three.js MSM PBR chunks handle shading AFTER the `cloudBrightness` modulation. Both documented in file comments.                                                                                        |
-| **T3.4 — cloud-shadow cleanup**            | `9c06c16`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). NTSC→Rec.709 luma match Gaia `luma.glsl:3-4`; two-mesh workaround collapsed to one; `CLOUD_SHADOW_LUMA_CUTOFF` dedup. First iteration flickered 15 units from self-shadow loop; fixed by `receiveShadow={false}` on the cloud mesh. | Gaia writes depth from `cloud.fragment.glsl`; atlas keeps `customDepthMaterial` because cloudMaterial has `depthWrite:false` (T3.6 CustomBlending). Arch adaptation documented in `usePlanetMaterials.ts`.                                                                                                                                                             |
+| Onda                                        | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                                                                                                                                                                              | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1 + θ.1b — star billboard**             | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                                                                                                                                                                     | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
+| **θ.3 — LightGlow**                         | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit).                                                                                                                                                    | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
+| **θ.4 — PseudoLensFlare**                   | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                                                                                                                                                                                  | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
+| **θ.5a — atmscattering snippet**            | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.                                                                                                                                                               | Building-block ship — consumed by θ.5b+c at `bc0a429`. No runtime behavior change at this commit.                                                                                                                                                                                                                                                                      |
+| **T3.5 — night-lights terminator**          | `33807b6`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). `linstep(-0.1, 0.1, -intensity)` mirrors `pbr.glsl:98-99`. 9 pinned test values cover every break point. Old atlas smoothstep leaked 15.6% night-lights at sun=5.7° above horizon; now 0.                                                                                      | None. Scope limited to the night-lights emissive gate for Earth's `body.id === "earth"` branch. Gaia's `selfShadow *= dayFactor` at `pbr.glsl:102` is ring-surface-specific and not ported (documented in shader-patch comment).                                                                                                                                       |
+| **θ.5b+c — atmosphere + per-frame wiring**  | `bc0a429` (prior `56d0e38` **reverted `422d794`**)                           | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke + user live-watch) at ship time. θ.5d R1 re-read later caught 3 numerical drifts (fG=-0.85 not +0.76; nSamples=5 not 23; implicit eSun=20 not 10) that had slipped past the original checks — fixed in θ.5d, see lesson **L27**.                                                 | Scope limited to Earth — uniform bundle `buildEarthAtmosphereUniforms()` hard-wires Earth's Nishita coefficients. Mars/Venus/others wait for θ.5d's per-body config layer.                                                                                                                                                                                             |
+| **T3.6 — cloud terminator**                 | `785c925`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). Blending `AdditiveBlending → CustomBlending(ONE, ONE_MINUS_SRC_COLOR)` = Gaia `BlendMode.COLOR`. Formula `1 − linstep(-0.25, 0.12, -NL)` + `clamp(_, 0.03, 1.0)` mirrors `cloud.fragment.glsl:144,165`. 8 pinned tests.                                                        | Atlas uses scalar `cloudDayFactor` not Gaia's RGB vector-length — acceptable under single-Sun assumption. Atlas does NOT re-implement Gaia's multi-light loop; Three.js MSM PBR chunks handle shading AFTER the `cloudBrightness` modulation. Both documented in file comments.                                                                                        |
+| **T3.4 — cloud-shadow cleanup**             | `9c06c16`                                                                    | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke). NTSC→Rec.709 luma match Gaia `luma.glsl:3-4`; two-mesh workaround collapsed to one; `CLOUD_SHADOW_LUMA_CUTOFF` dedup. First iteration flickered 15 units from self-shadow loop; fixed by `receiveShadow={false}` on the cloud mesh.                                            | Gaia writes depth from `cloud.fragment.glsl`; atlas keeps `customDepthMaterial` because cloudMaterial has `depthWrite:false` (T3.6 CustomBlending). Arch adaptation documented in `usePlanetMaterials.ts`.                                                                                                                                                             |
+| **T2.0 — SunScreenFlare predecessor sweep** | `cd626dc`                                                                    | **PURE DELETION** — atlas-native predecessor to θ.4, not a Gaia port. 3-sprite object-space layer removed; Sun now renders through `ProceduralSun3D` billboard + θ.4 `PseudoLensFlareEffect` post-process only. Orphan sweep confirmed no remaining refs to `SunScreenFlare` / `createRadialGradientTexture` / `createStarburstTexture` in `src/`. | None. Gates green (873/873 tests; lint + build clean). Runtime smoke: 55-56 FPS sustained across two 2s windows; zero console errors; scene renders cleanly. L26 per-pixel temporal sampling blocked by `preserveDrawingBuffer: false` on the Three.js canvas — acceptable fallback for a pure-deletion onda with no new shader/uniform surface.                       |
 
 ---
 
-## → Next up: pick from the remaining unblocked set
+## → Next up: Lens Closure Wave — **T2.3a placeholder wiring** (T2.0 ✅ shipped `cd626dc`; remaining: T2.3a → T2.2 → T2.1; T2.3b hot-swap on asset delivery)
 
-**T3.4 + T3.5 + T3.6 shipped**
-(`9c06c16`, `33807b6`, `785c925`). Earth's day/night terminator +
-cloud shadow casting + cloud luma convention are now all Gaia-
-accurate. Pending user live-watch.
+**T2.0 landed 2026-04-22 (`cd626dc`)** — `SunScreenFlare.tsx` +
+its `Planet.tsx:21` import + `Planet.tsx:839-845` mount deleted.
+Sun now renders through `ProceduralSun3D` billboard + the θ.4
+`PseudoLensFlareEffect.ts` post-process pipeline (mounted at
+`PostProcessingPipeline.tsx:130` via `<LensFlareSlot/>`). Pipeline
+output is now isolable — downstream calibration onda (T2.3a assets,
+T2.2 blur + intensity raise, T2.1 COMPLEX port) measure the
+post-process alone, not the sum of two competing effects.
 
-**T3.2 repriced** during this iteration: ROADMAP claim "atlas
-MeshStandardMaterial uses scalar metalness/roughness only" was
-partially stale per L25. Atlas already wires `map`, `normalMap`,
-`roughnessMap` for Earth; only `metalnessMap` + `aoMap` are
-unwired, and there's no Earth metalness-or-AO texture in
-`public/textures/`. Also ROADMAP's channel order ("R=metallic,
-G=roughness, B=AO") is inverted from Gaia's actual convention —
-`pbr.fragment.glsl:268,286,300` shows ORM (R=AO, G=roughness,
-B=metallic), same as glTF 2.0. See inline correction in ROADMAP §T3.2.
+**Cross-AI review origin (2026-04-22)**: atlas had been shipping
+TWO lens-flare systems stacked on the Sun — `SunScreenFlare.tsx`
+(3 object-space sprites, `body.type === "star"` gate) coexisting
+with θ.4 `PseudoLensFlareEffect.ts`. Violated
+`feedback_no_effect_stacking.md` memory rule (Replace, don't
+stack). The θ.4 ship should have deleted the predecessor as the
+final step; that cleanup was missed and slipped past DIFF GATE +
+SUBAGENT VERIFY + MATH TESTS because all three scoped to "does
+the port match source?" rather than "is this the right thing to
+have in the first place?" See L29.
 
-Remaining unblocked items ranked by fidelity-gap per day:
+**Asset reality check** (verified 2026-04-22 against
+`gaiasky.space/resources/datasets/` and `/licenses/`): the
+user-recalled "~285MB Gaia pack with lens PNGs" does not exist.
+Public packs are `default-data` (v62, 73 MiB — solar system data
+only) and `hi-res-textures` (v15, 248 MiB — 4K/8K planet surfaces
+only). Neither includes `lenscolor.png`, `lensdirt.jpg`,
+`lensstarburst.jpg` — those live in `$GS_DATA/tex/base/` per
+`Settings.java:4351-4353` with NO stated license on the Gaia
+licenses page (software = MPL 2.0, audiovisual = CC-BY, datasets
+= CC-BY or original; image textures = unspecified). **D3
+"reconstruct natively under CC-BY-4.0" path remains correct** —
+direct vendoring is not license-safe.
 
-| Item                        | Effort                        | Notes                                                                                                    |
-| --------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **T3.3** Eclipse geometry   | 3-5 d                         | `lib/eclipses.glsl` (~80 LOC); ports umbra/penumbra/diffraction. Nothing rendered during syzygies today. |
-| T3.2 PBR metalness/AO hooks | 1-2 d (narrower than ROADMAP) | No textures yet in public/. Code plumbing is cheap; asset work is the blocker.                           |
-| T2.1 COMPLEX lens flare     | 3-5 d                         | Biggest visible Gaia gap in Tier 2.                                                                      |
+**Placeholder policy** (2026-04-22 user decision). T2.3 splits
+into **T2.3a** (wire the Gaia-original PNGs as gitignored
+placeholders at `public/textures/lens/` to unblock T2.2/T2.1
+calibration now, without waiting for external AI-generation) and
+**T2.3b** (hot-swap placeholders for user's CC-BY-4.0 AI-generated
+assets once delivered). Placeholders are license-ambiguous and
+MUST NOT be committed — a targeted `public/textures/lens/*.{png,jpg}`
+rule in `.gitignore` is the safety rail. Current placeholder
+hashes / mtimes are recorded in `ROADMAP.md §T2.3` so a future
+agent can prove by mtime-delta that the swap actually happened.
 
-Recommendation: **T3.3** (eclipse geometry) — the last unblocked
-scene-shading gap on Tier 3. Natural math-extraction fit
-(umbra/penumbra/diffraction formulas → `eclipseMath.ts`
-(umbra/penumbra formulas fit `foo.ts + foo.test.ts` naturally).
+### Wave order (smallest diff first; each onda a separate 12-step ship)
+
+| Onda         | Scope                                                                                                                                                                                                                                                                                                                                                                   | Effort |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| ~~**T2.0**~~ | ✅ **Shipped `cd626dc`** — `SunScreenFlare.tsx` + `Planet.tsx:21` import + mount at `Planet.tsx:839-845` deleted. Orphan helpers (`createRadialGradientTexture`, `createStarburstTexture`) gone with the file.                                                                                                                                                          | done   |
+| **T2.3a**    | **Placeholder wiring** — copy `references/gaia-sky-source/{lenscolor.png, lensdirt-low.jpg, lensstarburst.jpg}` into `public/textures/lens/`; add targeted `public/textures/lens/*.{png,jpg}` to `.gitignore`; replace procedural `DataTexture` bakes in `lensFlareSprites.ts` with `THREE.TextureLoader().load(...)`. License-ambiguous placeholders, never committed. | 4-8 h  |
+| **T2.2**     | Port Gaia's 35-pass Gaussian blur (between `PseudoLensFlareEffect` and Bloom); raise `PSEUDO_LENS_FLARE_DEFAULT_INTENSITY` from `0.03` back to Gaia literal `0.15`; verify no periphery rings.                                                                                                                                                                          | 2-3 d  |
+| **T2.1**     | Port COMPLEX variant (D2-resolved) — `lensflare.frag.glsl` is a different shader from PSEUDO. New `LensFlareEffect.ts`; register PSEUDO as alternate variant.                                                                                                                                                                                                           | 3-5 d  |
+| **T2.3b**    | **CC-BY-4.0 asset swap** (BLOCKS on user AI-gen delivery). When user drops replacements into `references/gaia-sky-source/` (verify by hash-delta AND mtime ≥ `2026-04-22`): copy to `public/textures/lens/`, remove the gitignore rule, add credits to root `README.md` + new `public/textures/CREDITS.md`.                                                             | 2-4 h  |
+
+Total Lens Closure Wave: ~1-2 weeks. Full scope / evidence /
+dependencies per onda in `ROADMAP.md §T2.0-T2.3`.
+
+**Parked during the wave**: T3.3 (eclipse geometry, 3-5 d) — was
+Next up pre-pivot; remains the front-runner once the wave closes.
+T3.2 PBR hooks stay asset-blocked.
 
 Under the Gaia-fidelity rule (memory
 `feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 remain resolved —
