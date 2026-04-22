@@ -239,7 +239,7 @@ export const SunScreenFlare = ({
           map={textures.radial}
           transparent
           opacity={0}
-          depthTest={false}
+          depthTest={true}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
@@ -251,7 +251,7 @@ export const SunScreenFlare = ({
           map={textures.radial}
           transparent
           opacity={0}
-          depthTest={false}
+          depthTest={true}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
@@ -263,7 +263,7 @@ export const SunScreenFlare = ({
           map={textures.rays}
           transparent
           opacity={0}
-          depthTest={false}
+          depthTest={true}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}

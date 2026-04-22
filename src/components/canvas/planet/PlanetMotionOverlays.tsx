@@ -27,7 +27,7 @@ export const PlanetMotionOverlays = forwardRef<
           transparent
           opacity={0.95}
           depthWrite={false}
-          toneMapped={false}
+          toneMapped={true}
         />
       </mesh>
       <mesh scale={[1.12, 1.03, 1.55]} raycast={() => null}>
@@ -40,7 +40,7 @@ export const PlanetMotionOverlays = forwardRef<
           opacity={0.24}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
-          toneMapped={false}
+          toneMapped={true}
         />
       </mesh>
     </group>
