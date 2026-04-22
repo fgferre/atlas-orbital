@@ -150,7 +150,7 @@ Fixes visible in user's reference screenshot comparison.
 
 Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 
-### T3.1 — Rayleigh + Mie atmospheric scattering ⭐ HIGHEST VISUAL IMPACT (in progress)
+### T3.1 — Rayleigh + Mie atmospheric scattering ✅ **SHIPPED** (θ.5a `c2f05a6` + θ.5b+c `bc0a429` + θ.5d `f64411e`)
 
 - **Gaia**: `assets/shader/atm.fragment.glsl` + `assets/shader/lib/atmscattering.frag.glsl`
   (note: snippet lives under `lib/`, not `snippet/` — ROADMAP-P10 citation drift corrected 2026-04-22)
@@ -166,18 +166,23 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
   - ✅ **θ.5a** — `c2f05a6` — snippet (`atmscatteringSnippet.ts`) +
     math mirrors (`atmosphereMath.ts` + `.test.ts`, 16 pinned values).
   - ⚠️ **θ.5b** first attempt — `56d0e38` **reverted in `422d794`**.
-    Static-default uniforms produced saturated output that flickered
-    against the cloud layer's transparent-sort. Lesson L26 captured;
-    re-planned as combined θ.5b+c.
+    Static defaults flickered against the cloud-layer transparent-
+    sort. Lesson L26 captured.
   - ✅ **θ.5b+c** — `bc0a429` — combined shader rewrite + per-frame
-    uniforms. Earth's atmosphere renders Nishita Rayleigh+Mie with
-    `v3CameraPos` / `v3LightPos` / `fCameraHeight` driven from real
-    scene state in Earth-local frame (T1.2 inverse-matrix pattern).
-    Multi-frame smoke (L26): maxDelta=0 over 60 frames. Pending
-    user live-watch confirmation.
-  - 🟡 **θ.5d** (next) — per-body Rayleigh/Mie/scale-height config
-    from body record; Mars + candidates get their own params; final
-    gates; ship completes T3.1.
+    uniforms. Runtime smoke L26 maxDelta=0; user live-watch passed.
+    **Note**: at ship-time carried 3 numerical drifts (fG=-0.85 not
+    +0.76, nSamples=5 not 23, implicit eSun=20 not 10) that slipped
+    past DIFF GATE + SUBAGENT VERIFY because both checked what the
+    port CLAIMED, not what Gaia Java actually sets. Drifts fixed in
+    θ.5d. Lesson L27 captured.
+  - ✅ **θ.5d** — `f64411e` — per-body `AtmosphereScatteringConfig`
+    interface on `CelestialBody`; `buildAtmosphereUniforms(config)`
+    factory derives all scalars from config per
+    `AtmosphereComponent.java:107-159`; 3 drifts fixed; atmosphere
+    mesh + useFrame block generalized from Earth-hardcoded gate to
+    `body.atmosphereScattering != null`. Adding Mars/Venus/Titan
+    configs will auto-light-up their atmospheres with no further
+    code changes.
 - **Dependencies**: port `atmscattering.frag.glsl` snippet first as
   shared include.
 

@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after θ.5b+c ship (`bc0a429`) — Rayleigh+Mie atmosphere + per-frame uniforms wired for Earth; user live-watch confirmed no flicker, no blackout, atmosphere intensity acceptable. Next = θ.5d (per-body configs)._
+_Last updated: 2026-04-22 after θ.5d ship (`f64411e`) — per-body `AtmosphereScatteringConfig` + 3 θ.5b+c drifts fixed (fG, nSamples, eSun). T3.1 complete. Pending user live-watch; next = T3.2 (PBR) by D4 fidelity-gap ranking._
 
 ---
 
@@ -60,7 +60,7 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L26).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L27).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
@@ -71,61 +71,46 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                                       | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                                                                                                                                                                                   | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1 + θ.1b — star billboard**            | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                                                                                                                                                                          | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
-| **θ.3 — LightGlow**                        | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit).                                                                                                                                                         | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
-| **θ.4 — PseudoLensFlare**                  | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                                                                                                                                                                                       | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
-| **θ.5a — atmscattering snippet**           | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.                                                                                                                                                                    | Building-block ship — consumed by θ.5b+c at `bc0a429`. No runtime behavior change at this commit.                                                                                                                                                                                                                                                                      |
-| **θ.5b+c — atmosphere + per-frame wiring** | `bc0a429` (prior `56d0e38` **reverted `422d794`**)                           | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke + user live-watch). Earth uses Nishita Rayleigh+Mie via snippet. Per-frame `v3CameraPos`/`v3LightPos`/`fCameraHeight` in planet-local frame via T1.2-pattern inverse matrix. Smoke (L26): maxDelta=0 across 60 frames × 7 points; user confirmed no flicker/blackout/over-saturation. | Scope limited to Earth — uniform bundle `buildEarthAtmosphereUniforms()` hard-wires Earth's Nishita coefficients. Mars/Venus/others wait for θ.5d's per-body config layer.                                                                                                                                                                                             |
+| Onda                                       | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                                                                                                                              | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1 + θ.1b — star billboard**            | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                                                                                                                     | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
+| **θ.3 — LightGlow**                        | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit).                                                                                                    | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
+| **θ.4 — PseudoLensFlare**                  | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                                                                                                                                  | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
+| **θ.5a — atmscattering snippet**           | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.                                                                                                               | Building-block ship — consumed by θ.5b+c at `bc0a429`. No runtime behavior change at this commit.                                                                                                                                                                                                                                                                      |
+| **θ.5b+c — atmosphere + per-frame wiring** | `bc0a429` (prior `56d0e38` **reverted `422d794`**)                           | **1:1 VERIFIED** (DIFF GATE + SUBAGENT VERIFY + multi-frame smoke + user live-watch) at ship time. θ.5d R1 re-read later caught 3 numerical drifts (fG=-0.85 not +0.76; nSamples=5 not 23; implicit eSun=20 not 10) that had slipped past the original checks — fixed in θ.5d, see lesson **L27**. | Scope limited to Earth — uniform bundle `buildEarthAtmosphereUniforms()` hard-wires Earth's Nishita coefficients. Mars/Venus/others wait for θ.5d's per-body config layer.                                                                                                                                                                                             |
 
 ---
 
-## → Next up: **θ.5b+c — atmosphere shader + per-frame wiring (combined)** (`ROADMAP.md §T3.1`) ⭐
+## → Next up: **T3.2 — PBR metallic/roughness texture reads** (`ROADMAP.md §T3.2`)
 
-Previous θ.5b attempt (`56d0e38`, reverted in `422d794`) shipped
-the shader with STATIC defaults and punted per-frame wiring to
-θ.5c. Mistake: static uniforms produced saturated output that
-interacted with the cloud layer via transparent-sort flips →
-flicker. L26 captures the verification-method failure;
-**scope-level lesson**: the shader rewrite and the per-frame
-uniform writes are one coherent unit and can't be split cleanly.
+**T3.1 is done** (Rayleigh + Mie atmospheric scattering, ROADMAP's ⭐
+#1 cinematic gap): θ.5a `c2f05a6` + θ.5b+c `bc0a429` + θ.5d `f64411e`.
+Pending user live-watch of θ.5d — the fG sign flip (−0.85→+0.76) and
+eSun halving (20→10) will shift the atmosphere's visual character
+toward Gaia-accurate rendering; earlier θ.5b+c look was based on
+numerically wrong defaults (see **L27**).
 
-T3.1 sub-onda progress:
+Per D4 (rank unblocked work by fidelity-gap size), the next biggest
+gap is **T3.2 — PBR metallic/roughness texture reads**. atlas's
+`MeshStandardMaterial` uses scalar `metalness`/`roughness` only;
+Gaia reads packed R=metallic, G=roughness, B=AO from OMR textures
+with energy-conservative Fresnel-Schlick F0 blending. Visible on
+Earth (ocean specular), Mars (dust dryness), any planet with water
+or metallic surfaces. Effort: 2-3 days per body that has PBR maps.
 
-- ✅ **θ.5a** — `c2f05a6` — snippet + math mirrors landed. Unchanged
-  by the revert; still the 1:1-verified building block.
-- 🟡 **θ.5b+c** ← here. Combined ship in one commit:
-  1. Rewrite `src/components/canvas/shaders/atmosphereShader.ts`
-     to compose `ATMSCATTERING_{FRAG,VERT}_GLSL` + inlined `luma()`
-     - the Earth uniform bundle (same as reverted `56d0e38`, with
-       the GLSL1 + `#define out varying` shim that passed runtime
-       compile).
-  2. Add `useFrame` in `Planet.tsx` (Earth branch only) that writes
-     per-frame:
-     - `v3CameraPos` = `inverse(mesh.matrixWorld) * camera.position`
-       (camera in Earth-local frame; mirrors T1.2 ring-shadow
-       pattern at `Planet.tsx:247-284`).
-     - `v3LightPos` = normalized Sun direction in Earth-local frame
-       (Sun lives at world origin; `v3LightPos = normalize(inverse(mesh.matrixWorld) * (0,0,0) - v3PlanetPos_local)`).
-     - `v3PlanetPos` = `(0,0,0)` (planet at its own local origin).
-     - `fCameraHeight` = `length(v3CameraPos)`.
-  3. Runtime smoke via multi-frame pixel sampling (L26) +
-     explicit user-watched confirmation before commit. No screenshot-
-     only green lights.
-- 🔲 **θ.5d** — per-body Rayleigh/Mie/scale-height config loaded
-  from body record; Mars + any other candidate body gets its own
-  params; per-body runtime smoke; final gates; ship (completes
-  T3.1).
+Alternatives (also unblocked):
 
-Scope for θ.5b+c: Earth only, Earth-default uniforms hard-wired in
-the material factory. Mars/Venus atmospheres wait for θ.5d's
-per-body config layer.
+- T3.3 Eclipse geometry (3-5 d)
+- T3.4 Cloud / ring shadow cleanup (1-2 d)
+- **T3.5** Earth night-lights terminator tightening (2 h, SMALL)
+- **T3.6** Cloud additive blending terminator gate (2-4 h)
+- T3.7 Atmosphere exponent parameterization (1 h — **obsoleted** by
+  T3.1 ship; the old `pow(max(...), 4.0)` is gone, parameterization
+  now lives inside `AtmosphereScatteringConfig`)
+- Or revisit Tier 2: T2.1 COMPLEX lens flare (D2 resolved → go)
 
-After T3.1 ships, D4 re-ranks the remaining set; next-biggest gaps
-are T3.2 (PBR metallic/roughness) and T3.3 (eclipse geometry), both
-visible on Earth/Saturn. Then T2.1 (COMPLEX lens flare) and the
-small Tier 3 polish fixes (T3.5/T3.6/T3.7).
+Recommendation: **T3.2** for biggest fidelity gap per day. A small
+T3.5 or T3.6 fix fits as a palate cleanser between larger ports.
 
 Under the Gaia-fidelity rule (memory
 `feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 remain resolved —

@@ -856,3 +856,71 @@ clouds + atmosphere + ring-shadow; etc.).
 
 **Code marker.** Ship-protocol step 8 in `tasks/STATUS.md` kickoff
 prompt. θ.5b was the discovery case — reverted in `422d794`.
+
+## L27 — DIFF GATE + SUBAGENT VERIFY must read numeric sources end-to-end; don't validate against claimed values
+
+**2026-04-22. Caught during θ.5d R1 re-read of
+`AtmosphereComponent.java`.**
+
+θ.5b+c (`bc0a429`) shipped with three numerical drifts vs Gaia:
+
+| Uniform           | θ.5b+c value      | Gaia source                                       | Gap                                                                                                             |
+| ----------------- | ----------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `fG`              | −0.85 (backward)  | `AtmosphereComponent.java:112`: +0.76             | Sign flip. Changed the phase function from backward- to forward-scattering — a visually significant difference. |
+| `nSamples`        | 5                 | `AtmosphereComponent.java:56`: 23                 | Under-sampled integrator (my "perf budget" excuse); visually coarser.                                           |
+| (implicit) `eSun` | 20 → fKrESun=0.05 | `AtmosphereComponent.java:55`: 10 → fKrESun=0.025 | Sun brightness doubled — atmosphere twice as intense as Gaia.                                                   |
+
+All three passed **three verification layers**: self-DIFF GATE,
+independent SUBAGENT VERIFY (with explicit `file:line` citation
+protocol), AND user live-watch. None caught the drifts. Why?
+
+The DIFF GATE prompts I wrote — and the subagent prompts I
+dispatched — both framed the verification as "confirm the atlas
+shader matches Gaia's GLSL source". That scope is correct but
+INCOMPLETE: the atmosphere's numeric constants don't live in the
+GLSL file. They live in the **Java wrapper** (`AtmosphereComponent.java`)
+that writes uniforms per-body. The snippet GLSL just says
+`uniform float fG;` — no value. The value comes from Java.
+
+My θ.5b+c verification prompts read the `.glsl` files and checked
+that atlas's shader template is a byte-match. They didn't point
+subagents at the Java file where the default values are set. So
+my "Earth defaults" — fabricated from memory of the Nishita paper —
+sailed through every gate because no one was comparing them to
+Gaia's actual defaults.
+
+User live-watch also missed it: the atmosphere rendered a plausible
+blue haze. Without a side-by-side against Gaia's rendering of the
+same scene, "looks like an atmosphere" = "ships". The fidelity gap
+was invisible to human eye on a single planet.
+
+**Rule.** For any shader port whose runtime behavior depends on
+uniforms set by host-side (Java) code:
+
+1. **DIFF GATE scope includes the host-side code**, not just the
+   shader. Read `setFooUniform()` / `setUp...Material()` / the
+   equivalent Java method that pushes values to the GPU. List
+   every uniform with its Gaia value.
+2. **SUBAGENT VERIFY prompt must cite the host-side file**. Write
+   the prompt so the agent has to open the Java file and verify
+   default constants. Don't let "just diff the .glsl" hide the
+   numeric gap.
+3. **Constants with known Gaia defaults must cite a specific
+   `java:line`**. If a value came from "a Nishita paper default"
+   or "common Earth value", that's an invention until verified.
+   Under the Gaia-fidelity rule, invented defaults lose to
+   Gaia-source defaults — even if visually plausible.
+
+**Process corollary.** The three verification layers (DIFF GATE,
+SUBAGENT VERIFY, MATH TESTS) protect against different failure
+modes — but they only catch drifts **inside the scope of what they
+read**. If a drift lives outside that scope (host-side defaults,
+config files, data bundles), no number of re-audits within the
+scope will find it. Expanding scope is the only remedy.
+
+**Code marker.** θ.5d `f64411e` fixes the three drifts and adds
+six `GAIA_DEFAULT_*` constants in
+`src/components/canvas/shaders/atmosphereShader.ts` with
+`AtmosphereComponent.java:LINE` citations for every default. Future
+DIFF GATE prompts for atmosphere should cite **both** the snippet
+GLSL and the Java wrapper.
