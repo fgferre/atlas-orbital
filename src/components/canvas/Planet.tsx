@@ -392,24 +392,27 @@ const PlanetVisual = ({
 
         {/* Cloud Rotation Group — super-rotates independently of the solid body */}
         <group ref={cloudRotationRef}>
-          {/* 2. Cloud Layer (Visual - Additive) */}
+          {/* 2. Cloud Layer — T3.4 collapsed. Pre-T3.4 this was split
+              into two meshes: a visible cloud mesh with castShadow=false,
+              and an invisible "shadow caster" mesh at the same scale
+              with an opacity=0 basic material + customDepthMaterial.
+              T3.4 merges into one mesh: the visible cloud casts its own
+              shadow via the attached `cloudShadowMaterial` as
+              customDepthMaterial — Three.js uses the main material for
+              the forward pass and the custom depth material for the
+              shadow pass. Silhouette alignment is enforced by the shared
+              `CLOUD_SHADOW_LUMA_CUTOFF` constant in usePlanetMaterials.ts
+              and the Rec.709 luma convention matching Gaia luma.glsl. */}
           {cloudMaterial && (
-            <mesh scale={[1.01, 1.01, 1.01]} castShadow={false} receiveShadow>
-              <sphereGeometry args={[1, 64, 64]} />
-              <primitive object={cloudMaterial} attach="material" />
-            </mesh>
-          )}
-
-          {/* 2b. Cloud Shadow Caster (Invisible, only casts shadow) */}
-          {cloudShadowMaterial && (
             <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow={false}>
               <sphereGeometry args={[1, 64, 64]} />
-              <primitive
-                object={cloudShadowMaterial}
-                attach="customDepthMaterial"
-              />
-              {/* We need a basic material to make it renderable, but we make it invisible */}
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              <primitive object={cloudMaterial} attach="material" />
+              {cloudShadowMaterial && (
+                <primitive
+                  object={cloudShadowMaterial}
+                  attach="customDepthMaterial"
+                />
+              )}
             </mesh>
           )}
         </group>

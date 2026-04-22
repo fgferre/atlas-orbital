@@ -13,6 +13,17 @@ import {
 } from "../shaders/planetShadowShader";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
+/**
+ * T3.4 — shared luma threshold between the visual cloud material and
+ * the cloud shadow depth material. Cloud pixels below this Rec.709
+ * luminance value are skipped for shadow casting and effectively
+ * invisible in the final composite (T3.6 multiplies `texColor.rgb *
+ * cloudBrightness`, so low-rgb pixels barely contribute post-COLOR-
+ * blend). Keeping the threshold identical on both sides prevents
+ * shadow silhouette from diverging from the visible cloud mask.
+ */
+const CLOUD_SHADOW_LUMA_CUTOFF = 0.2;
+
 interface UsePlanetMaterialsParams {
   body: CelestialBody;
   roughness: number;
@@ -135,9 +146,17 @@ export function usePlanetMaterials({
     return mat;
   }, [textureClouds, ringShadowIntensity]);
 
-  // Shadow Caster Material (Custom Depth Material)
-  // This material is used ONLY for casting shadows from the clouds.
-  // It converts the black-and-white cloud texture into an alpha map for the shadow depth buffer.
+  // Shadow Caster Material (Custom Depth Material) — T3.4.
+  // Used as the cloud mesh's `customDepthMaterial` during Three.js's
+  // shadow pass, so the visible cloud mesh itself casts shadows and
+  // we no longer need a separate invisible shadow-caster geometry
+  // (removed in T3.4 — see Planet.tsx cloud block).
+  //
+  // Luminance weights updated NTSC → Rec.709 (0.2126, 0.7152, 0.0722)
+  // to match Gaia `/tmp/gaiasky/assets/shader/lib/luma.glsl:3-4`. Pre-
+  // T3.4 used the legacy BT.601 weights (0.299, 0.587, 0.114), which
+  // over-weighted red in the cloud-shadow silhouette — a visible
+  // drift from Gaia parity even though the luminance range is similar.
   const cloudShadowMaterial = useMemo(() => {
     if (!textureClouds) return null;
 
@@ -145,23 +164,34 @@ export function usePlanetMaterials({
     const mat = new THREE.MeshDepthMaterial({
       depthPacking: THREE.RGBADepthPacking,
       map: textureClouds, // Use the cloud texture
-      alphaTest: 0.2, // Cutoff for shadows
+      alphaTest: CLOUD_SHADOW_LUMA_CUTOFF, // Cutoff for shadows (shared w/ visual)
     });
 
-    // Custom shader to use luminance (brightness) as alpha
+    // Custom shader to use Rec.709 luminance (matching Gaia luma.glsl)
+    // as alpha-test source. Cloud pixels below CLOUD_SHADOW_LUMA_CUTOFF
+    // discard (no shadow); above, full-alpha-through to depth write.
+    // Silhouette alignment contract: the visual cloud material's
+    // T3.6 `cloudBrightness` modulation multiplies RGB (not alpha),
+    // so the effective "visible cloud area" is approximately where
+    // `luma(texColor.rgb) >= CLOUD_SHADOW_LUMA_CUTOFF`. Shadow pass
+    // uses the same threshold on the same luma definition → silhouette
+    // matches the visual within ~1 texel (hard alphaTest vs smooth
+    // RGB modulation).
+    //
+    // We intentionally do NOT prepend `uniform sampler2D map;` or
+    // `varying vec2 vUv;` here — Three.js's `USE_MAP` preprocessor
+    // flag already emits those declarations (`ShaderChunk.map_pars_fragment`).
+    // Prepending them produced `ERROR: 'map' : redefinition` at runtime
+    // (caught by L26 multi-frame smoke during T3.4).
     mat.onBeforeCompile = (shader) => {
-      shader.fragmentShader = `
-        uniform sampler2D map;
-        varying vec2 vUv;
-        ${shader.fragmentShader}
-      `.replace(
+      shader.fragmentShader = shader.fragmentShader.replace(
         "#include <map_fragment>",
         `
         #ifdef USE_MAP
-          vec4 texColor = texture2D(map, vUv);
-          // Use luminance (brightness) as alpha
-          float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-          if (luminance < 0.2) discard; // Alpha test based on brightness
+          vec4 texColor = texture2D(map, vMapUv);
+          // Rec.709 luminance, matches Gaia luma.glsl:3-4.
+          float luminance = dot(texColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+          if (luminance < ${CLOUD_SHADOW_LUMA_CUTOFF.toFixed(3)}) discard;
         #endif
         `
       );
