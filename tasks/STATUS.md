@@ -1,163 +1,192 @@
 # Phase θ — Gaia Sky port status
 
-**Single source of truth for where we are in the Gaia Sky visual port.**
-Read this first before touching shader / VFX code.
+Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-21 (after `db407dc` — θ.4 pseudo lens flare + lensdirt starburst shipped)._
+_Last updated: 2026-04-22 after T1.1 ship (4cc35cb) — θ.4 starburst Y-coord drift resolved._
+
+---
+
+## Kickoff prompt (paste into any new session)
+
+Copy the 11-step loop below. **Step 1 bootstraps everything else** —
+the agent reads this file and the docs it references, so reading
+order, rules, Gaia source path, and §Next up are all discovered
+automatically.
+
+```
+1.  Read tasks/STATUS.md fully, then the docs it references
+    (AGENTS.md, CLAUDE.md, tasks/ROADMAP.md, tasks/lessons.md,
+    /tmp/gaiasky/). Identify §Next up.
+2.  Read tasks/ROADMAP.md for that item's Gaia source citation
+    and effort.
+3.  R1 source-read: open the cited Gaia source and quote the
+    relevant lines back as evidence.
+4.  Implement port with the smallest diff that matches source.
+    Extract the math to TypeScript (pattern: foo.ts + foo.test.ts)
+    and pin sample input/output values against Gaia behavior.
+5.  DIFF GATE — self-run a line-by-line diff between the Gaia
+    source shader and the atlas port. Every divergence carries a
+    one-line rationale comment in the atlas code. Undocumented
+    divergence is a ship blocker.
+6.  SUBAGENT VERIFY — dispatch an Explore subagent (Sonnet) with
+    no context from this session. Prompt: "Re-diff <atlas port
+    file> against Gaia source at <file:line>. Cite file:line for
+    every divergence. Flag any undocumented divergence." Resolve
+    findings before proceeding.
+7.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
+8.  Runtime smoke: Claude Preview MCP — confirm no shader compile
+    errors and scene renders (not black).
+9.  Commit with source-file citations in the message.
+10. Update tasks/STATUS.md (shipped row + §Next up) and
+    tasks/ROADMAP.md (item → done + commit SHA).
+11. Update tasks/lessons.md only if a new engineering failure
+    mode was discovered in this iteration.
+
+Stop and check in before any non-reversible step (destructive git,
+file deletion, invasive refactor, new major dependency).
+```
 
 ---
 
 ## For a fresh agent picking up mid-phase
 
-Read in this order:
-
 1. `AGENTS.md` (repo root) — engineering standards.
 2. `CLAUDE.md` (repo root) — workflow orchestration rules.
-3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules (index).
-4. **This file** (`tasks/STATUS.md`) — what's shipped, what's next.
-5. `tasks/phase-gaia-sky.md` — the full Gaia Sky port spec (1500+ lines).
-   §4 = tier / reduced-motion contract. §5 = per-onda port plans.
-   §8 = sequence table. §9 = out-of-scope.
-6. `tasks/lessons.md` — cross-cutting engineering lessons.
+3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
+4. **This file** — what's shipped + known drifts + immediate next.
+5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L24).
+7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
+   `.glsl` / `.java` BEFORE any port (memory rule
+   `feedback_gaia_sky_source_first`).
 
-After reading, the next-action bullet under **"→ Next up"** below tells
-you exactly what to do.
+After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
 ## Shipped ondas
 
-| Onda                                   | Shipped                 | Commits                                                                                                      | What it delivers                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1** — Star sprite kernel           | 2026-04-20              | `2662f08`, `13e501e`                                                                                         | Gaia fragment kernel: gaussian halo texture + razor white core via `smoothstep(0.0, 0.04, r)` on premul additive blend                                                                                                                                                                                                                                                                                                                                                    |
-| **θ.1b** — Vertex solid-angle port     | 2026-04-20 → 2026-04-21 | `22349b0`, `583268e`, `07606be`, `0131af0`, `54e14ca`, `f8d8bff`, `8668b20`, `9b13f18`, `0961591`, `fa23a27` | Pseudo-size `a_size` from absMag + `solidAngle = a_size/dist` + `lint_smoothstep` opacity + `degrees12/radians12` precision + `[minQuad, 3e-8]` clamp + billboard-quad rendering + full Gaia color pipeline (Ballesteros→xyY→XYZ→γRGB +0.16 HSV) + fragment saturate + LEN0 unit-conversion fix (Math audit D1, `fa23a27`)                                                                                                                                                |
-| **θ.3** — LightGlow post-process       | 2026-04-21              | `a27dc42`, `fdb66ae`                                                                                         | `lightglow.frag.glsl` port as pmndrs Effect: Archimedean-spiral luma gate + polar-mask time-animated halo on top-N HYG billboard stars. Sun NOT in registry (Gaia: Sun is planet/model, not HIP-billboard). FOV-factor aware. Reduced-motion gates the mount. Runtime `nSamples=1` override honoured.                                                                                                                                                                     |
-| **θ.4** — Pseudo lens flare + lensdirt | 2026-04-21              | `db407dc`                                                                                                    | Merged pmndrs Effect porting `bias.frag.glsl` + `pseudolensflare.frag.glsl` + `lensdirt.frag.glsl`. Chapman ghosts + halo + chromatic aberration + 1D lens-colour + 2D dirt + 4-peak 1D starburst spikes. `flareIntensity = 0.03` atlas-tuned (Gaia literal 0.15; compensates for omitted 35-pass blur). Starburst drifts with `camera.direction` sum (`MainPostProcessor.java:911`). HDR HalfFloat composer buffer prerequisite. Reduced-motion freezes starburst drift. |
+| Onda                            | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                        | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1 + θ.1b — star billboard** | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                               | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
+| **θ.3 — LightGlow**             | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. Spiral scale not FOV-aware — `LightGlowEffect.ts:45-46` hardcodes assuming `fovFactor=1.0`; Gaia `MainPostProcessor.java:562` divides by dynamic fovFactor.                                                                                               |
+| **θ.4 — PseudoLensFlare**       | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                            | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
 
 ---
 
-## → Next up: **θ.6 — Grading finishes (CA + vignette + film grain)**
+## → Next up: **Tier 1 quick wins** (`ROADMAP.md §Tier 1`)
 
-**Status**: pending, ready to start.
-**Effort**: S (estimated ~200 LOC).
-**Plan section**: `tasks/phase-gaia-sky.md §5 θ.6`.
-**Dependency**: none shader-level. Slots into the composer chain as a
-post-Bloom grade pass.
+Two remaining bugs with direct source citations. No new foundations
+needed. (T1.1 shipped in `4cc35cb`.)
 
-**User preference**: θ.1c motion trails is on-deck (not chosen) — user
-deprioritized motion trails in favour of lens effects (shipped as θ.4).
-θ.6 is the next smallest composer item and matches Gaia Sky's default
-grading finish. θ.1c stays on the pending list but moves down.
+1. **T1.2 — Fix ring shadow frame mixing** — object-space `vPos` mixed
+   with world-space `uSunPosition` in `ringShadowShader.ts:31` and
+   `usePlanetMaterials.ts:342`. Works only when planet matrix is
+   identity; breaks under Saturn 26.73° tilt.
+2. **T1.3 — Wire LightGlow spiral to FOV factor** —
+   `LightGlowEffect.ts:45-46` accepts a uniform + camera feeds
+   `fovFactor = tan(FOV/2) / tan(20°)` per frame.
 
-**Scope summary**: port three independent toggles from Gaia's
-post-process chain — `chromaticAberration`, `vignette`, and `filmGrain`
-shaders. Small, display-referred (LDR post-tone-map), and independently
-tier-gated per `§4.1`. Replaces the earlier ad-hoc grade layer with
-direct 1:1 Gaia port.
-
-**Gaia Sky source to read first (R1 protocol)**:
-
-- `/tmp/gaiasky/assets/shader/postprocess/chromaticaberration.frag.glsl`
-- `/tmp/gaiasky/assets/shader/postprocess/vignetting.frag.glsl`
-- `/tmp/gaiasky/assets/shader/postprocess/filmgrain.frag.glsl`
-- `/tmp/gaiasky/core/src/gaiasky/render/MainPostProcessor.java`
-  `postProcessGradingChain` or similar — confirm slot + defaults
-- `/tmp/gaiasky/assets/conf/config.yaml` `chromaticAberration` +
-  `filmGrain` + `levels.vignette` sections.
-
-**Atlas-side surface expected**:
-
-- New effects in `src/components/canvas/scene/effects/`:
-  `ChromaticAberrationEffect.ts`, `VignetteEffect.ts`,
-  `FilmGrainEffect.ts` (or reuse pmndrs built-ins where 1:1
-  compatible).
-- `PostProcessingPipeline.tsx` — slot all three after AgX tone
-  mapping (display-referred).
-- `DisplayPanel` — three toggles "Chromatic Aberration / Vignette /
-  Film Grain".
-- Reduced-motion gate does NOT hard-disable θ.6 (none of the three
-  are motion-sensitive).
+Effort: 1 day remaining. Ship each through the protocol below.
 
 ---
 
-## Pending sequence after θ.1c
+## Confirmed non-drifts (stop re-auditing)
 
-Order from `phase-gaia-sky.md §8` (post-θ.3-ship):
+These came up as "suspected drift" in earlier passes but were verified
+present / correct on 2026-04-22. Future passes should not rediscover
+them:
 
-| #   | Onda | Subsystem      | Effort | Notes                                                        |
-| --- | ---- | -------------- | ------ | ------------------------------------------------------------ |
-| 1   | θ.6  | Composer       | S      | Grading finishes — CA + vignette + film grain (NEXT)         |
-| 2   | θ.9  | Scene-graph    | M      | Orbit-lines glow shader                                      |
-| 3   | θ.10 | Scene-graph    | M      | Constellations lines + MSDF labels                           |
-| 4   | θ.12 | Scene-graph    | S      | Named star labels via troika                                 |
-| 5   | θ.8  | Camera         | M      | Cinematic damping + FoV easing + surfaceMode                 |
-| 6   | θ.1c | Star vertex    | M      | Billboard motion-trail stretch (deprioritized — user intent) |
-| 7   | θ.5  | Composer+Depth | M      | Camera motion blur (velocity-based)                          |
-| 8   | θ.15 | Composer       | M      | NFAA + FXAA + LumaSharpen (no SMAA)                          |
-| 9   | θ.14 | Star vertex    | S      | Alive-sky twinkle (depends on θ.1b)                          |
-| 10  | θ.11 | Backdrop       | M-H    | Milky Way cubemap + dust                                     |
-| 11  | θ.7a | Hero-LOD       | M      | Hero-star corona billboard                                   |
-| 12  | θ.7b | Hero-LOD       | L      | Procedural surface + cross-fade                              |
-
-Canonical full table (with tier visibility, ship-order rationale, and
-notes per onda) lives in `tasks/phase-gaia-sky.md §8`.
+- Atlas **has** log-depth buffer enabled
+  (`Scene.tsx:261` → `glConfig = { antialias, logarithmicDepthBuffer: true }`).
+- Atlas **has** dynamic near-plane adjustment per focus
+  (`CameraController.tsx:310-314`).
+- Atlas **applies** stellar proper motion in the vertex shader
+  (`Starfield.tsx:26-28,146-147` — `velocity × yearsSinceJ2000`).
+- Simulation clock is time-accurate (J2000 epoch, matches Gaia's
+  `GlobalClock`); user can warp to any date.
+- θ.1/θ.1b/θ.3 shaders are 1:1 with documented divergences only
+  (verified by pass P10 mechanical diff).
 
 ---
 
-## Ship-protocol contract (user's standing requirement)
+## Ship protocol (enforced)
 
-Every onda ships through this loop (applies to θ.1c too):
+Every onda ships through 11 steps. Three independent verification
+layers replace visual parity: self-run **DIFF GATE** + independent
+**SUBAGENT VERIFY** + pinned **MATH TESTS**.
 
-1. **R1 source-read** — clone + read Gaia Sky `.glsl` / Java files for
+1. **R1 source-read** — read the actual Gaia `.glsl` / Java files for
    the onda. No plan-prose shortcuts.
-2. **Implementation** — port 1:1 with documented intentional
-   divergences (HDR, atlas architecture choices).
-3. **Self-check** against source — catch own drift before Codex does.
-4. **Gates** — `npm test -- --run`, `npm run lint`, `npm run build`.
-5. **Runtime smoke** — Claude-Preview MCP, screenshot, verify no
-   shader errors in console.
-6. **Codex audit** — fire `codex exec --sandbox read-only` with a
-   focused prompt (see `tasks/codex-review-theta-3-prompt.txt` for
-   the template).
-7. **Verify Codex findings independently** — each claim split into
-   (a) direction from source, (b) execution match. Procedural
-   substitutes for Gaia `$GS_DATA` assets are underspecified —
-   pick conservative fallbacks. See
-   `memory/feedback_codex_verified_claims_can_still_drift.md`.
-8. **Fix legitimate findings**, reject drift suggestions.
-9. **Commit** with detailed message referencing source files.
-10. **Update `tasks/STATUS.md`** (this file) and `tasks/phase-gaia-sky.md
-§8` with the new SHIPPED row + commit SHAs.
-11. **Update `memory/`** with any new lesson.
+2. **Plan port** — smallest diff matching source; identify which math
+   layer needs extraction to TypeScript helpers.
+3. **Implement** + extract math to `foo.ts` + `foo.test.ts`. Pin
+   sample input/output values against Gaia behavior (pattern:
+   `lensFlareMath.test.ts`, `lightGlowMath.test.ts`,
+   `starfieldShaderMath.test.ts`).
+4. **⭐ DIFF GATE** (lesson L22) — self-run line-by-line diff
+   between Gaia source shader and atlas port. Every divergence
+   carries a one-line rationale comment in the atlas code
+   (arch adaptation / HDR strategy / intentional tuning). Any
+   undocumented divergence blocks ship.
+5. **⭐ SUBAGENT VERIFY** — dispatch an Explore subagent (Sonnet)
+   with **no context from this session**. Prompt it with the two
+   file paths (atlas port + Gaia source) and demand: re-diff,
+   cite `file:line` for every divergence, flag undocumented. The
+   agent's verdict is independent of the implementer's
+   rationalizations. Resolve any findings before proceeding.
+6. **Gates** — `npm test -- --run` (the pinned math tests run
+   here), `npm run lint`, `npm run build`.
+7. **Runtime smoke** — Claude Preview MCP screenshot; check
+   console for shader compile errors; confirm scene renders
+   (not black). Last machine-checkable gate.
+8. **Commit** with message citing source files.
+9. **Update STATUS.md** (this file) and `ROADMAP.md` — mark onda
+   shipped, flag any residual drifts, move to next.
+10. **Update `lessons.md`** only if a new engineering failure mode
+    was discovered.
+11. **Loop** — read §Next up for the next item.
+
+**Visual parity vs Gaia runtime is OUTSIDE the loop.** Side-by-side
+visual comparison requires running Gaia Sky (Java/LibGDX desktop
+app) at a matched camera state, which Claude cannot reliably do.
+Rigor comes from the three verification layers above: DIFF GATE
+catches implementer drift, SUBAGENT VERIFY catches confirmation
+bias, MATH TESTS pin numeric behavior. If the code matches 1:1
+with documented divergences and the user still reports a visual
+gap, the cause is structural (config defaults, quality tier,
+dependency behavior) — investigate with source + config diff,
+never attempt further runtime visual comparison.
 
 ---
 
-## Out-of-scope (documented, not pending)
+## Audit completeness (2026-04-22)
 
-Tracked in `tasks/phase-gaia-sky.md §9`:
+Port state was audited across 19 verification passes:
 
-- **θ.2** — merged into θ.4 (Gaia's diffraction spikes live inside
-  `lensdirt.frag.glsl`, not a separate billboard layer).
-- **θ.13** — output dithering (Gaia Sky does not ship it).
-- **SSR** — screen-space reflections, deferred.
-- **Curvature / Reprojection / WarpingMesh / XBRZ** — dome/projection
-  passes we do not port.
+- 4 initial passes: post-processing inventory, scene
+  lighting/materials, lens effects drift, HDR/tone/depth architecture
+- 5 mid passes: camera cinematics, texture assets/licensing, scene-graph
+  LOD + star density, atlas pre-θ divergence, config.yaml + shader
+  snippet library
+- 10 final passes: line rendering, grid rendering, particle systems,
+  transparency + render order, precision/scale/jitter, shadow system,
+  animation/time/proper-motion, depth-buffer verdict, text/MSDF labels,
+  **1:1 shader line-by-line diff (P10)**
+
+All findings consolidated in `ROADMAP.md`. No further full-audit rounds
+needed unless new subsystems are introduced.
 
 ---
 
-## Open visual tuning concerns (tracked separately)
+## Pending decisions (see `ROADMAP.md §Pending decisions`)
 
-- **Halo footprint size**: LightGlow default `textureScale × 1.6 =
-0.65 NDC` matches Gaia exactly but is visually dramatic at
-  solar-system zoom. If the user wants a subtler look, add a
-  DisplayPanel "Star Halo Intensity" slider mapping to
-  `effect.setTextureScale()` (not a drift — a user-facing knob). No
-  planned work; tune on feedback.
-- **Sun corona**: currently `ProceduralSun3D` sphere without
-  post-process corona. Gaia Sky gets Sun corona from LensFlare (θ.4)
-  - Bloom on HDR emissive. Will resolve when θ.4 ships.
-- **`star-tex-03-*` asset parity**: our LightGlow sprite is a
-  conservative pure-radial gaussian (equivalent to Gaia
-  `textureIndex=4`). Gaia's default `textureIndexLens=3` has subtle
-  cross spikes. Shipping the real asset is a one-line swap if
-  licensing allows.
+| Key    | Question                                                       | Blocks                          |
+| ------ | -------------------------------------------------------------- | ------------------------------- |
+| **D1** | Which starfield source was shown in reference screenshots?     | Interpretation of θ.1/θ.1b ship |
+| **D2** | COMPLEX vs PSEUDO lens flare?                                  | T2.1 execution                  |
+| **D3** | Lens sprites — create native / stay procedural / request perm? | T2.3 execution                  |
+| **D4** | Tier order (1→4 sequential vs prioritize T3 for scene impact)? | Everything after Tier 1         |
+| **D5** | Tone map + bloom defaults — atlas opinion or Gaia parity?      | T2.4 execution                  |
+
+Tier 1 can proceed without any of these decisions.
