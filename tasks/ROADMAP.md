@@ -78,7 +78,7 @@ Small diffs, direct source citations, no new foundations.
 
 Fixes visible in user's reference screenshot comparison.
 
-### T2.1 — Lens-flare variant decision
+### T2.1 — Port COMPLEX lens flare (**D2 resolved → option (a)**)
 
 - **Finding**: Gaia's default ships `lensFlare.type: COMPLEX`
   (`MainPostProcessor.java:280-312`), which uses
@@ -87,14 +87,10 @@ Fixes visible in user's reference screenshot comparison.
 - **Evidence**: user's Gaia screenshot shows rainbow dispersive spikes
   spanning the screen — this is COMPLEX output, not PSEUDO. Atlas
   never had this.
-- **Options**:
-  - **(a) Port COMPLEX**: add `LensFlareEffect.ts` based on
-    `lensflare.frag.glsl`. Keep PSEUDO as secondary or remove.
-  - **(b) Keep PSEUDO as atlas opinion**: document the divergence
-    in STATUS.md; accept that the reference screenshot used a
-    different config.
-- **Recommendation**: (a). Full Gaia parity, matches what users see
-  elsewhere.
+- **Resolution** (Gaia-fidelity rule, 2026-04-22): **port COMPLEX**.
+  Add `LensFlareEffect.ts` based on `lensflare.frag.glsl`. Keep
+  PSEUDO registered as secondary variant (user-selectable) until
+  visual tuning is complete; do not rip θ.4 out yet.
 - **Effort**: 3-5 days (port + calibration + DIFF GATE per L22 +
   runtime smoke).
 - **Dependencies**: none.
@@ -115,30 +111,36 @@ Fixes visible in user's reference screenshot comparison.
 - **Dependencies**: T2.1 decision. If COMPLEX is ported, PSEUDO's blur
   matters less.
 
-### T2.3 — Lens sprite assets decision
+### T2.3 — Native CC-BY-4.0 lens sprite assets (**D3 resolved → option (a)**)
 
 - **Finding**: `lensstarburst.jpg`, `lensdirt.jpg`, `lenscolor.png`,
   `star-tex-03-*` are in Gaia's `$GS_DATA` bundle. No public license
   stated in `/tmp/gaiasky/ACKNOWLEDGEMENTS.md`.
-- **Options**:
-  - **(a)** Create native atlas versions from scratch under CC-BY-4.0.
-  - **(b)** Stay procedural forever with "not 1:1 Gaia" disclaimer.
-  - **(c)** Request Gaia maintainer permission to vendor specific
-    files.
-- **Effort**: 1-2 days for (a); hours for (b); unknown for (c).
+- **Resolution** (Gaia-fidelity rule, 2026-04-22): **option (a)**.
+  Reconstruct each sprite natively under CC-BY-4.0 to reproduce
+  Gaia's visual output (not "stay procedural with a disclaimer" —
+  that is the opposite of max fidelity). The permission-request
+  path (c) was rejected for latency; no reconstruction blocker
+  justifies it.
+- **Effort**: 1-2 days (one session per sprite: study Gaia's visual,
+  recreate procedurally or by hand-painting, smoke-test against
+  the shader that samples it).
 - **Dependencies**: none.
 - **Note**: Milky Way panorama separately available from ESO under
   CC-BY-4.0 — can be vendored for T4.7.
 
-### T2.4 — Tone map + bloom default alignment
+### T2.4 — Tone map + bloom default alignment (**D5 resolved → Gaia parity**)
 
 - **Gaia defaults**: `postprocess.toneMapping.type: NONE`,
   `postprocess.bloom.intensity: 0.0` (`config.yaml`).
-- **Atlas defaults**: AgX tone mapping forced in composer
+- **Atlas defaults (pre-T2.4)**: AgX tone mapping forced in composer
   (`resolver.ts:117,134,151,168`), bloom 0.75-1.1 via visual presets.
-- **Options**: atlas opinion (keep AgX + high bloom as tuned
-  defaults) or Gaia parity (add tone-map selector with NONE option,
-  make bloom opt-in).
+- **Resolution** (Gaia-fidelity rule, 2026-04-22): **match Gaia
+  `config.yaml` exactly** — default composer builds with
+  tone-map `NONE` and bloom `0.0`. Current AgX + high-bloom values
+  move behind a user-togglable "Cinematic" setting (not default),
+  so fidelity is the out-of-box experience and atlas-opinion stays
+  available on opt-in.
 - **Effort**: 1 day.
 - **Dependencies**: none.
 
@@ -382,17 +384,21 @@ clipping/jitter`.
 
 ---
 
-## Pending decisions
+## Decisions (resolved 2026-04-22 under Gaia-fidelity rule)
 
-| Key    | Question                                                 | Options                                                 | Blocks                          |
-| ------ | -------------------------------------------------------- | ------------------------------------------------------- | ------------------------------- |
-| **D1** | Which starfield source was in the reference screenshots? | HYG (Gaia port) / NASA (NASA Eyes)                      | Interpretation of θ.1/θ.1b ship |
-| **D2** | COMPLEX vs PSEUDO lens flare?                            | (a) Port COMPLEX (b) Keep PSEUDO as atlas opinion       | T2.1 execution                  |
-| **D3** | Lens sprites strategy?                                   | (a) Native CC-BY-4.0 (b) Procedural forever (c) Request | T2.3 execution                  |
-| **D4** | Tier order?                                              | 1→4 sequential / prioritize T3 for scene impact         | Everything after Tier 1         |
-| **D5** | Tone map + bloom defaults?                               | Atlas opinion / Gaia parity with selector               | T2.4 execution                  |
+Durable rule: **when a decision has a "match Gaia" branch and an
+"atlas opinion / procedural / stay as-is" branch, pick Gaia**. See
+memory `feedback_default_gaia_fidelity.md`. The D2-D5 resolutions
+below follow mechanically from that rule — no further user input
+required.
 
-Tier 1 can proceed without any decision above.
+| Key    | Question                                                 | Resolution                                                                                                                                                    |
+| ------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1** | Which starfield source was in the reference screenshots? | **Moot** — θ.1/θ.1b shipped 1:1 Gaia per P10 diff; reference-screenshot attribution no longer blocks anything.                                                |
+| **D2** | COMPLEX vs PSEUDO lens flare?                            | **(a) Port COMPLEX** — Gaia `config.yaml` ships `lensFlare.type: COMPLEX` (`MainPostProcessor.java:280-312`). PSEUDO kept as secondary variant until tuning.  |
+| **D3** | Lens sprites strategy?                                   | **(a) Native CC-BY-4.0** — reconstruct `lensstarburst`, `lensdirt`, `lenscolor`, `star-tex-03-*` to match Gaia's visual output. Not "stay procedural".        |
+| **D4** | Tier order?                                              | **Prioritize by fidelity-gap size.** Within unblocked set, biggest ⭐ gap first. Current winner: **T3.1** (Rayleigh+Mie, labelled #1 cinematic gap).          |
+| **D5** | Tone map + bloom defaults?                               | **Gaia parity.** Match `config.yaml` exactly: `toneMapping.type: NONE`, `bloom.intensity: 0.0`. Atlas-opinion values move behind a user setting, not default. |
 
 ---
 

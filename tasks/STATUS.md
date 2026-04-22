@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after T1.3 audit — discovered already-shipped in `a27dc42`; Tier 1 now fully clear._
+_Last updated: 2026-04-22 — Tier 1 clear; D2/D3/D4/D5 resolved under Gaia-fidelity rule (`feedback_default_gaia_fidelity.md`); next onda = T3.1 Rayleigh+Mie atmosphere._
 
 ---
 
@@ -74,37 +74,42 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **Blocked — needs user decision (D2, D3, D4, and/or D5)**
+## → Next up: **T3.1 — Rayleigh + Mie atmospheric scattering** (`ROADMAP.md §T3.1`) ⭐
 
-Tier 1 is fully clear:
+Tier 1 is fully clear (T1.1 `4cc35cb`, T1.2 `6c0f82f`, T1.3 already
+in `a27dc42`).
 
-- T1.1 shipped in `4cc35cb` (starburst Y-coord).
-- T1.2 shipped in `6c0f82f` (ring-shadow frame alignment).
-- T1.3 was stale on audit — already shipped in θ.3's original
-  `a27dc42` commit; per-frame driver at
-  `src/components/canvas/scene/LightGlowInjector.tsx:141-186`
-  and `src/lib/lightRegistry.ts:78-82`.
+Under the Gaia-fidelity rule (memory
+`feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 are all
+auto-resolved:
 
-All of Tier 2 is decision-gated:
+- **D2** → **port COMPLEX** (Gaia `config.yaml` default).
+- **D3** → **native CC-BY-4.0** lens sprites matching Gaia output.
+- **D4** → **rank by fidelity-gap size**, biggest ⭐ first.
+- **D5** → **match Gaia** `config.yaml` (tone-map NONE, bloom 0).
 
-- **T2.1** — Lens-flare variant (COMPLEX vs PSEUDO) — **blocked by D2**.
-- **T2.2** — PseudoLensFlare 35-pass blur — **blocked by T2.1 → D2**.
-- **T2.3** — Lens sprite assets (provenance) — **blocked by D3**.
-- **T2.4** — Tone-map + bloom default alignment — **blocked by D5**.
+D4 picks **T3.1** as the next onda: ROADMAP labels it as the **#1
+cinematic gap** — Earth and Mars atmospheres are currently flat
+rim-glow Fresnel (`atmosphereShader.ts:21` →
+`pow(max(...), 4.0)`), while Gaia runs multi-scatter 32-64
+samples/px per `atm.fragment.glsl` + `atmscattering.frag.glsl`
+with Rayleigh + Mie phase functions and scale-depth attenuation.
+Effort: 5-7 days. Will be split across several loop iterations:
 
-Tier 3 has small unblocked items (T3.5 night-lights 2 h;
-T3.6 cloud-additive gate 2-4 h; T3.7 atm-exponent 1 h) **but all of
-Tier 3 is gated by D4** (tier-order decision: sequential 1→4 vs
-prioritize T3 for scene impact).
+- **θ.5a** — port `atmscattering.frag.glsl` snippet as shared include
+  (extracting phase functions + optical-depth integrator to
+  `atmosphereMath.ts` + test).
+- **θ.5b** — wire `atm.fragment.glsl` into `atmosphereShader.ts`
+  (replacing rim-glow Fresnel).
+- **θ.5c** — per-planet atmosphere parameters (Rayleigh coefficients,
+  Mie anisotropy, scale height) loaded from body config.
+- **θ.5d** — runtime smoke per body, DIFF GATE, SUBAGENT VERIFY,
+  gates, ship.
 
-**Action required**: answer D2 (and ideally D4) before the next loop
-iteration. Recommended: per ROADMAP §T2.1 the author already
-recommended option (a) "port COMPLEX" — user's Gaia reference
-screenshot shows COMPLEX output, which atlas never had. If the user
-confirms D2=(a), T2.1 is a 3-5 day port (`lensflare.frag.glsl`).
-If the user prefers scene-impact first, flip D4 to "prioritize T3"
-and T3.1 (Rayleigh+Mie atmosphere, ⭐ highest visual impact) becomes
-the next onda.
+After T3.1 ships, D4 re-ranks the remaining set; next-biggest gaps
+are T3.2 (PBR metallic/roughness) and T3.3 (eclipse geometry), both
+visible on Earth/Saturn. Then T2.1 (COMPLEX lens flare) and the
+small Tier 3 polish fixes (T3.5/T3.6/T3.7).
 
 ---
 
@@ -196,14 +201,17 @@ needed unless new subsystems are introduced.
 
 ---
 
-## Pending decisions (see `ROADMAP.md §Pending decisions`)
+## Decisions (all resolved 2026-04-22 under Gaia-fidelity rule)
 
-| Key    | Question                                                       | Blocks                          |
-| ------ | -------------------------------------------------------------- | ------------------------------- |
-| **D1** | Which starfield source was shown in reference screenshots?     | Interpretation of θ.1/θ.1b ship |
-| **D2** | COMPLEX vs PSEUDO lens flare?                                  | T2.1 execution                  |
-| **D3** | Lens sprites — create native / stay procedural / request perm? | T2.3 execution                  |
-| **D4** | Tier order (1→4 sequential vs prioritize T3 for scene impact)? | Everything after Tier 1         |
-| **D5** | Tone map + bloom defaults — atlas opinion or Gaia parity?      | T2.4 execution                  |
+Durable rule in memory `feedback_default_gaia_fidelity.md`: **when
+a decision has a "match Gaia" branch and an "atlas opinion" branch,
+pick Gaia**. Do not re-surface resolved items here — see
+`ROADMAP.md §Decisions` for full rationale per key.
 
-Tier 1 can proceed without any of these decisions.
+| Key    | Resolution                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------- |
+| **D1** | Moot — θ.1/θ.1b shipped 1:1.                                                                                        |
+| **D2** | Port COMPLEX (Gaia default per `config.yaml` + `MainPostProcessor.java:280-312`).                                   |
+| **D3** | Native CC-BY-4.0 sprites matching Gaia's output. Not procedural.                                                    |
+| **D4** | Biggest-gap-first. Current winner: T3.1 (⭐ #1 cinematic gap).                                                      |
+| **D5** | Match Gaia `config.yaml` — `toneMapping.type: NONE`, `bloom.intensity: 0.0`. Cinematic preset moves to user opt-in. |
