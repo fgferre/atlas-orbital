@@ -48,13 +48,26 @@ export function usePlanetMaterials({
   surfaceMap,
   surfaceFillLight,
 }: UsePlanetMaterialsParams) {
-  // Cloud Material (PBR + Analytical Shadows)
+  // Cloud Material — T3.6 Gaia-fidelity pass.
+  // Blending: matches Gaia `CloudComponent.java:116` (BlendMode.COLOR
+  // = `GL_ONE, GL_ONE_MINUS_SRC_COLOR`). Replaces the pre-T3.6
+  // `THREE.AdditiveBlending` (`GL_ONE, GL_ONE`) which over-brightened
+  // the terminator because even dimmed cloud values added to the
+  // background unconditionally. `OneMinusSrcColorFactor` masks the
+  // background by (1 − cloudColor), so dim clouds barely disturb the
+  // night side.
+  // Terminator: matches Gaia `cloud.fragment.glsl:144,165` —
+  // `linstep(-0.25, 0.12, -NL)` (asymmetric) with 0.03 night floor.
+  // Pinned by `cloudTerminatorMath.{ts,test.ts}` (8 tests).
   const cloudMaterial = useMemo(() => {
     if (!textureClouds) return null;
     const mat = new THREE.MeshStandardMaterial({
       map: textureClouds,
       transparent: true,
-      blending: THREE.AdditiveBlending, // Reverted to Additive for visual look
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneMinusSrcColorFactor,
+      blendEquation: THREE.AddEquation,
       side: THREE.DoubleSide,
       depthWrite: false,
       roughness: 1.0,
@@ -81,24 +94,40 @@ export function usePlanetMaterials({
         `
       );
 
-      // Inject world-space declarations into fragment shader
+      // Inject world-space declarations + linstep helper into fragment
+      // shader. `linstep` mirrors Gaia `math.glsl:58-61` — same helper
+      // is inlined in the planet-material patch for T3.5 night-lights,
+      // but onBeforeCompile patches are per-material, so we inject
+      // here too rather than cross-reference.
       shader.fragmentShader = `
         uniform vec3 uSunPositionWorld;
         varying vec3 vCloudWorldPos;
         varying vec3 vCloudWorldNormal;
+
+        float linstep(float edge0, float edge1, float x) {
+            float d = edge1 - edge0;
+            return d != 0.0 ? clamp((x - edge0) / d, 0.0, 1.0) : 0.0;
+        }
+
         ${shader.fragmentShader}
       `;
 
-      // Modulate cloud opacity/color based on world-space day/night
+      // Modulate cloud brightness based on world-space day/night.
+      // T3.6 port of Gaia `cloud.fragment.glsl:144,165`:
+      //   dayFactor = 1 - linstep(-0.25, 0.12, -NL);
+      //   brightness = clamp(dayFactor, 0.03, 1.0);
+      //   cloudColor = cloud.rgb * brightness;
+      // Applied via multiplication onto diffuseColor.rgb (the MSM
+      // chunk that later drives the fragment output).
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <color_fragment>",
         `
         #include <color_fragment>
         vec3 cloudLightDir = normalize(uSunPositionWorld - vCloudWorldPos);
         float cloudIntensity = dot(vCloudWorldNormal, cloudLightDir);
-        float cloudNightFactor = 1.0 - smoothstep(-0.2, 0.2, cloudIntensity);
-        // Darken clouds on the night side
-        diffuseColor.rgb *= mix(1.0, 0.05, cloudNightFactor);
+        float cloudDayFactor = 1.0 - linstep(-0.25, 0.12, -cloudIntensity);
+        float cloudBrightness = clamp(cloudDayFactor, 0.03, 1.0);
+        diffuseColor.rgb *= cloudBrightness;
         `
       );
     };
