@@ -18,7 +18,6 @@ import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
 import type { Line2 } from "three-stdlib";
 
-import { SunScreenFlare } from "./planet/SunScreenFlare";
 import {
   PROGRADE_ARROW_BASE_WIDTH,
   PROGRADE_ARROW_BASE_LENGTH,
@@ -836,13 +835,6 @@ export const Planet = ({
       )}
 
       <group ref={groupRef} name={body.id}>
-        {body.type === "star" && (
-          <SunScreenFlare
-            targetRef={groupRef}
-            radiusKm={body.radiusKm}
-            color={body.color}
-          />
-        )}
         {showProgradeVector && focusId === body.id && body.type !== "star" && (
           <PlanetMotionOverlays
             ref={progradeRef}
