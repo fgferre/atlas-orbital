@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 — Tier 1 clear; D2/D3/D4/D5 resolved under Gaia-fidelity rule (`feedback_default_gaia_fidelity.md`); next onda = T3.1 Rayleigh+Mie atmosphere._
+_Last updated: 2026-04-22 after θ.5a ship (`c2f05a6`) — atmscattering snippet + math mirrors landed; next = θ.5b (wire snippet into `atmosphereShader.ts`)._
 
 ---
 
@@ -68,50 +68,44 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ## Shipped ondas
 
-| Onda                            | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                           | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **θ.1 + θ.1b — star billboard** | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                  | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
-| **θ.3 — LightGlow**             | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit). | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
-| **θ.4 — PseudoLensFlare**       | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                               | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
+| Onda                             | Commits                                                                      | 1:1 status (verified pass P10 — diff)                                                                                                                                                           | Known drifts / known-good                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **θ.1 + θ.1b — star billboard**  | `2662f08`, `13e501e`, `22349b0`..`fa23a27` (10 commits ending with LEN0 fix) | **1:1 VERIFIED**. Divergences are stylistic unrolls, inlined `luma.glsl`, pmndrs adaptations — all documented.                                                                                  | None outstanding. Full Gaia color pipeline (Ballesteros → xyY → XYZ → γRGB +0.16 HSV), LEN0 unit fix, pseudo-size kernel all match source line-for-line.                                                                                                                                                                                                               |
+| **θ.3 — LightGlow**              | `a27dc42`, `fdb66ae`                                                         | **1:1 VERIFIED** with documented arch divergences (vertex→fragment move required by pmndrs; HDR clamp strategy scoped to glow contribution). Spiral scale IS FOV-aware (2026-04-22 T1.3 audit). | Sprite uses pure radial gaussian because Gaia asset `star-tex-03-*` is in `$GS_DATA` with no public license. (FOV-factor drift listed in earlier STATUS rows was audit-stale: `LightGlowInjector.tsx:141-186` already drives `setSpiralScale(.../fovFactor)` per frame — shipped in `a27dc42`.)                                                                        |
+| **θ.4 — PseudoLensFlare**        | `db407dc`, `4cc35cb`                                                         | **1:1 VERIFIED** (post-T1.1). Starburst Y-coord now matches Gaia.                                                                                                                               | Starburst Y-coord fixed in T1.1 (`4cc35cb`) — extracted to `PSEUDO_LENS_STARBURST_SAMPLE_Y_COORD = 0.0` with pinned regression test. Residual: 35-pass blur omitted → `flareIntensity=0.03` vs Gaia literal `0.15` (documented tuning). Ships PSEUDO variant; Gaia default is COMPLEX (`MainPostProcessor.java:280-312`, different shader entirely) — tracked as T2.1. |
+| **θ.5a — atmscattering snippet** | `c2f05a6`                                                                    | **1:1 VERIFIED** (DIFF GATE + independent SUBAGENT VERIFY). Snippet byte-identical except header guards (documented). Math mirrors pin 16 values against hand-derived Gaia formulas.            | Building-block ship — unconsumed until θ.5b wires into `atmosphereShader.ts`. No runtime behavior change.                                                                                                                                                                                                                                                              |
 
 ---
 
-## → Next up: **T3.1 — Rayleigh + Mie atmospheric scattering** (`ROADMAP.md §T3.1`) ⭐
+## → Next up: **θ.5b — wire atmscattering snippet into `atm.fragment.glsl` port** (`ROADMAP.md §T3.1`) ⭐
 
-Tier 1 is fully clear (T1.1 `4cc35cb`, T1.2 `6c0f82f`, T1.3 already
-in `a27dc42`).
+T3.1 sub-onda progress:
 
-Under the Gaia-fidelity rule (memory
-`feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 are all
-auto-resolved:
-
-- **D2** → **port COMPLEX** (Gaia `config.yaml` default).
-- **D3** → **native CC-BY-4.0** lens sprites matching Gaia output.
-- **D4** → **rank by fidelity-gap size**, biggest ⭐ first.
-- **D5** → **match Gaia** `config.yaml` (tone-map NONE, bloom 0).
-
-D4 picks **T3.1** as the next onda: ROADMAP labels it as the **#1
-cinematic gap** — Earth and Mars atmospheres are currently flat
-rim-glow Fresnel (`atmosphereShader.ts:21` →
-`pow(max(...), 4.0)`), while Gaia runs multi-scatter 32-64
-samples/px per `atm.fragment.glsl` + `atmscattering.frag.glsl`
-with Rayleigh + Mie phase functions and scale-depth attenuation.
-Effort: 5-7 days. Will be split across several loop iterations:
-
-- **θ.5a** — port `atmscattering.frag.glsl` snippet as shared include
-  (extracting phase functions + optical-depth integrator to
-  `atmosphereMath.ts` + test).
-- **θ.5b** — wire `atm.fragment.glsl` into `atmosphereShader.ts`
-  (replacing rim-glow Fresnel).
-- **θ.5c** — per-planet atmosphere parameters (Rayleigh coefficients,
-  Mie anisotropy, scale height) loaded from body config.
-- **θ.5d** — runtime smoke per body, DIFF GATE, SUBAGENT VERIFY,
-  gates, ship.
+- ✅ **θ.5a** — `c2f05a6` — snippet + math mirrors landed. Building
+  blocks ready for θ.5b to consume. Nothing imports them yet.
+- 🟡 **θ.5b** ← here. Rewrite `src/components/canvas/shaders/atmosphereShader.ts`:
+  replace the rim-glow Fresnel at line 21 (`pow(max(0.0, 0.6 - dot(normal, viewDir)), 4.0)`)
+  with Gaia's `atm.fragment.glsl` + `atm.vertex.glsl` structure.
+  Compose `ATMSCATTERING_FRAG_GLSL` and `ATMSCATTERING_VERT_GLSL`
+  into the shader; prepend inline `luma()` per the snippet's consumer
+  contract (Gaia `atm.fragment.glsl:20`). Define one of
+  `atmosphereGround` / `atmosphericScattering` per atlas material
+  role. Sane uniform defaults for Earth so the render looks right
+  before θ.5c adds per-planet parameter wiring. Effort: 1-2 days.
+- 🔲 **θ.5c** — per-planet atmosphere parameters (Rayleigh
+  coefficients, Mie anisotropy, scale height) loaded from body
+  config.
+- 🔲 **θ.5d** — runtime smoke per body, final DIFF GATE, SUBAGENT
+  VERIFY, gates, ship (completes T3.1).
 
 After T3.1 ships, D4 re-ranks the remaining set; next-biggest gaps
 are T3.2 (PBR metallic/roughness) and T3.3 (eclipse geometry), both
 visible on Earth/Saturn. Then T2.1 (COMPLEX lens flare) and the
 small Tier 3 polish fixes (T3.5/T3.6/T3.7).
+
+Under the Gaia-fidelity rule (memory
+`feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 remain resolved —
+no pending user input.
 
 ---
 

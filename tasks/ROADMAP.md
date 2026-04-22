@@ -150,17 +150,28 @@ Fixes visible in user's reference screenshot comparison.
 
 Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 
-### T3.1 — Rayleigh + Mie atmospheric scattering ⭐ HIGHEST VISUAL IMPACT
+### T3.1 — Rayleigh + Mie atmospheric scattering ⭐ HIGHEST VISUAL IMPACT (in progress)
 
-- **Gaia**: `assets/shader/atm.fragment.glsl` + `atmscattering.frag.glsl`
-  snippet — multi-scatter 32-64 samples/px with phase functions and
+- **Gaia**: `assets/shader/atm.fragment.glsl` + `assets/shader/lib/atmscattering.frag.glsl`
+  (note: snippet lives under `lib/`, not `snippet/` — ROADMAP-P10 citation drift corrected 2026-04-22)
+  — multi-scatter 32-64 samples/px with phase functions and
   scale-depth attenuation.
 - **Atlas**: `src/components/canvas/shaders/atmosphereShader.ts:21`
   has only rim-glow Fresnel `pow(max(...), 4.0)`.
 - **Visual impact**: #1 cinematic gap. Earth / Mars atmospheres
   currently flat; Gaia is volumetric (sunset reddening, sunrise
   darkening).
-- **Effort**: 5-7 days.
+- **Effort**: 5-7 days, split across sub-ondas θ.5a-d.
+- **Progress**:
+  - ✅ **θ.5a** — `c2f05a6` — snippet (`atmscatteringSnippet.ts`) +
+    math mirrors (`atmosphereMath.ts` + `.test.ts`, 16 pinned values).
+    Unconsumed building blocks, zero runtime change.
+  - 🟡 **θ.5b** (next) — rewrite `atmosphereShader.ts` to compose the
+    snippet + port `atm.fragment.glsl` / `atm.vertex.glsl`. Replace
+    rim-glow Fresnel; Earth-default uniforms so render looks sane
+    before θ.5c.
+  - 🔲 **θ.5c** — per-planet atmosphere params from body config.
+  - 🔲 **θ.5d** — per-body runtime smoke, final gates, ship.
 - **Dependencies**: port `atmscattering.frag.glsl` snippet first as
   shared include.
 
