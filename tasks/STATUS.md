@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after θ.5a ship (`c2f05a6`) — atmscattering snippet + math mirrors landed; next = θ.5b (wire snippet into `atmosphereShader.ts`)._
+_Last updated: 2026-04-22 after θ.5b revert (`422d794`) — static-default uniforms caused flicker vs cloud layer; θ.5b and θ.5c merged into a single next ship. L26 added._
 
 ---
 
@@ -37,7 +37,10 @@ automatically.
     findings before proceeding.
 7.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
 8.  Runtime smoke: Claude Preview MCP — confirm no shader compile
-    errors and scene renders (not black).
+    errors AND scene renders AND **does not flicker over time**
+    (L26: screenshots don't catch temporal bugs; use multi-frame
+    pixel sampling via preview_eval+rAF for ≥30 frames, or ask the
+    user to watch live, before marking smoke passed).
 9.  Commit with source-file citations in the message.
 10. Update tasks/STATUS.md (shipped row + §Next up) and
     tasks/ROADMAP.md (item → done + commit SHA).
@@ -57,7 +60,7 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L25).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L26).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
@@ -77,26 +80,46 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **θ.5b — wire atmscattering snippet into `atm.fragment.glsl` port** (`ROADMAP.md §T3.1`) ⭐
+## → Next up: **θ.5b+c — atmosphere shader + per-frame wiring (combined)** (`ROADMAP.md §T3.1`) ⭐
+
+Previous θ.5b attempt (`56d0e38`, reverted in `422d794`) shipped
+the shader with STATIC defaults and punted per-frame wiring to
+θ.5c. Mistake: static uniforms produced saturated output that
+interacted with the cloud layer via transparent-sort flips →
+flicker. L26 captures the verification-method failure;
+**scope-level lesson**: the shader rewrite and the per-frame
+uniform writes are one coherent unit and can't be split cleanly.
 
 T3.1 sub-onda progress:
 
-- ✅ **θ.5a** — `c2f05a6` — snippet + math mirrors landed. Building
-  blocks ready for θ.5b to consume. Nothing imports them yet.
-- 🟡 **θ.5b** ← here. Rewrite `src/components/canvas/shaders/atmosphereShader.ts`:
-  replace the rim-glow Fresnel at line 21 (`pow(max(0.0, 0.6 - dot(normal, viewDir)), 4.0)`)
-  with Gaia's `atm.fragment.glsl` + `atm.vertex.glsl` structure.
-  Compose `ATMSCATTERING_FRAG_GLSL` and `ATMSCATTERING_VERT_GLSL`
-  into the shader; prepend inline `luma()` per the snippet's consumer
-  contract (Gaia `atm.fragment.glsl:20`). Define one of
-  `atmosphereGround` / `atmosphericScattering` per atlas material
-  role. Sane uniform defaults for Earth so the render looks right
-  before θ.5c adds per-planet parameter wiring. Effort: 1-2 days.
-- 🔲 **θ.5c** — per-planet atmosphere parameters (Rayleigh
-  coefficients, Mie anisotropy, scale height) loaded from body
-  config.
-- 🔲 **θ.5d** — runtime smoke per body, final DIFF GATE, SUBAGENT
-  VERIFY, gates, ship (completes T3.1).
+- ✅ **θ.5a** — `c2f05a6` — snippet + math mirrors landed. Unchanged
+  by the revert; still the 1:1-verified building block.
+- 🟡 **θ.5b+c** ← here. Combined ship in one commit:
+  1. Rewrite `src/components/canvas/shaders/atmosphereShader.ts`
+     to compose `ATMSCATTERING_{FRAG,VERT}_GLSL` + inlined `luma()`
+     - the Earth uniform bundle (same as reverted `56d0e38`, with
+       the GLSL1 + `#define out varying` shim that passed runtime
+       compile).
+  2. Add `useFrame` in `Planet.tsx` (Earth branch only) that writes
+     per-frame:
+     - `v3CameraPos` = `inverse(mesh.matrixWorld) * camera.position`
+       (camera in Earth-local frame; mirrors T1.2 ring-shadow
+       pattern at `Planet.tsx:247-284`).
+     - `v3LightPos` = normalized Sun direction in Earth-local frame
+       (Sun lives at world origin; `v3LightPos = normalize(inverse(mesh.matrixWorld) * (0,0,0) - v3PlanetPos_local)`).
+     - `v3PlanetPos` = `(0,0,0)` (planet at its own local origin).
+     - `fCameraHeight` = `length(v3CameraPos)`.
+  3. Runtime smoke via multi-frame pixel sampling (L26) +
+     explicit user-watched confirmation before commit. No screenshot-
+     only green lights.
+- 🔲 **θ.5d** — per-body Rayleigh/Mie/scale-height config loaded
+  from body record; Mars + any other candidate body gets its own
+  params; per-body runtime smoke; final gates; ship (completes
+  T3.1).
+
+Scope for θ.5b+c: Earth only, Earth-default uniforms hard-wired in
+the material factory. Mars/Venus atmospheres wait for θ.5d's
+per-body config layer.
 
 After T3.1 ships, D4 re-ranks the remaining set; next-biggest gaps
 are T3.2 (PBR metallic/roughness) and T3.3 (eclipse geometry), both

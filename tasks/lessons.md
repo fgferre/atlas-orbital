@@ -798,3 +798,61 @@ next agent.
 `lightRegistry.ts:78-82` + `lightRegistry.test.ts:107-114`, all
 shipped in `a27dc42`. ROADMAP §T1.3 claimed "unfixed"; was
 corrected 2026-04-22.
+
+## L26 — Runtime smoke for visual shaders needs temporal observation, not a screenshot
+
+**2026-04-22. Caught during θ.5b runtime smoke (commit `56d0e38`, reverted `422d794`).**
+
+The ship protocol's step 8 is "Runtime smoke: Claude Preview MCP —
+confirm no shader compile errors and scene renders (not black)."
+I satisfied this mechanically: opened the preview, read console
+logs (clean), took one screenshot (Earth visible with atmosphere),
+declared PASS. Shipped the commit. User watching live immediately
+reported: **"a tela está piscando e fica preta de vez em quando"**
+(screen flickers and goes black sometimes). Corrective message was
+blunt: **"vc nao vai conseguir captar os flickerings e a tela preta
+vendo screenshots"** — you won't catch flickers via screenshots.
+
+Root cause of the flicker: my shader produced near-saturated output
+with hardcoded defaults (integrator math computed `v3FrontColor`
+≈10⁴-10⁵ per sample → post-tonemap ≈vec3(1.0)). Stacked with
+existing cloud-layer (also `AdditiveBlending` + `depthWrite:false`
+
+- `transparent:true`), Three's per-frame transparent-sort flipped
+  the two layers, producing visible flicker. None of this surfaces
+  in a single-instant screenshot because flicker is **temporal** —
+  two consecutive frames can each be rendered fine individually but
+  differ by enough to read as a blink.
+
+**Rule.** "Runtime smoke" for a shader that affects pixels in the
+main render path is NOT complete until behavior is observed **over
+time with all sibling layers active**. Acceptable completions:
+
+1. User-watched live confirmation — the human is the authoritative
+   oracle for flicker. After shipping a preview build, explicitly
+   ask "does it flicker or blank at any moment?" before marking
+   smoke passed.
+2. Multi-frame numeric invariant — via `preview_eval`, install a
+   `requestAnimationFrame` loop that samples `canvas.getContext('2d')`
+   or uses the GL `readPixels` at a fixed coordinate across ≥30
+   frames (~0.5s at 60fps); a static scene should have ≤1-step
+   variance. Report max pairwise pixel-delta; flag anything >5
+   units per channel as a flicker signal.
+3. Playwright video capture (`video: 'on'` in playwright config)
+   for regressions that need to persist in CI.
+
+A single screenshot proves COMPILE + STATIC-DRAW. It does NOT prove
+stability. "No console errors" is not sufficient either — flicker
+from transparent-sort flips or NaN in some fragments can occur with
+a 100% clean console.
+
+**Process corollary.** When the onda changes a shader that layers
+additively with other transparent meshes (clouds, lens flares,
+atmosphere shells, glows), explicitly enumerate the sibling layers
+in the ship-protocol checklist and include a specific "does not
+flicker against <sibling>" assertion in step 8. `tasks/STATUS.md`
+should track these sibling relationships per body (Earth: planet +
+clouds + atmosphere + ring-shadow; etc.).
+
+**Code marker.** Ship-protocol step 8 in `tasks/STATUS.md` kickoff
+prompt. θ.5b was the discovery case — reverted in `422d794`.

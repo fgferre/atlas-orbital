@@ -165,13 +165,17 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 - **Progress**:
   - ✅ **θ.5a** — `c2f05a6` — snippet (`atmscatteringSnippet.ts`) +
     math mirrors (`atmosphereMath.ts` + `.test.ts`, 16 pinned values).
-    Unconsumed building blocks, zero runtime change.
-  - 🟡 **θ.5b** (next) — rewrite `atmosphereShader.ts` to compose the
-    snippet + port `atm.fragment.glsl` / `atm.vertex.glsl`. Replace
-    rim-glow Fresnel; Earth-default uniforms so render looks sane
-    before θ.5c.
-  - 🔲 **θ.5c** — per-planet atmosphere params from body config.
-  - 🔲 **θ.5d** — per-body runtime smoke, final gates, ship.
+  - ⚠️ **θ.5b** first attempt — `56d0e38` **reverted in `422d794`**.
+    Static-default uniforms produced saturated output that flickered
+    against the cloud layer's transparent-sort. Lesson L26 captured;
+    re-planned as combined θ.5b+c.
+  - 🟡 **θ.5b+c** (next, combined) — rewrite `atmosphereShader.ts`
+    AND wire per-frame uniforms (`v3CameraPos`, `v3LightPos`,
+    `fCameraHeight`) from real scene state in a single ship. Mirrors
+    T1.2 ring-shadow inverse-matrix pattern at `Planet.tsx:247-284`.
+    Earth-default scattering coefficients hard-wired.
+  - 🔲 **θ.5d** — per-body Rayleigh/Mie/scale-height config from body
+    record; Mars + candidates get their own params; final gates; ship.
 - **Dependencies**: port `atmscattering.frag.glsl` snippet first as
   shared include.
 
