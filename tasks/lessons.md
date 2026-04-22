@@ -644,3 +644,100 @@ where the other is or neither does.
 `playwright.config.ts:3` — `baseURL: "http://127.0.0.1:4174/atlas-orbital/"`
 
 - `webServer: { command: "npm run preview:test", url: "...:4174/..." }`.
+
+## L22 — 1:1 port claim requires a line-by-line diff gate before ship
+
+**2026-04-22. Caught by the 19-pass audit of Phase θ shipped work.**
+
+Phase θ shipped 4 waves (θ.1, θ.1b, θ.3, θ.4) each through the then-
+current protocol: R1 source-read → implementation → self-check →
+gates → runtime smoke → codex audit. Every wave was claimed as
+"1:1 port of Gaia source with documented divergences." Still, a
+mechanical line-by-line diff (pass P10 of the consolidation audit)
+caught an **undocumented drift** in θ.4:
+`src/components/canvas/scene/effects/PseudoLensFlareEffect.ts:198,202`
+samples the starburst texture at `Y=0.5` while
+`/tmp/gaiasky/assets/shader/postprocess/lensdirt.frag.glsl:29,30`
+samples at `Y=0.0`. Two characters. Undocumented. Ship went out.
+Neither codex review nor self-check nor smoke test caught it. The
+diff was the first tool that actually compared line-to-line.
+
+**Rule.** When claiming a 1:1 shader port, produce and attach (to the
+PR or commit message) a diff between the Gaia source shader and the
+atlas port. Every divergence must carry a one-line rationale
+comment in the atlas code — category one of: (a) arch adaptation
+(e.g. pmndrs Effect signature order), (b) HDR strategy
+(clamp-scope or blend-mode divergence that changes the contract
+with downstream effects), (c) intentional tuning (atlas-native
+default with calibration rationale). **Any undocumented
+divergence is a ship blocker** — either document it or remove it.
+
+Codex or LLM-based reviewer audits are not a substitute for the
+mechanical diff. They pattern-match prose; the diff compares
+tokens. Both can coexist; only the diff is the gate.
+
+**Code marker.** Ship-protocol step 4 in `tasks/STATUS.md` is
+the DIFF GATE. Previous "codex audit" step 6 is subsumed.
+
+## L23 — Subagent synthesis must be spot-checked in the main context
+
+**2026-04-22. Caught during the 19-pass audit synthesis.**
+
+During the audit, one subagent reading `config.yaml` + shader
+snippet library reported "atlas has no log-depth buffer, Gaia's
+`logdepthbuff.glsl` is used in 34 shaders — atlas should port." I
+folded this into the user-facing synthesis as a structural gap.
+A subsequent pass (specifically looking at atlas's WebGLRenderer
+config) found
+`src/components/canvas/Scene.tsx:261: glConfig = { ..., logarithmicDepthBuffer: true }`.
+Atlas had had the flag on all along — Three.js handles log-depth
+via the native renderer option, not via the Gaia-style
+`#include <logdepthbuff.glsl>` pattern. The synthesis went out
+wrong and had to be publicly corrected in the next turn.
+
+**Rule.** When a subagent makes a claim about atlas
+_capabilities_ (has / doesn't have X), spot-check it in main
+context with a direct `Read` or `Grep` before consolidating into
+user-facing synthesis. The agent synthesizes what it found; it
+doesn't know what it missed. Critical-path check for any
+"feature absent in atlas" claim: 30 seconds of grep in the main
+context is cheap compared to the cost of the user correcting
+your synthesis and losing trust. The inverse ("feature present")
+needs less scrutiny — you can't grep for something that isn't
+there, so false positives are rare.
+
+**Tooling corollary.** When dispatching research agents, tell
+them to cite `file:line` for every claim. It makes the
+verification spot-check trivial: open the cited path and
+confirm the line. Claims without citations should not be folded
+into synthesis at all.
+
+## L24 — Contradictions between audit passes are signal, not noise
+
+**2026-04-22. Caught during the 19-pass audit consolidation.**
+
+Pass C (config.yaml inventory) claimed "no log-depth in atlas."
+Pass P8 (depth-buffer verdict) found
+`logarithmicDepthBuffer: true` in `Scene.tsx:261`. Both passes
+read the same codebase. The temptation when consolidating was
+to pick the more detailed one, average, or defer; the correct
+response was to investigate. When I spot-checked (L23's rule),
+P8 was right — Pass C had looked only at Gaia `config.yaml`
+and inferred absence in atlas by pattern, not by direct grep.
+
+**Rule.** When two audit passes, reviewers, or tools produce
+contradicting facts about the same code, treat it as a
+high-priority signal to re-verify — don't average them, don't
+pick the more confident one, don't defer to "we'll sort it later."
+The contradiction IS evidence that at least one source is wrong,
+and downstream work cannot safely build on either until you have
+ground truth. Budget 5 min to spot-check the disagreement before
+moving on.
+
+**Process corollary.** When dispatching multiple passes over
+overlapping surface area, structure prompts so contradictions
+are easy to detect. Mandate `file:line` citations; require
+"not found" as explicit output when a search returns empty;
+align each pass's output to a consistent table schema so
+diffing pass outputs is mechanical. Loose prose summaries
+hide contradictions.
