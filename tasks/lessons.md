@@ -924,3 +924,74 @@ six `GAIA_DEFAULT_*` constants in
 `AtmosphereComponent.java:LINE` citations for every default. Future
 DIFF GATE prompts for atmosphere should cite **both** the snippet
 GLSL and the Java wrapper.
+
+## L28 — `depthTest: false` on HDR sprites silently breaks occlusion AND fools post-FX
+
+**2026-04-22. Caught by user report of two simultaneous visual
+bugs on Earth close-up.**
+
+User observed two independent artefacts:
+
+1. Lens-flare ghosts emanating from the Sun _through_ Earth's
+   silhouette when the Sun was supposed to be occluded by the
+   planet.
+2. Rainbow chromatic-aberration fringes on the prograde direction
+   vector, as if the vector were a point light source.
+
+Both bugs shared a single architectural hazard: HDR-bright sprites
+that bypass either depth testing or tone mapping silently contaminate
+the HDR buffer, and any post-effect that samples that buffer
+(bloom, lens flare, light glow spiral search) will treat those
+pixels as legitimate bright sources.
+
+**Bug 1 — `depthTest={false}`.**
+`src/components/canvas/planet/SunScreenFlare.tsx` rendered three
+Sun sprites (`core`, `halo`, `rays`) with
+`depthTest={false} + renderOrder={5000..5003} + AdditiveBlending +
+toneMapped={false}`. The `depthTest={false}` meant Earth's closer
+opaque depth could not cull the Sun's sprite fragments — the Sun
+always drew over the planet's night side. PseudoLensFlare's bias
+filter (Gaia-parity `−0.98`) then saw bright HDR values at the Sun's
+projected position and correctly generated ghost trails, but the
+input premise was false: the Sun should have been occluded.
+
+**Bug 2 — `toneMapped={false}`.**
+`src/components/canvas/planet/PlanetMotionOverlays.tsx` rendered the
+prograde arrow with `toneMapped={false}`. That flag bypasses atlas's
+AgX tone-map step, so the arrow's sRGB color goes into the HDR
+HalfFloat RT verbatim. With `AdditiveBlending` on the halo mesh
+stacking onto the main mesh, the arrow could exceed the PseudoLensFlare
+bias threshold and the Bloom threshold, and get treated as a point
+light — the rainbow CA fringes in the user's screenshot.
+
+**Rule.** For any sprite / mesh / particle rendered into the HDR
+pipeline:
+
+1. **Default to `depthTest: true`.** If physical optics would
+   occlude the sprite behind scene geometry, so must the render.
+   `depthTest: false` is reserved for UI overlays that have been
+   explicitly extracted from the HDR pipeline.
+2. **Default to `toneMapped: true`** for any material whose color
+   comes from a regular palette. `toneMapped: false` is for genuinely
+   HDR-bright emissive surfaces (sun cores, star billboards) that
+   legitimately exceed the [0, 1] range and want the full AgX/ACES
+   compression to happen later in the pipeline.
+3. **If you must set `depthTest: false` (legit UI overlay) OR
+   `toneMapped: false` (legit emissive source)**, the material MUST
+   be registered in a render pass that the HDR-reading post-effects
+   skip. Atlas has no such pass today; adding one would be the
+   principled fix. Until then, every `depthTest: false / toneMapped:
+false` in the scene graph is an implicit contract with every
+   downstream post-FX: "please treat me as a light source."
+
+**Process corollary.** When auditing lens-flare / bloom / LightGlow
+divergence from Gaia, the audit must include a grep for
+`depthTest` and `toneMapped` on every scene material, not just
+shader-level inspection of the post-effect. The HDR contract crosses
+the mesh / post-FX boundary and a single `toneMapped: false` on an
+unrelated mesh can ruin an otherwise-correct flare port.
+
+**Code marker.** Fix `1d6cc30` flipped
+`SunScreenFlare.tsx:242,254,266` to `depthTest={true}` and
+`PlanetMotionOverlays.tsx:30,43` to `toneMapped={true}`. Atlas
+convention for HDR sprites now aligned with `ProceduralSun3D.tsx:419,445,475`.

@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after T3.4 ship (`9c06c16`) — cloud-shadow architecture collapsed to single-mesh + Rec.709 luma aligned with Gaia. Next = T3.3 (eclipse geometry) by fidelity-gap ranking._
+_Last updated: 2026-04-22 after lens-flare drift fix (`1d6cc30`) — Sun sprite depthTest + prograde vector toneMap. Two user-reported bugs root-caused to `depthTest={false}` / `toneMapped={false}` on HDR-contributing sprites. L28 added. Next = T3.3 (eclipse geometry)._
 
 ---
 
@@ -60,7 +60,7 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L27).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L28).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
