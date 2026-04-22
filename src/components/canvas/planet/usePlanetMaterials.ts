@@ -257,7 +257,11 @@ export function usePlanetMaterials({
           `
         );
 
-        // Inject day texture handling in fragment shader
+        // Inject day texture handling in fragment shader.
+        // Linstep helper injected here (inlined from Gaia
+        // `/tmp/gaiasky/assets/shader/lib/math.glsl:58-61`) so the
+        // T3.5 night-lights terminator formula below can use it
+        // verbatim — WebGL has no `#include`.
         shader.fragmentShader = `
           uniform sampler2D tNight;
           uniform vec3 uSunPositionWorld;
@@ -265,10 +269,22 @@ export function usePlanetMaterials({
           varying vec3 vWorldPos;
           varying vec3 vWorldNormal;
           varying vec2 vUv;
+
+          float linstep(float edge0, float edge1, float x) {
+              float d = edge1 - edge0;
+              return d != 0.0 ? clamp((x - edge0) / d, 0.0, 1.0) : 0.0;
+          }
+
           ${shader.fragmentShader}
         `;
 
-        // Apply night lights to emissive channel
+        // Apply night lights to emissive channel.
+        // T3.5 — Gaia terminator (pbr.glsl:98-99): 1:1 port via
+        // `linstep(-0.1, 0.1, -NdotL)`. Atlas pre-T3.5 used
+        // `1.0 - smoothstep(-0.2, 0.2, intensity)` — 2x-wider band +
+        // cubic smoothing — which leaked 15.9% of night-lights onto
+        // the day side at intensity=0.1 (sun 5.7° above horizon).
+        // New formula is pinned by `nightLightsMath.test.ts`.
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <emissivemap_fragment>",
           `
@@ -279,8 +295,11 @@ export function usePlanetMaterials({
           vec3 lightDir = normalize(uSunPositionWorld - vWorldPos);
           float intensity = dot(vWorldNormal, lightDir);
 
-          // Night lights appear where intensity is low (terminator transition)
-          float nightFactor = 1.0 - smoothstep(-0.2, 0.2, intensity);
+          // Gaia-1:1 night-lights gate (T3.5). Linear ramp over a
+          // 0.2-wide band centered on the terminator; 0 on the day
+          // side at intensity >= 0.1, 1 on the night side at
+          // intensity <= -0.1. Mirrors pbr.glsl:98-99.
+          float nightFactor = linstep(-0.1, 0.1, -intensity);
 
           vec4 nightColor = texture2D(tNight, vUv);
 
