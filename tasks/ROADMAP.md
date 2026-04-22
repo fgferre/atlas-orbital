@@ -130,7 +130,7 @@ Fixes visible in user's reference screenshot comparison.
   mode cannot arise from removing a sprite layer).
 - **Status**: done — commit `cd626dc`.
 
-### T2.1 — Port COMPLEX lens flare ⭐ **NEXT UP** (promoted over T2.2 on 2026-04-22)
+### T2.1 — Port COMPLEX lens flare ✅ **SHIPPED (`a2c6594`)**
 
 - **Finding**: Gaia's **default** is `lensFlare.type: COMPLEX`
   (`config.yaml:606`). `MainPostProcessor.java:268-312` branches
@@ -178,14 +178,47 @@ Fixes visible in user's reference screenshot comparison.
   3. Register COMPLEX as the default variant. PSEUDO remains
      importable but behind an explicit toggle (user setting or
      debug flag — match atlas conventions).
-- **Effort**: 3-5 days (port + multi-light driver + calibration
-  - DIFF GATE per L22 + SUBAGENT VERIFY + runtime smoke).
-- **Dependencies**: T2.3a (`51750c3`) for the shared `lensdirt`
-  - `lensstarburst` texture surface — COMPLEX's `useLensDirt`
-    branch (`LensFlare.java:55-58, 77-93`) consumes the same two
-    assets PSEUDO does, so T2.3a's loader wiring already covers
-    both variants. No blur chain dependency — COMPLEX doesn't
-    have one.
+- **Fix shipped** (`a2c6594`):
+  1. New file
+     `src/components/canvas/scene/effects/LensFlareEffect.ts`
+     — pmndrs Effect subclass containing the 1:1 port of
+     `lensflare.frag.glsl` `#ifdef complexLensFlare` branch
+     (lines 84-161). Helpers `lensFlareCircle`, `regShape`,
+     `rnd1`, `rnd2` byte-for-byte. Main with 6-sample
+     Archimedean-spiral luma occlusion check. Inline dirt +
+     starburst modulation after the clamp (pmndrs architectural
+     divergence from Gaia's separate `LensDirtFilter`; same
+     pattern θ.4 uses for the same reason).
+  2. `src/components/canvas/scene/effects/lensFlareMath.ts`
+     extended with `ndcToLensFlareUv`,
+     `computeLightIntensityAlpha`,
+     `lensFlareSpiralSamplePositions` helpers + constants
+     (`LENS_FLARE_FULL_ALPHA_ANGLE = 1e-6`,
+     `LENS_FLARE_ZERO_ALPHA_ANGLE = 0.5e-7`,
+     `LENS_FLARE_SPIRAL_AMPLITUDE_REF = 0.01`,
+     `LENS_FLARE_SPIRAL_N_SAMPLES_REF = 6`).
+  3. `src/components/canvas/scene/LensFlareInjector.tsx`
+     rewritten to instantiate `LensFlareEffect` and push the
+     per-frame Sun UV via `ndcToLensFlareUv`. Off-screen cull
+     matches `MainPostProcessor.java:671` pattern
+     (`setIntensity(0)` + `clearLights()`, belt-and-suspenders).
+     Reduced-motion policy preserved (starburstOffset frozen
+     at 0).
+  4. PseudoLensFlareEffect preserved — importable for opt-in.
+- **Verification stack**:
+  - DIFF GATE self-check against `lensflare.frag.glsl:84-207`:
+    every divergence documented (rnd rename, STRENGTH 0.35
+    hardcode, constant loop bound + break, inline dirt,
+    inputColor.a preservation).
+  - SUBAGENT VERIFY (Explore/Sonnet, fresh context, cited
+    `/tmp/gaiasky/` paths): 10/10 PASS.
+  - Math tests: +13 pinned values (NDC→UV projection, alpha
+    linstep monotonicity, spiral-position aspect-ratio
+    correction).
+  - Gates: 890/890 tests, lint clean, build clean.
+  - Runtime smoke: COMPLEX ring pattern visible around the Sun
+    at 58.5 FPS; zero console errors; WebGL context alive.
+- **Status**: done — commit `a2c6594`. No further T2.1 work.
 
 ### T2.2 — PseudoLensFlare 35-pass blur (**demoted to opt-in on 2026-04-22**)
 
