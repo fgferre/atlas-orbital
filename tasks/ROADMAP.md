@@ -231,14 +231,26 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
 - **Effort**: 3-5 days.
 - **Dependencies**: none.
 
-### T3.4 — Cloud / ring shadow casting cleanup
+### T3.4 — Cloud / ring shadow casting cleanup ✅ **SHIPPED (`9c06c16`)**
 
-- **Atlas issue**: `Planet.tsx:332` uses `customDepthMaterial` with an
-  invisible `meshBasicMaterial` for cloud shadow caster → silhouette
-  can diverge from visual cloud material.
-- **Gaia**: proper depth rendering with the visible cloud material.
-- **Effort**: 1-2 days.
-- **Dependencies**: none.
+- **Atlas (before)**: two meshes at cloud scale — a visible cloud
+  (`castShadow=false`) plus an invisible shadow caster
+  (`meshBasicMaterial(opacity=0) + customDepthMaterial`). Silhouette
+  drift risk: the invisible caster's alphaTest used NTSC BT.601 luma
+  weights `(0.299, 0.587, 0.114)`, Gaia `luma.glsl:3-4` uses Rec.709
+  `(0.2126, 0.7152, 0.0722)`.
+- **Gaia**: `cloud.fragment.glsl:168,174` writes depth from the visible
+  cloud fragment directly — no separate shadow caster.
+- **Fix shipped**: single visible mesh with `castShadow` and
+  `customDepthMaterial` attached; NTSC → Rec.709 luma swap; new
+  `CLOUD_SHADOW_LUMA_CUTOFF = 0.2` module constant deduplicates the
+  threshold. `receiveShadow={false}` added to avoid self-shadow
+  flicker (caught by L26 multi-frame smoke as maxDelta=15).
+  Documented divergence: atlas keeps the `customDepthMaterial`
+  pattern because cloudMaterial runs `depthWrite:false` (T3.6
+  CustomBlending correctness), so it cannot serve as its own
+  shadow depth source like Gaia does.
+- **Status**: done — commit `9c06c16`.
 
 ### T3.5 — Earth night-lights terminator tightening ✅ **SHIPPED (`33807b6`)**
 
