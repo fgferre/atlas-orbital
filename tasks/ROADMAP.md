@@ -257,16 +257,25 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
   ring-surface scope and not needed for Earth.
 - **Status**: done — commit `33807b6`.
 
-### T3.6 — Cloud additive blending terminator gate
+### T3.6 — Cloud additive blending terminator gate ✅ **SHIPPED (`785c925`)**
 
-- **Atlas**: `usePlanetMaterials.ts:56` — unconditional
-  `THREE.AdditiveBlending` ("Reverted to Additive for visual look"
-  comment flags this was iterated on). Over-brightens terminator on
-  night side.
-- **Gaia**: normal blending over day side, selective additive where
-  clouds scatter light.
-- **Effort**: 2-4 h.
-- **Dependencies**: none.
+- **Atlas (before)**: `usePlanetMaterials.ts:56` used
+  `THREE.AdditiveBlending` + `smoothstep(-0.2, 0.2, cloudIntensity)`
+  - `mix(1.0, 0.05, nightFactor)`. Additive blend added even dim
+    clouds to the background unconditionally → over-bright terminator.
+- **Gaia**: `CloudComponent.java:116` sets `BlendMode.COLOR`
+  (`GL_ONE, GL_ONE_MINUS_SRC_COLOR`, per `BlendMode.java:18`).
+  `cloud.fragment.glsl:144,165` uses
+  `1 - linstep(-0.25, 0.12, -NL)` (asymmetric linear band) +
+  `clamp(_, 0.03, 1.0)` night floor.
+- **Fix shipped**: blend mode swapped to
+  `CustomBlending(OneFactor, OneMinusSrcColorFactor, AddEquation)`;
+  formula ported 1:1 via new
+  `src/components/canvas/planet/cloudTerminatorMath.{ts,test.ts}`
+  (8 pinned tests). `linstep` helper injected into the cloud
+  material's `onBeforeCompile` (shared Gaia `math.glsl:58-61`
+  pattern with T3.5).
+- **Status**: done — commit `785c925`.
 
 ### T3.7 — Atmosphere exponent parameterization
 
