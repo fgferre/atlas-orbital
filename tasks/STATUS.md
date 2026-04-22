@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after T1.1 ship (4cc35cb) — θ.4 starburst Y-coord drift resolved._
+_Last updated: 2026-04-22 after T1.2 ship (6c0f82f) — ring-shadow frame alignment resolved._
 
 ---
 
@@ -74,20 +74,17 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **Tier 1 quick wins** (`ROADMAP.md §Tier 1`)
+## → Next up: **T1.3 — Wire LightGlow spiral to FOV factor** (`ROADMAP.md §T1.3`)
 
-Two remaining bugs with direct source citations. No new foundations
-needed. (T1.1 shipped in `4cc35cb`.)
+Last remaining Tier 1 bug. `LightGlowEffect.ts:45-46` hardcodes
+`u_spiralScale` assuming `fovFactor=1.0`; halo size is constant across
+all zooms. Gaia (`MainPostProcessor.java:562`) feeds
+`fovFactor = tan(FOV/2) / tan(20°)` (`AbstractCamera.java:148`) per frame.
 
-1. **T1.2 — Fix ring shadow frame mixing** — object-space `vPos` mixed
-   with world-space `uSunPosition` in `ringShadowShader.ts:31` and
-   `usePlanetMaterials.ts:342`. Works only when planet matrix is
-   identity; breaks under Saturn 26.73° tilt.
-2. **T1.3 — Wire LightGlow spiral to FOV factor** —
-   `LightGlowEffect.ts:45-46` accepts a uniform + camera feeds
-   `fovFactor = tan(FOV/2) / tan(20°)` per frame.
+Fix: add `u_fovFactor` uniform, compute per frame, divide spiral
+sample radius by it. Effort: ~2 h.
 
-Effort: 1 day remaining. Ship each through the protocol below.
+(T1.1 shipped in `4cc35cb`; T1.2 shipped in `6c0f82f`.)
 
 ---
 

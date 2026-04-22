@@ -25,23 +25,24 @@ Small diffs, direct source citations, no new foundations.
   proof against 2D `lensstarburst.jpg` upgrades.
 - **Status**: done — commit `4cc35cb`.
 
-### T1.2 — Ring shadow frame mixing
+### T1.2 — Ring shadow frame mixing ✅ **SHIPPED (`6c0f82f`)**
 
-- **Gaia**: uses a proper world-space transform for ring plane
-  intersection.
-- **Atlas**: `src/components/canvas/shaders/ringShadowShader.ts:31`
-  and `src/components/canvas/planet/usePlanetMaterials.ts:342`
-  compute `float t = -vPos.y / lightDir.y;`. `vPos` is object-space
-  (vertex shader sets `vPos = position;`) while `uSunPosition` is
-  world-space. The intersection math is only correct when the
-  planet's model matrix is identity. Saturn is tilted 26.73° → ring
-  shadow falls on the wrong surface region.
-- **Fix**: transform either the ray or the ring plane into a common
-  frame before the intersection. Cleanest: pass planet's inverse model
-  matrix as uniform, transform `uSunPosition` to object-space, then
-  reuse the existing math.
-- **Effort**: 2-4 h.
-- **Dependencies**: none.
+- **Atlas (before)**: `usePlanetMaterials.ts:329,342` fed
+  `float t = -vPos.y / lightDir.y` with `vPos` in object-space and
+  `uSunPosition` stuck at world-space `(0,0,0)` (never updated).
+  The frames coincided only under an identity model matrix —
+  Saturn's 26.73° tilt + orbital translation both broke that.
+  Bonus: `src/components/canvas/shaders/ringShadowShader.ts` had
+  already been inlined into `usePlanetMaterials.ts` and was dead code.
+- **Fix shipped**: added per-frame update in `Planet.tsx:247-284` that
+  mirrors the existing ring-material pattern —
+  `TMP_PLANET_INV_MATRIX.copy(rotationRef.current.matrixWorld).invert();`
+  then `TMP_PLANET_SUN_LOCAL.set(0,0,0).applyMatrix4(...)` copies
+  object-space sun into `uSunPosition`. GLSL intersection math
+  unchanged. Deleted dead `ringShadowShader.ts`. Pinned by
+  `src/components/canvas/planet/ringShadowMath.{ts,test.ts}` (6 tests,
+  including a Saturn-like tilt+translation regression).
+- **Status**: done — commit `6c0f82f`.
 
 ### T1.3 — LightGlow spiral not FOV-aware
 
