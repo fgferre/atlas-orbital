@@ -778,9 +778,8 @@ elevation) / elevation` in `FOCUS_MODE`; cinematic vs
   - `NaturalCamera.java:524-548` — surface-mode flag activation
     (`surfaceModeFlag.set(focus.isPlanet() && distFromFocus <
 focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
-    handler swaps from `directionToTarget` to `updateRotationFree`
-    - the focus direction tracks pointer-cartesian instead of
-      body-center.
+    handler swaps from `directionToTarget` to `updateRotationFree` - the focus direction tracks pointer-cartesian instead of
+    body-center.
   - `NaturalCamera.java:980-1010` — velocity / acceleration /
     friction zoom physics (per-frame `vel` integrates `force` —
     `friction` over `dt`, with the friction term bifurcating on
@@ -800,16 +799,27 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
   - No surface mode — focus always rotates around the body's
     center regardless of camera distance.
 - **Sub-wave ship plan** (pattern: T4.4a-e / T4.5a-δ):
-  - **T4.2-α — Proximity-aware damping** (~2 d). Pure-TS port of
-    `counterAmount` curve from `NaturalCamera.java:993-997` as
-    `src/lib/camera/proximityDamping.ts`; pin sample
-    distance/elevation/counterAmount triples in
-    `proximityDamping.test.ts`. Replace OrbitControls' fixed
-    `dampingFactor` with a per-frame setter driven by the curve
-    in CameraController's `useFrame`. Independent. PRE-CHECK:
-    confirm OrbitControls allows live-mutating `dampingFactor`
-    without re-init (three-stdlib's implementation reads it on
-    every `update()` so this should work).
+  - **T4.2-α ✅ SHIPPED (2026-04-23, `dae3815`)** —
+    proximity-aware damping. `src/lib/camera/proximityDamping.ts`
+    ports Gaia's counterAmount curve from
+    `NaturalCamera.java:993-997` via the algebraic identity
+    `1/((dist-elev)/elev) = elev/(dist-elev)`, then saturates
+    via `closeness = ratio/(1+ratio)` to fit OrbitControls'
+    `dampingFactor ∈ (0,1]` domain. 9 pinned tests cover the
+    constants (BASE=0.05, MAX=0.5), all boundary states
+    (no-focus / at-surface / halfway / stellar), monotonicity,
+    explicit Gaia-formula identity, and scale invariance.
+    `CameraController.tsx` writes the per-frame value inside
+    its existing focus useFrame; PRE-CHECK confirmed at
+    `OrbitControls.js:191-235` that three-stdlib reads
+    `scope.dampingFactor` per `update()` so live mutation
+    works without re-init. Documented divergences (header
+    comment): `lastFwdAmount` directional gate, `cinematic`
+    toggle, `fullStop` precondition (gate not needed because
+    OrbitControls' single damping mode is naturally swamped
+    by active user-input deltas), and unbounded → bounded
+    saturation. SUBAGENT VERIFY caught a missing `fullStop`
+    documentation note; fixed pre-commit. Independent.
   - **T4.2-β — Surface mode** (~3-4 d). Port the `surfaceModeFlag`
     activation rule (`distFromFocus < radius × 2.5 / fovFactor`)
     - the rotation-handler swap (free rotation + pointer-cartesian
@@ -832,8 +842,10 @@ pos += vel × dt; vel *= friction(vel, dt)`. Port the
     OrbitControls allows external `dollyIn`/`dollyOut` calls
     interleaved with internal `update()` without breaking the
     spherical-coords accumulator.
-- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ. α + γ are
-  independent (shippable in parallel). β depends on α.
+- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; α shipped
+  (~0.3 d actual vs ~2 d estimate — pure-TS port + per-frame
+  setter is a small surgical change). T4.2-γ (zoom physics)
+  - T4.2-β (surface mode) remaining.
 - **Dependencies**: none. T4.1 (camera-relative rendering)
   remains a separate concern; T4.2 ports input behavior on top
   of atlas's current absolute-world frame.
