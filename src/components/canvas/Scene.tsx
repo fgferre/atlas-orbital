@@ -53,6 +53,10 @@ import {
   calculateAdaptiveZoomSpeed,
 } from "../../lib/camera";
 import {
+  addZoomImpulse,
+  consumeZoomVelocity,
+} from "../../lib/camera/zoomPhysics";
+import {
   PostProcessingPipeline,
   type BloomController,
   type HueSaturationController,
@@ -143,7 +147,25 @@ const NormalizedWheelZoom = ({
   controlsRef: RefObject<OrbitControlsImpl | null>;
 }) => {
   const { gl } = useThree();
+  // Pre-T4.2-γ: this ref accumulated fractional wheel deltas into
+  // integer "logical zoom steps" that were then dispatched directly.
+  // Post-T4.2-γ: the same accumulator still produces step counts, but
+  // they feed an INERTIAL VELOCITY buffer rather than triggering an
+  // immediate dolly. The per-frame integrator below decays the
+  // velocity exponentially and dispatches fractional dolly calls until
+  // it crosses the deadzone — Gaia-faithful coast-down for the wheel.
   const pendingWheelStepsRef = useRef(0);
+  // T4.2-γ — zoom velocity buffer + active-flick flag. Mirror of
+  // Gaia's `vel` scalar in `NaturalCamera.java` (1D form for the
+  // wheel-only port). Sign convention matches `accumulateWheelZoomSteps`:
+  // positive = zoom out (dollyOut), negative = zoom in (dollyIn).
+  const zoomVelocityRef = useRef(0);
+  // Tracks whether the current velocity coast-down is "active" so we
+  // dispatch one `start` / one `end` per flick instead of per frame.
+  // The CameraController listens for `start` to cancel any in-flight
+  // privileged-position transition (`Scene.tsx:CameraController`
+  // useEffect at line 286-297).
+  const isCoastingRef = useRef(false);
 
   useEffect(() => {
     const element = gl.domElement;
@@ -164,20 +186,22 @@ const NormalizedWheelZoom = ({
 
       if (stepCount === 0) return;
 
-      controls.dispatchEvent({ type: "start", target: controls });
+      // Push the impulse onto the velocity buffer. The per-frame
+      // integrator below picks it up next tick and starts dispatching
+      // fractional dolly calls until friction brings velocity back
+      // below the deadzone.
+      zoomVelocityRef.current = addZoomImpulse(
+        zoomVelocityRef.current,
+        stepCount
+      );
 
-      for (let stepIndex = 0; stepIndex < Math.abs(stepCount); stepIndex++) {
-        const zoomScale = controls.getZoomScale();
-
-        if (stepCount > 0) {
-          controls.dollyOut(zoomScale);
-        } else {
-          controls.dollyIn(zoomScale);
-        }
+      // First flick after rest → fire `start` so any in-flight
+      // privileged-position transition cancels (CameraController
+      // listens for this).
+      if (!isCoastingRef.current) {
+        controls.dispatchEvent({ type: "start", target: controls });
+        isCoastingRef.current = true;
       }
-
-      controls.update();
-      controls.dispatchEvent({ type: "end", target: controls });
     };
 
     element.addEventListener("wheel", handleWheelCapture, {
@@ -189,6 +213,48 @@ const NormalizedWheelZoom = ({
       element.removeEventListener("wheel", handleWheelCapture, true);
     };
   }, [controlsRef, gl.domElement]);
+
+  // Per-frame integrator. Runs every frame regardless of wheel input;
+  // when velocity is 0 it's a no-op. When non-zero, applies friction
+  // → fractional dolly via OrbitControls' multiplicative dolly API.
+  // OrbitControls reads `scope.scale` inside `update()` and resets
+  // it each frame, so dispatching multiple dolly calls per frame is
+  // safe (they compose into the next `scale`).
+  useFrame((_, dt) => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const velocity = zoomVelocityRef.current;
+    if (velocity === 0) return;
+
+    const { nextVelocity, frameSteps } = consumeZoomVelocity(velocity, dt);
+    zoomVelocityRef.current = nextVelocity;
+
+    if (frameSteps !== 0) {
+      // Convert fractional steps to OrbitControls' multiplicative
+      // dolly API. `controls.getZoomScale()` returns the per-step
+      // scale factor (typically ~0.9 with zoomSpeed=2); raising it
+      // to the absolute frameSteps preserves the sign-aware
+      // cumulative effect.
+      const dollyScale = Math.pow(
+        controls.getZoomScale(),
+        Math.abs(frameSteps)
+      );
+      if (frameSteps > 0) {
+        controls.dollyOut(dollyScale);
+      } else {
+        controls.dollyIn(dollyScale);
+      }
+      controls.update();
+    }
+
+    if (nextVelocity === 0 && isCoastingRef.current) {
+      // Velocity decayed below deadzone — fire `end` so callers can
+      // resume any logic that was paused at `start`.
+      controls.dispatchEvent({ type: "end", target: controls });
+      isCoastingRef.current = false;
+    }
+  });
 
   return null;
 };
