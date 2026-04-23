@@ -138,25 +138,32 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **user decision — four ship-ready candidates**. T4.4 CLOSED fully (six sub-waves a/b/c/d/e-α/e-β through `ae13866`); T4.5 α + δ shipped (`ed22f53` + `7abbc78` — MSDF math + AU tick labels); T4.9 R1 re-scoped (`e2a01df`); comprehensive audit CLEAN (`a065136`). Pick one:
+## → Next up: **unblock pivot landed (2026-04-23 user decisions)**. T4.5-γ + T4.9b' retired; T2.3b deferred to final asset-licensing wave; T4.9a' SHIPPED with placeholder asset (`3c3846d`); T4.2 sub-wave plan written and ready to ship. Active queue (no longer "user decision required" — clear ship sequence):
 
-1. **T4.5-β** — body name labels via drei `<Text>` (1-2 d). Decision baked in: REPLACE the HTML `PlanetOverlay` or ADDITIVE opt-in via `labelMode: "html" | "sdf"` store flag. HTML-vs-3D tradeoff affects a11y (HTML currently supports keyboard focus + screen readers; 3D SDF labels don't). Recommend additive-opt-in for first cut so a11y stays covered.
-2. **T4.5-γ** — constellation line-segments + rendering (2-3 d). BLOCKED on data acquisition: needs IAU constellation boundaries or Stellarium's `constellationship.fab`. Once data is in `public/data/constellations/`, the ship is just drei `<Line>` with the SDF patch + name labels via the already-shipped `<Text>` path.
-3. **T4.9a'** — Sun star-billboard fallback at stellar distances (0.5-1 d). BLOCKED on `star-tex-04-low.jpg` drop in `references/gaia-sky-source/` — same pattern as T2.3a / `a9f9bd5`. Once asset present: vendor to `public/textures/stars/` (gitignored), add distance-gated switch in `Planet.tsx` so Sun billboards when cam > threshold AU, keeps `ProceduralSun3D` for close-up.
-4. **T4.2 — camera cinematics** (1-2w, ship-ready but big). NaturalCamera damping + surface-mode port. No splits yet; would need sub-wave plan.
+1. **T4.5-β** — body name labels via drei `<Text>` (~1-2 d). **WIP in stash on this branch** (`labelMode: "html" | "sdf"` store slice + `PlanetLabels3D.tsx` + `PlanetOverlay` gating); needs Scene mount + LayersPanel toggle + tests + gates + commit. Additive-opt-in path picked (default `"html"` keeps a11y; SDF mode is opt-in).
+2. **T4.2-α** — Proximity-aware damping (~2 d). Pure-TS port of `NaturalCamera.java:993-997` `counterAmount` curve as `src/lib/camera/proximityDamping.ts`. Replace OrbitControls' fixed `dampingFactor=0.05` with per-frame setter. Independent. PRE-CHECK: confirm three-stdlib OrbitControls allows live-mutating `dampingFactor`.
+3. **T4.2-γ** — Inertial zoom physics (~3-5 d). Replace `NormalizedWheelZoom` step accumulator with velocity-integrating zoom mirroring `NaturalCamera.java:980-1010`. Independent of α/β.
+4. **T4.2-β** — Surface mode (~3-4 d). Port `NaturalCamera.java:524-548` `surfaceModeFlag` (`distFromFocus < radius × 2.5 / fovFactor`) + free-rotation handler swap. Depends on T4.2-α.
 
-Out of current session's scope: **T4.1 camera-relative rendering** (2-3w, unlocks T4.4e-α's Gaia-faithful math for projection lines but large refactor), **T4.3 particle system** (2-3w, subsumes Milky Way backdrop gap), **T4.9b'** (close-Sun dataset port — needs `default-data` pack download).
+**Asset-deferred (shipped what was possible, asset swap waits)**: T4.9a' (Sun billboard at stellar distances) shipped at `3c3846d` with `star-tex-04-low.jpg` placeholder = byte-identical copy of existing `star-tex-03.jpg`. Real asset swap aligned with T2.3b in the final asset-licensing wave.
 
-All shipped this session 2026-04-23: T2.5 + T2.6 (`9910eeb`); T4.4 full wave (`49fdaf0` → `ae13866` across 6 sub-waves); T4.4e-β projection lines mount (`ae13866`); LightGlow cross-spike fix + asset swap (`d6165c6` + `a9f9bd5`); T4.9 R1 re-verify (`e2a01df`); comprehensive drift audit CLEAN verdict (`a065136`); T4.5-α MSDF math (`ed22f53`); T4.5-δ AU tick labels (`7abbc78`); M5 lesson on subagent-citation verification (`677ee5c`). Still decision-gated or blocked per above.
+**Retired (won't port, header kept for traceability)**: T4.5-γ (constellation lines — atlas is solar-system-first, no orbital-mechanics value); T4.9b' (close-Sun dataset port — `ProceduralSun3D` covers acceptably, re-open only on user complaint); T3.7 / T3.9 / T4.7 / T4.9c (per earlier audit passes).
+
+**Out of current session's scope**: **T4.1 camera-relative rendering** (2-3w, unlocks T4.4e-α's Gaia-faithful projection-line math but large refactor), **T4.3 particle system** (2-3w, subsumes Milky Way backdrop gap).
+
+All shipped this session 2026-04-23: T2.5 + T2.6 (`9910eeb`); T4.4 full wave (`49fdaf0` → `ae13866` across 6 sub-waves); T4.4e-β projection lines mount (`ae13866`); LightGlow cross-spike fix + asset swap (`d6165c6` + `a9f9bd5`); T4.9 R1 re-verify (`e2a01df`); comprehensive drift audit CLEAN verdict (`a065136`); T4.5-α MSDF math (`ed22f53`); T4.5-δ AU tick labels (`7abbc78`); M5 lesson on subagent-citation verification (`677ee5c`); **T4.9a' Sun billboard at stellar distances (`3c3846d`)** — placeholder-asset ship; **ROADMAP unblock pivot** (T4.5-γ retired, T4.9b' retired, T2.3b deferred to final asset wave, T4.2 sub-wave plan α/β/γ written) bundled in same commit.
 
 Earlier ships still load-bearing: T2.0 `cd626dc`, T2.1 `a2c6594`, T2.3a `51750c3`, T2.4 `a722bba`, T3.3 `c44f913`, T3.4 `9c06c16`, T3.5 `33807b6`, T3.6 `785c925`, T4.6 `a6a3644`. Confirmed NOT ports: T3.7, T3.9, T4.7, T4.9c.
 
 Lens Closure Wave (default path) complete: T2.0 ✅ `cd626dc`,
 T2.3a ✅ `51750c3`, T2.1 ✅ `a2c6594`. T3.3 ✅ `c44f913` adds
-eclipse geometry. Blocked/optional: **T2.3b** (hot-swap
-placeholders once user delivers CC-BY-4.0 replacements — no
-activity in `references/gaia-sky-source/` at last check), **T2.2**
-(opt-in PSEUDO blur, not on Gaia default path).
+eclipse geometry. **T2.3b** deferred to the final asset-
+licensing wave (decision 2026-04-23): the gitignored
+placeholders at `public/textures/lens/` stay in place for
+regular development; `.gitignore` is the safety rail; swap
+runs alongside T4.9a' real-asset swap when the asset wave
+fires. **T2.2** (opt-in PSEUDO blur, not on Gaia default path)
+remains optional/deferred.
 
 **Tier-4 hygiene pass (2026-04-22)**: two more items closed via
 L31-style re-verification:

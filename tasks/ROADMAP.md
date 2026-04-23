@@ -768,21 +768,88 @@ clipping/jitter`.
   upload path.
 - **Dependencies**: none but invasive.
 
-### T4.2 — Camera cinematics (damping + surface mode + inertial zoom)
+### T4.2 — Camera cinematics (damping + surface mode + inertial zoom) — sub-wave plan ready, decision 2026-04-23
 
 - **Gaia**:
   - `NaturalCamera.java:987-1000` — proximity-aware friction
-    (`counterAmount = focus.getDistToCamera() / elevation`).
-  - `NaturalCamera.java:1429-1445` — surface mode proximity rotation
-    slowdown.
-  - Velocity + acceleration + friction zoom physics.
+    (`counterAmount` curve scaling friction by `(distToCamera −
+elevation) / elevation` in `FOCUS_MODE`; cinematic vs
+    non-cinematic switch at line 994).
+  - `NaturalCamera.java:524-548` — surface-mode flag activation
+    (`surfaceModeFlag.set(focus.isPlanet() && distFromFocus <
+focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
+    handler swaps from `directionToTarget` to `updateRotationFree`
+    - the focus direction tracks pointer-cartesian instead of
+      body-center.
+  - `NaturalCamera.java:980-1010` — velocity / acceleration /
+    friction zoom physics (per-frame `vel` integrates `force` —
+    `friction` over `dt`, with the friction term bifurcating on
+    `fullStop`).
+  - `NaturalCamera.java:1395-1410` — `speedScaling()` returns the
+    multiplier the position update multiplies through, derived
+    from the smoothed min(closestStar, closestBody, focus)
+    distance via `MathUtilsDouble.flint`.
 - **Atlas**:
-  - `CameraController.tsx` — `OrbitControls` with fixed
-    `dampingFactor=0.05`.
-  - `NormalizedWheelZoom` — linear snappy zoom.
-  - No surface mode.
-- **Effort**: 1-2 weeks.
-- **Dependencies**: none.
+  - `CameraController.tsx` (375 LOC) — orchestrates
+    `OrbitControls` from three-stdlib with fixed
+    `dampingFactor=0.05` (Scene.tsx:399). No proximity awareness
+    in the damping curve.
+  - `Scene.tsx:138-192 NormalizedWheelZoom` — wheel events
+    accumulate into integer step counts then dispatch
+    `dollyIn`/`dollyOut`. Linear snappy feel; no inertia.
+  - No surface mode — focus always rotates around the body's
+    center regardless of camera distance.
+- **Sub-wave ship plan** (pattern: T4.4a-e / T4.5a-δ):
+  - **T4.2-α — Proximity-aware damping** (~2 d). Pure-TS port of
+    `counterAmount` curve from `NaturalCamera.java:993-997` as
+    `src/lib/camera/proximityDamping.ts`; pin sample
+    distance/elevation/counterAmount triples in
+    `proximityDamping.test.ts`. Replace OrbitControls' fixed
+    `dampingFactor` with a per-frame setter driven by the curve
+    in CameraController's `useFrame`. Independent. PRE-CHECK:
+    confirm OrbitControls allows live-mutating `dampingFactor`
+    without re-init (three-stdlib's implementation reads it on
+    every `update()` so this should work).
+  - **T4.2-β — Surface mode** (~3-4 d). Port the `surfaceModeFlag`
+    activation rule (`distFromFocus < radius × 2.5 / fovFactor`)
+    - the rotation-handler swap (free rotation + pointer-cartesian
+      focus direction). New `src/lib/camera/surfaceMode.ts` extracts
+      the boolean rule + a "should reorient focus" sub-flag; mounts
+      in CameraController as a per-frame check that toggles
+      OrbitControls' target-update behavior. Depends on T4.2-α
+      (the damping curve modulates the surface-mode rotation
+      smoothness; shipping β on top of T4.2-α's per-frame damping
+      setter is the cleanest plug-in point).
+  - **T4.2-γ — Inertial zoom physics** (~3-5 d). Replace
+    `NormalizedWheelZoom`'s snappy step accumulator with a
+    velocity-integrating zoom: per-frame `vel += accel × dt;
+pos += vel × dt; vel *= friction(vel, dt)`. Port the
+    bifurcation at `NaturalCamera.java:990-1000` (real friction
+    when `fullStop`, force-derived friction otherwise). New
+    `src/lib/camera/zoomPhysics.ts` + tests. Independent of α/β
+    — wheel handler swaps wholesale, OrbitControls kept for
+    pan + drag-rotate. PRE-CHECK: confirm three-stdlib
+    OrbitControls allows external `dollyIn`/`dollyOut` calls
+    interleaved with internal `update()` without breaking the
+    spherical-coords accumulator.
+- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ. α + γ are
+  independent (shippable in parallel). β depends on α.
+- **Dependencies**: none. T4.1 (camera-relative rendering)
+  remains a separate concern; T4.2 ports input behavior on top
+  of atlas's current absolute-world frame.
+- **Open decisions**:
+  - **Cinematic toggle parity** — Gaia exposes `cinematic` as a
+    per-frame boolean (`config.yaml` + GUI). Atlas can either
+    expose it as a store flag (mirrors Gaia UX) or hardcode
+    cinematic=true (simpler, matches the typical "smooth
+    cinematic" feel users want from a solar-system viewer).
+    Decision deferred until α ships and we feel the
+    non-cinematic damping curve.
+  - **NaturalCamera friction term sign** — Gaia uses a "negative
+    velocity scaled by counterAmount" friction in
+    `NaturalCamera.java:1000`. Atlas's port should mirror that
+    exact sign convention; the unit tests pin sample inputs to
+    catch a sign flip.
 
 ### T4.3 — Particle system pipeline
 
