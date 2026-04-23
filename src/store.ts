@@ -70,6 +70,17 @@ interface AppState {
    * "grid on/off" affordance).
    */
   gridOrientation: GridOrientation;
+  /**
+   * T4.4e — whether to draw the L-polyline connecting the Sun (grid
+   * origin) to the focused body's XZ projection on the plane, then
+   * vertically up to the focus itself. Gaia toggles this via
+   * `config.yaml:381 projectionLines: true` (default) inside
+   * `program.recursiveGrid`; atlas exposes the same flag so users can
+   * hide the callout when it occludes the focused body view.
+   * Hidden automatically when no focus is active or focus === Sun
+   * (no meaningful projection to draw).
+   */
+  gridProjectionLines: boolean;
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   qualityMode: QualityMode;
@@ -138,6 +149,7 @@ interface AppState {
   toggleDeclutterOrbits: () => void;
   toggleEclipticGrid: () => void;
   setGridOrientation: (orientation: GridOrientation) => void;
+  toggleGridProjectionLines: () => void;
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setQualityMode: (mode: QualityMode) => void;
@@ -224,6 +236,7 @@ export const useStore = create<AppState>()(
       declutterOrbits: true,
       showEclipticGrid: true,
       gridOrientation: "ecliptic",
+      gridProjectionLines: true,
       showProgradeVector: true,
       scaleMode: "didactic",
       // Defaults overwritten by the persist middleware's rehydration
@@ -329,6 +342,8 @@ export const useStore = create<AppState>()(
       toggleEclipticGrid: () =>
         set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
       setGridOrientation: (gridOrientation) => set({ gridOrientation }),
+      toggleGridProjectionLines: () =>
+        set((state) => ({ gridProjectionLines: !state.gridProjectionLines })),
       toggleProgradeVector: () =>
         set((state) => ({ showProgradeVector: !state.showProgradeVector })),
       toggleShowStarfield: () =>

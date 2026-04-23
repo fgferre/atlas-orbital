@@ -90,6 +90,10 @@ export const LayersPanel = ({
   const toggleEclipticGrid = useStore((state) => state.toggleEclipticGrid);
   const gridOrientation = useStore((state) => state.gridOrientation);
   const setGridOrientation = useStore((state) => state.setGridOrientation);
+  const gridProjectionLines = useStore((state) => state.gridProjectionLines);
+  const toggleGridProjectionLines = useStore(
+    (state) => state.toggleGridProjectionLines
+  );
   const showProgradeVector = useStore((state) => state.showProgradeVector);
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -292,6 +296,11 @@ export const LayersPanel = ({
                     />
                   ))}
                 </div>
+                <Toggle
+                  label="Projection Lines"
+                  checked={gridProjectionLines}
+                  onChange={toggleGridProjectionLines}
+                />
               </div>
             )}
             <Toggle
