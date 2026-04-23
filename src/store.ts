@@ -92,6 +92,17 @@ interface AppState {
    * (no meaningful projection to draw).
    */
   gridProjectionLines: boolean;
+  /**
+   * T4.2-β — read-only signal flipped to `true` when the camera
+   * crosses Gaia's surface-mode threshold (`distFromFocus <
+   * focusRadius × 2.5 / fovFactor` AND focus is a planet).
+   * Written from `CameraController`'s focus useFrame; consumers
+   * (UI indicators, future rotation-handler swap) read it. Setter
+   * dedups so per-frame writes only re-render React when the flag
+   * actually flips (typically once per focus transit, not per
+   * frame).
+   */
+  surfaceModeActive: boolean;
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   qualityMode: QualityMode;
@@ -162,6 +173,7 @@ interface AppState {
   toggleEclipticGrid: () => void;
   setGridOrientation: (orientation: GridOrientation) => void;
   toggleGridProjectionLines: () => void;
+  setSurfaceModeActive: (active: boolean) => void;
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setQualityMode: (mode: QualityMode) => void;
@@ -250,6 +262,7 @@ export const useStore = create<AppState>()(
       showEclipticGrid: true,
       gridOrientation: "ecliptic",
       gridProjectionLines: true,
+      surfaceModeActive: false,
       showProgradeVector: true,
       scaleMode: "didactic",
       // Defaults overwritten by the persist middleware's rehydration
@@ -359,6 +372,12 @@ export const useStore = create<AppState>()(
       setGridOrientation: (gridOrientation) => set({ gridOrientation }),
       toggleGridProjectionLines: () =>
         set((state) => ({ gridProjectionLines: !state.gridProjectionLines })),
+      setSurfaceModeActive: (surfaceModeActive) =>
+        set((state) =>
+          state.surfaceModeActive === surfaceModeActive
+            ? state
+            : { surfaceModeActive }
+        ),
       toggleProgradeVector: () =>
         set((state) => ({ showProgradeVector: !state.showProgradeVector })),
       toggleShowStarfield: () =>

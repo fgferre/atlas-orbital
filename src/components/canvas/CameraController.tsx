@@ -17,6 +17,7 @@ import {
   computeProximityDamping,
   PROXIMITY_DAMPING_BASE,
 } from "../../lib/camera/proximityDamping";
+import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
 // because the frame loop is single-threaded and every read is paired
@@ -338,6 +339,10 @@ export const CameraController = () => {
       // T4.2-α — no focus active, keep OrbitControls at the base
       // damping (smooth coast at stellar distances).
       controlsInstance.dampingFactor = PROXIMITY_DAMPING_BASE;
+      // T4.2-β — surface-mode is gated on focus-being-a-planet, so
+      // a no-focus state is always normal mode. Clear the flag if
+      // the user just defocused while inside the surface threshold.
+      useStore.getState().setSurfaceModeActive(false);
       resetFocusTrackingState(focusTrackingRef.current);
       return;
     }
@@ -378,9 +383,25 @@ export const CameraController = () => {
           cameraDistance,
           focusRadius
         );
+        // T4.2-β — surface-mode flag publication. Atlas's mouse-only
+        // input layer makes the gamepad/vr/tracking suppressors
+        // permanently false; the threshold collapses to focus-type +
+        // distance + fovDegrees. Setter dedups so React only
+        // re-renders on flag flips, not every frame.
+        const fovDegrees = (cameraInstance as THREE.PerspectiveCamera).fov;
+        const active = isSurfaceModeActive({
+          focusIsPlanet: focusBody.type === "planet",
+          distFromFocus: cameraDistance,
+          focusRadius,
+          fovDegrees,
+        });
+        useStore.getState().setSurfaceModeActive(active);
       }
     } catch (err) {
-      console.error("[CameraController] proximity-damping error:", err);
+      console.error(
+        "[CameraController] proximity-damping / surface-mode error:",
+        err
+      );
       controlsInstance.dampingFactor = PROXIMITY_DAMPING_BASE;
     }
 
