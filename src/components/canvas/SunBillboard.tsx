@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 import { resolveSunRenderRange } from "../../lib/sunRenderRange";
+import { useStore } from "../../store";
 import { getSunBillboardSprite } from "./scene/effects/sunBillboardSprite";
 
 /**
@@ -53,6 +54,20 @@ import { getSunBillboardSprite } from "./scene/effects/sunBillboardSprite";
 // at 1080p, a comfortable star-dot footprint regardless of distance.
 const SCREEN_SIZE_FACTOR = 0.012;
 
+// Hard ceiling on the sprite's world-unit scale. The intro camera
+// animation starts the camera at `[~1e12]` world units before
+// flying it down to the viewing position; without this cap the
+// per-frame `dist × SCREEN_SIZE_FACTOR` produces vertex coordinates
+// in the `±6e9` range during the first few frames, well past the
+// float32 precision the GPU vertex stage relies on. Some drivers
+// (especially integrated / mobile GPUs) respond to that with a
+// WebGL Context Lost — the user-reported boot failure
+// 2026-04-23 traced to exactly this. Capping at 1e6 keeps vertex
+// coords in the safe ±5e5 range while still rendering the Sun as
+// a tiny dot at interstellar distances (~17 px on a 1080p screen
+// at 100 AU; at 1000 AU it shrinks but stays visible).
+const SCREEN_SIZE_MAX_WORLD_UNITS = 1_000_000;
+
 const noopRaycast: THREE.Object3D["raycast"] = () => null;
 
 export const SunBillboard = () => {
@@ -79,6 +94,15 @@ export const SunBillboard = () => {
   }, []);
 
   useEffect(() => {
+    // Diagnostic log — confirms SunBillboard is mounting (only fires
+    // when sunRenderMode resolves to "procedural"). If the user
+    // reports a boot issue and DOES NOT see this log, the issue is
+    // elsewhere; if they DO see it, the cap + intro suppression
+    // additions in the useFrame below should keep the sprite scale
+    // safe at the boot's `[~1e12]` initial camera distance.
+    console.info(
+      "[SunBillboard] mounted (procedural sun-render mode active; sprite scale capped + intro-suppressed)"
+    );
     return () => {
       material.dispose();
     };
@@ -91,6 +115,19 @@ export const SunBillboard = () => {
       const sprite = spriteRef.current;
       if (!sprite) return;
 
+      // Suppress the billboard during the intro camera animation —
+      // the camera transits from [~1e12] world units to the viewing
+      // position over ~2 s, and any sprite scale derived from that
+      // initial distance would push vertex coordinates past safe
+      // float32 precision (cause of the 2026-04-23 user-reported
+      // canvas-white boot failure). Once the animation completes,
+      // distance is bounded and SunBillboard activates normally.
+      const isIntroAnimating = useStore.getState().isIntroAnimating;
+      if (isIntroAnimating) {
+        sprite.visible = false;
+        return;
+      }
+
       // Camera distance to the Sun (origin in atlas's world frame).
       const dist = state.camera.position.length();
       const range = resolveSunRenderRange(dist);
@@ -98,7 +135,15 @@ export const SunBillboard = () => {
       sprite.visible = isFar;
       if (!isFar) return;
 
-      const screenSize = dist * SCREEN_SIZE_FACTOR;
+      // Cap the sprite scale to keep vertex coords in the GPU's
+      // safe-precision range (see SCREEN_SIZE_MAX_WORLD_UNITS comment).
+      // At extreme distances (>~10 AU per FOV unit) the sprite shrinks
+      // on screen below the constant-pixel target; that's an acceptable
+      // visual trade for boot stability.
+      const screenSize = Math.min(
+        dist * SCREEN_SIZE_FACTOR,
+        SCREEN_SIZE_MAX_WORLD_UNITS
+      );
       sprite.scale.setScalar(screenSize);
     } catch (err) {
       console.error("[SunBillboard] frame error:", err);
