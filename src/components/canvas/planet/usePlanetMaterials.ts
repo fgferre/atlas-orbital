@@ -11,6 +11,14 @@ import {
   planetShadowFragmentPatch,
   planetShadowEmissivePatch,
 } from "../shaders/planetShadowShader";
+import {
+  ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY,
+  ECLIPSE_FRAGMENT_HELPERS,
+  ECLIPSE_FRAGMENT_OUTPUT_PATCH,
+  ECLIPSE_FRAGMENT_UNIFORMS,
+  ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
+  ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
+} from "../shaders/eclipseShaderPatch";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
 /**
@@ -289,6 +297,7 @@ export function usePlanetMaterials({
 
     // Apply Earth day/night shader (takes priority over ring shadows)
     if (body.id === "earth" && textureNight) {
+      const eclipseEnabled = !!body.eclipsingBodyId;
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.tNight = { value: textureNight };
@@ -297,6 +306,17 @@ export function usePlanetMaterials({
           value: new THREE.Vector3(0, 0, 0),
         };
         shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
+
+        // T3.3 eclipse uniforms — populated per-frame by `Planet.tsx`
+        // via `body.eclipsingBodyId` scene-graph lookup.
+        if (eclipseEnabled) {
+          shader.uniforms.uEclipsingBodyPos = {
+            value: new THREE.Vector3(0, 0, 0),
+          };
+          shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+          shader.uniforms.uEclipsingVrScale = { value: 1 };
+          shader.uniforms.uEclipsingActive = { value: 0 };
+        }
 
         // Inject varyings in vertex shader — world-space position and normal
         shader.vertexShader = `
@@ -334,6 +354,9 @@ export function usePlanetMaterials({
               return d != 0.0 ? clamp((x - edge0) / d, 0.0, 1.0) : 0.0;
           }
 
+          ${eclipseEnabled ? ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY : ""}
+          ${eclipseEnabled ? ECLIPSE_FRAGMENT_HELPERS : ""}
+
           ${shader.fragmentShader}
         `;
 
@@ -364,6 +387,60 @@ export function usePlanetMaterials({
 
           // Add night lights to emissive
           totalEmissiveRadiance += nightColor.rgb * nightFactor * uNightLightIntensity;
+          `
+        );
+
+        // T3.3 — inject eclipse shadow blend before output_fragment
+        // so the multiplication hits outgoingLight pre-tonemap
+        // (matches Gaia pbr.fragment.glsl:671,676 call site).
+        if (eclipseEnabled) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            "#include <output_fragment>",
+            `
+            ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
+            #include <output_fragment>
+            `
+          );
+        }
+      };
+    }
+    // T3.3 — bodies with eclipsingBodyId but no Earth-specific
+    // day/night or ring-planet treatment (e.g. Moon during a
+    // lunar eclipse). Injects the eclipse shader on top of a
+    // default MeshStandardMaterial.
+    else if (body.eclipsingBodyId) {
+      mat.onBeforeCompile = (shader) => {
+        mat.userData.shader = shader;
+        shader.uniforms.uSunPositionWorld = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingBodyPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.uEclipsingVrScale = { value: 1 };
+        shader.uniforms.uEclipsingActive = { value: 0 };
+
+        shader.vertexShader = `
+          ${ECLIPSE_VERTEX_WORLD_VARYINGS_DECL}
+          ${shader.vertexShader}
+        `.replace(
+          "#include <begin_vertex>",
+          `
+          #include <begin_vertex>
+          ${ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN}
+          `
+        );
+
+        shader.fragmentShader = `
+          ${ECLIPSE_FRAGMENT_UNIFORMS}
+          ${ECLIPSE_FRAGMENT_HELPERS}
+          ${shader.fragmentShader}
+        `.replace(
+          "#include <output_fragment>",
+          `
+          ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
+          #include <output_fragment>
           `
         );
       };
@@ -454,6 +531,7 @@ export function usePlanetMaterials({
     body.color,
     body.type,
     body.ringSystem,
+    body.eclipsingBodyId,
     roughness,
     metalness,
     sunRenderMode,

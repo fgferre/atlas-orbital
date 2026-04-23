@@ -206,6 +206,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       kMie: 0.0015,
       wavelengthsUm: [0.65, 0.57, 0.475],
     },
+    // T3.3 eclipse: Moon occludes the Sun for Earth fragments during
+    // solar eclipse events. Shader patch in `usePlanetMaterials`
+    // + per-frame uniform wiring in `Planet.tsx`.
+    eclipsingBodyId: "moon",
   },
   {
     id: "mars",
@@ -562,6 +566,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "384,400 km",
     info: "Earth satellite.",
     textures: { map: TEXTURE_PATH + "8k_moon.jpg" },
+    // T3.3 eclipse: Earth casts a shadow on the Moon during lunar
+    // eclipses — the signature blood-moon red tint comes from the
+    // diffraction spectrum multiplied into the shadow band.
+    eclipsingBodyId: "earth",
   },
   // Galilean Moons (Jupiter)
   {

@@ -180,6 +180,19 @@ export interface CelestialBody {
    */
   atmosphereScattering?: AtmosphereScatteringConfig;
 
+  /**
+   * T3.3 eclipse geometry: the id of the body whose shadow can fall
+   * on THIS body (the receiver). Presence of this field switches on
+   * the eclipse shader patch in `usePlanetMaterials` + per-frame
+   * uniform wiring in `Planet.tsx`. Mirrors Gaia's
+   * `eclipsingBodyFlag` define at `eclipses.glsl:4`.
+   *
+   * Standard atlas pairing:
+   * - Earth.eclipsingBodyId = "moon" (solar eclipse — Moon eclipses Sun)
+   * - Moon.eclipsingBodyId = "earth" (lunar eclipse — Earth casts shadow)
+   */
+  eclipsingBodyId?: string;
+
   // Optional non-uniform scale for observation-based ellipsoids.
   shapeScale?: [number, number, number];
 

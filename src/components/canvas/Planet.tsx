@@ -46,6 +46,8 @@ const TMP_ATMO_INV_MATRIX = new THREE.Matrix4();
 const TMP_ATMO_CAMERA_WORLD = new THREE.Vector3();
 const TMP_ATMO_CAMERA_LOCAL = new THREE.Vector3();
 const TMP_ATMO_SUN_LOCAL = new THREE.Vector3();
+const TMP_ECLIPSE_RECEIVER_POS = new THREE.Vector3();
+const TMP_ECLIPSE_ECLIPSING_POS = new THREE.Vector3();
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -191,7 +193,7 @@ const PlanetVisual = ({
 
   const ringRef = useRef<THREE.Mesh>(null);
 
-  useFrame(({ camera, size }) => {
+  useFrame(({ camera, size, scene }) => {
     if (!groupRef.current) return;
 
     // 1. Scaling
@@ -326,6 +328,65 @@ const PlanetVisual = ({
         // mirrors the block-level disable at Starfield.tsx:499-523.
         // eslint-disable-next-line react-hooks/immutability -- scalar uniform update is the intended per-frame Three.js pattern
         atmoUniforms.fCameraHeight.value = TMP_ATMO_CAMERA_LOCAL.length();
+      }
+
+      // T3.3 — Eclipse uniforms. Runs for any body with an
+      // `eclipsingBodyId` (Earth during solar eclipse, Moon during
+      // lunar eclipse). Looks up the eclipsing body's mesh via
+      // `scene.getObjectByName`, writes its world-pos + radius into
+      // the shader uniforms every frame. Matches Gaia's
+      // `MainPostProcessor.java:633-679` (light-position update
+      // handler) pattern: driver pushes CPU-computed world-space
+      // eclipse geometry; shader reads as-is.
+      if (
+        body.eclipsingBodyId &&
+        planetMaterial &&
+        planetMaterial.userData.shader
+      ) {
+        const shader = planetMaterial.userData.shader as {
+          uniforms: { [key: string]: THREE.IUniform };
+        };
+        const eclipsingBody = BODIES_BY_ID.get(body.eclipsingBodyId);
+        const eclipsingMesh = scene.getObjectByName(body.eclipsingBodyId);
+        const uPos = shader.uniforms.uEclipsingBodyPos;
+        const uRadius = shader.uniforms.uEclipsingBodyRadius;
+        const uVrScale = shader.uniforms.uEclipsingVrScale;
+        const uActive = shader.uniforms.uEclipsingActive;
+        if (uPos && uRadius && uVrScale && uActive && eclipsingBody) {
+          if (eclipsingMesh) {
+            eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
+            (uPos.value as THREE.Vector3).copy(TMP_ECLIPSE_ECLIPSING_POS);
+
+            // World radius of the eclipsing body, matching atlas's
+            // scale-mode resolution. `resolveSemanticBodyRadius`
+            // returns the same value the eclipsing body's mesh is
+            // actually scaled by, so the shader's
+            // `eclipsingBodyRadius × 1.7` penumbra ratio matches
+            // what's rendered on screen.
+            const eclipsingRadius = AstroPhysics.resolveSemanticBodyRadius({
+              body: eclipsingBody,
+              scaleMode,
+            });
+            // eslint-disable-next-line react-hooks/immutability -- scalar uniform update
+            uRadius.value = eclipsingRadius;
+
+            // vrScale must be large enough for the segment from the
+            // receiver fragment toward the Sun (world origin) to reach
+            // past the eclipsing body. `distance(receiver, sun) × 2`
+            // guarantees that regardless of whether the eclipsing body
+            // is between receiver and sun or beyond.
+            groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
+            const receiverDist = TMP_ECLIPSE_RECEIVER_POS.length();
+            uVrScale.value = Math.max(1, receiverDist * 2);
+
+            uActive.value = 1;
+          } else {
+            // Eclipsing body isn't in the scene graph yet — skip
+            // eclipse math this frame (shader early-outs on
+            // uEclipsingActive < 0.5).
+            uActive.value = 0;
+          }
+        }
       }
     }
   });
