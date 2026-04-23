@@ -10,8 +10,10 @@
  *
  * - CLOSE_FLYBY (camera < 200 from a body): surface-detail mode. Bloom
  *   knocked down so planet textures aren't washed by star halos; slight
- *   brightness bump for dark-side readability when the terminator crosses
- *   the frame; softer shadows so craters/clouds don't crush.
+ *   brightness bump (brightness +0.02) for dark-side readability when
+ *   the terminator crosses the frame. Shadow / envMap tuning used to
+ *   differentiate this preset but was retired when T2.5/T2.6 aligned
+ *   both fields to Gaia-invariant values.
  *
  * - PLANET_ORBIT (camera 200–2000): balanced default — the values that felt
  *   right across the representative-views iteration.
@@ -31,10 +33,20 @@
  *   support richer mids).
  *
  * Gaia-fidelity lighting baselines are intentionally invariant across
- * presets: global ambient is Gaia's `scene.renderer.ambient: 0.0`, and
- * the central solar point light mirrors `LightingUtils.java`'s
- * `pointLight.intensity = 1`. Context presets may still grade the final
- * image and tune the focused shadow helper.
+ * presets: global ambient is Gaia's `scene.renderer.ambient: 0.0`
+ * (`config.yaml:238`), the central solar point light mirrors
+ * `LightingUtils.java:49`'s `pointLight.intensity = 1`, and
+ * `envMapIntensity = 0` mirrors Gaia's lack of a diffuse irradiance
+ * cubemap — `pbr.fragment.glsl:620-621` uses the reflection skybox
+ * only for specular (`finalReflection = reflectionColor * AO`), never
+ * for diffuse IBL. `shadowIntensity` is the one residual atlas-only
+ * supplement: Three.js DirectionalLights carry shadow maps, so the
+ * focused-body helper needs a non-zero intensity to cast crater /
+ * cloud self-shadows. Held at an empirical floor (0.4) that preserves
+ * visible self-shadow contrast while keeping the focused-body
+ * over-brightness vs Gaia ≈1.4× (down from ≈2.5× pre-T2.5) — Option 1
+ * in `ROADMAP.md §T2.5`. Option 3 (point-shadow cubemap at origin)
+ * would drop the drift to 0 at higher perf cost, tracked for later.
  *
  * `distanceFromSun` is the body's physical heliocentric distance in AU.
  * For bodies with a parentId the engine returns parent-centered
@@ -76,8 +88,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     brightness: 0.0,
     ambientIntensity: 0.0,
     sunIntensity: 1.0,
-    shadowIntensity: 1.5,
-    envMapIntensity: 1.9,
+    shadowIntensity: 0.4,
+    envMapIntensity: 0.0,
     guideIntensity: 0.85,
     vectorIntensity: 1.0,
   },
@@ -90,8 +102,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     brightness: 0.0,
     ambientIntensity: 0.0,
     sunIntensity: 1.0,
-    shadowIntensity: 1.5,
-    envMapIntensity: 1.9,
+    shadowIntensity: 0.4,
+    envMapIntensity: 0.0,
     guideIntensity: 1.0,
     vectorIntensity: 1.0,
   },
@@ -104,8 +116,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     brightness: 0.02,
     ambientIntensity: 0.0,
     sunIntensity: 1.0,
-    shadowIntensity: 1.3,
-    envMapIntensity: 2.1,
+    shadowIntensity: 0.4,
+    envMapIntensity: 0.0,
     guideIntensity: 0.7,
     vectorIntensity: 1.0,
   },
@@ -118,8 +130,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     brightness: 0.0,
     ambientIntensity: 0.0,
     sunIntensity: 1.0,
-    shadowIntensity: 1.5,
-    envMapIntensity: 1.9,
+    shadowIntensity: 0.4,
+    envMapIntensity: 0.0,
     guideIntensity: 1.0,
     vectorIntensity: 1.0,
   },
@@ -132,8 +144,8 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     brightness: 0.0,
     ambientIntensity: 0.0,
     sunIntensity: 1.0,
-    shadowIntensity: 1.5,
-    envMapIntensity: 1.9,
+    shadowIntensity: 0.4,
+    envMapIntensity: 0.0,
     guideIntensity: 0.95,
     vectorIntensity: 1.0,
   },

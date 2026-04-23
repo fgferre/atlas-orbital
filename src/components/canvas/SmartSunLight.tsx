@@ -43,7 +43,7 @@ const enableSmartSunLayerForBody = (root: THREE.Object3D, bodyId: string) => {
 export const SmartSunLight = forwardRef<
   THREE.DirectionalLight,
   { intensity?: number; shadowMapSize?: number }
->(({ intensity = 1.5, shadowMapSize = 4096 }, ref) => {
+>(({ intensity = 0.4, shadowMapSize = 4096 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
   const lightRef = useRef<THREE.DirectionalLight>(null);
