@@ -820,16 +820,41 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     by active user-input deltas), and unbounded → bounded
     saturation. SUBAGENT VERIFY caught a missing `fullStop`
     documentation note; fixed pre-commit. Independent.
-  - **T4.2-β — Surface mode** (~3-4 d). Port the `surfaceModeFlag`
-    activation rule (`distFromFocus < radius × 2.5 / fovFactor`)
-    - the rotation-handler swap (free rotation + pointer-cartesian
-      focus direction). New `src/lib/camera/surfaceMode.ts` extracts
-      the boolean rule + a "should reorient focus" sub-flag; mounts
-      in CameraController as a per-frame check that toggles
-      OrbitControls' target-update behavior. Depends on T4.2-α
-      (the damping curve modulates the surface-mode rotation
-      smoothness; shipping β on top of T4.2-α's per-frame damping
-      setter is the cleanest plug-in point).
+  - **T4.2-β ✅ SHIPPED (2026-04-23, `06e7f5e`)** — surface-mode
+    flag (predicate half). `src/lib/camera/surfaceMode.ts` ports
+    `NaturalCamera.java:526-527` `surfaceModeFlag.set(...)` predicate
+    exactly: `!gamepadInput && !vr && !isTracking && focusIsPlanet
+&& distFromFocus < focusRadius × 2.5 / fovFactor`. Constants
+    pinned: `SURFACE_MODE_RADII_MULTIPLIER=2.5` (NaturalCamera.java
+    literal — comment says "1.8 radii" but L27 says trust source);
+    `SURFACE_MODE_REFERENCE_FOV_DEG=40` (AbstractCamera.java:42
+    `TAN_REF_FOV`). `computeFovFactor(fovDegrees)` is exact port of
+    `AbstractCamera.java:148` `tan(fov/2) / tan(40/2)` — sub-linear
+    in FOV (tan curve, not linear ratio). 13 pinned tests (1151
+    total) cover constants, fovFactor identity at 40°, atlas's 45°
+    default matches tan-ratio formula, monotonicity, predicate
+    boundaries (positive case + at-threshold + not-a-planet + each
+    suppressor + radius<=0 defensive + 45° threshold widening +
+    narrow-FOV growth + wide-FOV shrink). Store gains
+    `surfaceModeActive: boolean` field (default false) +
+    `setSurfaceModeActive` setter (dedups so React only re-renders
+    on flag flips, not per frame). `CameraController` reads
+    `cameraInstance.fov` inside the existing focus useFrame, calls
+    `isSurfaceModeActive`, writes via setter; no-focus branch
+    explicitly clears the flag. Same try/catch defense as T4.2-α.
+    DIFF GATE PASS. SUBAGENT VERIFY: PASS — all 6 divergence
+    categories documented (numeric constants, FOV formula,
+    suppressors, `diverted` flag, rotation handler, defensive
+    radius guard) with file:line citations. **Architectural
+    divergence** (documented inline): rotation-handler swap from
+    `directionToTarget` → `updateRotationFree` is NOT yet wired —
+    atlas's three-stdlib OrbitControls keeps focus-tracking in
+    both modes; the surface-mode flag is observable via the store
+    so a future T4.2-β-handler ship can swap to a free-look mode
+    (likely by repointing `controls.target` at camera+offset OR
+    swapping to `FlyControls`). This first ship lands the predicate
+    - signal; the handler swap is the deferred half. Depends on
+      T4.2-α (shipped).
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
     pins three constants + three pure functions for a 1D
@@ -868,11 +893,14 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     replaces fullStop, force-accumulator step collapsed (impulses
     are already discrete), per-body speed scaling preserved through
     `DynamicZoom + getZoomScale()`. Independent of α/β.
-- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; α + γ shipped
-  (~0.6 d combined actual vs ~5-7 d estimate — both pure-TS
-  lib ports with thin wiring; α=damping curve setter, γ=
-  velocity buffer + per-frame integrator that swaps the wheel
-  handler wholesale). Only T4.2-β (surface mode) remaining.
+- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; **all three
+  shipped** in ~1 d combined actual vs ~8-11 d estimate. Pure-TS
+  lib ports with thin wiring landed cleanly — α (damping curve
+  setter), γ (velocity buffer + per-frame integrator), β
+  (surface-mode predicate + signal). The β rotation-handler
+  swap remains as a future T4.2-β-handler refinement (atlas's
+  OrbitControls vs Gaia's free-look architecture is a real
+  divergence; the flag is observable today).
 - **Dependencies**: none. T4.1 (camera-relative rendering)
   remains a separate concern; T4.2 ports input behavior on top
   of atlas's current absolute-world frame.
