@@ -875,12 +875,26 @@ clipping/jitter`.
       null-transform = equatorial inverts the mapping. Inner ring
       uses `outerRGB × α=0.3` instead of Gaia's complementary
       color (atlas-opinion).
-  - **T4.4e** — projection lines (camera ↔ focus segments onto
-    the grid plane when `origin=REFSYS` + focus active per
-    `GridRecUpdater.java:84-102`). Effort: 1 d.
-- **Effort**: T4.4a done (0.5 d), T4.4b done (1 d incl. refactor
-  - predecessor sweep), T4.4c done (0.5 d), T4.4d done (0.5 d);
-    T4.4e 1 d → remaining ~1 d.
+  - **T4.4e-α ✅ SHIPPED (2026-04-23, `521ae82`)** — projection-
+    lines MATH extraction (camera ↔ focus L-polyline endpoint
+    helpers). `src/lib/gridProjection.ts` ports
+    `GridRecUpdater.java:171-200`'s `getCFPos` + `getZXLine` +
+    `getYLine` + inline driver block. 15 pinned tests covering
+    identity, rotations around all three axes, L-corner
+    continuity, and two geometric invariants under arbitrary
+    rotations (`yB_world === focus − cam`; `zxA_world === −cam`).
+    1 documented divergence: float32 vs Gaia's double (render-
+    space ≤140k units fits comfortably). DIFF GATE + SUBAGENT
+    VERIFY PASS; building-block only, no runtime surface.
+  - **T4.4e-β** — mount + UI + store slice. Adds
+    `gridProjectionLines: boolean` (default `true` per
+    `config.yaml:381`), renders via drei `<Line>` with the T4.6
+    SDF patch, per-frame driver gated on focus active + flag,
+    UI toggle in `LayersPanel.tsx` under the existing coordinate-
+    grid section. Effort: ~0.5 d.
+- **Effort**: T4.4a/b/c/d all done (~3 d total); T4.4e-α done
+  (~0.25 d); T4.4e-β ~0.5 d → remaining ~0.5 d to close T4.4
+  fully 1:1 with Gaia.
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
