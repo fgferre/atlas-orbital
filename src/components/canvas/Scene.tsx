@@ -31,7 +31,7 @@ import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
-import { EclipticGrid } from "./EclipticGrid";
+import { GridRecursive } from "./GridRecursive";
 import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
@@ -330,7 +330,7 @@ export const Scene = () => {
           userOverrides={graphicsOverrides}
         />
         <color attach="background" args={["#000000"]} />
-        {showEclipticGrid && <EclipticGrid />}
+        {showEclipticGrid && <GridRecursive />}
         <Suspense fallback={null}>
           <StarfieldManager />
           <Environment
