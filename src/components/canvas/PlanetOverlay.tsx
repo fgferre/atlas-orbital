@@ -13,8 +13,14 @@ export const PlanetOverlay = memo(() => {
   // ticks, anything). Focused selectors keep this component quiet
   // unless the overlay array or the two visibility toggles change.
   const overlayItems = useStore((state) => state.overlayItems);
-  const showLabels = useStore((state) => state.showLabels);
   const showIcons = useStore((state) => state.showIcons);
+  // T4.5-β — when the user flips to SDF labels the HTML label text
+  // hides (PlanetLabels3D draws the 3D text) but the icon buttons
+  // stay as the a11y surface. `showHtmlLabel` = user wants labels
+  // AND the HTML path is the active label renderer.
+  const showHtmlLabel = useStore(
+    (state) => state.showLabels && state.labelMode === "html"
+  );
   const selectId = useStore((state) => state.selectId);
 
   return (
@@ -48,7 +54,7 @@ export const PlanetOverlay = memo(() => {
               keyboard + screen-reader users. The visible text already
               provides the accessible name, so we drop the redundant
               `aria-label`. */}
-          {showLabels && item.showLabel && (
+          {showHtmlLabel && item.showLabel && (
             <button
               type="button"
               tabIndex={showIcons && item.showIcon ? -1 : 0}

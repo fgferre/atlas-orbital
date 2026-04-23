@@ -83,6 +83,14 @@ describe("store phase 4 regression guards", () => {
     useStore.getState().toggleLabels();
     expect(useStore.getState().showLabels).toBe(false);
 
+    // T4.5-β — labelMode defaults to "html" for a11y; setter
+    // flips to "sdf" without touching showLabels.
+    expect(useStore.getState().labelMode).toBe("html");
+    useStore.getState().setLabelMode("sdf");
+    expect(useStore.getState().labelMode).toBe("sdf");
+    useStore.getState().setLabelMode("html");
+    expect(useStore.getState().labelMode).toBe("html");
+
     expect(useStore.getState().showCredits).toBe(false);
     useStore.getState().toggleCredits();
     expect(useStore.getState().showCredits).toBe(true);

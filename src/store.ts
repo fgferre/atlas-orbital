@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import type { GridOrientation } from "./lib/gridOrientation";
+import { DEFAULT_LABEL_MODE, type LabelMode } from "./lib/labelMode";
 import type { QualityMode } from "./lib/qualityProfile";
 import { simulationClock } from "./lib/simulationClock";
 import type { SunRenderMode } from "./lib/sunRenderMode";
@@ -46,6 +47,16 @@ interface AppState {
   focusId: string | null;
   showLabels: boolean;
   showIcons: boolean;
+  /**
+   * T4.5-β — body label rendering mode. `"html"` keeps the existing
+   * `PlanetOverlay` HTML path (keyboard focus + screen reader
+   * compatible — default for a11y). `"sdf"` mounts drei `<Text>`
+   * inside the canvas, mirroring Gaia's `font.fragment.glsl` +
+   * `LabelEntityRenderSystem.renderCelestial` pipeline. The icon
+   * buttons in `PlanetOverlay` remain the a11y surface in both
+   * modes (the 3D text itself is not focusable / screen-readable).
+   */
+  labelMode: LabelMode;
   showStarfield: boolean;
   starfieldSource: StarfieldSource;
   starfieldProviderStates: Record<StarfieldSource, StarfieldProviderState>;
@@ -145,6 +156,7 @@ interface AppState {
   setViewportFraming: (next: ViewportFramingState) => void;
   toggleLabels: () => void;
   toggleIcons: () => void;
+  setLabelMode: (mode: LabelMode) => void;
   toggleOrbits: () => void;
   toggleDeclutterOrbits: () => void;
   toggleEclipticGrid: () => void;
@@ -232,6 +244,7 @@ export const useStore = create<AppState>()(
       focusId: null,
       showLabels: true,
       showIcons: true,
+      labelMode: DEFAULT_LABEL_MODE,
       showOrbits: true,
       declutterOrbits: true,
       showEclipticGrid: true,
@@ -336,6 +349,8 @@ export const useStore = create<AppState>()(
         ),
       toggleLabels: () => set((state) => ({ showLabels: !state.showLabels })),
       toggleIcons: () => set((state) => ({ showIcons: !state.showIcons })),
+      setLabelMode: (labelMode) =>
+        set((state) => (state.labelMode === labelMode ? state : { labelMode })),
       toggleOrbits: () => set((state) => ({ showOrbits: !state.showOrbits })),
       toggleDeclutterOrbits: () =>
         set((state) => ({ declutterOrbits: !state.declutterOrbits })),

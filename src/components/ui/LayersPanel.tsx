@@ -7,6 +7,7 @@ import {
   GRID_ORIENTATION_LABELS,
   GRID_ORIENTATIONS,
 } from "../../lib/gridOrientation";
+import { LABEL_MODE_LABELS, LABEL_MODES } from "../../lib/labelMode";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
 import { RailTabContent } from "./RightControlRail";
@@ -78,6 +79,8 @@ export const LayersPanel = ({
 
   const showLabels = useStore((state) => state.showLabels);
   const toggleLabels = useStore((state) => state.toggleLabels);
+  const labelMode = useStore((state) => state.labelMode);
+  const setLabelMode = useStore((state) => state.setLabelMode);
   const showIcons = useStore((state) => state.showIcons);
   const toggleIcons = useStore((state) => state.toggleIcons);
   const showOrbits = useStore((state) => state.showOrbits);
@@ -260,6 +263,25 @@ export const LayersPanel = ({
               checked={showLabels}
               onChange={toggleLabels}
             />
+            {showLabels && (
+              <div className="space-y-2 border border-white/5 bg-black/20 p-3">
+                <SubsectionLabel>Label Renderer</SubsectionLabel>
+                <div
+                  role="group"
+                  aria-label="Label renderer"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {LABEL_MODES.map((mode) => (
+                    <ChoiceButton
+                      key={mode}
+                      label={LABEL_MODE_LABELS[mode]}
+                      isActive={labelMode === mode}
+                      onClick={() => setLabelMode(mode)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             <Toggle
               label="Orbits"
               checked={showOrbits}

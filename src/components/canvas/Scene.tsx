@@ -30,6 +30,7 @@ import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
+import { PlanetLabels3D } from "./PlanetLabels3D";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { GridAuLabels } from "./GridAuLabels";
@@ -398,6 +399,12 @@ export const Scene = () => {
           </Suspense>
         )}
         <OverlayPositionTracker />
+        {/* T4.5-β — Gaia-native SDF body labels (drei <Text>); self-
+            gates on `labelMode === "sdf" && showLabels` so it's a
+            no-op in default HTML mode. The HTML `PlanetOverlay`
+            below the Canvas keeps the icon a11y surface in both
+            modes (3D text isn't focusable / screen-readable). */}
+        <PlanetLabels3D />
         <CameraController />
         <InitialCameraAnimation />
         <DreiOrbitControls
