@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
+import { getGridRecScaling } from "./shaders/gridRecScaling";
 import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
 
 /**
@@ -15,25 +16,32 @@ import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
  * `/tmp/gaiasky/assets/shader/gridrec.fragment.glsl`; this component
  * owns the mesh + placement + scene-level opacity fade.
  *
- * T4.4b ship scope:
- *  - Horizontal quad on the ecliptic plane (y=0) matching
- *    `EclipticGrid.tsx`'s footprint — preserves the "grid fades in
- *    as you zoom out" UX atlas users already have.
- *  - Static `u_tessQuality = 1` + `u_heightScale = 1` + CIRCULAR
- *    style (Gaia default per `config.yaml:384`). T4.4c wires the
- *    camera-distance-driven `getGridScaling` + orientation toggle
- *    (Equatorial / Ecliptic / Galactic) per
- *    `GridRecUpdater.java:80-81` + `GridRecursiveRadio.java:34-44`.
+ * Ship scope by sub-wave:
+ *  - **T4.4b** (shipped `94af1b8`): horizontal quad + shader mount
+ *    on the ecliptic plane, CIRCULAR style default, static uniforms.
+ *  - **T4.4c** (this file, below): per-frame `getGridRecScaling`
+ *    driver pushing camera-distance → `u_tessQuality` +
+ *    `u_heightScale`. The grid now actually zooms through decades
+ *    as the camera pulls back, matching Gaia's recursive behavior
+ *    (`GridRecUpdater.java:80-81`). The level-1 rings swap
+ *    smoothly between decades via the `heightScale` fade.
+ *  - **T4.4d** (pending): orientation toggle (Equatorial / Ecliptic /
+ *    Galactic) per `GridRecursiveRadio.java:34-48` transform-name
+ *    swap + per-orientation color callouts.
+ *  - **T4.4e** (pending): projection lines when `origin=REFSYS` +
+ *    camera focus is active (`GridRecUpdater.java:84-102`).
  *  - The AU tick labels `EclipticGrid.tsx` rendered (1/2/5/10/20/
  *    30/40 AU sprite text) are an atlas-opinion feature with no
  *    Gaia equivalent on the grid mesh itself. Removed with the
- *    predecessor sweep; a Gaia-native label path comes back via
- *    T4.5 (MSDF text + constellations).
+ *    T4.4b predecessor sweep; a Gaia-native label path returns
+ *    with T4.5 (MSDF text + constellations).
  *
  * Opacity still follows atlas's camera-distance fade curve so the
  * layer toggle remains useful at close fly-by. Gaia's own opacity
  * curve is driven by `GridRecUpdater.java` through `base.opacity`
- * on the entity; a 1:1 runtime port is T4.4c scope.
+ * on the entity at line 74 (`flint` on distToCamera); atlas keeps
+ * its linear `clamp((dist - 10k)/(140k - 10k), 0, 1)` curve as a
+ * UI-affordance layer on top.
  */
 
 const noopRaycast: THREE.Object3D["raycast"] = () => null;
@@ -57,6 +65,19 @@ export const GridRecursive = () => {
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
 
     const dist = camera.position.length();
+
+    // T4.4c — Gaia's recursive decade walk. Feeds atlas world
+    // units directly into the scale-invariant algorithm; see
+    // `gridRecScaling.ts` JSDoc for why no AU conversion is
+    // required.
+    const scaling = getGridRecScaling(dist);
+    const uniforms = materialRef.current.uniforms;
+    uniforms.u_tessQuality.value = scaling.tessQuality;
+    uniforms.u_heightScale.value = scaling.heightScale;
+
+    // Scene-level opacity fade stays atlas-native (UI affordance
+    // on top of the Gaia shader). Mirrors `base.opacity` role in
+    // `GridRecUpdater.java:74` but uses atlas's linear curve.
     const t = THREE.MathUtils.clamp(
       (dist - GRID_RECURSIVE_CONFIG.opacityFadeStart) /
         (GRID_RECURSIVE_CONFIG.opacityFadeEnd -
@@ -70,7 +91,7 @@ export const GridRecursive = () => {
         GRID_RECURSIVE_CONFIG.opacityFar,
         t
       ) * guideIntensity;
-    materialRef.current.uniforms.u_opacity.value = opacity;
+    uniforms.u_opacity.value = opacity;
   });
 
   return (
