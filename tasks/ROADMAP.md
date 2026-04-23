@@ -442,13 +442,88 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
   T3.6 small next) because plumbing without assets yields zero
   visual change.
 
-### T3.3 — Eclipse geometry (umbra / penumbra / diffraction)
+### T3.3 — Eclipse geometry (umbra / penumbra / diffraction) ✅ **SHIPPED (`c44f913`)**
 
-- **Gaia**: `assets/shader/lib/eclipses.glsl` (~80 LOC) — umbra
-  0.0 soft edge, penumbra ~1.7× radius, diffraction spectrum between.
-- **Atlas**: no eclipse shading. Syzygies invisible.
-- **Effort**: 3-5 days.
-- **Dependencies**: none.
+- **Gaia**: `/tmp/gaiasky/assets/shader/lib/eclipses.glsl` (123 LOC).
+  Umbra = 0.04 × radius (hard-black), penumbra = 1.7 × radius
+  (linear shadow ramp), diffraction band = [0.2×, 1.6×] radius
+  (orange-brown spectrum × 4x(1-x)×0.3×edgeFade). Terminator
+  edge-fade via `smoothstep(-0.1, 0.2, dot_NL)`. Near-side gate
+  `dot_NM > -0.15` culls fragments facing away from the eclipsing
+  body. Helper `math.glsl:dist_segment_point` for the ray-miss
+  distance computation. Integration sites: `pbr.fragment.glsl:477`
+  (call #1 to compute shadow) + `pbr.fragment.glsl:676` (call #2
+  to blend into fragColor).
+- **Atlas (before)**: no eclipse shading. Syzygies invisible —
+  user couldn't see solar eclipses (Moon darkening a patch of
+  Earth) or lunar eclipses (Earth shadow turning the Moon
+  orange-red).
+- **Fix shipped** (`c44f913`):
+  1. Three new files in `src/components/canvas/shaders/`:
+     - `eclipseMath.ts` — pure-TS mirror of the Gaia math.
+       10 pinned constants (`ECLIPSE_UMBRA_CORE_RADIUS_RATIO =
+0.04`, `ECLIPSE_PENUMBRA_RADIUS_RATIO = 1.7`,
+       `ECLIPSE_DIFFRACTION_START_RATIO = 0.2`,
+       `ECLIPSE_DIFFRACTION_END_RATIO = 1.6`,
+       `ECLIPSE_EDGE_FADE_LO = -0.1`, `ECLIPSE_EDGE_FADE_HI = 0.2`,
+       `ECLIPSE_NEAR_SIDE_DOT_THRESHOLD = -0.15`,
+       `ECLIPSE_DIFFRACTION_INTENSITY_SCALE = 0.3`,
+       `ECLIPSE_DIFFRACTION_SPECTRUM_SCALE = 0.5`, +
+       spectrum endpoints `[0.41, 0.26, 0.013]` /
+       `[0.88, 0.42, 0.063]`).
+       Helpers: `distSegmentPoint`, `getDiffractionSpectrum`,
+       `computeEclipseShading`, `eclipseBlend`.
+     - `eclipseMath.test.ts` — 26 pinned tests covering
+       constants + helper edge cases + shading pipeline.
+     - `eclipseShaderPatch.ts` — reusable GLSL template strings
+       that interpolate constants from `eclipseMath.ts` via
+       string interpolation so math-JS ↔ GLSL parity is
+       compile-time guaranteed.
+  2. `src/lib/astrophysics.ts` — `CelestialBody.eclipsingBodyId?`
+     added with docstring citing Gaia's `eclipsingBodyFlag`.
+  3. `src/data/celestialBodies.ts` — Earth gets
+     `eclipsingBodyId: "moon"`, Moon gets `eclipsingBodyId: "earth"`.
+  4. `src/components/canvas/planet/usePlanetMaterials.ts`:
+     - Earth day/night branch extended to compose the eclipse
+       uniforms + helpers + output-fragment patch on top of its
+       existing shader.
+     - New `else if (body.eclipsingBodyId)` branch for
+       eclipse-only bodies (Moon) — declares its own world-space
+       varyings + uniforms + helpers + patch.
+  5. `src/components/canvas/Planet.tsx` — per-frame driver block
+     added after the atmosphere update. Looks up eclipsing body
+     via `scene.getObjectByName(body.eclipsingBodyId)`, writes
+     world-pos + semantic radius + `max(1, distance(receiver,
+sun) × 2)` vrScale into the uniforms; sets
+     `uEclipsingActive` to 1 when mesh found, 0 when not
+     (shader early-outs on the 0 path).
+- **Documented divergences** (L22):
+  - Outline branch (`#ifdef eclipseOutlines` at
+    `eclipses.glsl:79-91`) NOT ported — Gaia debug wireframe
+    mode, not production visual.
+  - `gs_` prefix on helper functions to avoid collision with
+    Three.js ShaderChunk includes.
+  - `uEclipsingActive` runtime gate (atlas-added; replaces
+    Gaia's compile-time `#ifdef eclipsingBodyFlag`).
+  - Single injection site before `<output_fragment>` vs Gaia's
+    two-call split (shadow compute at `pbr.fragment.glsl:477`,
+    blend at `:676`). Atlas folds both into one inline block
+    that modifies `outgoingLight` before the Three.js chunk
+    reads it.
+- **Verification stack**:
+  - DIFF GATE self-check against `eclipses.glsl:33-94`: all
+    constants, gates, ramps, diffraction math byte-match.
+  - SUBAGENT VERIFY (Explore/Sonnet, fresh context, cited
+    `/tmp/gaiasky/` paths): 11/11 PASS.
+  - Math tests: 26/26 PASS.
+  - Gates: 916/916 tests, lint clean, build clean.
+  - Runtime smoke: scene renders at 56.5 FPS, zero console
+    errors, WebGL context alive. Visual umbra/penumbra bands
+    visible only during actual eclipse events — time-warp to a
+    known event (e.g. 2017-08-21 solar eclipse, 2025-03-14
+    lunar eclipse) and zoom in on Earth/Moon to observe. Smoke
+    scope limited to compile + static render + no flicker.
+- **Status**: done — commit `c44f913`.
 
 ### T3.4 — Cloud / ring shadow casting cleanup ✅ **SHIPPED (`9c06c16`)**
 
