@@ -43,8 +43,8 @@ test.describe("postprocessing", () => {
   });
 
   // NB: Wave α Commit 2 attempted an "ultra visual identity (frozen
-  // sim)" screenshot test here. With the HDR pipeline active (AgX
-  // ToneMapping + Bloom mipmap pyramid), Chromium's headless
+  // sim)" screenshot test here. With the HDR postprocess pipeline
+  // active, Chromium's headless
   // `Page.captureScreenshot` protocol hangs past a 60 s test timeout
   // when the renderer is mid-allocation — reproducibly, not
   // intermittently. A 3-attempt retry wrapper (`screenshotWithRetry`)

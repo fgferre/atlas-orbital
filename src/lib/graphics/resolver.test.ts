@@ -78,9 +78,9 @@ describe("PRESET_DEFAULTS — byte-match to qualityProfile RESOLVED_PROFILES", (
     }
   });
 
-  it("every preset defaults toneMapping to AgX (Commit 2 R1 #1A contract)", () => {
+  it("every preset defaults toneMapping to Gaia NONE", () => {
     for (const preset of ["ultra", "high", "medium", "low"] as const) {
-      expect(PRESET_DEFAULTS[preset].toneMapping).toBe("agx");
+      expect(PRESET_DEFAULTS[preset].toneMapping).toBe("none");
     }
   });
 });
@@ -208,6 +208,14 @@ describe("resolveEffectiveGraphics — overrides", () => {
       NO_SIGNALS
     );
     expect(result.bloomIntensityMul).toBeCloseTo(0.75 * 2, 10);
+  });
+
+  it("bloomIntensity override is absolute and can opt into bloom over Gaia default", () => {
+    const result = resolveEffectiveGraphics(
+      stateFor("high", { bloomIntensity: 0.8 }),
+      NO_SIGNALS
+    );
+    expect(result.bloomIntensity).toBe(0.8);
   });
 
   it("bloomThreshold override leaks through as absolute (preset base irrelevant)", () => {

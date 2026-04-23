@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after **Codex audit triage** — fresh external review of the session's ships surfaced 8 findings. 2 blockers against T4.6 were FALSE ALARMS (three-stdlib@2.37+ vs atlas's pinned 2.36.1 — regression test added to pin the sentinel). 1 drift claim on Earth eclipse gating was also a FALSE ALARM (codex missed atlas's `else if (body.eclipsingBodyId)` fallthrough at `usePlanetMaterials.ts:411`). 3 drifts + 2 nits were REAL and fixed: (#3) COMPLEX no longer animates `starburstOffset` (Gaia only animates for PSEUDO per `MainPostProcessor.java:915-917`); (#4) LensDirt final `clamp(modulated, 0, 1)` added per `lensdirt.frag.glsl:34-35` to stop HDR overflow into Bloom; (#5) cloud material now runs the same eclipse shader patch as Earth + a per-frame driver in `Planet.tsx` (solar eclipse darkens clouds, matching `cloud.fragment.glsl:170-172`); (#7) `tex.needsUpdate = true` removed from `applyLensFilter` to stop the "no image data" spurious warning; (#8) stale §Next up text + broken `|x|` markdown pipes fixed. Session totals (15 commits, incl. doc-only)._
+_Last updated: 2026-04-23 after **lighting/shadow Gaia re-audit** — defaults now match Gaia where source is explicit: ambient `0.0`, central solar point light `1.0`, bloom `0.0`, tone mapping `NONE`. The Display panel's tone mapping selector now drives the composer instead of persisting a no-op. `SmartSunLight` is layer-scoped to the focused body so its directional shadow helper no longer lights unrelated planets with the focused body's sun vector. Ring-shadow GLSL now guards near-parallel ray/plane intersections to avoid Inf/NaN propagation. Post-patch skeptical audit surfaced **two residual drifts** the patch did not close: T2.5 (`shadowIntensity 1.3-1.5` still supplements the focused body ~2.5× over Gaia) and T2.6 (`envMapIntensity 1.9-2.1` adds diffuse IBL that Gaia does not use). Both tracked in ROADMAP for follow-up ondas. L32 captured: visual-diff baseline PNGs (`e2e/**/*-snapshots/*.png`) need an explicit review gate when re-baked, not just `--update-snapshots` + green tests. Prior Codex audit triage remains below in history._
 
 ---
 
@@ -62,7 +62,11 @@ automatically.
     errors AND scene renders AND **does not flicker over time**
     (L26: screenshots don't catch temporal bugs; use multi-frame
     pixel sampling via preview_eval+rAF for ≥30 frames, or ask the
-    user to watch live, before marking smoke passed).
+    user to watch live, before marking smoke passed). **If the
+    commit re-bakes any `e2e/**/*-snapshots/*.png` baseline, visually
+    inspect the new PNG and confirm every visible delta traces to an
+    intentional change in the same commit (L32). File-size delta ≥2×
+    is a flag for closer review.**
 11. Commit with source-file citations in the message.
 12. Update tasks/STATUS.md (shipped row + §Next up) and
     tasks/ROADMAP.md (item → done + commit SHA).
@@ -82,11 +86,13 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L31).
-   Newest entries (2026-04-22) codify the ROADMAP-drift patterns:
-   L30 (wave ordering must respect `config.yaml` defaults, not
-   variant availability) and L31 (shader file existence ≠ Gaia
-   runtime wiring — grep for `new <EffectClass>(` first).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L32).
+   Newest entries codify plan-vs-reality drift guards across the
+   ship lifecycle: L30 (plan-time — wave ordering must respect
+   `config.yaml` defaults), L31 (port-time — shader file existence
+   ≠ Gaia runtime wiring), L32 (verify-time — visual-diff baseline
+   PNGs need a human "does this delta make sense?" pass when
+   re-baked).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
@@ -115,7 +121,7 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **Tier-4 candidates after hygiene + codex triage**: T2.3b still BLOCKED (user asset delivery); T3.7 / T3.8 / T3.9 / T4.6 / T4.7 / T4.8 all shipped or closed. Remaining unblocked work: **T4.1 camera-relative rendering** (2-3w, jitter fix), **T4.2 camera cinematics** (1-2w, NaturalCamera damping + surface mode), **T4.3 particle systems** (2-3w, ASTEROID BELT + KUIPER + MW particles — subsumes the old T4.7 panorama gap), T4.4 recursive grid (1w, orientation toggle per `01337d3` scope correction), T4.5 MSDF text / constellations (1-2w).
+## → Next up: **Lighting drifts (T2.5 + T2.6)** surfaced by the 2026-04-23 post-Codex audit — both come from atlas-specific architectural choices (DirectionalLight-for-shadow, IBL env map) that Gaia does not share. T2.5 (`shadowIntensity` supplement on focused body, 0.5-5 d depending on option) is the smaller visual drift but the one that most directly breaks "focused body = other bodies" parity. T2.6 (`envMapIntensity` dark-side lift, 0.5-1 d) is cheaper but riskier visually because Gaia-parity = true black dark side. Both want smoke + user sign-off before ship. Other Tier-4 candidates still valid: **T4.1 camera-relative rendering** (2-3w, jitter fix), **T4.2 camera cinematics** (1-2w, NaturalCamera damping + surface mode), **T4.3 particle systems** (2-3w, ASTEROID BELT + KUIPER + MW particles — subsumes the old T4.7 panorama gap), T4.4 recursive grid (1w, orientation toggle per `01337d3` scope correction), T4.5 MSDF text / constellations (1-2w). T2.3b still BLOCKED (user asset delivery); T3.7 / T3.8 / T3.9 / T4.6 / T4.7 / T4.8 all shipped or closed.
 
 Lens Closure Wave (default path) complete: T2.0 ✅ `cd626dc`,
 T2.3a ✅ `51750c3`, T2.1 ✅ `a2c6594`. T3.3 ✅ `c44f913` adds

@@ -48,6 +48,15 @@ describe("resolveLerpRefTargets — Wave 0 identity invariant", () => {
 });
 
 describe("resolveLerpRefTargets — override composition", () => {
+  it("bloomIntensity is absolute so users can opt into bloom over Gaia's 0 default", () => {
+    const result = resolveLerpRefTargets(
+      BASE_PRESET,
+      { bloomIntensity: 0.8, bloomIntensityMul: 2 },
+      0.75
+    );
+    expect(result.bloomIntensity).toBe(0.8);
+  });
+
   it("bloomIntensityMul doubles the bloom target", () => {
     const result = resolveLerpRefTargets(
       BASE_PRESET,

@@ -11,13 +11,12 @@
  *     Reflections, Sun Render.
  *
  * Deferred from Wave 1 per Finding 7 + scope:
- *   - Exposure slider: the AgX `<ToneMapping>` effect from
- *     `@react-three/postprocessing` has no user-exposed exposure prop
- *     and `gl.toneMappingExposure` is a no-op under R1 #1A's
- *     `NoToneMapping` renderer. Implementing a real compositor
- *     exposure path is Wave η.6 scope; shipping the slider now would
- *     ship a dead control. Amendment note lives in
- *     tasks/graphics-settings-design.md §3.
+ *   - Exposure slider: `@react-three/postprocessing` tone mapping has
+ *     no user-exposed exposure prop and `gl.toneMappingExposure` is a
+ *     no-op under the renderer-level `NoToneMapping` contract.
+ *     Implementing a real compositor exposure path is Wave η.6 scope;
+ *     shipping the slider now would ship a dead control. Amendment
+ *     note lives in tasks/graphics-settings-design.md §3.
  *   - Camera Effects + Textures & LoD sections: hidden until the R1
  *     effects and LoD system land (Waves γ / η / R3).
  *
@@ -51,10 +50,7 @@ const PRESET_OPTIONS: Array<{
 ];
 
 const TONE_MAPPING_OPTIONS: Array<{ id: ToneMappingName; label: string }> = [
-  // Finding 7 amend: AgX is the default under R1 #1A's HDR pipeline.
-  // Linear is dropped (would break the HDR contract). Wiring through
-  // `<ToneMapping mode={...}>` is Wave γ+ scope — Wave 1 persists the
-  // user's choice but the composer always runs AgX until then.
+  { id: "none", label: "None" },
   { id: "agx", label: "AgX" },
   { id: "aces", label: "ACES" },
   { id: "reinhard", label: "Reinhard" },
@@ -233,19 +229,19 @@ export const DisplayPanel = () => {
         />
 
         <Slider
-          label="Bloom Intensity ×"
-          value={graphicsOverrides.bloomIntensityMul ?? 1}
+          label="Bloom Intensity"
+          value={effective.bloomIntensity ?? 0}
           min={0}
           max={2}
           step={0.05}
           disabled={!effective.bloomEnabled}
-          onChange={(v) => setGraphicsOverride("bloomIntensityMul", v)}
+          onChange={(v) => setGraphicsOverride("bloomIntensity", v)}
           onReset={
-            graphicsOverrides.bloomIntensityMul !== undefined
-              ? () => setGraphicsOverride("bloomIntensityMul", undefined)
+            graphicsOverrides.bloomIntensity !== undefined
+              ? () => setGraphicsOverride("bloomIntensity", undefined)
               : undefined
           }
-          hint="Multiplier over the preset and visual-context base."
+          hint="Gaia default is 0. Raise for cinematic bloom."
         />
 
         <Slider
@@ -264,24 +260,16 @@ export const DisplayPanel = () => {
           hint="R1 #2 default 1.0 — lower lets more surfaces glow."
         />
 
-        {/* Tone Mapping dropdown intentionally disabled in Wave α.
-            The store persists the user's choice in
-            `graphicsOverrides.toneMapping`, but the composer in
-            `PostProcessingPipeline.tsx` stays pinned to AgX until
-            Wave γ wires `<ToneMapping mode={effective.toneMapping}>`
-            through. Showing the dropdown as active would let users
-            click options that produce zero visible change — hiding it
-            behind a disabled state with an explicit tooltip keeps the
-            panel honest. */}
         <Select
           label="Tone Mapping"
-          value="agx"
+          value={effective.toneMapping}
           options={TONE_MAPPING_OPTIONS}
-          onChange={() => {
-            /* disabled — see comment above */
-          }}
-          disabled
-          disabledHint="AgX is the active operator. Dropdown activates in a future update."
+          onChange={(next) => setGraphicsOverride("toneMapping", next)}
+          onReset={
+            graphicsOverrides.toneMapping !== undefined
+              ? () => setGraphicsOverride("toneMapping", undefined)
+              : undefined
+          }
         />
 
         <Slider

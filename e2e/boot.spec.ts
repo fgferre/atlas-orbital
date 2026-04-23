@@ -63,8 +63,8 @@ test.describe("boot", () => {
     await freezeSimulation(page);
     await visitAtlasAndWaitForReady(page);
     // Wait 3.5 s: the 2 s useVisualPresetLerp convergence PLUS enough
-    // headroom for the AgX composer's first Bloom downsample pyramid
-    // and tone-mapping LUT upload to settle. Shorter waits tripped an
+    // headroom for the postprocess composer allocations to settle.
+    // Shorter waits tripped an
     // intermittent "Protocol error (Page.captureScreenshot): Unable to
     // capture screenshot" from Chromium — the pipeline was mid-
     // allocation when the capture fired.

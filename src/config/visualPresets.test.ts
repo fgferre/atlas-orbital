@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getPresetForContext } from "./visualPresets";
+import { getPresetForContext, VISUAL_PRESETS } from "./visualPresets";
 
 // `getPresetForContext(distanceFromSun, cameraDistance)` is the
 // auto-preset classifier consumed by `useVisualPresetLerp`. The camera
@@ -72,5 +72,15 @@ describe("getPresetForContext — system region by heliocentric AU", () => {
   it("outer ↔ deep boundary at 50 AU is exclusive on the low side", () => {
     expect(getPresetForContext(49.999, FAR_CAM)).toBe("OUTER_SYSTEM");
     expect(getPresetForContext(50, FAR_CAM)).toBe("DEEP_SPACE");
+  });
+});
+
+describe("VISUAL_PRESETS — Gaia lighting/postprocess defaults", () => {
+  it("keeps ambient, central sun, and bloom defaults aligned with Gaia config", () => {
+    for (const preset of Object.values(VISUAL_PRESETS)) {
+      expect(preset.ambientIntensity).toBe(0);
+      expect(preset.sunIntensity).toBe(1);
+      expect(preset.bloomIntensity).toBe(0);
+    }
   });
 });

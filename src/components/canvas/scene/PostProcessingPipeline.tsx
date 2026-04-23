@@ -10,6 +10,7 @@ import {
 import { ToneMappingMode } from "postprocessing";
 import { LensFlareSlot } from "./LensFlareInjector";
 import { LightGlowSlot } from "./LightGlowInjector";
+import type { ToneMappingName } from "../../../lib/graphics/resolver";
 
 export interface BloomController {
   intensity: number;
@@ -30,7 +31,15 @@ interface PostProcessingPipelineProps {
   hueSatRef: RefObject<HueSaturationController | null>;
   brightnessRef: RefObject<BrightnessContrastController | null>;
   bloomEnabled: boolean;
+  toneMapping: ToneMappingName;
 }
+
+const TONE_MAPPING_MODE: Partial<Record<ToneMappingName, ToneMappingMode>> = {
+  agx: ToneMappingMode.AGX,
+  aces: ToneMappingMode.ACES_FILMIC,
+  reinhard: ToneMappingMode.REINHARD,
+  cineon: ToneMappingMode.CINEON,
+};
 
 export const PostProcessingPipeline = memo(
   ({
@@ -38,6 +47,7 @@ export const PostProcessingPipeline = memo(
     hueSatRef,
     brightnessRef,
     bloomEnabled,
+    toneMapping,
   }: PostProcessingPipelineProps) => {
     const assignBloomRef = useCallback(
       (effect: BloomController | null) => {
@@ -58,9 +68,9 @@ export const PostProcessingPipeline = memo(
       [brightnessRef]
     );
 
-    // Effect ordering (Wave α — post fix wave-alpha P1.3):
-    //   Bloom (HDR in) → ToneMapping (AgX, HDR→LDR) → HueSaturation (LDR) →
-    //   BrightnessContrast (LDR)
+    // Effect ordering:
+    //   Bloom (HDR in, Gaia default intensity 0) → optional ToneMapping →
+    //   HueSaturation → BrightnessContrast
     //
     // Two correctness constraints the chain has to satisfy:
     //   1. Bloom must read REAL HDR luminance so it only picks up the
@@ -95,6 +105,10 @@ export const PostProcessingPipeline = memo(
     // Kept matching the preset so the boot frame and the first lerp
     // tick don't disagree.
     //
+    // Gaia default tone mapping is NONE (`config.yaml`), so the
+    // ToneMapping pass is omitted unless the user explicitly selects
+    // a cinematic operator in the Display panel.
+    //
     // The HDR contract stays `luminanceThreshold=1.0` (prompt R1 #2):
     // only surfaces on the HDR-emissive allow-list cross the
     // threshold — planet / atmosphere / cloud / ring / orbit-line
@@ -124,6 +138,8 @@ export const PostProcessingPipeline = memo(
     // ghost-march reads HDR bright-pass before Bloom smears it.
     // Starburst spike drift is driven by the camera-direction
     // scalar inside `LensFlareSlot`.
+    const toneMappingMode = TONE_MAPPING_MODE[toneMapping];
+
     return (
       <EffectComposer frameBufferType={THREE.HalfFloatType}>
         <LightGlowSlot />
@@ -139,7 +155,11 @@ export const PostProcessingPipeline = memo(
         ) : (
           <></>
         )}
-        <ToneMapping mode={ToneMappingMode.AGX} />
+        {toneMappingMode !== undefined ? (
+          <ToneMapping mode={toneMappingMode} />
+        ) : (
+          <></>
+        )}
         <HueSaturation ref={assignHueSatRef} hue={0} />
         <BrightnessContrast ref={assignBrightnessRef} />
       </EffectComposer>

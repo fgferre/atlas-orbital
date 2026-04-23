@@ -17,6 +17,7 @@ import { StarfieldManager } from "./StarfieldManager";
 import * as THREE from "three";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
+import { useEffectiveGraphics } from "../../hooks/useEffectiveGraphics";
 import {
   resolveDeferredTextureBudget,
   setDeferredTextureBudget,
@@ -213,6 +214,7 @@ export const Scene = () => {
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const scaleMode = useStore((state) => state.scaleMode);
   const qualityProfile = useQualityProfile(qualityMode);
+  const effectiveGraphics = useEffectiveGraphics();
   // Wave α P1.1 fix: pull graphicsOverrides from the slice so the
   // DisplayPanel's sliders actually reach useVisualPresetLerp. Shallow-
   // select to avoid re-render on unrelated store fields (L19).
@@ -267,11 +269,11 @@ export const Scene = () => {
       // R1 #1A (Wave α Commit 2): the postprocessing composer is the
       // single authority on tone mapping — keep the renderer linear so
       // bloom operates on real HDR luminance instead of a Reinhard-
-      // compressed buffer. The `<ToneMapping mode={ToneMappingMode.AGX}>`
-      // pass in `PostProcessingPipeline.tsx` runs LAST in the effect
-      // chain. Output color space is set explicitly (the default at
-      // three r181 is SRGBColorSpace, but we pin it so a future default
-      // shift doesn't silently change our gamma contract).
+      // compressed buffer. Gaia default omits tone mapping; optional
+      // cinematic operators are applied by `PostProcessingPipeline.tsx`.
+      // Output color space is set explicitly (the default at three r181
+      // is SRGBColorSpace, but we pin it so a future default shift
+      // doesn't silently change our gamma contract).
       gl.toneMapping = THREE.NoToneMapping;
       gl.outputColorSpace = THREE.SRGBColorSpace;
     },
@@ -406,6 +408,7 @@ export const Scene = () => {
             hueSatRef={hueSatRef}
             brightnessRef={brightnessRef}
             bloomEnabled={qualityProfile.bloomEnabled}
+            toneMapping={effectiveGraphics.toneMapping}
           />
         )}
         <DeferredTextureBudgetGate profileName={qualityProfile.name} />

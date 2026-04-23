@@ -40,6 +40,8 @@ import type { VisualPreset } from "../../../config/visualPresets";
 export interface GraphicsOverrides {
   /** Multiplier applied to `preset.bloomIntensity × qualityMultiplier`. */
   bloomIntensityMul?: number;
+  /** Absolute bloom intensity override; used to opt into bloom over Gaia's 0.0 default. */
+  bloomIntensity?: number;
   /** Absolute override for bloom threshold (preset value ignored). */
   bloomThreshold?: number;
   /** Multiplier applied to `preset.saturation`. */
@@ -85,9 +87,10 @@ export const resolveLerpRefTargets = (
   bloomIntensityMultiplier: number
 ): ResolvedRefTargets => ({
   bloomIntensity:
+    overrides.bloomIntensity ??
     preset.bloomIntensity *
-    bloomIntensityMultiplier *
-    (overrides.bloomIntensityMul ?? 1),
+      bloomIntensityMultiplier *
+      (overrides.bloomIntensityMul ?? 1),
   bloomThreshold: overrides.bloomThreshold ?? preset.bloomThreshold,
   saturation: preset.saturation * (overrides.saturationMul ?? 1),
   brightness: preset.brightness + (overrides.brightnessDelta ?? 0),

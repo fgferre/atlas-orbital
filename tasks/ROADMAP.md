@@ -348,20 +348,79 @@ lensstarburst.jpg}` (gitignored via
 - **Note**: Milky Way panorama separately available from ESO under
   CC-BY-4.0 — can be vendored for T4.7.
 
-### T2.4 — Tone map + bloom default alignment (**D5 resolved → Gaia parity**)
+### T2.4 — Tone map + bloom default alignment ✅ **SHIPPED (2026-04-22)**
 
 - **Gaia defaults**: `postprocess.toneMapping.type: NONE`,
   `postprocess.bloom.intensity: 0.0` (`config.yaml`).
-- **Atlas defaults (pre-T2.4)**: AgX tone mapping forced in composer
-  (`resolver.ts:117,134,151,168`), bloom 0.75-1.1 via visual presets.
-- **Resolution** (Gaia-fidelity rule, 2026-04-22): **match Gaia
-  `config.yaml` exactly** — default composer builds with
-  tone-map `NONE` and bloom `0.0`. Current AgX + high-bloom values
-  move behind a user-togglable "Cinematic" setting (not default),
-  so fidelity is the out-of-box experience and atlas-opinion stays
-  available on opt-in.
-- **Effort**: 1 day.
+- **Atlas defaults (before)**: AgX tone mapping forced in composer
+  (`resolver.ts` preset defaults), bloom 0.75-1.1 via visual presets.
+- **Fix shipped**: preset tone mapping now defaults to `none`; the
+  composer omits `<ToneMapping>` unless the Display panel override
+  selects AgX/ACES/Reinhard/Cineon. `VISUAL_PRESETS[*].bloomIntensity`
+  now defaults to `0.0`, matching Gaia's `postprocess.bloom.intensity`.
+  The user-facing tone mapping dropdown is live instead of persisting a
+  no-op value.
 - **Dependencies**: none.
+
+### T2.5 — `shadowIntensity` alignment on focused body (**drift surfaced 2026-04-23**)
+
+- **Gaia ground truth**: `LightingUtils.java:49 pointLight.intensity = 1`.
+  Per-body per-model point light. No supplemental directional source.
+  Every body — focused or not — receives the same `intensity = 1` on
+  the Sun-ward face.
+- **Atlas current**: `visualPresets.ts` ships `shadowIntensity: 1.3–1.5`
+  across the 5 presets. `useVisualPresetLerp.ts:164-165` writes that
+  value to `SmartSunLight` (DirectionalLight). After T2.4's layer-scope
+  fix (`SmartSunLight.tsx:63 layers.set(1)`), only the focused body
+  receives the directional supplement on top of the global PointLight
+  (layer 0, `sunIntensity = 1.0`). **Focused body total ≈ 2.3–2.5×
+  Gaia.** Non-focused bodies at 1.0× match Gaia.
+- **Why it exists at all**: Three.js couples shadow darkness to
+  directional-light intensity (`contribution = intensity * NdotL *
+shadowFactor`). Dropping `shadowIntensity` to 0 would make shadows
+  invisible. Gaia's libGDX PBR pipeline computes shadow from the
+  point-light per-model shadow map, not a separate directional; atlas
+  cannot trivially match that in r3f without custom shader work.
+- **Candidate fixes** (in order of invasiveness):
+  1. Lower `shadowIntensity` empirically to the floor that still
+     resolves crater/cloud shadow (~0.3–0.5); document residual
+     over-brightness on focused body.
+  2. Drive `shadowIntensity` inversely with `sunIntensity` so the
+     sum ≈ 1.0 on the focused body; accept that non-focused bodies
+     lose absolute brightness when focus moves.
+  3. Replace DirectionalLight with PointLight+shadow-cube-map at
+     origin; pay the perf cost, get geometrically correct shadows.
+- **Dependencies**: none; orthogonal to shader ports.
+- **Effort**: 0.5–1 d (option 1), 1–2 d (option 2), 3–5 d (option 3).
+
+### T2.6 — `envMapIntensity` alignment (**drift surfaced 2026-04-23**)
+
+- **Gaia ground truth**: `config.yaml` has `reflectionSkyboxLocation`
+  (line 20) only for **specular reflections**, not a diffuse irradiance
+  source. No `envMapIntensity` equivalent. Shaders do not sample a
+  cubemap for irradiance.
+- **Atlas current**: `useVisualPresetLerp.ts:171` writes
+  `scene.environmentIntensity = preset.envMapIntensity` (`1.9–2.1`
+  across presets). Three.js's `MeshStandardMaterial` uses this as
+  diffuse IBL contribution. Non-negligible light on the anti-Sun face
+  of every body.
+- **Consequence**: atlas's dark side receives ~1.9× of IBL irradiance
+  that Gaia does not. This is **partially why atlas looked less dark
+  than the user's Gaia reference before T2.4** — and why dropping
+  `ambientIntensity` to 0 (T2.4) did not black-out the dark side as
+  expected. Lowering `envMapIntensity` will.
+- **Risk**: at `envMapIntensity = 0`, the dark side becomes
+  **true black** (no indirect illumination). That IS Gaia's look, but
+  may be more dramatic than the user expects. Smoke-test at
+  intermediate values first.
+- **Candidate fixes**:
+  1. Drop `envMapIntensity` to `0` across all presets; accept full
+     black dark side.
+  2. Taper to a low non-zero value (e.g. `0.1`) as atlas-opinion
+     while flagging it as a documented drift; not 1:1 but closer.
+- **Dependencies**: visual smoke + user sign-off before any ship.
+- **Effort**: 0.5 d (fix + smoke); add 0.5 d if user wants comparison
+  against a Gaia screenshot before committing.
 
 ---
 

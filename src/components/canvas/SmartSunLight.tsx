@@ -13,6 +13,33 @@ import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
 
+const SMART_SUN_LIGHT_LAYER = 1;
+
+const disableSmartSunLayer = (root: THREE.Object3D) => {
+  root.traverse((object) => {
+    object.layers.disable(SMART_SUN_LIGHT_LAYER);
+  });
+};
+
+const enableSmartSunLayerForBody = (root: THREE.Object3D, bodyId: string) => {
+  root.traverse((object) => {
+    object.layers.enable(SMART_SUN_LIGHT_LAYER);
+  });
+
+  // Planet groups contain their moons as nested child bodies. Keep the
+  // focused body's visual subtree on the smart-shadow layer, but remove
+  // nested bodies so they do not inherit the focused body's solar vector.
+  root.traverse((object) => {
+    if (
+      object !== root &&
+      object.name !== bodyId &&
+      BODIES_BY_ID.has(object.name)
+    ) {
+      disableSmartSunLayer(object);
+    }
+  });
+};
+
 export const SmartSunLight = forwardRef<
   THREE.DirectionalLight,
   { intensity?: number; shadowMapSize?: number }
@@ -22,14 +49,29 @@ export const SmartSunLight = forwardRef<
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const shadowCameraRef = useRef<THREE.OrthographicCamera>(null);
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
+  const targetPosRef = useRef(new THREE.Vector3());
+  const layeredTargetRef = useRef<THREE.Object3D | null>(null);
 
   useImperativeHandle(ref, () => lightRef.current!);
 
   useEffect(() => {
     if (lightRef.current) {
       lightRef.current.target = lightTarget;
+      // Keep the shadow helper from acting as a second global sun.
+      // Focused objects opt into this layer below; all other objects
+      // stay on layer 0 and are lit only by the central PointLight.
+      lightRef.current.layers.set(SMART_SUN_LIGHT_LAYER);
     }
   }, [lightTarget]);
+
+  useEffect(() => {
+    return () => {
+      if (layeredTargetRef.current) {
+        disableSmartSunLayer(layeredTargetRef.current);
+      }
+      layeredTargetRef.current = null;
+    };
+  }, []);
 
   useFrame(({ scene }) => {
     if (!lightRef.current || !shadowCameraRef.current) return;
@@ -39,10 +81,24 @@ export const SmartSunLight = forwardRef<
     const trackedBody = BODIES_BY_ID.get(trackedBodyId) ?? null;
     const targetObj = scene.getObjectByName(trackedBodyId);
 
-    if (!targetObj || !trackedBody) return;
+    if (!targetObj || !trackedBody) {
+      if (layeredTargetRef.current) {
+        disableSmartSunLayer(layeredTargetRef.current);
+      }
+      layeredTargetRef.current = null;
+      return;
+    }
+
+    if (layeredTargetRef.current !== targetObj) {
+      if (layeredTargetRef.current) {
+        disableSmartSunLayer(layeredTargetRef.current);
+      }
+      layeredTargetRef.current = targetObj;
+    }
+    enableSmartSunLayerForBody(targetObj, trackedBodyId);
 
     // 2. Calculate Positions
-    const targetPos = new THREE.Vector3();
+    const targetPos = targetPosRef.current;
     targetObj.getWorldPosition(targetPos);
     const shadowExtent = AstroPhysics.resolveShadowExtent({
       body: trackedBody,

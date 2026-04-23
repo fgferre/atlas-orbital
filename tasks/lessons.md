@@ -1217,3 +1217,59 @@ only the wired runtime is truth.**
 **Code marker**: ROADMAP §T3.9 "❌ NOT PORTING — Gaia dead code"
 header + the three discovery citations at `grep -rn "new
 LightScattering("`, `MainPostProcessor.java`, `GamepadGui.java:1029`.
+
+## L32 — Visual-diff baseline PNGs need an explicit "does this change make sense?" gate before being comitted
+
+**2026-04-23. Caught during audit of the Codex lighting/post-processing
+patch: boot snapshot regenerated 333 KB → 130 KB without an explicit
+"this new baseline is correct" sign-off in the commit message.**
+
+Playwright's visual-diff harness (`e2e/boot.spec.ts-snapshots/`)
+compares the rendered frame byte-for-byte against the last committed
+baseline PNG. When a rendering change is intentional, the fix path is
+`--update-snapshots` + re-commit. Problem: that workflow only confirms
+that the NEW frame is self-consistent; it does NOT confirm that the new
+frame is CORRECT.
+
+In this incident, Codex's patch legitimately changed the composer
+(bloom 0, tone-map skipped, ambient 0, shadowIntensity stayed 1.3-1.5).
+The baseline PNG naturally changed. The agent ran the suite with
+`--update-snapshots`, got a green test, and shipped — but the new
+baseline could equally well have baked in an unintended drift (e.g.
+the focused-body over-illumination called out in T2.5 is now
+enshrined in the baseline).
+
+**Rule.** When a ship re-bakes a `*-snapshots/` PNG, the ship is not
+complete until **one human** visually inspects the new baseline and
+confirms it matches the intent of the change. Checklist for the agent:
+
+1. Before `--update-snapshots`: diff the OLD baseline vs the current
+   test output (`npx playwright test --reporter=html` + open report).
+   Note what visually changed.
+2. Regenerate the baseline.
+3. Open the new baseline PNG. Cross-reference each visible change
+   against the expected diff from step 1.
+4. If any change is **unexplained** — scene-darker-overall, halo
+   disappeared-from-a-body, unexpected shadow contour — STOP. Do
+   not commit the new baseline. Either reconcile or revert.
+5. Commit the baseline only if every visible change traces back to
+   an intentional code change in the same commit. The commit
+   message MUST cite which change caused which visual delta.
+
+**Add to ship protocol step 10** (Runtime smoke): if the commit
+touches composer effects / lighting intensities / shader uniforms
+feeding the boot scene, extend smoke to include an explicit baseline
+PNG review before step 11 commit. PNG file-size delta (e.g. 333 KB →
+130 KB here) is a useful first-pass signal — a 2× shrink or grow
+means the scene's visual complexity changed substantially and earns
+closer inspection.
+
+**Process corollary — L32 is L30/L31's sibling in "prose-vs-reality"
+guards.** L30 caught config-default drift before R1. L31 caught
+dead-code porting before R1. L32 catches "the test went green but
+the baseline lies" AFTER implementation. Three guards across the
+lifecycle: plan-time (L30), port-time (L31), verify-time (L32).
+
+**Code marker**: `e2e/boot.spec.ts-snapshots/boot-frozen-chromium-win32.png`
+baseline regenerated in the Codex lighting commit (2026-04-23);
+STATUS.md § "Ship protocol" step 10 updated to reference this rule.

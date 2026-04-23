@@ -258,8 +258,8 @@ export const proceduralSunSphereFragmentShader = `
     // combined with Commit 2's mis-ordered grading the visible sun
     // went nearly black. Keep the zero floor (brightnessToColor can
     // dip slightly negative near the ocean minimum) but let HDR
-    // values pass through so the composer's AgX tone-map is what
-    // decides the final on-screen luminance.
+    // values pass through so the active postprocess path decides the
+    // final on-screen luminance.
     vec3 col = max(brightnessToColor(brightness), vec3(0.0));
     float alpha = getAlpha(normalize(vNormalWorld));
 

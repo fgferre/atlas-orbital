@@ -3,19 +3,18 @@
  *
  * The 5 presets carry context-tuned grading + lighting values that
  * `useVisualPresetLerp` smooth-interpolates between as `getPresetForContext`
- * re-classifies the camera. All values here are POST-AgX: grading sits on
- * the LDR buffer after tone mapping (see `PostProcessingPipeline.tsx` chain
- * comment for the correctness constraint).
+ * re-classifies the camera. Grading is applied in the post chain after
+ * the optional tone-mapping pass; Gaia default keeps that pass disabled.
  *
  * Per-preset intent:
  *
  * - CLOSE_FLYBY (camera < 200 from a body): surface-detail mode. Bloom
  *   knocked down so planet textures aren't washed by star halos; slight
- *   brightness + ambient bump for dark-side readability when the terminator
- *   crosses the frame; softer shadows so craters/clouds don't crush.
+ *   brightness bump for dark-side readability when the terminator crosses
+ *   the frame; softer shadows so craters/clouds don't crush.
  *
  * - PLANET_ORBIT (camera 200–2000): balanced default — the values that felt
- *   right under AgX across the representative-views iteration.
+ *   right across the representative-views iteration.
  *
  * - INNER_SYSTEM (distanceFromSun < 3.5 AU, not orbiting a body): Sun and
  *   the four terrestrials + main-belt asteroids dominate the frame.
@@ -23,15 +22,19 @@
  *   touch more direct-sun intensity.
  *
  * - OUTER_SYSTEM (3.5 AU ≤ distanceFromSun < 50 AU): gas/ice-giant region
- *   through Pluto and the near Kuiper belt. Cooler, less saturated;
- *   slightly dimmer direct sun to read as physically further from the
- *   illuminant.
+ *   through Pluto and the near Kuiper belt. Cooler and less saturated.
  *
  * - DEEP_SPACE (distanceFromSun ≥ 50 AU): scattered disk + Sedna-like
  *   orbits. Moody/clinical. Slightly more bloom so remaining bright
  *   stars feel like the only sources in frame; contrast up a touch for
  *   that empty-space feel; saturation low (no nearby colored bodies to
  *   support richer mids).
+ *
+ * Gaia-fidelity lighting baselines are intentionally invariant across
+ * presets: global ambient is Gaia's `scene.renderer.ambient: 0.0`, and
+ * the central solar point light mirrors `LightingUtils.java`'s
+ * `pointLight.intensity = 1`. Context presets may still grade the final
+ * image and tune the focused shadow helper.
  *
  * `distanceFromSun` is the body's physical heliocentric distance in AU.
  * For bodies with a parentId the engine returns parent-centered
@@ -65,70 +68,70 @@ export interface VisualPreset {
 
 export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
   DEEP_SPACE: {
-    bloomIntensity: 1.1,
+    bloomIntensity: 0.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.16,
     contrast: 0.33,
     brightness: 0.0,
-    ambientIntensity: 0.03,
-    sunIntensity: 0.35,
+    ambientIntensity: 0.0,
+    sunIntensity: 1.0,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 0.85,
     vectorIntensity: 1.0,
   },
   PLANET_ORBIT: {
-    bloomIntensity: 1.0,
+    bloomIntensity: 0.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.18,
     contrast: 0.3,
     brightness: 0.0,
-    ambientIntensity: 0.035,
-    sunIntensity: 0.4,
+    ambientIntensity: 0.0,
+    sunIntensity: 1.0,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 1.0,
     vectorIntensity: 1.0,
   },
   CLOSE_FLYBY: {
-    bloomIntensity: 0.75,
+    bloomIntensity: 0.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.18,
     contrast: 0.28,
     brightness: 0.02,
-    ambientIntensity: 0.05,
-    sunIntensity: 0.4,
+    ambientIntensity: 0.0,
+    sunIntensity: 1.0,
     shadowIntensity: 1.3,
     envMapIntensity: 2.1,
     guideIntensity: 0.7,
     vectorIntensity: 1.0,
   },
   INNER_SYSTEM: {
-    bloomIntensity: 1.0,
+    bloomIntensity: 0.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.22,
     contrast: 0.3,
     brightness: 0.0,
-    ambientIntensity: 0.035,
-    sunIntensity: 0.45,
+    ambientIntensity: 0.0,
+    sunIntensity: 1.0,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 1.0,
     vectorIntensity: 1.0,
   },
   OUTER_SYSTEM: {
-    bloomIntensity: 1.0,
+    bloomIntensity: 0.0,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.15,
     contrast: 0.32,
     brightness: 0.0,
-    ambientIntensity: 0.035,
-    sunIntensity: 0.35,
+    ambientIntensity: 0.0,
+    sunIntensity: 1.0,
     shadowIntensity: 1.5,
     envMapIntensity: 1.9,
     guideIntensity: 0.95,

@@ -17,14 +17,14 @@ The goal is to preserve validated context, prevent repeated false assumptions, a
 - `73cd2c2` feat(vfx): R1 #1A + #1B + #2. `gl.toneMapping = NoToneMapping`, `gl.outputColorSpace = SRGBColorSpace`, `<ToneMapping mode={ToneMappingMode.AGX}>` runs LAST in the composer chain (after Bloom → HueSaturation → BrightnessContrast). `vfxHdrGain` uniform on Starfield + NASAStarfield ShaderMaterials (L15 literal: flows through the useMemo'd material ref, not JSX children) with tier defaults ultra 2.0 / high 1.8 / balanced 1.5 / constrained 1.0. Bloom `luminanceThreshold={1.0}` + `luminanceSmoothing={0.1}`. 5 new HDR-composite tests in `starfieldShaderMath.test.ts`.
 - `4601969` feat(graphics): R2 Wave 1. `src/lib/graphics/resolver.ts` with `PRESET_DEFAULTS` (byte-matched to `qualityProfile.RESOLVED_PROFILES`), `src/store/graphicsSlice.ts`, `src/store.persistMigration.ts` bump v0 → v1 with migration for every legacy `qualityMode` value. User-facing `DisplayPanel` (18 E/H rows across Rendering / Post-Processing / Atmosphere & Sun) and `A11yPanel` (Reduced Motion + UI Scale active; Colorblind Mode + High Contrast grayed for Wave 4). Compat shim in `useQualityProfile.ts` keeps the 5 pre-Wave-α consumer sites working unchanged.
 
-**Current live tone mapping:** AgX via composer `<ToneMapping mode={ToneMappingMode.AGX}>`. Renderer is `NoToneMapping`. Any doc that references `gl.toneMapping = ReinhardToneMapping` as the live path is pre-Wave-α and should be read as historical. `tasks/graphics-settings-design.md §3` carries the Finding 7 amendment (Tone Mapping dropdown options, Exposure deferred to Wave η.6).
+**Current live tone mapping:** Gaia default `NONE`; renderer remains `NoToneMapping`, and `PostProcessingPipeline.tsx` only mounts a `<ToneMapping>` effect when the Display panel override selects AgX/ACES/Reinhard/Cineon. Any doc that references `gl.toneMapping = ReinhardToneMapping` or forced composer AgX as the live path is historical. Exposure remains deferred to Wave η.6.
 
-**Deferred from Wave α (tracked for future waves):**
+**Deferred from Wave α / later resolved:**
 
 - Exposure slider — Wave η.6 (adaptive exposure / R1 #6). `gl.toneMappingExposure` is a no-op under the new contract; shipping a placeholder slider in Wave 1 would have been a dead control.
-- Tone Mapping composer wiring — the dropdown persists user choice in `graphicsOverrides.toneMapping` but the composer stays pinned to AgX until Wave γ revisits the post-chain for lens-flare integration.
+- Tone Mapping composer wiring — shipped: `graphicsOverrides.toneMapping` now drives the composer, defaulting to Gaia `NONE`.
 - Leva → `graphicsOverrides` routing — Wave 0 plan step 2, deferred past Wave α; Leva stays debug-only and doesn't affect user-facing paths.
-- `postprocessing-ultra-frozen` visual-diff spec — Chromium headless `Page.captureScreenshot` protocol reproducibly hangs with the AgX + Bloom pipeline on ultra; the unit tests (`visualPresetOverrides.test.ts`, `starfieldShaderMath.test.ts`) are the rigorous gates and the boot visual-diff still covers default-tier render.
+- `postprocessing-ultra-frozen` visual-diff spec — Chromium headless `Page.captureScreenshot` protocol has reproducibly hung with the ultra HDR postprocess pipeline; the unit tests (`visualPresetOverrides.test.ts`, `starfieldShaderMath.test.ts`) are the rigorous gates and the boot visual-diff still covers default-tier render.
 
 **Gates at Wave α close:** `npm run lint` clean, `npm run test:run` 689/689 across 44 files, `npm run build` ~9 s, `npx playwright test --workers=1` 7/7.
 

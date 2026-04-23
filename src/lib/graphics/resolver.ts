@@ -37,6 +37,8 @@ export type GraphicsBasePreset = Exclude<GraphicsPresetName, "custom">;
 export interface GraphicsOverrides {
   /** Multiplier on `preset.bloomIntensityMul × visualPreset.bloomIntensity`. */
   bloomIntensityMul?: number;
+  /** Absolute bloom intensity override; lets users opt into bloom over Gaia's 0.0 default. */
+  bloomIntensity?: number;
   /** Absolute override for bloom threshold (preset base ignored). */
   bloomThreshold?: number;
   /** Multiplier on `visualPreset.saturation`. */
@@ -53,7 +55,7 @@ export interface GraphicsOverrides {
   shadowIntensityMul?: number;
   /** Multiplier on `visualPreset.envMapIntensity`. */
   envMapIntensityMul?: number;
-  /** User-selected tone mapping operator; defaults to preset's `agx`. */
+  /** User-selected tone mapping operator; defaults to Gaia's `none`. */
   toneMapping?: ToneMappingName;
   /** Resolution scale override (dprMax). */
   resolutionScale?: number;
@@ -69,7 +71,7 @@ export interface GraphicsOverrides {
   vfxHdrGain?: number;
 }
 
-export type ToneMappingName = "agx" | "aces" | "reinhard" | "cineon";
+export type ToneMappingName = "none" | "agx" | "aces" | "reinhard" | "cineon";
 
 /**
  * Flat contract of everything the renderer needs for a frame. Constructed
@@ -85,6 +87,7 @@ export interface EffectiveGraphics {
   vfxHdrGain: number;
   // Post-process override layer (multiplicative / additive over visualPreset)
   bloomIntensityMul: number;
+  bloomIntensity?: number;
   bloomThreshold?: number;
   toneMapping: ToneMappingName;
   saturationMul: number;
@@ -114,7 +117,8 @@ export const PRESET_DEFAULTS: Record<
     bloomEnabled: true,
     vfxHdrGain: 4.0,
     bloomIntensityMul: 1,
-    toneMapping: "agx",
+    bloomIntensity: undefined,
+    toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -131,7 +135,8 @@ export const PRESET_DEFAULTS: Record<
     bloomEnabled: true,
     vfxHdrGain: 3.0,
     bloomIntensityMul: 1,
-    toneMapping: "agx",
+    bloomIntensity: undefined,
+    toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -148,7 +153,8 @@ export const PRESET_DEFAULTS: Record<
     bloomEnabled: true,
     vfxHdrGain: 2.5,
     bloomIntensityMul: 0.75,
-    toneMapping: "agx",
+    bloomIntensity: undefined,
+    toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -165,7 +171,8 @@ export const PRESET_DEFAULTS: Record<
     bloomEnabled: false,
     vfxHdrGain: 1.0,
     bloomIntensityMul: 0,
-    toneMapping: "agx",
+    bloomIntensity: undefined,
+    toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -284,6 +291,7 @@ export const resolveEffectiveGraphics = (
     bloomEnabled: ov.bloomEnabled ?? base.bloomEnabled,
     vfxHdrGain: ov.vfxHdrGain ?? base.vfxHdrGain,
     bloomIntensityMul: base.bloomIntensityMul * (ov.bloomIntensityMul ?? 1),
+    bloomIntensity: ov.bloomIntensity,
     bloomThreshold: ov.bloomThreshold,
     toneMapping: ov.toneMapping ?? base.toneMapping,
     saturationMul: base.saturationMul * (ov.saturationMul ?? 1),

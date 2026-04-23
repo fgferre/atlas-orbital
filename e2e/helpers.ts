@@ -26,8 +26,8 @@ export const freezeSimulation = async (page: Page) => {
 };
 
 /**
- * Captures a page screenshot with retries. Wave α's HDR pipeline
- * (AgX ToneMapping + Bloom mipmap pyramid on ultra tier) occasionally
+ * Captures a page screenshot with retries. The HDR postprocess pipeline
+ * on the ultra tier occasionally
  * tripped Chromium's `Page.captureScreenshot` protocol with "Unable
  * to capture screenshot" even after a multi-second settle — the
  * failure is not deterministic, and a second attempt a couple seconds

@@ -546,22 +546,24 @@ export function usePlanetMaterials({
           float terminatorFade = smoothstep(0.0, 0.2, sunDot);
 
           if (terminatorFade > 0.0) {
-            // Intersect with Ring Plane (y=0)
-            // t = -origin.y / dir.y
-            float t = -vPos.y / lightDir.y;
+            // Intersect with Ring Plane (y=0). Skip near-parallel rays
+            // to avoid Inf/NaN propagation from the division by lightDir.y.
+            if (abs(lightDir.y) > 0.000001) {
+              float t = -vPos.y / lightDir.y;
 
-            // If t > 0, the ray hits the plane *towards* the sun (shadow caster)
-            if (t > 0.0) {
-              vec3 hitPos = vPos + lightDir * t;
-              float radius = length(hitPos.xz);
+              // If t > 0, the ray hits the plane *towards* the sun (shadow caster)
+              if (t > 0.0) {
+                vec3 hitPos = vPos + lightDir * t;
+                float radius = length(hitPos.xz);
 
-              if (radius > uInnerRadius && radius < uOuterRadius) {
-                float u = (radius - uInnerRadius) / (uOuterRadius - uInnerRadius);
-                vec4 ringColor = texture2D(tRing, vec2(u, 0.5));
+                if (radius > uInnerRadius && radius < uOuterRadius) {
+                  float u = (radius - uInnerRadius) / (uOuterRadius - uInnerRadius);
+                  vec4 ringColor = texture2D(tRing, vec2(u, 0.5));
 
-                // Darken based on ring opacity and terminator fade
-                // 0.9 factor for max shadow density
-                diffuseColor.rgb *= (1.0 - ringColor.a * 0.9 * terminatorFade);
+                  // Darken based on ring opacity and terminator fade
+                  // 0.9 factor for max shadow density
+                  diffuseColor.rgb *= (1.0 - ringColor.a * 0.9 * terminatorFade);
+                }
               }
             }
           }
