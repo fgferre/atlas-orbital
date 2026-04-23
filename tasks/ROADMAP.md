@@ -828,22 +828,30 @@ clipping/jitter`.
     hand-derived sample values. No runtime surface; the upcoming
     shader port imports these so GLSL literals and TS mirrors stay
     in lockstep. DIFF GATE + SUBAGENT VERIFY 15/15 + 9/9 PASS.
-  - **T4.4b** — fragment shader port + quad mount + predecessor
-    sweep. Ports `circle()`, `square()`, `circle_rec()`, `square_rec()`,
-    `main()` composites to a Three.js shader material (import
-    constants from T4.4a); mounts on a camera/focus-centered quad;
-    deletes `EclipticGrid.tsx` in the same commit under
-    `feedback_no_effect_stacking.md`. Static uniforms first
-    (CIRCULAR style, neutral u_tessQuality / u_heightScale) so
-    smoke can isolate the shader. Effort: 2-3 d.
+  - **T4.4b ✅ SHIPPED (2026-04-23, `94af1b8`)** — fragment shader
+    port + quad mount + predecessor sweep. `circle()`, `square()`,
+    `circle_rec()`, `square_rec()`, `main()` composites ported to
+    `src/components/canvas/shaders/gridRecShader.ts` (verbatim, with
+    numeric literals template-interpolated from T4.4a so TS ↔ GLSL
+    stay in lockstep). `GridRecursive.tsx` mounts on a 40k×40k
+    horizontal quad via `buildGridRecShaderMaterial()`.
+    `gridRecursiveConfig.ts` hosts layout constants so the component
+    passes `react-refresh/only-export-components`. 28 new jsdom
+    tests. `EclipticGrid.tsx` (341 LOC) + test + helper module
+    deleted under `feedback_no_effect_stacking.md`. AU tick labels
+    regress pending T4.5 MSDF label path. DIFF GATE + SUBAGENT
+    VERIFY both PASS uniform-by-uniform + helper-by-helper. 6
+    documented divergences (WebGL1 GLSL 1.00 not 330 core,
+    log-depth skipped, `simple_noise` dropped, layout→gl*FragColor,
+    opacity-via-uniform, `gridrec*`/`GRIDREC\_` namespace prefixes).
   - **T4.4c** — per-frame drivers + orientation toggle. Implements
     `getGridScaling(body.distToCamera, ...)` to drive
     `u_tessQuality` + `u_heightScale`; UI toggle for
     Equatorial / Ecliptic / Galactic via transform matrix swap
     (`GridRecursiveRadio.java:34-44`); projection lines when
     origin=REFSYS + focus active. Effort: 2 d.
-- **Effort**: T4.4a done (0.5 d), T4.4b 2-3 d, T4.4c 2 d →
-  remaining ~4-5 d.
+- **Effort**: T4.4a done (0.5 d), T4.4b done (1 d incl. refactor
+  - predecessor sweep), T4.4c 2 d → remaining ~2 d.
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
