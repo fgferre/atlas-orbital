@@ -1150,3 +1150,70 @@ from source, report what you found, then proceed.
 **Code marker**: STATUS.md reorder of 2026-04-22 (T2.1 promoted
 over T2.2) + ROADMAP.md §T2.1 "⭐ NEXT UP" header + ROADMAP.md
 §T2.2 "demoted to opt-in" header.
+
+## L31 — ROADMAP items can describe Gaia DEAD code; verify instantiation in MainPostProcessor before porting
+
+**2026-04-22. Caught when picking T3.9 (Lightscattering god rays)
+as the next-up onda — 3-5 d scheduled, 3-5 d saved.**
+
+T3.9's ROADMAP text said: _"Gaia: `lightscattering.frag.glsl` —
+volumetric crepuscular rays from up to 10 light sources. 60-sample
+raymarch... Atlas: zero volumetric presence. Visual impact: high.
+Splendor gap contributor."_ Plausible, concrete, cited a real
+file path. Under the Gaia-fidelity rule the next step would be
+R1 → port.
+
+R1 surfaced three findings the ROADMAP hadn't:
+
+1. The actual `LightScatteringFilter.java:22-25` defaults are
+   `decay=0.96815, density=0.926, weight=0.58767, numSamples=100`
+   — NOT the ROADMAP's `decay=0.95, density=0.5, 60-sample`.
+   L30-style numeric drift.
+2. `grep -rn "new LightScattering(" /tmp/gaiasky/core/src` returns
+   **ZERO hits**. The effect class is never instantiated anywhere
+   in Gaia's codebase.
+3. `MainPostProcessor.java` wires `LightGlow` (atlas θ.3, 1:1
+   shipped at `a27dc42`) but NOT `LightScattering`. The GUI
+   button labelled `"gui.lightscattering"` toggles `LightGlow`
+   (the comment header of `lightglow.frag.glsl:2` literally reads
+   _"Light scattering implementation"_). The i18n key is
+   historical; the effect the user sees under that label is
+   already atlas's θ.3.
+
+Shipping T3.9 would have ported DEAD Gaia code — an effect Gaia
+itself doesn't render — and advertised "god-ray parity" where
+none of Gaia's active output includes god rays. Direct violation
+of `feedback_default_gaia_fidelity.md` (default = what Gaia
+ships, not what the Gaia repo contains).
+
+**Rule.** Before R1-reading a shader file for a port, grep
+`MainPostProcessor.java` (or the equivalent render orchestrator
+file) for `new <EffectClass>(` + verify the Effect is `.add(ppb,
+...)`'d into the active post-process chain. Shader file existence
+is **necessary but not sufficient** — Gaia's repo contains
+inactive / legacy effect classes that were never removed. If the
+Effect has zero instantiations, the shader file is documentation
+of an experiment, not a port target.
+
+Add this pre-check to the kickoff loop's step 2 ("Read
+`tasks/ROADMAP.md` for that item's Gaia source citation"): before
+step 3 R1, run `grep -rn "new <ClassName>(" /tmp/gaiasky/core/src`
+and confirm at least one hit. If zero, the onda gets demoted to
+"confirmed non-port" and the ROADMAP cites the dead-code finding
+so no future agent re-discovers it.
+
+**Process corollary — this is L30's sibling.** L30 caught ROADMAP
+wave order prioritising a non-default variant. L31 catches
+ROADMAP pointing at a non-existent active path. Both failures
+come from trusting ROADMAP prose over the Gaia
+post-processor branch structure. Future ROADMAP audits should
+include: (a) `config.yaml` default check (L30), (b)
+`MainPostProcessor.java` instantiation check (L31), (c) numeric
+literal check from the \*.java filter class (L27).
+
+Three sibling rules, same protective pattern: **prose can drift;
+only the wired runtime is truth.**
+
+**Code marker**: ROADMAP §T3.9 "❌ NOT PORTING — Gaia dead code"
+header + the three discovery citations at `grep -rn "new
+LightScattering("`, `MainPostProcessor.java`, `GamepadGui.java:1029`.

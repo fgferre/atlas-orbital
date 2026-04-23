@@ -459,26 +459,23 @@ Transforms the scene's "cinematic feel" — lighting, shading, eclipses.
   Earth) or lunar eclipses (Earth shadow turning the Moon
   orange-red).
 - **Fix shipped** (`c44f913`):
-  1. Three new files in `src/components/canvas/shaders/`:
-     - `eclipseMath.ts` — pure-TS mirror of the Gaia math.
-       10 pinned constants (`ECLIPSE_UMBRA_CORE_RADIUS_RATIO =
+  1. Three new files in `src/components/canvas/shaders/`: - `eclipseMath.ts` — pure-TS mirror of the Gaia math.
+     10 pinned constants (`ECLIPSE_UMBRA_CORE_RADIUS_RATIO =
 0.04`, `ECLIPSE_PENUMBRA_RADIUS_RATIO = 1.7`,
-       `ECLIPSE_DIFFRACTION_START_RATIO = 0.2`,
-       `ECLIPSE_DIFFRACTION_END_RATIO = 1.6`,
-       `ECLIPSE_EDGE_FADE_LO = -0.1`, `ECLIPSE_EDGE_FADE_HI = 0.2`,
-       `ECLIPSE_NEAR_SIDE_DOT_THRESHOLD = -0.15`,
-       `ECLIPSE_DIFFRACTION_INTENSITY_SCALE = 0.3`,
-       `ECLIPSE_DIFFRACTION_SPECTRUM_SCALE = 0.5`, +
-       spectrum endpoints `[0.41, 0.26, 0.013]` /
-       `[0.88, 0.42, 0.063]`).
-       Helpers: `distSegmentPoint`, `getDiffractionSpectrum`,
-       `computeEclipseShading`, `eclipseBlend`.
-     - `eclipseMath.test.ts` — 26 pinned tests covering
-       constants + helper edge cases + shading pipeline.
-     - `eclipseShaderPatch.ts` — reusable GLSL template strings
-       that interpolate constants from `eclipseMath.ts` via
-       string interpolation so math-JS ↔ GLSL parity is
-       compile-time guaranteed.
+     `ECLIPSE_DIFFRACTION_START_RATIO = 0.2`,
+     `ECLIPSE_DIFFRACTION_END_RATIO = 1.6`,
+     `ECLIPSE_EDGE_FADE_LO = -0.1`, `ECLIPSE_EDGE_FADE_HI = 0.2`,
+     `ECLIPSE_NEAR_SIDE_DOT_THRESHOLD = -0.15`,
+     `ECLIPSE_DIFFRACTION_INTENSITY_SCALE = 0.3`,
+     `ECLIPSE_DIFFRACTION_SPECTRUM_SCALE = 0.5`, +
+     spectrum endpoints `[0.41, 0.26, 0.013]` /
+     `[0.88, 0.42, 0.063]`).
+     Helpers: `distSegmentPoint`, `getDiffractionSpectrum`,
+     `computeEclipseShading`, `eclipseBlend`. - `eclipseMath.test.ts` — 26 pinned tests covering
+     constants + helper edge cases + shading pipeline. - `eclipseShaderPatch.ts` — reusable GLSL template strings
+     that interpolate constants from `eclipseMath.ts` via
+     string interpolation so math-JS ↔ GLSL parity is
+     compile-time guaranteed.
   2. `src/lib/astrophysics.ts` — `CelestialBody.eclipsingBodyId?`
      added with docstring citing Gaia's `eclipsingBodyFlag`.
   3. `src/data/celestialBodies.ts` — Earth gets
@@ -583,34 +580,86 @@ sun) × 2)` vrScale into the uniforms; sets
   pattern with T3.5).
 - **Status**: done — commit `785c925`.
 
-### T3.7 — Atmosphere exponent parameterization
+### T3.7 — Atmosphere exponent parameterization ✅ **MOOT — superseded by θ.5b+c (`bc0a429`)**
 
-- **Atlas**: `atmosphereShader.ts:21` hardcodes `pow(max(...), 4.0)`.
-  Not tunable per planet.
-- **Fix**: expose `u_atmosphereExponent` uniform; default 4.0; per-body
-  override in planet config.
-- **Effort**: 1 h.
-- **Dependencies**: none.
+- **Original claim**: atlas's `atmosphereShader.ts:21` hardcoded
+  `pow(max(..), 4.0)` rim-glow Fresnel, not tunable per planet.
+- **Current state (verified 2026-04-22)**: the rim-glow hardcode
+  was **removed** when θ.5b+c shipped the Nishita Rayleigh+Mie
+  scattering port. Atmosphere now renders via full multi-sample
+  integrator (`atmosphereShader.ts:21-46` docstring) driven by
+  per-body `AtmosphereScatteringConfig` on `CelestialBody`. No
+  exponent parameter exists to parameterize. Bodies without
+  `atmosphereScattering` have no atmosphere (atlas matches Gaia
+  default behaviour — planet without configured scattering =
+  no shell rendered).
+- **Status**: moot — the parameter and its hardcode vanished with
+  the θ.5b+c ship; no residual work to do. Doc-only correction
+  captured 2026-04-22.
 
-### T3.8 — Roughness-map color space audit
+### T3.8 — Roughness-map color space audit ✅ **AUDIT CLOSED — `NoColorSpace` verified correct**
 
-- **Atlas**: `usePlanetAssets.ts:152` forces `colorSpace: THREE.NoColorSpace`
-  for roughness textures.
-- **Verify**: are the source roughness textures gamma-encoded (sRGB)
-  or linear? If gamma, current code is wrong (underestimates roughness).
-- **Effort**: 2 h (audit + fix).
-- **Dependencies**: none.
+- **Atlas**: `usePlanetAssets.ts:145,152` forces
+  `colorSpace: THREE.NoColorSpace` on normal + roughness
+  texture loads.
+- **Audit (2026-04-22)**: chain-of-custody traced for Earth's
+  `{2k,8k}_earth_roughness_map.jpg`:
+  1. Solar System Scope ships `*_earth_specular_map.tif` as a
+     LINEAR grayscale specular intensity map (their documented
+     convention — `scripts/bake-earth-pbr.js:11-12,48-53`).
+  2. Atlas bake pipeline (`scripts/bake-earth-pbr.js:108-125`):
+     - `.grayscale()` (single-channel — linearity preserved).
+     - `.negate({alpha:false})` which is `255 - x` (specular →
+       roughness inversion — linearity preserved).
+     - `.jpeg({quality:85, mozjpeg:true})` (no colourspace
+       conversion — sharp's default JPG path preserves byte
+       values).
+  3. Stored JPG byte = linear roughness × 255. Three's
+     `MeshStandardMaterial` roughness sampler reads this byte
+     as the linear roughness scalar directly — `NoColorSpace`
+     is CORRECT. `SRGBColorSpace` would apply an unwanted
+     `pow(x/255, 2.2)` decode, understating roughness on
+     rough-surface bands by up to ~4×.
+- **Fix shipped**: explanatory comment block added at
+  `usePlanetAssets.ts:139-158` documenting the chain-of-custody
+  so future agents don't re-audit. No code behaviour change.
+- **Status**: done — doc/comment-only ship 2026-04-22. Audit
+  closed; sRGB swap NOT required.
 
-### T3.9 — Lightscattering god rays (new — not in original plan)
+### T3.9 — Lightscattering god rays ❌ **NOT PORTING — Gaia dead code (2026-04-22)**
 
-- **Gaia**: `assets/shader/postprocess/lightscattering.frag.glsl` —
-  volumetric crepuscular rays from up to 10 light sources. 60-sample
-  raymarch, decay 0.95, density 0.5.
-- **Atlas**: zero volumetric presence. Sun currently has no
-  god-ray signature.
-- **Visual impact**: high. "Splendor" gap contributor.
-- **Effort**: 3-5 days.
-- **Dependencies**: none.
+- **Gaia artefacts that exist but are NOT wired into the
+  default post-process pipeline**:
+  - `assets/shader/postprocess/lightscattering.frag.glsl` —
+    60/100-sample volumetric raymarch, decay 0.96815, density
+    0.926, weight 0.58767 (per `LightScatteringFilter.java:22-25`
+    — note: ROADMAP's pre-correction values "decay 0.95, density
+    0.5" were wrong even for the source).
+  - `core/src/gaiasky/render/postprocess/effects/LightScattering.java`
+    — Effect class, never instantiated.
+  - `core/src/gaiasky/render/postprocess/filters/LightScatteringFilter.java`
+    — Filter class, only referenced by the dead Effect above.
+- **Discovery**: `grep -rn "new LightScattering(" /tmp/gaiasky/core/src`
+  returns **ZERO** hits. `MainPostProcessor.java` wires `LightGlow`
+  (atlas θ.3) but never `LightScattering`. The GUI button labelled
+  `"gui.lightscattering"` (`GamepadGui.java:1029`,
+  `PreferencesWindow.java:1187`) toggles `LightGlow`, not the
+  inactive scattering effect — the i18n key is historical.
+- **Gaia-active equivalent**: `lightglow.frag.glsl` (whose line 2
+  comment literally reads "Light scattering implementation"). Atlas
+  shipped this as **θ.3 LightGlow** (`a27dc42` + `fdb66ae`), 1:1
+  verified. What users see in Gaia's "light scattering" UI toggle
+  is already rendered in atlas by θ.3.
+- **Decision** (Gaia-fidelity rule
+  `feedback_default_gaia_fidelity.md`): atlas does not port dead
+  Gaia code. Parity on the active path is already achieved.
+  Porting `lightscattering.frag.glsl` would add an effect **Gaia
+  itself doesn't ship** — opposite of fidelity.
+- **Lesson captured**: **L31** (ROADMAP items can describe Gaia
+  DEAD code; check for instantiation / wiring in
+  `MainPostProcessor.java` before porting, not just shader file
+  existence).
+- **Status**: confirmed non-port — doc-only correction 2026-04-22.
 
 ### T3.10 — Cascaded Shadow Maps (optional, consider deferring)
 

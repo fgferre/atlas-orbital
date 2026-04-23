@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after **T3.3 shipped** (`c44f913`) — Gaia eclipse geometry ported (`eclipses.glsl` — umbra/penumbra/diffraction bands + terminator edge fade + near-side gate). Earth is now eclipse-aware under its day/night shader branch; Moon gets a new eclipse-only shader branch. Per-frame driver in `Planet.tsx` looks up the eclipsing body via `scene.getObjectByName(eclipsingBodyId)` and pushes world-pos + semantic radius + vrScale into shader uniforms. 26 new math tests; DIFF GATE + SUBAGENT VERIFY 11/11 PASS; runtime smoke at 56.5 FPS zero console errors. Syzygies visible when user time-warps to known events (solar eclipses darken Earth's day side; lunar eclipses tint the Moon orange-red). T2.3b (lens asset hot-swap) remains blocked on user CC-BY-4.0 delivery. T2.1 shipped `a2c6594`, T2.3a `51750c3`, T2.0 `cd626dc`._
+_Last updated: 2026-04-22 after **ROADMAP hygiene pass** — R1 re-verification against `/tmp/gaiasky/` surfaced three more ROADMAP drifts (all matching the L30 / L31 pattern): T3.7 is moot (superseded by θ.5b+c Nishita scattering, the rim-glow hardcode it referenced no longer exists); T3.8 audit closed (roughness map `NoColorSpace` verified correct via Solar System Scope linear-TIFF → atlas bake chain); T3.9 demoted to ❌ NOT PORTING because `LightScattering.java` is Gaia dead code (zero `new LightScattering()` hits — Gaia's "light scattering" UI toggle actually controls LightGlow, which atlas shipped as θ.3). L31 captured. T3.3 shipped earlier `c44f913`; Lens Closure Wave default path done (T2.0 `cd626dc`, T2.3a `51750c3`, T2.1 `a2c6594`)._
 
 ---
 
@@ -94,7 +94,7 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **T3.3 done — next unblocked ondas**: T2.3b BLOCKED (user asset delivery) or Tier-3 follow-ups (T3.9 lightscattering god rays, T3.2 PBR hooks asset-blocked, T3.7 atmosphere exponent parameterization, T3.8 roughness-map color space audit)
+## → Next up: **mostly cleared — pick direction**: T2.3b still BLOCKED (user asset delivery); T3.7 / T3.8 / T3.9 closed via hygiene pass (see below); Tier-4 foundations (T4.1 camera-relative rendering, T4.2 camera cinematics, T4.3 particle systems, T4.7 Milky Way backdrop) are the next unblocked ondas if user wants more
 
 Lens Closure Wave (default path) complete: T2.0 ✅ `cd626dc`,
 T2.3a ✅ `51750c3`, T2.1 ✅ `a2c6594`. T3.3 ✅ `c44f913` adds
@@ -102,6 +102,32 @@ eclipse geometry. Blocked/optional: **T2.3b** (hot-swap
 placeholders once user delivers CC-BY-4.0 replacements — no
 activity in `references/gaia-sky-source/` at last check), **T2.2**
 (opt-in PSEUDO blur, not on Gaia default path).
+
+**Tier-3 hygiene pass (2026-04-22)**: R1-reading each remaining
+T3.x item against `/tmp/gaiasky/` surfaced three more ROADMAP
+drifts matching the L30 / L31 pattern:
+
+- **T3.7** (atmosphere exponent parameterization) — **MOOT**.
+  The `pow(max(..), 4.0)` rim-glow hardcode it referenced
+  vanished when θ.5b+c shipped the Nishita multi-sample
+  scattering. No parameter to parameterize.
+- **T3.8** (roughness-map colour-space audit) — **AUDIT CLOSED**
+  via doc-only ship. Solar System Scope linear specular TIFF →
+  atlas bake via `.grayscale().negate()` preserves linearity →
+  JPG stored byte IS the linear roughness × 255 →
+  `NoColorSpace` is correct. `SRGBColorSpace` would understate
+  roughness by ~4× on rough bands. Chain-of-custody comment
+  added at `usePlanetAssets.ts:139-158`.
+- **T3.9** (lightscattering god rays) — **❌ NOT PORTING**.
+  `LightScattering.java` is Gaia dead code (zero `new
+LightScattering(` hits across the repo); `MainPostProcessor.java`
+  wires `LightGlow` (atlas θ.3) but never the scattering effect.
+  The Gaia GUI label "light scattering" toggles LightGlow, whose
+  shader's own header comment reads "Light scattering
+  implementation". Atlas already has parity on the active Gaia
+  path via θ.3. Porting the inactive effect would diverge from
+  Gaia default. **L31 captured** to prevent future
+  ROADMAP-vs-dead-code traps.
 
 **T3.3 landed 2026-04-22 (`c44f913`)** — three new files:
 `src/components/canvas/shaders/eclipseMath.ts` (pure-TS mirror

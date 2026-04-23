@@ -139,6 +139,23 @@ export function usePlanetAssets({
   // Normal + roughness share the "secondary" gating because they only matter
   // at close range. They need NoColorSpace so the GPU samples them linearly —
   // sRGB decoding would corrupt the tangent-space normals and mis-scale roughness.
+  //
+  // T3.8 audit (2026-04-22): verified `NoColorSpace` is correct for the
+  // roughness map. Chain of custody for `{2k,8k}_earth_roughness_map.jpg`:
+  //   1. Solar System Scope ships `*_earth_specular_map.tif` as a LINEAR
+  //      grayscale specular intensity (their documented convention;
+  //      `scripts/bake-earth-pbr.js:11-12,48-53` records provenance).
+  //   2. `scripts/bake-earth-pbr.js:118-122` pipeline: decode TIFF →
+  //      `.grayscale()` (linearity preserved) → `.negate({alpha:false})`
+  //      which is `255 - x` (linearity preserved — it's the
+  //      specular→roughness inversion) → `.jpeg({quality:85, mozjpeg:true})`
+  //      which re-encodes without colourspace conversion.
+  //   3. Stored JPG byte = linear roughness × 255. Three's
+  //      `MeshStandardMaterial` roughness sampler expects linear
+  //      `[0, 1]` values, so `NoColorSpace` makes the GPU read the
+  //      byte/255 directly as the roughness scalar — CORRECT.
+  //      `SRGBColorSpace` would apply a `pow(x/255, 2.2)` decode,
+  //      understating roughness on rough-surface bands by up to ~4×.
   const normalTextureLoaded = useDeferredTexture(normalRequest.selectedPath, {
     enabled: shouldLoadSecondary,
     pin: shouldPinMap,
