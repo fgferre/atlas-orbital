@@ -844,14 +844,30 @@ clipping/jitter`.
     documented divergences (WebGL1 GLSL 1.00 not 330 core,
     log-depth skipped, `simple_noise` dropped, layout→gl*FragColor,
     opacity-via-uniform, `gridrec*`/`GRIDREC\_` namespace prefixes).
-  - **T4.4c** — per-frame drivers + orientation toggle. Implements
-    `getGridScaling(body.distToCamera, ...)` to drive
-    `u_tessQuality` + `u_heightScale`; UI toggle for
-    Equatorial / Ecliptic / Galactic via transform matrix swap
-    (`GridRecursiveRadio.java:34-44`); projection lines when
-    origin=REFSYS + focus active. Effort: 2 d.
+  - **T4.4c ✅ SHIPPED (2026-04-23, `2e42b8c`)** — `getGridScaling`
+    runtime driver. `src/components/canvas/shaders/gridRecScaling.ts`
+    ports `GridRecUpdater.java:148-160`'s decade-walk + `gridRecLint`
+    mirror of `MathUtilsDouble.lint`. `GridRecursive.tsx`'s
+    `useFrame` pushes `camera.position.length()` →
+    `getGridRecScaling` → `u_tessQuality` + `u_heightScale` per
+    frame. 18 new tests covering decade brackets, scale-invariance,
+    and the >10^25 fallback. 1 documented divergence: no AU
+    conversion (algorithm is scale-invariant, same normalized
+    output regardless of unit choice). DIFF GATE + SUBAGENT VERIFY
+    6/6 PASS; runtime smoke confirms recursive-ring behavior at
+    close camera distances that static-uniform T4.4b ship produced
+    a flat pattern at.
+  - **T4.4d** — orientation toggle (Equatorial / Ecliptic /
+    Galactic) per `GridRecursiveRadio.java:34-48`'s
+    `transform.setTransformName` swap. New store state slice +
+    mesh rotation + UI toggle in `LayersPanel.tsx` + per-orientation
+    color callouts (`gr.ccEq` / `ccEcl` / `ccGal`). Effort: 1 d.
+  - **T4.4e** — projection lines (camera ↔ focus segments onto
+    the grid plane when `origin=REFSYS` + focus active per
+    `GridRecUpdater.java:84-102`). Effort: 1 d.
 - **Effort**: T4.4a done (0.5 d), T4.4b done (1 d incl. refactor
-  - predecessor sweep), T4.4c 2 d → remaining ~2 d.
+  - predecessor sweep), T4.4c done (0.5 d); T4.4d 1 d + T4.4e
+    1 d → remaining ~2 d.
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
