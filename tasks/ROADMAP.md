@@ -830,22 +830,49 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
       (the damping curve modulates the surface-mode rotation
       smoothness; shipping β on top of T4.2-α's per-frame damping
       setter is the cleanest plug-in point).
-  - **T4.2-γ — Inertial zoom physics** (~3-5 d). Replace
-    `NormalizedWheelZoom`'s snappy step accumulator with a
-    velocity-integrating zoom: per-frame `vel += accel × dt;
-pos += vel × dt; vel *= friction(vel, dt)`. Port the
-    bifurcation at `NaturalCamera.java:990-1000` (real friction
-    when `fullStop`, force-derived friction otherwise). New
-    `src/lib/camera/zoomPhysics.ts` + tests. Independent of α/β
-    — wheel handler swaps wholesale, OrbitControls kept for
-    pan + drag-rotate. PRE-CHECK: confirm three-stdlib
-    OrbitControls allows external `dollyIn`/`dollyOut` calls
-    interleaved with internal `update()` without breaking the
-    spherical-coords accumulator.
-- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; α shipped
-  (~0.3 d actual vs ~2 d estimate — pure-TS port + per-frame
-  setter is a small surgical change). T4.2-γ (zoom physics)
-  - T4.2-β (surface mode) remaining.
+  - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
+    inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
+    pins three constants + three pure functions for a 1D
+    velocity/friction integrator: `ZOOM_IMPULSE_PER_STEP=4.0`
+    (logical-steps/sec injection per detent),
+    `ZOOM_FRICTION_PER_SECOND=8.0` (closed-form
+    `velocity × exp(-friction × dt)`; ~87 ms half-life), and
+    `ZOOM_VELOCITY_DEADZONE=0.1` (snap-to-zero floor that
+    replaces Gaia's `fullStop` flag). 13 pinned tests (1138
+    total) cover constants, accumulation + sign + fractional
+    impulses, decay (zero-dt identity, sign preservation,
+    long-dt non-overshoot via closed form), and a multi-frame
+    convergence integral that confirms a single impulse
+    dispatches ≈0.5 logical-steps total (= ∫₀^∞ 4·e^(-8t) dt).
+    `Scene.tsx:NormalizedWheelZoom` refactored: wheel handler
+    pushes impulses into a `zoomVelocityRef` + dispatches
+    "start" only on first impulse after rest; new useFrame
+    integrator runs each frame, decays via
+    `consumeZoomVelocity`, dispatches fractional
+    `OrbitControls.dollyIn`/`dollyOut` via
+    `Math.pow(getZoomScale(), |frameSteps|)`, and fires "end"
+    when velocity decays below deadzone. PRE-CHECK confirmed
+    at `OrbitControls.js:843-852` that public
+    `dollyIn`/`dollyOut` mutate internal `scale` then call
+    `update()` cleanly (composable across multiple per-frame
+    calls). DIFF GATE PASS. SUBAGENT VERIFY (fresh Explore,
+    no parent context): PASS w/ caveats — only flagged item
+    was the sign convention vs Gaia (`addForwardForce`'s
+    positive = forward vs atlas's positive = zoom out per
+    DOM `WheelEvent.deltaY > 0`); fix was a header
+    clarification confirming the chain is self-consistent
+    (`accumulateWheelZoomSteps → addZoomImpulse → dollyOut`
+    for positive everywhere). Documented divergences (header):
+    1D scalar vs Gaia 3D vector, single global friction (proximity-
+    aware coupling deferred to a `T4.2-γ-tighten` pass), deadzone
+    replaces fullStop, force-accumulator step collapsed (impulses
+    are already discrete), per-body speed scaling preserved through
+    `DynamicZoom + getZoomScale()`. Independent of α/β.
+- **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; α + γ shipped
+  (~0.6 d combined actual vs ~5-7 d estimate — both pure-TS
+  lib ports with thin wiring; α=damping curve setter, γ=
+  velocity buffer + per-frame integrator that swaps the wheel
+  handler wholesale). Only T4.2-β (surface mode) remaining.
 - **Dependencies**: none. T4.1 (camera-relative rendering)
   remains a separate concern; T4.2 ports input behavior on top
   of atlas's current absolute-world frame.
