@@ -727,13 +727,44 @@ clipping/jitter`.
 - **Effort**: 2-3 weeks (new subsystem).
 - **Dependencies**: data loading for particle catalogs.
 
-### T4.4 — Additional grids (equatorial, galactic, recursive)
+### T4.4 — Recursive grid port (orientation toggle: Equatorial / Ecliptic / Galactic)
 
-- **Gaia**: 3 coordinate grids via `gridrec.fragment.glsl` with
-  multi-resolution LOD using `dFdx` screen derivatives
-  (`/tmp/gaiasky/core/src/gaiasky/scene/entity/GridRecursiveRadio.java:34-44`).
-- **Atlas**: `EclipticGrid.tsx` only. Custom shader, single-pass,
-  fade radial `smoothstep(uFadeStart, uFadeEnd, dist)`.
+- **Step 3 PRE-CHECK re-correction (2026-04-22)**: ROADMAP text
+  previously said "3 coordinate grids". Gaia R1 shows that's
+  misleading — there is **ONE** `GridRecursive` entity
+  (`core/src/gaiasky/scene/system/initialize/GridRecInitializer.java`
+  creates a single entity per `families.gridRecs` Family). The
+  user-facing toggle is an **orientation mode switch** driven by
+  `GridRecursiveRadio.java:34-44` on `TOGGLE_VISIBILITY_CMD`:
+  changes `transform.setTransformName` between `null`
+  (Equatorial), `"eclipticToEquatorial"` (Ecliptic), and
+  `"galacticToEquatorial"` (Galactic). The mesh is the same
+  recursive grid either way.
+- **Gaia source**:
+  - `assets/shader/gridrec.fragment.glsl` (133 LOC) — circular vs
+    square mode via `u_elevationMultiplier`; `dFdx`-based
+    screen-space line-width adaptation; 2-level subdivision
+    fade via `u_heightScale`; camera-distance encoded in
+    `u_tessQuality`. Uses log-depth buffer + `simple_noise.glsl`.
+  - `assets/conf/config.yaml:377-385` recursive grid config:
+    origin `[FOCUS|REFSYS]`, style `[CIRCULAR|SQUARE]`.
+- **Atlas**: `EclipticGrid.tsx` — custom shader, single-pass,
+  radial fade `smoothstep(uFadeStart, uFadeEnd, dist)`. Fixed
+  plane, no camera-distance adaptation, no orientation toggle.
+- **Port scope** (1 week):
+  1. `gridrec.fragment.glsl` + `gridrec.vertex.glsl` → atlas
+     shader module.
+  2. Per-frame driver for `u_tessQuality` (camera distance) +
+     `u_heightScale` (subgrid fade).
+  3. Camera-centered (or focus-centered) quad mesh that follows
+     the camera/focus.
+  4. Orientation transform matrices for Equatorial ↔ Ecliptic
+     ↔ Galactic. Atlas's current `EclipticGrid` becomes the
+     Ecliptic-mode default of the new recursive grid; Equatorial
+     and Galactic gain UI toggles.
+  5. Under `feedback_no_effect_stacking.md`: remove the old
+     `EclipticGrid.tsx` when shipping to avoid stacking the
+     fixed-plane and recursive grids.
 - **Effort**: 1 week.
 - **Dependencies**: none.
 
