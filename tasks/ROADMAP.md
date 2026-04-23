@@ -857,17 +857,30 @@ clipping/jitter`.
     6/6 PASS; runtime smoke confirms recursive-ring behavior at
     close camera distances that static-uniform T4.4b ship produced
     a flat pattern at.
-  - **T4.4d** — orientation toggle (Equatorial / Ecliptic /
-    Galactic) per `GridRecursiveRadio.java:34-48`'s
-    `transform.setTransformName` swap. New store state slice +
-    mesh rotation + UI toggle in `LayersPanel.tsx` + per-orientation
-    color callouts (`gr.ccEq` / `ccEcl` / `ccGal`). Effort: 1 d.
+  - **T4.4d ✅ SHIPPED (2026-04-23, `379fd2e`)** — orientation
+    toggle (Equatorial / Ecliptic / Galactic). `src/lib/gridOrientation.ts`
+    ports `Coordinates.getRotationMatrix(α, β, γ) = Ry(γ)·Rz(β)·Ry(α)`
+    - the three orientation matrices (OBLIQUITY 23.4392808°,
+      galactic Euler R=32.93192 / Q=27.12825 / P=192.85948) + the
+      per-orientation color callouts (ccEq=gRed=[219,68,55],
+      ccEcl=gGreen=[15,157,88], ccGal=gBlue=[66,133,244]).
+      `GridRecursive.tsx` wraps the mesh in a `<group>` with the
+      orientation quaternion + mutates `u_diffuseColor` /
+      `u_emissiveColor` on flip. Store slice (`gridOrientation`) +
+      3-way ChoiceButton radio in `LayersPanel.tsx`. 23 new pinned
+      tests. DIFF GATE + SUBAGENT VERIFY 8/8 PASS. Documented
+      axis-convention divergence: atlas's "ecliptic" dispatcher
+      returns identity (atlas's world frame is ecliptic-aligned
+      via planet orbits); Gaia's frame is equatorial so
+      null-transform = equatorial inverts the mapping. Inner ring
+      uses `outerRGB × α=0.3` instead of Gaia's complementary
+      color (atlas-opinion).
   - **T4.4e** — projection lines (camera ↔ focus segments onto
     the grid plane when `origin=REFSYS` + focus active per
     `GridRecUpdater.java:84-102`). Effort: 1 d.
 - **Effort**: T4.4a done (0.5 d), T4.4b done (1 d incl. refactor
-  - predecessor sweep), T4.4c done (0.5 d); T4.4d 1 d + T4.4e
-    1 d → remaining ~2 d.
+  - predecessor sweep), T4.4c done (0.5 d), T4.4d done (0.5 d);
+    T4.4e 1 d → remaining ~1 d.
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
