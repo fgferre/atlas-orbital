@@ -1014,13 +1014,30 @@ OneMinusSrcColorFactor)` = `BlendMode.COLOR`, so clouds no
   system's dust clouds + MW nebulae could reintroduce the
   multi-additive stack).
 
-### T4.9 — Sun surface + flare asset swap (procedural-substitute audit 2026-04-23)
+### T4.9 — Sun surface + flare asset swap (procedural-substitute audit 2026-04-23) ⚠ **R1 PENDING — subagent citations fabricated**
 
+- **⚠ Verify before ship (2026-04-23)**: the audit subagent that
+  surfaced this item cited `SunComponent.java:50-70` and
+  `$GS_DATA/tex/base/sun-{surface,glow,corona}` — **neither exists
+  in `/tmp/gaiasky/`**. A grep for `SunComponent` / `sun-surface` /
+  `sun-glow` / `sun-corona` returns zero matches; the only
+  config hit is `config.yaml:144 texBillboard:
+$data/default-data/tex/base/sso.png` (generic solar-system-object
+  billboard, not Sun-specific). **R1 this sub-wave properly before
+  writing any code** — trace the Sun through Gaia's actual render
+  path (likely the star-catalog entry using `textureIndex: 4` per
+  `config.yaml:169`) and confirm what asset (if any) drives its
+  surface. If Gaia renders the Sun as a regular star-catalog
+  billboard, atlas's procedural Perlin isn't a "substitute for a
+  real Gaia asset" — it's an atlas-invention, and T4.9a should be
+  demoted to "atlas-opinion removal vs Gaia's billboard path",
+  not "Gaia-asset swap".
 - **Audit origin**: user flagged cross-spike rays around bright
   stars, which surfaced (and fixed, `d6165c6` → `a9f9bd5`) the
-  LightGlow sprite. The audit that followed (subagent punch-list)
-  found TWO more procedural substitutes in the Sun-render path
-  that ship atlas-opinion geometry instead of Gaia's real assets.
+  LightGlow sprite. The audit subagent that followed (punch-list)
+  flagged TWO more procedural substitutes in the Sun-render path,
+  BUT its Gaia citations are unverified (see ⚠ above). Keep the
+  shape below as a WORKING HYPOTHESIS, not ship-ready plan.
 - **T4.9a — Sun surface texture** (noticeable visual impact).
   - **Atlas**: `ProceduralSun3D.tsx` bakes a 3-layer Perlin-4D
     cubemap each frame (`uPerlinCube`) via
