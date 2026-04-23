@@ -9,7 +9,6 @@ import {
   LIGHT_GLOW_POLAR_MASK_MIN_VAL,
   LIGHT_GLOW_POLAR_TIME_MULS,
 } from "./LightGlowEffect";
-import { getLightGlowSprite, LIGHT_GLOW_SPRITE_SIZE } from "./lightGlowSprite";
 
 const approxEq = (actual: number, expected: number, tol = 1e-6) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
@@ -143,38 +142,16 @@ describe("archimedesSpiralSamples — fx/fy parametric curve", () => {
   });
 });
 
-describe("LightGlow sprite — conservative radial gaussian", () => {
-  const sampleRed = (x: number, y: number): number => {
-    const tex = getLightGlowSprite();
-    const data = tex.image.data as Uint8Array;
-    return data[(y * LIGHT_GLOW_SPRITE_SIZE + x) * 4];
-  };
-
-  it("peaks at the centre and falls off monotonically along the axes", () => {
-    const c = Math.floor(LIGHT_GLOW_SPRITE_SIZE / 2);
-    // Radial profile: centre brighter than any offset.
-    const centerVal = sampleRed(c, c);
-    const r10 = sampleRed(c + 10, c);
-    const r20 = sampleRed(c + 20, c);
-    const r40 = sampleRed(c + 40, c);
-    expect(centerVal).toBeGreaterThan(r10);
-    expect(r10).toBeGreaterThan(r20);
-    expect(r20).toBeGreaterThan(r40);
-  });
-
-  it("is radially symmetric — horizontal offset equals diagonal+vertical at the same Euclidean radius", () => {
-    // Pure gaussian is a function of r² only; cross-axis and diagonal
-    // samples at the same distance must match (within integer
-    // quantization). Protects against accidental re-introduction of
-    // procedural spike lobes (which the Gaia `star-tex-03-*` asset
-    // does NOT have in this conservative substitute).
-    const c = Math.floor(LIGHT_GLOW_SPRITE_SIZE / 2);
-    const radius = 20;
-    const horizontal = sampleRed(c + radius, c);
-    const diagonalHalfRadius = sampleRed(
-      c + Math.round(radius / Math.SQRT2),
-      c + Math.round(radius / Math.SQRT2)
-    );
-    expect(Math.abs(horizontal - diagonalHalfRadius)).toBeLessThanOrEqual(2);
-  });
-});
+// NOTE: The "conservative radial gaussian" test block that lived here
+// (monotonic fall-off + radial symmetry) covered the procedural
+// substitute used before the real Gaia `star-tex-03` asset was
+// vendored as a placeholder at `public/textures/stars/`. Both
+// invariants are FALSE for the real asset: the 4-ray cross-spikes
+// are by-design anisotropic, so horizontal/vertical samples at the
+// same radius are far brighter than diagonal samples. Texture-level
+// contract (filter / wrap / colorSpace / cache identity) now lives
+// in `lightGlowSprite.test.ts`; pixel-level probing moves to the
+// CC-BY-4.0 replacement ship when the vendored asset lands under
+// source control. See commits `d6165c6` (procedural border-zero
+// fix — retired) and the follow-up asset swap in this file's
+// companion test.

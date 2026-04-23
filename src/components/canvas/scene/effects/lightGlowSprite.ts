@@ -1,118 +1,85 @@
 import * as THREE from "three";
 
 /**
- * Baked glow sprite for the Gaia Sky LightGlow port (θ.3).
+ * Glow sprite for the Gaia Sky LightGlow port (θ.3).
  *
- * Gaia Sky's `u_texture1` for LightGlow comes from
- * `Settings.scene.star.getGlowTexture()` → `getStarTexture(textureIndexLens)`
- * → `$GS_DATA/tex/base/star-tex-{XX}-*`. config.yaml ships
- * `textureIndexLens: 3` which (per the config comment) is the
- * "horizontal and vertical spikes" asset.
+ * **Asset source.** Gaia Sky's `u_texture1` for LightGlow comes from
+ * `Settings.scene.star.getGlowTexture()` →
+ * `getStarTexture(textureIndexLens)` →
+ * `$GS_DATA/tex/base/star-tex-{XX}-*`. `config.yaml:171` ships
+ * `textureIndexLens: 3` — the "horizontal + vertical spikes" asset
+ * credited to Andreas Ressl and Georg Hammerschmid
+ * (`references/gaia-sky-source/star-tex-01-credit.txt`,
+ * originally sourced from Seed of Andromeda's procedural star
+ * rendering article). Same T2.3a placeholder pattern the lens-flare
+ * sprites use: the `-low` binary lives as a gitignored placeholder
+ * at `public/textures/stars/star-tex-03.jpg` during calibration;
+ * a CC-BY-4.0 reconstruction replaces it in a later ship and that
+ * replacement IS committed (ship analogous to T2.3b, tracked as
+ * T4.4f / LightGlow asset swap).
  *
- * **The actual Gaia asset is not vendored in this repo** (it lives in
- * a separate `$GS_DATA` package under Gaia Sky's licensing). Without
- * the real texture we keep a CONSERVATIVE substitute: a pure radial
- * gaussian. An earlier attempt to bake procedural cross-spikes
- * (σ_long = 34 of 128 px) produced visible hard cartesian lines
- * radiating from every bright star — the actual Gaia asset has
- * extremely subtle spikes that only become visible at near-ceiling
- * halo intensities, not the wide strong lobes a procedural
- * approximation generates.
+ * **Why the swap matters.** The pre-d6165c6 pure-gaussian procedural
+ * substitute gave a soft round halo with no spikes — missing Gaia's
+ * signature 4-ray cross-spike look. A first attempt at baking
+ * procedural spikes (`σ_long = 34` anisotropic gaussian) produced
+ * "visible hard cartesian lines radiating from every bright star"
+ * — too strong. The border-zero fix that followed
+ * (`LIGHT_GLOW_SPRITE_ZERO_RADIUS` in the prior iteration) killed
+ * the ClampToEdge leakage but still left atlas with a plain radial
+ * halo that diverged from Gaia. Shipping the real asset resolves
+ * both: the intended spike pattern is present AND the border is
+ * genuinely black, so no ClampToEdge leakage either.
  *
- * Net behaviour: our halo shape is closer to `star-tex-04-*` (radial
- * profile, which is Gaia's default for the regular billboard `u_texture0`
- * path). This is fine as a parity target because:
- *   1. The LightGlow polar-mask modulation already adds soft angular
- *      variance to the radial disc, which breaks the perfect-circle
- *      look and gives the "alive" animation.
- *   2. Both Gaia textures (03 spikes and 04 radial) share the same
- *      soft gaussian core — the spikes are an overlay on top. Without
- *      the overlay we lose only the cross character, not the halo.
- *   3. Shipping the real asset is a one-line swap later if licensing
- *      allows.
- *
- * Texture characteristics:
- *   - 128 × 128 px (larger than θ.1's 64² because the LightGlow halo
- *     covers a meaningfully bigger footprint when the halo-size cap
- *     saturates).
- *   - RGBA with identical RGB channels so `brightness = dot(rgb, luma)`
- *     reduces to the red channel value. pmndrs `EffectPass` requires
- *     RGBA sampling on some WebGL paths, so single-channel RED is
- *     out.
- *   - Center-weighted gaussian, σ = 20 px (~16 % of the texture
- *     extent) so the halo falls off to near-zero at the corners.
+ * **Shader sampling contract** (mirrors Gaia's libGDX pipeline):
+ *   - `LinearFilter` min + mag — Gaia uses the default smooth sampler.
+ *   - `ClampToEdgeWrapping` on both axes — out-of-halo UVs return
+ *     the vendored asset's zero border (no leakage).
+ *   - `NoColorSpace` — Gaia samples raw bytes without sRGB decode.
+ *   - No mipmaps — the LightGlow halo never needs minified samples
+ *     (halo size is driven by `u_textureScale`, not dependency on
+ *     screen resolution via a mip chain).
  */
 
-const GLOW_SPRITE_SIZE = 128;
-const GLOW_SIGMA = 20;
-// Hard-zero the sprite outside this radius so `ClampToEdge` wrap on the
-// halo sampler returns exact-zero when `glow_tc` overflows [0, 1]. Without
-// this cutoff, the gaussian tail at r=64 (the sprite's half-width) is
-// ~0.006 — tiny, but multiplied by the halo accumulation across N=8
-// lights and replicated infinitely along the H/V axes by edge clamping,
-// it reads as faint 4-ray cross-spikes coming out of every bright star.
-// The cutoff kills those rays without touching the halo disc inside the
-// radius (σ=20 is ≈16 % of the extent, so the gaussian is already
-// essentially zero at r=48 — rounding the 48→62 band to 0 costs nothing).
-// See `lightGlowSprite.test.ts` for the pinned border-zero assertion.
-const GLOW_SPRITE_ZERO_RADIUS = GLOW_SPRITE_SIZE / 2 - 2;
+const BASE_URL = import.meta.env.BASE_URL || "/";
+const STAR_TEXTURE_BASE = `${BASE_URL}textures/stars/`;
 
-let glowSpriteCache: THREE.DataTexture | null = null;
+export const LIGHT_GLOW_SPRITE_URL = `${STAR_TEXTURE_BASE}star-tex-03.jpg`;
 
-function bakeGlowSprite(): THREE.DataTexture {
-  const size = GLOW_SPRITE_SIZE;
-  const sigma = GLOW_SIGMA;
-  const data = new Uint8Array(size * size * 4);
-  const center = (size - 1) / 2;
-  const twoSigmaSq = 2 * sigma * sigma;
-  const zeroRadiusSq = GLOW_SPRITE_ZERO_RADIUS * GLOW_SPRITE_ZERO_RADIUS;
+const loader = new THREE.TextureLoader();
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - center;
-      const dy = y - center;
-      const r2 = dx * dx + dy * dy;
-      const g = r2 >= zeroRadiusSq ? 0 : Math.exp(-r2 / twoSigmaSq);
-      const value = Math.round(g * 255);
-      const idx = (y * size + x) * 4;
-      data[idx + 0] = value;
-      data[idx + 1] = value;
-      data[idx + 2] = value;
-      data[idx + 3] = 255;
-    }
-  }
+let glowSpriteCache: THREE.Texture | null = null;
 
-  const tex = new THREE.DataTexture(
-    data,
-    size,
-    size,
-    THREE.RGBAFormat,
-    THREE.UnsignedByteType
-  );
+function applyGlowFilter(tex: THREE.Texture) {
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.generateMipmaps = false;
-  tex.needsUpdate = true;
+  tex.colorSpace = THREE.NoColorSpace;
+  // DO NOT set `needsUpdate = true` here — `TextureLoader.load()`
+  // returns a Texture whose image is still decoding. The loader's
+  // own `onLoad` callback flips `needsUpdate` once the Image is
+  // ready. Same guardrail as `lensFlareSprites.ts:59-65` (codex
+  // audit 2026-04-22).
+}
+
+function loadGlowSprite(): THREE.Texture {
+  const tex = loader.load(LIGHT_GLOW_SPRITE_URL);
+  applyGlowFilter(tex);
   return tex;
 }
 
 /**
  * Process-wide singleton glow sprite texture. Created lazily on first
- * LightGlow effect mount.
+ * LightGlow effect mount. Returns immediately with an empty image that
+ * the loader fills in on decode — subsequent frames sample the real
+ * pixels. If the asset is absent (the placeholder never got copied,
+ * or a production build ships without it) the halo renders black,
+ * which is a documented degraded state mirrored from `lensFlareSprites`.
  */
-export function getLightGlowSprite(): THREE.DataTexture {
+export function getLightGlowSprite(): THREE.Texture {
   if (!glowSpriteCache) {
-    glowSpriteCache = bakeGlowSprite();
+    glowSpriteCache = loadGlowSprite();
   }
   return glowSpriteCache;
 }
-
-/**
- * Exposed for tests: size + sigma pins of the baked sprite. Keeps the
- * asset-geometry contract with the shader discoverable.
- */
-export const LIGHT_GLOW_SPRITE_SIZE = GLOW_SPRITE_SIZE;
-export const LIGHT_GLOW_SPRITE_SIGMA = GLOW_SIGMA;
-export const LIGHT_GLOW_SPRITE_ZERO_RADIUS = GLOW_SPRITE_ZERO_RADIUS;
