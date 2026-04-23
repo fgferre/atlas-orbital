@@ -929,13 +929,24 @@ clipping/jitter`.
     Requires source data (IAU constellation boundaries or
     Stellarium's `constellationship.fab`). Effort: 2-3 d + data
     acquisition.
-  - **T4.5-δ** — AU tick label re-mount specifically. Brings
-    back the 1/2/5/10/20/30/40 AU sprite labels that
-    `EclipticGrid.tsx` had (regression from T4.4b's predecessor
-    sweep) — now via Gaia-native SDF text instead of
-    canvas-textured sprites. Effort: 0.5-1 d, depends on β.
-- **Effort**: T4.5-α done (~0.25 d); T4.5-β 1-2 d; T4.5-γ 2-3 d
-  - data; T4.5-δ 0.5-1 d. Total remaining ~4-6 d.
+  - **T4.5-δ ✅ SHIPPED (2026-04-23, `7abbc78`)** — AU tick
+    label re-mount via drei `<Text>`. `GridAuLabels.tsx` renders
+    14 SDF text instances (7 AU × 2 axes: X at `(au*1000, planeY,
++250)` and Z at `(+250, planeY, au*1000)`) colored by active
+    grid orientation (ccEq/ccEcl/ccGal). Black outline at 0.7α
+    for starfield legibility. Used troika-three-text's default
+    `fwidth()` smoothing (not Gaia's fixed-scale `1/(16×u_scale)`
+    from T4.5-α — troika's formula is device-pixel-ratio-aware
+    and adapts to zoom automatically; α's constants remain
+    pinned for a future override onda if needed). Gated on
+    `showEclipticGrid && showLabels`. Closes T4.4b predecessor-
+    sweep regression. Known caveat: label positions align with
+    planets only in `realistic` scale mode (didactic mode
+    compresses planets via `mapDidacticHeliocentricDistance` but
+    labels stay at linear AU — tracked as pre-existing scale-
+    mode architectural issue, out of scope for δ).
+- **Effort**: T4.5-α + T4.5-δ done (~1 d combined); T4.5-β
+  1-2 d; T4.5-γ 2-3 d + data. Remaining ~3-5 d.
 - **Dependencies**: T4.5-γ depends on constellation line-segment
   data acquisition.
 
