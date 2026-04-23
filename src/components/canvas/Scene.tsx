@@ -25,12 +25,12 @@ import {
 import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
 import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
-// import { SunBillboard } from "./SunBillboard"; // see DISABLED note below
+import { SunBillboard } from "./SunBillboard";
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
-// import { PlanetLabels3D } from "./PlanetLabels3D"; // see DISABLED note below
+import { PlanetLabels3D } from "./PlanetLabels3D";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { GridAuLabels } from "./GridAuLabels";
@@ -522,29 +522,26 @@ export const Scene = () => {
               qualityProfileName={qualityProfile.name}
               sunVisualRadiusWorld={sunVisualRadiusWorld}
             />
-            {/* T4.9a' — TEMPORARILY DISABLED 2026-04-23 alongside
-                PlanetLabels3D as a defensive bisect for the user-
-                reported white-canvas boot bug. The SunBillboard cap
-                + intro-suppression fixes already shipped (a9fc1bf)
-                should make this safe; this disable confirms whether
-                a remaining SunBillboard interaction is contributing
-                to the Context Lost. Re-enable once bisect identifies
-                the actual culprit. */}
-            {/* <SunBillboard /> */}
+            {/* T4.9a' — Sun star-billboard fallback at stellar
+                distances. Self-gates via `SUN_BILLBOARD_THRESHOLD_AU`
+                so it composites with `ProceduralSun3D`'s inverse gate
+                without overlap. Procedural-mode-only for the first
+                ship; the textured `Planet`-mesh path stays unchanged
+                (out of scope for T4.9a' first ship). Re-enabled
+                2026-04-23 after bisect confirmed the white-canvas
+                bug reproduces in pre-session HEAD too — the env
+                limitation is unrelated to this mount. */}
+            <SunBillboard />
           </Suspense>
         )}
         <OverlayPositionTracker />
-        {/* T4.5-β — TEMPORARILY DISABLED 2026-04-23 as a defensive
-            bisect for a user-reported white-canvas boot bug. The
-            component is a no-op when `labelMode === "html"` (the
-            default), so removing the mount has no observable user
-            impact unless someone had explicitly opted into SDF labels
-            via the LayersPanel. If the canvas comes back after this
-            mount is removed, PlanetLabels3D's drei <Text> imports +
-            troika worker setup are the smoking gun and a fix lands
-            before re-enabling. If the canvas still goes white, the
-            mount can be restored and bisect moves elsewhere. */}
-        {/* <PlanetLabels3D /> */}
+        {/* T4.5-β — Gaia-native SDF body labels (drei <Text>); self-
+            gates on `labelMode === "sdf" && showLabels` so it's a
+            no-op in default HTML mode. Re-enabled 2026-04-23 after
+            bisect confirmed pre-session HEAD also reproduces the
+            user-reported white-canvas bug — the env limitation is
+            unrelated to this mount. */}
+        <PlanetLabels3D />
         <CameraController />
         <InitialCameraAnimation />
         <DreiOrbitControls
