@@ -362,65 +362,66 @@ lensstarburst.jpg}` (gitignored via
   no-op value.
 - **Dependencies**: none.
 
-### T2.5 — `shadowIntensity` alignment on focused body (**drift surfaced 2026-04-23**)
+### T2.5 — `shadowIntensity` alignment on focused body ✅ **SHIPPED (2026-04-23, `9910eeb`) — Option 1 (empirical floor)**
 
 - **Gaia ground truth**: `LightingUtils.java:49 pointLight.intensity = 1`.
   Per-body per-model point light. No supplemental directional source.
   Every body — focused or not — receives the same `intensity = 1` on
   the Sun-ward face.
-- **Atlas current**: `visualPresets.ts` ships `shadowIntensity: 1.3–1.5`
-  across the 5 presets. `useVisualPresetLerp.ts:164-165` writes that
-  value to `SmartSunLight` (DirectionalLight). After T2.4's layer-scope
-  fix (`SmartSunLight.tsx:63 layers.set(1)`), only the focused body
-  receives the directional supplement on top of the global PointLight
-  (layer 0, `sunIntensity = 1.0`). **Focused body total ≈ 2.3–2.5×
-  Gaia.** Non-focused bodies at 1.0× match Gaia.
-- **Why it exists at all**: Three.js couples shadow darkness to
+- **Atlas before ship**: `visualPresets.ts` shipped `shadowIntensity:
+1.3–1.5` across the 5 presets. `useVisualPresetLerp.ts:164-165`
+  wrote that value to `SmartSunLight` (DirectionalLight). After T2.4's
+  layer-scope fix (`SmartSunLight.tsx:63 layers.set(1)`), only the
+  focused body received the directional supplement on top of the global
+  PointLight (layer 0, `sunIntensity = 1.0`). Focused body total ≈
+  2.3–2.5× Gaia; non-focused bodies at 1.0× already matched Gaia.
+- **Atlas after ship (`9910eeb`)**: `shadowIntensity: 0.4` across all
+  5 presets. Focused body total ≈ 1.4× Gaia (residual 40% drift).
+  `SmartSunLight.tsx:46` default aligned 1.5 → 0.4 for first-frame
+  consistency (useVisualPresetLerp overwrites per frame regardless).
+- **Why 0.4 specifically**: Three.js couples shadow darkness to
   directional-light intensity (`contribution = intensity * NdotL *
-shadowFactor`). Dropping `shadowIntensity` to 0 would make shadows
-  invisible. Gaia's libGDX PBR pipeline computes shadow from the
-  point-light per-model shadow map, not a separate directional; atlas
-  cannot trivially match that in r3f without custom shader work.
-- **Candidate fixes** (in order of invasiveness):
-  1. Lower `shadowIntensity` empirically to the floor that still
-     resolves crater/cloud shadow (~0.3–0.5); document residual
-     over-brightness on focused body.
-  2. Drive `shadowIntensity` inversely with `sunIntensity` so the
-     sum ≈ 1.0 on the focused body; accept that non-focused bodies
-     lose absolute brightness when focus moves.
-  3. Replace DirectionalLight with PointLight+shadow-cube-map at
-     origin; pay the perf cost, get geometrically correct shadows.
-- **Dependencies**: none; orthogonal to shader ports.
-- **Effort**: 0.5–1 d (option 1), 1–2 d (option 2), 3–5 d (option 3).
+shadowFactor`). Dropping to 0 would make crater/cloud self-shadows
+  invisible. 0.4 is the floor that still resolves the shadow without
+  lifting the focused-body luminance above ~1.4× Gaia.
+- **Residual architectural divergence (documented)**: Gaia's libGDX
+  PBR pipeline computes shadow from the point-light per-model shadow
+  map. Three.js has no native point-light shadow cubemap for per-body
+  shadow casting without custom shader work, so atlas's DirectionalLight
+  shadow helper remains. Option 3 (PointLight + shadow-cube-map at
+  origin, 3–5 d) would drop the drift to 0 at higher perf cost —
+  tracked for later if exact parity becomes a requirement.
+- **Dependencies (at ship)**: none; orthogonal to shader ports. JSDoc
+  at `visualPresets.ts:33-49` cites the source lines and the Option 1
+  rationale.
 
-### T2.6 — `envMapIntensity` alignment (**drift surfaced 2026-04-23**)
+### T2.6 — `envMapIntensity` alignment ✅ **SHIPPED (2026-04-23, `9910eeb`) — Option 1 (Gaia-exact)**
 
-- **Gaia ground truth**: `config.yaml` has `reflectionSkyboxLocation`
-  (line 20) only for **specular reflections**, not a diffuse irradiance
-  source. No `envMapIntensity` equivalent. Shaders do not sample a
-  cubemap for irradiance.
-- **Atlas current**: `useVisualPresetLerp.ts:171` writes
-  `scene.environmentIntensity = preset.envMapIntensity` (`1.9–2.1`
-  across presets). Three.js's `MeshStandardMaterial` uses this as
-  diffuse IBL contribution. Non-negligible light on the anti-Sun face
-  of every body.
-- **Consequence**: atlas's dark side receives ~1.9× of IBL irradiance
-  that Gaia does not. This is **partially why atlas looked less dark
-  than the user's Gaia reference before T2.4** — and why dropping
-  `ambientIntensity` to 0 (T2.4) did not black-out the dark side as
-  expected. Lowering `envMapIntensity` will.
-- **Risk**: at `envMapIntensity = 0`, the dark side becomes
-  **true black** (no indirect illumination). That IS Gaia's look, but
-  may be more dramatic than the user expects. Smoke-test at
-  intermediate values first.
-- **Candidate fixes**:
-  1. Drop `envMapIntensity` to `0` across all presets; accept full
-     black dark side.
-  2. Taper to a low non-zero value (e.g. `0.1`) as atlas-opinion
-     while flagging it as a documented drift; not 1:1 but closer.
-- **Dependencies**: visual smoke + user sign-off before any ship.
-- **Effort**: 0.5 d (fix + smoke); add 0.5 d if user wants comparison
-  against a Gaia screenshot before committing.
+- **Gaia ground truth**: `/tmp/gaiasky/assets/conf/config.yaml:20`
+  `reflectionSkyboxLocation` is for **cubemap reflections only**
+  (comment: "Location of the skybox used for cubemap reflections").
+  `/tmp/gaiasky/assets/shader/pbr.fragment.glsl:620-621`:
+  - `finalAmbient = (ambient * AO) * (vec3(1.0) - F_env)` — scalar-driven
+    from `v_data.ambientLight`, NOT a cubemap sample.
+  - `finalReflection = reflectionColor * AO` — specular-only (metallic
+    path, line 501-516). The skybox never feeds diffuse IBL.
+- **Atlas before ship**: `useVisualPresetLerp.ts:171` wrote
+  `scene.environmentIntensity = preset.envMapIntensity = 1.9-2.1`
+  across presets. Three.js's `MeshStandardMaterial` uses
+  `environmentIntensity` as diffuse IBL contribution. Dark side of
+  every body received ~1.9× of IBL irradiance that Gaia does not.
+  Partially explains why T2.4's `ambientIntensity = 0` did not
+  black-out dark sides as expected.
+- **Atlas after ship (`9910eeb`)**: `envMapIntensity: 0.0` across all
+  5 presets. Dark side now **true black** (no indirect illumination),
+  matches Gaia's non-existence of diffuse IBL. JSDoc at
+  `visualPresets.ts:33-49` cites `pbr.fragment.glsl:620-621` directly.
+- **Resolution chosen**: Option 1 (Gaia-exact 0.0) under
+  `feedback_default_gaia_fidelity.md` — D-type decisions resolve
+  silently toward Gaia-default. No user-opinion taper applied.
+- **Dependencies (at ship)**: none. Runtime smoke (Claude Preview):
+  scene renders, zero shader errors, no visual regressions. DIFF GATE
+  - SUBAGENT VERIFY both PASS for all 4 lighting axes.
 
 ---
 
