@@ -787,7 +787,7 @@ clipping/jitter`.
 - **Effort**: 2-3 weeks (new subsystem).
 - **Dependencies**: data loading for particle catalogs.
 
-### T4.4 — Recursive grid port (orientation toggle: Equatorial / Ecliptic / Galactic)
+### T4.4 — Recursive grid port (orientation toggle: Equatorial / Ecliptic / Galactic) ✅ **FULLY SHIPPED** across 6 sub-waves (T4.4a 49fdaf0 → T4.4e-β ae13866)
 
 - **Step 3 PRE-CHECK re-correction (2026-04-22)**: ROADMAP text
   previously said "3 coordinate grids". Gaia R1 shows that's
@@ -886,15 +886,22 @@ clipping/jitter`.
     1 documented divergence: float32 vs Gaia's double (render-
     space ≤140k units fits comfortably). DIFF GATE + SUBAGENT
     VERIFY PASS; building-block only, no runtime surface.
-  - **T4.4e-β** — mount + UI + store slice. Adds
-    `gridProjectionLines: boolean` (default `true` per
-    `config.yaml:381`), renders via drei `<Line>` with the T4.6
-    SDF patch, per-frame driver gated on focus active + flag,
-    UI toggle in `LayersPanel.tsx` under the existing coordinate-
-    grid section. Effort: ~0.5 d.
-- **Effort**: T4.4a/b/c/d all done (~3 d total); T4.4e-α done
-  (~0.25 d); T4.4e-β ~0.5 d → remaining ~0.5 d to close T4.4
-  fully 1:1 with Gaia.
+  - **T4.4e-β ✅ SHIPPED (2026-04-23, `ae13866`)** — mount + UI +
+    store slice. `GridProjectionLines.tsx` renders a 3-point
+    continuous L-polyline via drei `<Line>` + `useGaiaSdfLinePatch`
+    (T4.6). Store `gridProjectionLines: boolean` (default `true`
+    per `config.yaml:381`) + `toggleGridProjectionLines` +
+    `LayersPanel` toggle inside the Coordinate Grid sub-section.
+    Gated on `showEclipticGrid && gridProjectionLines && focusId
+!== "sun"`. **Atlas-world divergence** (documented in JSDoc):
+    Gaia's `GridRecUpdater.java:171-200` math operates in
+    camera-relative frame (grid mesh itself translated by -cam);
+    atlas uses absolute-world so β computes endpoints directly
+    from world positions (Sun origin → focus's XZ projection →
+    focus). α's Gaia-faithful helpers stay pinned for future
+    T4.1 camera-relative rendering port.
+- **Effort**: T4.4a/b/c/d all done (~3 d); T4.4e-α + β done
+  (~0.5 d). **T4.4 fully closed 1:1 with Gaia.**
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
