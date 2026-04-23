@@ -748,16 +748,49 @@ clipping/jitter`.
 - **Effort**: 1-2 weeks.
 - **Dependencies**: constellation line-segment data.
 
-### T4.6 — Quad-SDF line rendering
+### T4.6 — Quad-SDF line rendering ✅ **SHIPPED (`a6a3644`)**
 
-- **Gaia**: geometry shader expansion + SDF-feathered edges via
-  `cos(PI*x/2)^1.8` (`line.quad.cpu.fragment.glsl:26-28`). Lines stay
-  crisp at any zoom.
-- **Atlas**: `@react-three/drei` `Line2` + `LineMaterial` hardware line
-  (`PlanetOrbitLine.tsx:16-26`). Uses salience opacity
-  (`useOrbitalSalience.ts:39-77`) but no distance fade.
-- **Effort**: 1 week.
-- **Dependencies**: none.
+- **Gaia**: `/tmp/gaiasky/assets/shader/line.quad.cpu.fragment.glsl:20-33`
+  SDF feathering — `core = min(cos(PI*x/2), 1-|x|)`;
+  `alpha = pow(core, 1.8)`; `cplus = pow(core, 10)` added to
+  `rgb` for a bright-core stripe. Wired via
+  `config.yaml:243 mode: POLYLINE_QUADSTRIP` (Gaia default);
+  `RenderAssets.java:146-155` loads the full
+  `line.quad.cpu.{vertex,geometry,fragment}.glsl` set into the
+  active render pipeline.
+- **Atlas (before)**: `@react-three/drei` `<Line>` (Line2 +
+  LineMaterial) with no SDF feathering or bright-core; uses
+  `useOrbitalSalience.ts:39-77` for opacity modulation only.
+- **Fix shipped** (`a6a3644`):
+  1. New `src/components/canvas/shaders/lineSdfMath.ts` —
+     pure-TS mirror. Exports
+     `LINE_SDF_ALPHA_EXPONENT = 1.8`,
+     `LINE_SDF_BRIGHT_CORE_EXPONENT = 10.0` + helpers
+     (`lineSdfCore`, `lineSdfAlpha`, `lineSdfBrightCore`).
+  2. New `src/components/canvas/shaders/lineSdfMath.test.ts` —
+     14 pinned tests.
+  3. New `src/components/canvas/planet/useGaiaSdfLinePatch.ts` —
+     hook that installs the shader patch via `onBeforeCompile`
+     on drei's LineMaterial while preserving LineMaterial's
+     own `onBeforeCompile` (which sets `USE_LINE_COLOR_ALPHA`
+     based on the transparent flag). Bound to material
+     explicitly; forces `needsUpdate = true` to recompile.
+  4. `PlanetOrbitLine.tsx` — declares a `localRef` for the hook
+     alongside the forwarded `ref`; callback-ref splits the
+     Line2 instance into both. `LineLike = Line2 | LineSegments2`
+     union reflects drei's runtime type.
+- **Documented divergences** (L22):
+  - `(v_uv.y - 0.5) * 2.0` skipped — drei's LineMaterial emits
+    `vUv.y ∈ [-1, 1]` directly.
+  - `layerBuffer` → `gl_FragColor` (single-buffer).
+  - `logarithmicDepth()` skipped (Three's `#include <logdepthbuf_fragment>`
+    - renderer-level `logarithmicDepthBuffer: true` handles it).
+  - Shader-side premultiply → standard GPU alpha blend;
+    algebraically equivalent.
+- **Verification**: Step 3 PRE-CHECK PASS + R1 source-read +
+  DIFF GATE + SUBAGENT VERIFY 10/10 + Gates (930/930 tests,
+  lint/build clean) + Runtime smoke (56 FPS, no console errors).
+- **Status**: done — commit `a6a3644`.
 
 ### T4.7 — Milky Way backdrop ❌ **NOT PORTING as described — folds into T4.3**
 
