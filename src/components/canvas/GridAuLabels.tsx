@@ -1,0 +1,117 @@
+import { Text } from "@react-three/drei";
+import { useMemo } from "react";
+import * as THREE from "three";
+
+import { AU_TO_3D_UNITS } from "../../lib/astrophysics";
+import { GRID_ORIENTATION_COLORS } from "../../lib/gridOrientation";
+import { useStore } from "../../store";
+import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
+
+/**
+ * T4.5-δ — AU tick labels around the recursive grid. Brings back
+ * the 1 / 2 / 5 / 10 / 20 / 30 / 40 AU callouts the pre-T4.4b
+ * `EclipticGrid.tsx` rendered via canvas-textured sprites; the
+ * T4.4b predecessor sweep retired them pending a Gaia-native text
+ * path. This ship lands that path via drei's `<Text>` (which wraps
+ * `troika-three-text`, an SDF-font renderer whose math primitives
+ * were pinned in T4.5-α's `src/lib/msdfFontMath.ts`).
+ *
+ * **Smoothing decision.** T4.5-α captured Gaia's
+ * `1/(16 × u_scale)` formula for reference. This ship uses
+ * troika's DEFAULT `fwidth(distance)`-based smoothing because:
+ *   1. troika's smoothing is already device-pixel-ratio-aware +
+ *      adapts to scene zoom automatically (no manual `u_scale`
+ *      uniform to drive);
+ *   2. Gaia's fixed-scale smoothing would require overriding the
+ *      material via `customMaterial` prop — meaningful visual
+ *      diff only at extreme zoom levels;
+ *   3. Shipping the default first lets us measure visual quality
+ *      before committing to a uniform override (T4.5-β dedicated
+ *      onda handles the smoothing customization if needed).
+ *
+ * **Scale-mode caveat.** Labels sit at `au × AU_TO_3D_UNITS`
+ * world-unit positions. This aligns with planet positions in
+ * `realistic` scale mode (where `1 AU = 1000 world units` by the
+ * planet positioner). In `didactic` mode planets are compressed
+ * through `AstroPhysics.mapDidacticHeliocentricDistance` while
+ * the grid + these labels stay at linear-AU spacing — known
+ * drift flagged earlier by the user (their "scale mode should
+ * only exaggerate radii, not compress distances" proposal). That
+ * architectural change is a separate wave; δ does NOT adjust
+ * label positions per scale mode.
+ *
+ * **Layout** mirrors the old EclipticGrid pattern:
+ *   - X-axis labels at `(au × 1000, planeY, tickOffset)` —
+ *     nudged off-axis in +Z so the text doesn't overlap the axis
+ *     cross-line from the gridrec `circle_rec` shader.
+ *   - Z-axis labels at `(tickOffset, planeY, au × 1000)` — same
+ *     nudge in +X.
+ */
+
+const TICK_AU_VALUES = [1, 2, 5, 10, 20, 30, 40] as const;
+// Off-axis nudge so labels don't sit on the grid's center cross
+// lines (gridrec.fragment.glsl:66-68 renders a cross at the
+// plane's tc=0 axes — the labels offset in the orthogonal
+// direction to stay readable).
+const LABEL_OFFSET_WORLD_UNITS = 250;
+const LABEL_FONT_SIZE = 180; // world units; tune for camera range.
+const LABEL_OUTLINE_WIDTH = 6;
+
+const noopRaycast: THREE.Object3D["raycast"] = () => null;
+
+export const GridAuLabels = () => {
+  const showEclipticGrid = useStore((s) => s.showEclipticGrid);
+  const showLabels = useStore((s) => s.showLabels);
+  const gridOrientation = useStore((s) => s.gridOrientation);
+
+  const labelColor = useMemo(() => {
+    const [r, g, b] = GRID_ORIENTATION_COLORS[gridOrientation];
+    return new THREE.Color(r, g, b);
+  }, [gridOrientation]);
+
+  if (!showEclipticGrid || !showLabels) return null;
+
+  const planeY = GRID_RECURSIVE_CONFIG.planeYOffset;
+
+  return (
+    <group raycast={noopRaycast}>
+      {TICK_AU_VALUES.map((au) => {
+        const worldRadius = au * AU_TO_3D_UNITS;
+        const text = `${au} AU`;
+        return (
+          <group key={au}>
+            {/* +X axis tick — positioned in +Z so the label doesn't
+                overlap the grid's center cross. */}
+            <Text
+              position={[worldRadius, planeY, LABEL_OFFSET_WORLD_UNITS]}
+              fontSize={LABEL_FONT_SIZE}
+              color={labelColor}
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={LABEL_OUTLINE_WIDTH}
+              outlineColor="#000000"
+              outlineOpacity={0.7}
+              raycast={noopRaycast}
+            >
+              {text}
+            </Text>
+            {/* +Z axis tick — positioned in +X. */}
+            <Text
+              position={[LABEL_OFFSET_WORLD_UNITS, planeY, worldRadius]}
+              fontSize={LABEL_FONT_SIZE}
+              color={labelColor}
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={LABEL_OUTLINE_WIDTH}
+              outlineColor="#000000"
+              outlineOpacity={0.7}
+              raycast={noopRaycast}
+            >
+              {text}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+};
