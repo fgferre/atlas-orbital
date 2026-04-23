@@ -13,6 +13,10 @@ import {
   resetFocusTrackingState,
   resolveFocusTrackingFrame,
 } from "../../lib/camera";
+import {
+  computeProximityDamping,
+  PROXIMITY_DAMPING_BASE,
+} from "../../lib/camera/proximityDamping";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
 // because the frame loop is single-threaded and every read is paired
@@ -331,6 +335,9 @@ export const CameraController = () => {
     if (!cameraInstance || !controlsInstance) return;
 
     if (!focusId) {
+      // T4.2-α — no focus active, keep OrbitControls at the base
+      // damping (smooth coast at stellar distances).
+      controlsInstance.dampingFactor = PROXIMITY_DAMPING_BASE;
       resetFocusTrackingState(focusTrackingRef.current);
       return;
     }
@@ -347,6 +354,26 @@ export const CameraController = () => {
 
     const worldPos = TMP_WORLD_POS;
     targetMesh.getWorldPosition(worldPos);
+
+    // T4.2-α — proximity-aware damping. Mirrors NaturalCamera.java:993-997
+    // counterAmount curve: friction grows as the camera approaches the
+    // focused body's surface. Reads camera distance to focus + body
+    // visual radius (scaleMode-aware via AstroPhysics) and writes the
+    // resulting damping factor to OrbitControls. The control's update()
+    // reads scope.dampingFactor each frame, so this live mutation
+    // takes effect immediately.
+    const focusBody = BODIES_BY_ID.get(focusId);
+    if (focusBody) {
+      const focusRadius = AstroPhysics.resolveSemanticBodyRadius({
+        body: focusBody,
+        scaleMode: useStore.getState().scaleMode,
+      });
+      const cameraDistance = cameraInstance.position.distanceTo(worldPos);
+      controlsInstance.dampingFactor = computeProximityDamping(
+        cameraDistance,
+        focusRadius
+      );
+    }
 
     const prevTarget = TMP_PREV_TARGET.copy(controlsInstance.target);
     const { nextTarget, cameraDelta } = resolveFocusTrackingFrame({
