@@ -1014,6 +1014,58 @@ OneMinusSrcColorFactor)` = `BlendMode.COLOR`, so clouds no
   system's dust clouds + MW nebulae could reintroduce the
   multi-additive stack).
 
+### T4.9 — Sun surface + flare asset swap (procedural-substitute audit 2026-04-23)
+
+- **Audit origin**: user flagged cross-spike rays around bright
+  stars, which surfaced (and fixed, `d6165c6` → `a9f9bd5`) the
+  LightGlow sprite. The audit that followed (subagent punch-list)
+  found TWO more procedural substitutes in the Sun-render path
+  that ship atlas-opinion geometry instead of Gaia's real assets.
+- **T4.9a — Sun surface texture** (noticeable visual impact).
+  - **Atlas**: `ProceduralSun3D.tsx` bakes a 3-layer Perlin-4D
+    cubemap each frame (`uPerlinCube`) via
+    `proceduralSunPerlinFragmentShader`; re-rendered every 1-3
+    frames per quality preset. Mathematically sound but lacks
+    photographic granule structure, limb-darkening variability.
+  - **Gaia**: `$GS_DATA/tex/base/sun-{surface,glow,corona}` via
+    `SunComponent.java:50-70`; static photographic/rendered
+    textures, not real-time bakes.
+  - **Fix shape**: add `public/textures/sun/sun-surface.jpg` +
+    `sun-glow.jpg` + `sun-corona.jpg` gitignored placeholders
+    mirroring T2.3a / a9f9bd5 pattern; `ProceduralSun3D.tsx`
+    switches `uPerlinCube` uniform to sample real texture when
+    asset present, falls back to Perlin bake when missing (quality
+    ultra/high get real; balanced/constrained keep Perlin for
+    perf). NASA SOHO HMI / SDO AIA are candidate CC0 sources for
+    the CC-BY-4.0 replacement.
+  - **Effort**: 1-2 d (placeholder swap + quality-tier gating
+    - test the sprite contract mirror as `a9f9bd5` did).
+- **T4.9b — Sun flare / ray sprites** (noticeable, depends on T4.9a).
+  - **Atlas**: hand-authored line/flare geometry in
+    `ProceduralSun3D.tsx:142-303` — procedural meshes for rays +
+    lens-flare shapes.
+  - **Gaia**: baked sprites under `$GS_DATA/tex/base/lens*.png`
+    - sun-specific glow maps (`LensFlaresComponent.java:40-50`,
+      `SunComponent.java:60`). Specific spike count + pattern +
+      halo shape that procedural geometry approximates but doesn't
+      match.
+  - **Fix shape**: ports follow once T4.9a lands. Same vendored-
+    placeholder pattern.
+  - **Effort**: 2-3 d.
+- **T4.9c — Procedural dwarf-planet surfaces** (cosmetic, NOT a fix).
+  - **Atlas**: `proceduralSurface.ts` canvas-renders 512×256 per-body
+    textures for asteroids + Kuiper bodies (pallas, hygiea, quaoar,
+    gonggong, orcus, sedna, salacia, vanth, weywot) when no real
+    survey data exists.
+  - **Gaia**: ALSO procedural when real survey data is missing
+    (`BodyComponent.java:80-110` texture-resolution logic falls back
+    to procedural). Atlas matches Gaia's own behavior here.
+  - **Decision**: NOT a divergence, NOT scheduled. Re-open if IAU
+    body databases provide actual DEM/color maps for the listed
+    bodies and we want to bind them via `textureVariantManifest.ts`.
+- **Dependencies**: T4.9a is independent; T4.9b blocks on T4.9a.
+- **Effort (total)**: 3-5 d across T4.9a + T4.9b.
+
 ---
 
 ## Out of scope (documented, not pending)
