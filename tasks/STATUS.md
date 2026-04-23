@@ -2,13 +2,13 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after **Tier-4 hygiene pass** — T4.7 demoted (ROADMAP called for ESO panorama; Gaia actually renders Milky Way as `BillboardDataset` particles via `BillboardSetExtractor`, so the correct port lives inside T4.3 scope, not as an atlas-native backdrop — L31 pattern again) and T4.8 audit closed (renderOrder hierarchy sufficient for current scope; ROADMAP's cloud+atmosphere additive-flicker risk resolved by T3.6 `CustomBlending` + T3.4 `receiveShadow:false`; inventory refreshed with SunScreenFlare removed per T2.0). Preceded by Tier-3 hygiene (T3.7 moot, T3.8 audit closed, T3.9 ❌ not porting) and T3.3 eclipse geometry ship (`c44f913`). Lens Closure Wave default path done (T2.0 `cd626dc`, T2.3a `51750c3`, T2.1 `a2c6594`)._
+_Last updated: 2026-04-22 after **Kickoff-protocol upgrade** — L30 + L31 findings codified into the 13-step Ship protocol as a new **step 2 ROADMAP PRE-CHECK** (grep `config.yaml` default + grep `core/src` for `new <EffectClass>(` before R1-reading the shader). Prevents future sessions from burning port effort on dead code (T3.9 pattern) or non-default variants (T2.2 pattern). Both §Kickoff prompt and §Ship protocol (enforced) sections synchronized; stale "L1–L28" reference in §For a fresh agent bumped to L1–L31 with one-line summaries of L30/L31. Preceded this session by Tier-4 hygiene (T4.7 demoted, T4.8 audit closed), Tier-3 hygiene (T3.7 moot, T3.8 audit closed, T3.9 ❌ not porting), T3.3 eclipse geometry ship (`c44f913`), and the Lens Closure Wave default path (T2.0 `cd626dc`, T2.3a `51750c3`, T2.1 `a2c6594`)._
 
 ---
 
 ## Kickoff prompt (paste into any new session)
 
-Copy the 11-step loop below. **Step 1 bootstraps everything else** —
+Copy the 13-step loop below. **Step 1 bootstraps everything else** —
 the agent reads this file and the docs it references, so reading
 order, rules, Gaia source path, and §Next up are all discovered
 automatically.
@@ -21,36 +21,52 @@ automatically.
     effort, and Dependencies. If STATUS §Next up conflicts with
     ROADMAP Dependencies (stale audit), fix STATUS before
     proceeding (L25).
-3.  R1 source-read: open the cited Gaia source and quote the
+3.  **ROADMAP PRE-CHECK (L30 + L31)** — before R1-reading any
+    shader, verify the port target is actually Gaia's DEFAULT
+    render path, not dead code or a non-default variant:
+    (a) grep `/tmp/gaiasky/assets/conf/config.yaml` for the
+        feature's `type` / `active` / `default` key. If Gaia
+        ships a non-default variant, the onda ports THAT
+        variant, not whatever the ROADMAP happens to name.
+    (b) grep `/tmp/gaiasky/core/src` for
+        `new <EffectClass>(` — confirm at least one hit.
+        Zero hits = Gaia dead code; demote the onda to
+        "confirmed non-port" and move on. Shader file
+        existence is necessary but not sufficient (L31).
+    (c) if the ROADMAP numeric literals disagree with the
+        `*Filter.java` defaults, trust the Java (L27).
+    Any drift found here gets documented in ROADMAP + lessons.md
+    BEFORE moving to step 4.
+4.  R1 source-read: open the cited Gaia source and quote the
     relevant lines back as evidence.
-4.  Implement port with the smallest diff that matches source.
+5.  Implement port with the smallest diff that matches source.
     Extract the math to TypeScript (pattern: foo.ts + foo.test.ts)
     and pin sample input/output values against Gaia behavior.
-5.  PREDECESSOR SWEEP (L29) — grep for any atlas-native equivalent
+6.  PREDECESSOR SWEEP (L29) — grep for any atlas-native equivalent
     the port is replacing (sprite-based flare, procedural shader,
     manual implementation). Delete it in the same commit OR
     document in the commit message why it stays
     (`feedback_no_effect_stacking.md`). Skipping this step is how
     θ.4 shipped with `SunScreenFlare` stacking intact.
-6.  DIFF GATE — self-run a line-by-line diff between the Gaia
+7.  DIFF GATE — self-run a line-by-line diff between the Gaia
     source shader and the atlas port. Every divergence carries a
     one-line rationale comment in the atlas code. Undocumented
     divergence is a ship blocker.
-7.  SUBAGENT VERIFY — dispatch an Explore subagent (Sonnet) with
+8.  SUBAGENT VERIFY — dispatch an Explore subagent (Sonnet) with
     no context from this session. Prompt: "Re-diff <atlas port
     file> against Gaia source at <file:line>. Cite file:line for
     every divergence. Flag any undocumented divergence." Resolve
     findings before proceeding.
-8.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
-9.  Runtime smoke: Claude Preview MCP — confirm no shader compile
+9.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
+10. Runtime smoke: Claude Preview MCP — confirm no shader compile
     errors AND scene renders AND **does not flicker over time**
     (L26: screenshots don't catch temporal bugs; use multi-frame
     pixel sampling via preview_eval+rAF for ≥30 frames, or ask the
     user to watch live, before marking smoke passed).
-10. Commit with source-file citations in the message.
-11. Update tasks/STATUS.md (shipped row + §Next up) and
+11. Commit with source-file citations in the message.
+12. Update tasks/STATUS.md (shipped row + §Next up) and
     tasks/ROADMAP.md (item → done + commit SHA).
-12. Update tasks/lessons.md only if a new engineering failure
+13. Update tasks/lessons.md only if a new engineering failure
     mode was discovered in this iteration.
 
 Stop and check in before any non-reversible step (destructive git,
@@ -66,7 +82,11 @@ file deletion, invasive refactor, new major dependency).
 3. `~/.claude/projects/.../memory/MEMORY.md` — behavioral rules index.
 4. **This file** — what's shipped + known drifts + immediate next.
 5. `tasks/ROADMAP.md` — full tiered plan (what / why / Gaia source citation / effort).
-6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L28).
+6. `tasks/lessons.md` — cross-cutting engineering lessons (L1–L31).
+   Newest entries (2026-04-22) codify the ROADMAP-drift patterns:
+   L30 (wave ordering must respect `config.yaml` defaults, not
+   variant availability) and L31 (shader file existence ≠ Gaia
+   runtime wiring — grep for `new <EffectClass>(` first).
 7. `/tmp/gaiasky/` — cloned Gaia Sky source. Read the actual
    `.glsl` / `.java` BEFORE any port (memory rule
    `feedback_gaia_sky_source_first`).
@@ -332,40 +352,57 @@ them:
 
 ## Ship protocol (enforced)
 
-Every onda ships through 11 steps. Three independent verification
+Every onda ships through 13 steps. Three independent verification
 layers replace visual parity: self-run **DIFF GATE** + independent
-**SUBAGENT VERIFY** + pinned **MATH TESTS**.
+**SUBAGENT VERIFY** + pinned **MATH TESTS**. The first two steps
+are ROADMAP-hygiene guards added 2026-04-22 after L30/L31 caught
+cases where porting the ROADMAP-named shader would have shipped
+dead code (T3.9) or the wrong variant (T2.2 before reorder).
 
-1. **R1 source-read** — read the actual Gaia `.glsl` / Java files for
-   the onda. No plan-prose shortcuts.
-2. **Plan port** — smallest diff matching source; identify which math
-   layer needs extraction to TypeScript helpers.
-3. **Implement** + extract math to `foo.ts` + `foo.test.ts`. Pin
-   sample input/output values against Gaia behavior (pattern:
-   `lensFlareMath.test.ts`, `lightGlowMath.test.ts`,
+1. **Kickoff read** — this file + `AGENTS.md`, `CLAUDE.md`,
+   `tasks/ROADMAP.md`, `tasks/lessons.md`, `/tmp/gaiasky/`.
+   Identify §Next up.
+2. **ROADMAP PRE-CHECK (L30 + L31)** — before R1-reading the
+   shader, grep `/tmp/gaiasky/assets/conf/config.yaml` for the
+   feature's default flag + grep `core/src` for `new
+<EffectClass>(` to confirm Gaia wires the target. Zero
+   instantiations = dead code; demote. Non-default variant =
+   reorder wave. Numeric drift vs `*Filter.java` = trust Java.
+   Any drift found here gets documented in ROADMAP + lessons.md
+   BEFORE step 3.
+3. **R1 source-read** — open the cited Gaia `.glsl` / Java
+   files. No plan-prose shortcuts.
+4. **Plan port** — smallest diff matching source; identify
+   which math layer needs extraction to TypeScript helpers.
+5. **Implement** + extract math to `foo.ts` + `foo.test.ts`.
+   Pin sample input/output values against Gaia behavior
+   (pattern: `lensFlareMath.test.ts`, `eclipseMath.test.ts`,
    `starfieldShaderMath.test.ts`).
-4. **⭐ DIFF GATE** (lesson L22) — self-run line-by-line diff
-   between Gaia source shader and atlas port. Every divergence
-   carries a one-line rationale comment in the atlas code
-   (arch adaptation / HDR strategy / intentional tuning). Any
-   undocumented divergence blocks ship.
-5. **⭐ SUBAGENT VERIFY** — dispatch an Explore subagent (Sonnet)
-   with **no context from this session**. Prompt it with the two
-   file paths (atlas port + Gaia source) and demand: re-diff,
-   cite `file:line` for every divergence, flag undocumented. The
-   agent's verdict is independent of the implementer's
-   rationalizations. Resolve any findings before proceeding.
-6. **Gates** — `npm test -- --run` (the pinned math tests run
+6. **PREDECESSOR SWEEP (L29)** — grep for any atlas-native
+   equivalent the port is replacing. Delete in the same commit
+   or document in the message why it stays. Skipping is how
+   θ.4 shipped with `SunScreenFlare` stacking intact.
+7. **⭐ DIFF GATE** (L22) — self-run line-by-line diff between
+   Gaia source and atlas port. Every divergence carries a
+   one-line rationale comment (arch adaptation / HDR strategy
+   / intentional tuning). Undocumented divergence blocks ship.
+8. **⭐ SUBAGENT VERIFY** — dispatch an Explore subagent
+   (Sonnet) with **no context from this session**. Prompt:
+   "Re-diff <atlas port> against Gaia <file:line>. Cite
+   file:line for every divergence. Flag undocumented."
+   Agent's verdict is independent of the implementer's
+   rationalizations. Resolve findings before proceeding.
+9. **Gates** — `npm test -- --run` (pinned math tests run
    here), `npm run lint`, `npm run build`.
-7. **Runtime smoke** — Claude Preview MCP screenshot; check
-   console for shader compile errors; confirm scene renders
-   (not black). Last machine-checkable gate.
-8. **Commit** with message citing source files.
-9. **Update STATUS.md** (this file) and `ROADMAP.md` — mark onda
-   shipped, flag any residual drifts, move to next.
-10. **Update `lessons.md`** only if a new engineering failure mode
-    was discovered.
-11. **Loop** — read §Next up for the next item.
+10. **Runtime smoke** — Claude Preview MCP; check console for
+    shader compile errors; confirm scene renders; L26
+    multi-frame stability check if the port touches any
+    transparent-sort or HDR layer.
+11. **Commit** with message citing source files.
+12. **Update STATUS.md** (this file) and `ROADMAP.md` — mark
+    onda shipped, flag residual drifts, move to next.
+13. **Update `lessons.md`** only if a new engineering failure
+    mode was discovered. **Loop** — read §Next up.
 
 **Visual parity vs Gaia runtime is OUTSIDE the loop.** Side-by-side
 visual comparison requires running Gaia Sky (Java/LibGDX desktop
