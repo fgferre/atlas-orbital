@@ -45,6 +45,17 @@ import * as THREE from "three";
 
 const GLOW_SPRITE_SIZE = 128;
 const GLOW_SIGMA = 20;
+// Hard-zero the sprite outside this radius so `ClampToEdge` wrap on the
+// halo sampler returns exact-zero when `glow_tc` overflows [0, 1]. Without
+// this cutoff, the gaussian tail at r=64 (the sprite's half-width) is
+// ~0.006 — tiny, but multiplied by the halo accumulation across N=8
+// lights and replicated infinitely along the H/V axes by edge clamping,
+// it reads as faint 4-ray cross-spikes coming out of every bright star.
+// The cutoff kills those rays without touching the halo disc inside the
+// radius (σ=20 is ≈16 % of the extent, so the gaussian is already
+// essentially zero at r=48 — rounding the 48→62 band to 0 costs nothing).
+// See `lightGlowSprite.test.ts` for the pinned border-zero assertion.
+const GLOW_SPRITE_ZERO_RADIUS = GLOW_SPRITE_SIZE / 2 - 2;
 
 let glowSpriteCache: THREE.DataTexture | null = null;
 
@@ -54,13 +65,14 @@ function bakeGlowSprite(): THREE.DataTexture {
   const data = new Uint8Array(size * size * 4);
   const center = (size - 1) / 2;
   const twoSigmaSq = 2 * sigma * sigma;
+  const zeroRadiusSq = GLOW_SPRITE_ZERO_RADIUS * GLOW_SPRITE_ZERO_RADIUS;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = x - center;
       const dy = y - center;
       const r2 = dx * dx + dy * dy;
-      const g = Math.exp(-r2 / twoSigmaSq);
+      const g = r2 >= zeroRadiusSq ? 0 : Math.exp(-r2 / twoSigmaSq);
       const value = Math.round(g * 255);
       const idx = (y * size + x) * 4;
       data[idx + 0] = value;
@@ -103,3 +115,4 @@ export function getLightGlowSprite(): THREE.DataTexture {
  */
 export const LIGHT_GLOW_SPRITE_SIZE = GLOW_SPRITE_SIZE;
 export const LIGHT_GLOW_SPRITE_SIGMA = GLOW_SIGMA;
+export const LIGHT_GLOW_SPRITE_ZERO_RADIUS = GLOW_SPRITE_ZERO_RADIUS;
