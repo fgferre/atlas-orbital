@@ -904,16 +904,40 @@ clipping/jitter`.
   (~0.5 d). **T4.4 fully closed 1:1 with Gaia.**
 - **Dependencies**: none.
 
-### T4.5 — MSDF / 3D text labels + constellations
+### T4.5 — MSDF / 3D text labels + constellations (in flight as of 2026-04-23)
 
 - **Gaia**: SDF font rendering in `font.fragment.glsl:26-28` with
   `smoothstep(0.6 - smoothing, 0.6 + smoothing, dist)`, `u_scale`
   uniform for adaptive AA. Constellation boundaries toggleable.
-- **Atlas**: HTML/CSS tooltips only (`PlanetOverlay.tsx:54-68`). No 3D
-  text mounted. No constellations. `@react-three/drei` is in deps but
-  `<Text>` not used.
-- **Effort**: 1-2 weeks.
-- **Dependencies**: constellation line-segment data.
+- **Atlas (pre-T4.5)**: HTML/CSS tooltips only
+  (`PlanetOverlay.tsx:54-68`). No 3D text mounted. No
+  constellations. `@react-three/drei` is in deps but `<Text>` not
+  used.
+- **Sub-wave ship plan** (pattern: T4.4a-e):
+  - **T4.5-α ✅ SHIPPED (2026-04-23, `ed22f53`)** — pure-TS
+    mirror of `font.fragment.glsl`. `src/lib/msdfFontMath.ts`
+    exports 3 constants (MSDF_SMOOTHING_DIVISOR=16,
+    MSDF_SDF_THRESHOLD=0.6, MSDF_MIN_OPACITY_DISCARD=0.001) +
+    6 helpers (smoothing, smoothstep, alpha, discard-opacity,
+    discard-alpha, premultiply) + 25 pinned tests. DIFF GATE +
+    SUBAGENT VERIFY PASS. No runtime surface.
+  - **T4.5-β** — drei `<Text>` integration for body name labels.
+    Decision point: troika-three-text's default `fwidth()`
+    smoothing vs override with Gaia's `1/(16×scale)` via the
+    `uniforms` hook. Effort: 1-2 d.
+  - **T4.5-γ** — constellation line-segments + rendering.
+    Requires source data (IAU constellation boundaries or
+    Stellarium's `constellationship.fab`). Effort: 2-3 d + data
+    acquisition.
+  - **T4.5-δ** — AU tick label re-mount specifically. Brings
+    back the 1/2/5/10/20/30/40 AU sprite labels that
+    `EclipticGrid.tsx` had (regression from T4.4b's predecessor
+    sweep) — now via Gaia-native SDF text instead of
+    canvas-textured sprites. Effort: 0.5-1 d, depends on β.
+- **Effort**: T4.5-α done (~0.25 d); T4.5-β 1-2 d; T4.5-γ 2-3 d
+  - data; T4.5-δ 0.5-1 d. Total remaining ~4-6 d.
+- **Dependencies**: T4.5-γ depends on constellation line-segment
+  data acquisition.
 
 ### T4.6 — Quad-SDF line rendering ✅ **SHIPPED (`a6a3644`)**
 
