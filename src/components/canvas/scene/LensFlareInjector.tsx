@@ -2,7 +2,6 @@ import { useEffect, useMemo, type JSX } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 
-import { useStore } from "../../../store";
 import { LensFlareEffect } from "./effects/LensFlareEffect";
 import { ndcToLensFlareUv } from "./effects/lensFlareMath";
 
@@ -30,15 +29,14 @@ import { ndcToLensFlareUv } from "./effects/lensFlareMath";
  *   - **Viewport**: pushed every frame. Gaia does this via the
  *     framebuffer resize hook; atlas cheaper to just push per-frame
  *     (two uniform writes).
- *   - **Starburst drift**: inherited from θ.4 pattern. `offset =
- *     camera.direction.x + y + z` (`MainPostProcessor.java:911`).
- *     The `lensdirt` modulation inlined into `LensFlareEffect` uses
- *     this uniform to rotate the diffraction spikes with camera
- *     orientation.
- *   - **Reduced motion**: freezes `starburstOffset` at 0 so the spike
- *     pattern stops drifting. The static lens flare (ghosts + halo +
- *     dirt) continues to render — only the animated rotation is
- *     suppressed. Same policy as θ.4.
+ *   - **Starburst offset**: NOT animated here. Gaia's
+ *     `MainPostProcessor.java:915-917` updates `setStarburstOffset`
+ *     only for `PseudoLensFlare.class` — never for `LensFlare`
+ *     (COMPLEX). Our inlined dirt modulation keeps offset at the
+ *     constructor default (0) to match Gaia's COMPLEX behaviour.
+ *     (Drift fix from 2026-04-22 codex audit; pre-fix atlas
+ *     animated the offset every frame, producing a rotating
+ *     diffraction pattern Gaia's COMPLEX does not render.)
  *
  * PSEUDO variant (θ.4 `PseudoLensFlareEffect`) is NOT mounted here —
  * it remains importable for users who explicitly opt in, but is no
@@ -47,16 +45,13 @@ import { ndcToLensFlareUv } from "./effects/lensFlareMath";
  */
 
 const SUN_OBJECT_NAME = "sun";
-const REDUCED_MOTION_FALLBACK_OFFSET = 0.0;
 
 export function LensFlareSlot(): JSX.Element {
-  const reducedMotion = useStore((state) => state.accessibility.reducedMotion);
   const camera = useThree((state) => state.camera);
   const scene = useThree((state) => state.scene);
 
   const effect = useMemo(() => new LensFlareEffect(), []);
 
-  const directionBuffer = useMemo(() => new THREE.Vector3(), []);
   const worldPosBuffer = useMemo(() => new THREE.Vector3(), []);
   const ndcBuffer = useMemo(() => new THREE.Vector3(), []);
 
@@ -65,16 +60,14 @@ export function LensFlareSlot(): JSX.Element {
     // `lensflare.frag.glsl:177`.
     effect.setViewportSize(size.width, size.height);
 
-    // Starburst drift — same camera-direction sum as θ.4, serves the
-    // inlined lensdirt path inside LensFlareEffect.
-    if (reducedMotion) {
-      effect.setStarburstOffset(REDUCED_MOTION_FALLBACK_OFFSET);
-    } else {
-      camera.getWorldDirection(directionBuffer);
-      effect.setStarburstOffset(
-        directionBuffer.x + directionBuffer.y + directionBuffer.z
-      );
-    }
+    // Codex audit drift fix (2026-04-22): Gaia animates starburstOffset
+    // ONLY for PSEUDO — `MainPostProcessor.java:915-917` targets
+    // `PseudoLensFlare.class` and never calls `LensFlare.setStarburstOffset`
+    // for COMPLEX. Atlas's LensFlareEffect inlines the lensdirt modulation
+    // (architectural necessity under pmndrs single-Effect), but the
+    // offset itself must stay at the constructor default (0) to match
+    // Gaia's COMPLEX behaviour. Reduced-motion code path is no longer
+    // needed either — 0 already matches the fallback.
 
     // Sun projection → lensFlare light 0.
     // Off-screen cull: `setIntensity(0)` triggers the shader's cheap

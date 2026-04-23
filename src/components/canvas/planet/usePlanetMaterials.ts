@@ -93,11 +93,28 @@ export function usePlanetMaterials({
       metalness: 0.0,
     });
 
+    // T3.3 cloud-layer eclipse port (2026-04-22 codex audit drift
+    // #5 fix). Gaia includes `eclipses.glsl` in the cloud shader
+    // (`cloud.fragment.glsl:65`) and applies `eclipseBlend` at
+    // lines 170-172, so a solar eclipse darkens BOTH the Earth
+    // surface AND the clouds above it. Atlas previously patched
+    // eclipse only into the planet material, so during a solar
+    // eclipse the Earth surface would darken but clouds stayed
+    // fully lit — a visible layered artefact.
+    const cloudEclipseEnabled = !!body.eclipsingBodyId;
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
       // Sun is always at world origin — pass as world-space uniform, no CPU transform needed.
       shader.uniforms.uSunPositionWorld = { value: new THREE.Vector3(0, 0, 0) };
       shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
+      if (cloudEclipseEnabled) {
+        shader.uniforms.uEclipsingBodyPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.uEclipsingVrScale = { value: 1 };
+        shader.uniforms.uEclipsingActive = { value: 0 };
+      }
 
       // Inject world-space varyings into vertex shader
       shader.vertexShader = `
@@ -118,6 +135,13 @@ export function usePlanetMaterials({
       // is inlined in the planet-material patch for T3.5 night-lights,
       // but onBeforeCompile patches are per-material, so we inject
       // here too rather than cross-reference.
+      //
+      // Eclipse branch: reuse the shared `ECLIPSE_FRAGMENT_HELPERS`
+      // + `ECLIPSE_FRAGMENT_OUTPUT_PATCH` but the helpers hardcode
+      // varying names `vWorldPos` / `vWorldNormal` (planet convention).
+      // The cloud shader uses `vCloudWorldPos` / `vCloudWorldNormal`,
+      // so we alias via `#define` before the helper block — lets us
+      // reuse the helper GLSL verbatim without string-munging.
       shader.fragmentShader = `
         uniform vec3 uSunPositionWorld;
         varying vec3 vCloudWorldPos;
@@ -126,6 +150,17 @@ export function usePlanetMaterials({
         float linstep(float edge0, float edge1, float x) {
             float d = edge1 - edge0;
             return d != 0.0 ? clamp((x - edge0) / d, 0.0, 1.0) : 0.0;
+        }
+
+        ${
+          cloudEclipseEnabled
+            ? `
+        #define vWorldPos vCloudWorldPos
+        #define vWorldNormal vCloudWorldNormal
+        ${ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY}
+        ${ECLIPSE_FRAGMENT_HELPERS}
+        `
+            : ""
         }
 
         ${shader.fragmentShader}
@@ -149,10 +184,25 @@ export function usePlanetMaterials({
         diffuseColor.rgb *= cloudBrightness;
         `
       );
+
+      // T3.3 cloud-layer eclipse — inject the same output patch
+      // planet materials use; the `#define` aliases above let the
+      // shared helpers reference `vCloudWorldPos` / `vCloudWorldNormal`
+      // transparently. Matches Gaia `cloud.fragment.glsl:170-172`:
+      //   fragColor.rgb = eclipseBlend(fragColor.rgb, diffractionTint, eclshdw);
+      if (cloudEclipseEnabled) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <output_fragment>",
+          `
+          ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
+          #include <output_fragment>
+          `
+        );
+      }
     };
 
     return mat;
-  }, [textureClouds, ringShadowIntensity]);
+  }, [textureClouds, ringShadowIntensity, body.eclipsingBodyId]);
 
   // Shadow Caster Material (Custom Depth Material) — T3.4.
   // Used as the cloud mesh's `customDepthMaterial` during Three.js's

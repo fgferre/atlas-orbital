@@ -338,54 +338,61 @@ const PlanetVisual = ({
       // `MainPostProcessor.java:633-679` (light-position update
       // handler) pattern: driver pushes CPU-computed world-space
       // eclipse geometry; shader reads as-is.
-      if (
-        body.eclipsingBodyId &&
-        planetMaterial &&
-        planetMaterial.userData.shader
-      ) {
-        const shader = planetMaterial.userData.shader as {
-          uniforms: { [key: string]: THREE.IUniform };
-        };
+      // Shared block — computes the eclipse state once, writes to all
+      // materials that have eclipse uniforms. Post 2026-04-22 codex
+      // audit fix #5, the cloud material also needs eclipse so a solar
+      // eclipse darkens clouds above the Earth surface, matching Gaia
+      // `cloud.fragment.glsl:170-172`.
+      if (body.eclipsingBodyId) {
         const eclipsingBody = BODIES_BY_ID.get(body.eclipsingBodyId);
         const eclipsingMesh = scene.getObjectByName(body.eclipsingBodyId);
-        const uPos = shader.uniforms.uEclipsingBodyPos;
-        const uRadius = shader.uniforms.uEclipsingBodyRadius;
-        const uVrScale = shader.uniforms.uEclipsingVrScale;
-        const uActive = shader.uniforms.uEclipsingActive;
-        if (uPos && uRadius && uVrScale && uActive && eclipsingBody) {
-          if (eclipsingMesh) {
-            eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
-            (uPos.value as THREE.Vector3).copy(TMP_ECLIPSE_ECLIPSING_POS);
-
-            // World radius of the eclipsing body, matching atlas's
-            // scale-mode resolution. `resolveSemanticBodyRadius`
-            // returns the same value the eclipsing body's mesh is
-            // actually scaled by, so the shader's
-            // `eclipsingBodyRadius × 1.7` penumbra ratio matches
-            // what's rendered on screen.
-            const eclipsingRadius = AstroPhysics.resolveSemanticBodyRadius({
-              body: eclipsingBody,
-              scaleMode,
-            });
-            // eslint-disable-next-line react-hooks/immutability -- scalar uniform update
-            uRadius.value = eclipsingRadius;
-
-            // vrScale must be large enough for the segment from the
-            // receiver fragment toward the Sun (world origin) to reach
-            // past the eclipsing body. `distance(receiver, sun) × 2`
-            // guarantees that regardless of whether the eclipsing body
-            // is between receiver and sun or beyond.
-            groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
-            const receiverDist = TMP_ECLIPSE_RECEIVER_POS.length();
-            uVrScale.value = Math.max(1, receiverDist * 2);
-
-            uActive.value = 1;
-          } else {
-            // Eclipsing body isn't in the scene graph yet — skip
-            // eclipse math this frame (shader early-outs on
-            // uEclipsingActive < 0.5).
-            uActive.value = 0;
+        let pos: THREE.Vector3 | null = null;
+        let radius = 0;
+        let vrScale = 1;
+        let active = 0;
+        if (eclipsingBody && eclipsingMesh) {
+          eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
+          pos = TMP_ECLIPSE_ECLIPSING_POS;
+          // World radius of the eclipsing body, matching atlas's
+          // scale-mode resolution. `resolveSemanticBodyRadius`
+          // returns the same value the eclipsing body's mesh is
+          // actually scaled by, so the shader's
+          // `eclipsingBodyRadius × 1.7` penumbra ratio matches what's
+          // rendered on screen.
+          radius = AstroPhysics.resolveSemanticBodyRadius({
+            body: eclipsingBody,
+            scaleMode,
+          });
+          // vrScale must be large enough for the segment from the
+          // receiver fragment toward the Sun (world origin) to reach
+          // past the eclipsing body. `distance(receiver, sun) × 2`
+          // guarantees that regardless of whether the eclipsing body
+          // is between receiver and sun or beyond.
+          groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
+          vrScale = Math.max(1, TMP_ECLIPSE_RECEIVER_POS.length() * 2);
+          active = 1;
+        }
+        const materials = [planetMaterial, cloudMaterial] as (
+          | THREE.Material
+          | null
+          | undefined
+        )[];
+        for (const m of materials) {
+          const s = m?.userData?.shader as
+            | { uniforms: { [key: string]: THREE.IUniform } }
+            | undefined;
+          if (!s) continue;
+          const uPos = s.uniforms.uEclipsingBodyPos;
+          const uRadius = s.uniforms.uEclipsingBodyRadius;
+          const uVrScale = s.uniforms.uEclipsingVrScale;
+          const uActive = s.uniforms.uEclipsingActive;
+          if (!uPos || !uRadius || !uVrScale || !uActive) continue;
+          if (pos) {
+            (uPos.value as THREE.Vector3).copy(pos);
           }
+          uRadius.value = radius;
+          uVrScale.value = vrScale;
+          uActive.value = active;
         }
       }
     }

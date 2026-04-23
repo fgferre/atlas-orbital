@@ -56,7 +56,13 @@ function applyLensFilter(tex: THREE.Texture) {
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.colorSpace = THREE.NoColorSpace;
-  tex.needsUpdate = true;
+  // DO NOT set `tex.needsUpdate = true` here — `TextureLoader.load()`
+  // returns a Texture whose image is still pending. The loader's
+  // `onLoad` callback sets `needsUpdate` itself once the Image has
+  // decoded. Setting it now triggers a spurious
+  // "Texture marked for update but no image data found" warning on
+  // the first WebGLRenderer frame (caught by the 2026-04-22 codex
+  // audit under `references/gaia-sky-source/`).
 }
 
 function loadLensColorSprite(): THREE.Texture {

@@ -239,6 +239,14 @@ const fragmentShader = /* glsl */ `
     vec3 dirt = texture2D(u_lensDirtTexture, uv).rgb;
     vec3 modulated = flareColor.rgb * (dirt * 3.0 + starburst);
 
+    // Gaia lensdirt.frag.glsl:34-35 clamps the final modulated output
+    // to [0, 1] BEFORE the combine filter applies its intensity
+    // scalar. Atlas collapses the combine step into u_flareIntensity,
+    // so the clamp must happen on modulated before multiplication —
+    // otherwise HDR values exceeding 1 leak into downstream Bloom
+    // via the composer ADD blend. (2026-04-22 codex audit drift fix.)
+    modulated = clamp(modulated, 0.0, 1.0);
+
     outputColor = vec4(modulated * u_flareIntensity, inputColor.a);
   }
 `;
