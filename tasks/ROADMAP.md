@@ -1035,74 +1035,92 @@ OneMinusSrcColorFactor)` = `BlendMode.COLOR`, so clouds no
   system's dust clouds + MW nebulae could reintroduce the
   multi-additive stack).
 
-### T4.9 — Sun surface + flare asset swap (procedural-substitute audit 2026-04-23) ⚠ **R1 PENDING — subagent citations fabricated**
+### T4.9 — Sun rendering audit (procedural-substitute review, 2026-04-23)
 
-- **⚠ Verify before ship (2026-04-23)**: the audit subagent that
-  surfaced this item cited `SunComponent.java:50-70` and
-  `$GS_DATA/tex/base/sun-{surface,glow,corona}` — **neither exists
-  in `/tmp/gaiasky/`**. A grep for `SunComponent` / `sun-surface` /
-  `sun-glow` / `sun-corona` returns zero matches; the only
-  config hit is `config.yaml:144 texBillboard:
-$data/default-data/tex/base/sso.png` (generic solar-system-object
-  billboard, not Sun-specific). **R1 this sub-wave properly before
-  writing any code** — trace the Sun through Gaia's actual render
-  path (likely the star-catalog entry using `textureIndex: 4` per
-  `config.yaml:169`) and confirm what asset (if any) drives its
-  surface. If Gaia renders the Sun as a regular star-catalog
-  billboard, atlas's procedural Perlin isn't a "substitute for a
-  real Gaia asset" — it's an atlas-invention, and T4.9a should be
-  demoted to "atlas-opinion removal vs Gaia's billboard path",
-  not "Gaia-asset swap".
-- **Audit origin**: user flagged cross-spike rays around bright
-  stars, which surfaced (and fixed, `d6165c6` → `a9f9bd5`) the
-  LightGlow sprite. The audit subagent that followed (punch-list)
-  flagged TWO more procedural substitutes in the Sun-render path,
-  BUT its Gaia citations are unverified (see ⚠ above). Keep the
-  shape below as a WORKING HYPOTHESIS, not ship-ready plan.
-- **T4.9a — Sun surface texture** (noticeable visual impact).
-  - **Atlas**: `ProceduralSun3D.tsx` bakes a 3-layer Perlin-4D
-    cubemap each frame (`uPerlinCube`) via
-    `proceduralSunPerlinFragmentShader`; re-rendered every 1-3
-    frames per quality preset. Mathematically sound but lacks
-    photographic granule structure, limb-darkening variability.
-  - **Gaia**: `$GS_DATA/tex/base/sun-{surface,glow,corona}` via
-    `SunComponent.java:50-70`; static photographic/rendered
-    textures, not real-time bakes.
-  - **Fix shape**: add `public/textures/sun/sun-surface.jpg` +
-    `sun-glow.jpg` + `sun-corona.jpg` gitignored placeholders
-    mirroring T2.3a / a9f9bd5 pattern; `ProceduralSun3D.tsx`
-    switches `uPerlinCube` uniform to sample real texture when
-    asset present, falls back to Perlin bake when missing (quality
-    ultra/high get real; balanced/constrained keep Perlin for
-    perf). NASA SOHO HMI / SDO AIA are candidate CC0 sources for
-    the CC-BY-4.0 replacement.
-  - **Effort**: 1-2 d (placeholder swap + quality-tier gating
-    - test the sprite contract mirror as `a9f9bd5` did).
-- **T4.9b — Sun flare / ray sprites** (noticeable, depends on T4.9a).
-  - **Atlas**: hand-authored line/flare geometry in
-    `ProceduralSun3D.tsx:142-303` — procedural meshes for rays +
-    lens-flare shapes.
-  - **Gaia**: baked sprites under `$GS_DATA/tex/base/lens*.png`
-    - sun-specific glow maps (`LensFlaresComponent.java:40-50`,
-      `SunComponent.java:60`). Specific spike count + pattern +
-      halo shape that procedural geometry approximates but doesn't
-      match.
-  - **Fix shape**: ports follow once T4.9a lands. Same vendored-
-    placeholder pattern.
-  - **Effort**: 2-3 d.
+**⚠ Original framing was wrong.** The initial audit subagent
+fabricated citations (`SunComponent.java:50-70`, `$GS_DATA/tex/base/sun-{surface,glow,corona}`
+— neither exists). R1 re-verify (2026-04-23, this-session) traced
+Gaia's actual Sun-render path instead of trusting the hallucinated
+plan. Findings below.
+
+#### R1 Gaia Sun-render path
+
+- **Star-distance rendering**: the Sun, like every catalog star,
+  goes through the shared star-billboard pipeline. Four renderers
+  consume `GaiaSky.settings().scene.star.getStarTexture()`:
+  - `BillboardRenderer.java:182`
+  - `SingleStarQuadRenderer.java:50,230`
+  - `StarSetInstancedRenderer.java:49,266`
+  - `VariableSetInstancedRenderer.java:65,389`
+  - plus the LightGlow post-process (`LightGlowRenderPass.java:43,113,114`).
+    All five read `config.yaml:169 textureIndex: 4` → `star-tex-04-*.png`
+    (vs `textureIndexLens: 3` → `star-tex-03-*.png`, which atlas already
+    vendored in `a9f9bd5` for the LightGlow path).
+- **Close-Sun rendering**: when the camera gets close the Sun
+  switches from billboard to a body-mesh pipeline. The mesh +
+  texture asset for the Sun lives in `$GS_DATA/default-data/data/sol/*`
+  (empirically; the source repo does NOT contain the dataset —
+  `find /tmp/gaiasky -name "*sun*" -type f` only finds icon PNGs +
+  scripting utilities + `NslSun.java` orbital-element code). The
+  descriptor that wires the mesh is a JSON/gsc file in the
+  dataset pack, not in `/tmp/gaiasky`.
+- **No Sun-specific flare sprite in source**. `LensFlaresComponent.java`
+  also does not exist. Gaia renders flares via the general
+  post-process pipeline (θ.4 PSEUDO / T2.1 COMPLEX, both already
+  ported), not via a per-body sprite.
+
+#### Implication for atlas
+
+Atlas's `ProceduralSun3D.tsx` is NOT a "substitute for a specific
+Gaia asset". It's an atlas-invention close-up Sun renderer that
+uses a procedural Perlin cubemap + hand-authored ray/flare
+geometry, rendering INSTEAD of Gaia's body-pipeline + billboard
+path. Under Gaia-fidelity the correct framing is:
+
+- **Far-Sun (stellar distances)**: Gaia renders as star billboard
+  with `star-tex-04-*.png`. Atlas currently still uses the
+  procedural 3D Sun at all distances. **Real divergence**.
+- **Close-Sun (body-pipeline)**: Gaia renders from the `$GS_DATA`
+  sun-dataset mesh + textures. Atlas uses the Perlin cubemap.
+  **Unknowable divergence** (atlas would need the dataset to
+  port accurately).
+
+#### Sub-waves (re-scoped, ship-ready)
+
+- **T4.9a' — Sun billboard fallback at stellar distances**
+  (noticeable visual impact, 0.5-1 d).
+  - **Gaia**: Sun renders as `star-tex-04`-textured billboard via
+    `SingleStarQuadRenderer` / `BillboardRenderer` at distances
+    beyond the body-pipeline threshold.
+  - **Atlas**: always renders `ProceduralSun3D.tsx` regardless of
+    distance. Beyond the LightGlow's ~10 AU falloff the 3D sphere
+    - rays become visually inconsistent with how atlas renders
+      other stars (HYG catalog billboards with `star-tex-03` per
+      LightGlow + `star-tex-04`-equivalent Starfield kernel).
+  - **Fix shape**: vendor `star-tex-04-low.jpg` to
+    `public/textures/stars/` (same workflow as T2.3a / `a9f9bd5`;
+    gitignored placeholder pending CC-BY-4.0 replacement). Add a
+    distance-gated switch in `Planet.tsx` / `ProceduralSun3D.tsx`
+    so the Sun uses the star-billboard at `cameraDistance >
+threshold` and keeps the 3D sphere at close range.
+  - **Dependencies**: none. Same vendoring pattern as `a9f9bd5`.
+- **T4.9b' — Close-Sun dataset port** (unknown impact, BLOCKED).
+  - Requires downloading the `default-data` pack from
+    gaiasky.space + extracting the Sun body descriptor + its
+    texture(s). Until then, atlas's Perlin cubemap stays as
+    **documented atlas-opinion close-up rendering** with no
+    known Gaia equivalent in-source.
+  - Status: BLOCKED on `default-data` pack acquisition. Not
+    scheduled.
 - **T4.9c — Procedural dwarf-planet surfaces** (cosmetic, NOT a fix).
-  - **Atlas**: `proceduralSurface.ts` canvas-renders 512×256 per-body
-    textures for asteroids + Kuiper bodies (pallas, hygiea, quaoar,
-    gonggong, orcus, sedna, salacia, vanth, weywot) when no real
-    survey data exists.
-  - **Gaia**: ALSO procedural when real survey data is missing
-    (`BodyComponent.java:80-110` texture-resolution logic falls back
-    to procedural). Atlas matches Gaia's own behavior here.
-  - **Decision**: NOT a divergence, NOT scheduled. Re-open if IAU
-    body databases provide actual DEM/color maps for the listed
-    bodies and we want to bind them via `textureVariantManifest.ts`.
-- **Dependencies**: T4.9a is independent; T4.9b blocks on T4.9a.
-- **Effort (total)**: 3-5 d across T4.9a + T4.9b.
+  - `proceduralSurface.ts` canvas-renders 512×256 per-body
+    textures for asteroids + Kuiper bodies when no real survey
+    data exists. Gaia does the same fallback (`BodyComponent` at
+    runtime falls back to procedural when the descriptor is
+    missing texture paths). Atlas matches Gaia's own behavior —
+    NOT a divergence, NOT scheduled.
+- **Dependencies**: T4.9a' is independent and ship-ready.
+- **Effort**: T4.9a' ~0.5-1 d; T4.9b' blocked; T4.9c not scheduled.
 
 ---
 
