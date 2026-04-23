@@ -759,27 +759,81 @@ clipping/jitter`.
 - **Effort**: 1 week.
 - **Dependencies**: none.
 
-### T4.7 — Milky Way backdrop (ESO CC-BY-4.0 asset)
+### T4.7 — Milky Way backdrop ❌ **NOT PORTING as described — folds into T4.3**
 
-- **Gaia**: panoramic cubemap with dust.
-- **Atlas**: black void.
-- **Asset**: ESO fulldome Milky Way panorama available under CC-BY-4.0
-  — can be vendored.
-- **Effort**: 3-5 days.
-- **Dependencies**: vendor asset.
+- **ROADMAP claim re-checked (2026-04-22)**: "Gaia: panoramic cubemap
+  with dust" is inaccurate. L31 check against `/tmp/gaiasky/`:
+  - `grep -rn "MilkyWay\|milkyway" /tmp/gaiasky/assets/conf/config.yaml`:
+    zero hits for a Milky-Way backdrop; the only skybox reference
+    (`reflectionSkyboxLocation: $data/default-data/tex/skybox/gaiasky/`)
+    is for **cubemap reflections**, not a visual backdrop.
+  - `grep -rn "MilkyWay\|galaxy" /tmp/gaiasky/core/src/gaiasky/scene`
+    shows Gaia's MW is a `BillboardDataset` (procedural particle
+    set) rendered via `BillboardSetExtractor`, and a
+    `GalaxyGenerator` for procedural spiral-galaxy particles. No
+    panoramic cubemap anywhere.
+  - `/tmp/gaiasky/assets/scripts/showcases/milkyway-affine-transform.py`
+    header: "the Milky Way object, which is of type 'billboard set'".
+- **Implication under Gaia-fidelity rule**: the ESO panorama path
+  was an atlas-opinion shortcut, not a Gaia port. Under
+  `feedback_default_gaia_fidelity.md` atlas should render the
+  Milky Way via the same billboard-particle mechanism Gaia uses —
+  **that port lives inside T4.3 (Particle system pipeline)**.
+- **Decision**: T4.7 as originally scoped is **demoted to non-port**
+  (atlas-opinion vs Gaia-fidelity). The Milky Way backdrop gap is
+  captured inside T4.3's scope expansion (which already enumerates
+  "MW particles" alongside asteroid belt + Kuiper belt + clusters).
+  A standalone ESO panorama ship would be possible as a future
+  atlas-native cinematic preset but is no longer on the
+  Gaia-fidelity roadmap.
+- **Status**: confirmed non-port 2026-04-22. See T4.3.
 
-### T4.8 — Transparency sorting / OIT
+### T4.8 — Transparency sorting / OIT ✅ **AUDIT CLOSED — atlas hierarchy sufficient for current scope**
 
-- **Gaia**: explicit per-layer render ordering in Java render system.
-- **Atlas**: uses `renderOrder` map + painter's algorithm. Known risks:
-  - Cloud (scale 1.01) + atmosphere (scale 1.025) both `depthWrite: false`
-    additive — edge-on views may flicker.
-  - Ring (renderOrder=1000) vs planet overlays (renderOrder=0) —
-    composition depends on traverse order.
-- **Atlas renderOrder inventory**: Starfield=-2, EclipticGrid=-100,
-  ProceduralSun=0-3, Ring=1000, Arrows=2000, SunScreenFlare=5000-5003.
-- **Effort**: 2-3 days to audit + tune; 1-2 weeks to implement OIT.
-- **Dependencies**: none.
+- **Gaia**: explicit per-layer render ordering in Java render system
+  (see `core/src/gaiasky/render/RenderGroup.java` +
+  `ComponentTypes.java`).
+- **Atlas**: `renderOrder` map + painter's algorithm (Three.js
+  standard).
+- **Audit (2026-04-22)** — refreshed inventory:
+
+  | Layer                           | renderOrder   | File                                         |
+  | ------------------------------- | ------------- | -------------------------------------------- |
+  | EclipticGrid plane              | -100          | `EclipticGrid.tsx:203`                       |
+  | EclipticGrid labels             | -97           | `EclipticGrid.tsx:254` (missed in pre-audit) |
+  | Starfield (HYG + NASA variants) | -2            | `Starfield.tsx:535`, `NASAStarfield.tsx:148` |
+  | ProceduralSun core              | 0             | `ProceduralSun3D.tsx:599`                    |
+  | ProceduralSun glow sprites      | 1-3           | `ProceduralSun3D.tsx:608-622`                |
+  | Ring                            | 1000          | `Planet.tsx:443`                             |
+  | Arrows / PlanetMotionOverlays   | 2000          | `PlanetMotionOverlays.tsx:20`                |
+  | ~~SunScreenFlare~~              | ~~5000-5003~~ | **GONE post-T2.0 (`cd626dc`)**               |
+
+- **Known-risk verification**:
+  1. **Cloud + atmosphere edge flicker** — ROADMAP claimed both
+     layers were `depthWrite: false` + `AdditiveBlending` and might
+     compete in edge-on views. **Resolved**: T3.6 (`785c925`)
+     switched clouds from `AdditiveBlending` to `CustomBlending(OneFactor,
+OneMinusSrcColorFactor)` = `BlendMode.COLOR`, so clouds no
+     longer stack additively with the atmosphere's
+     `AdditiveBlending`. Additionally T3.4 (`9c06c16`) resolved
+     self-shadow flicker (15-unit maxDelta caught by L26 multi-
+     frame smoke) by setting `receiveShadow={false}` on the cloud
+     mesh.
+  2. **Ring vs planet overlays** — ROADMAP flagged composition
+     depends on traverse order. **Not a risk**: ring at 1000,
+     overlays at 2000 gives overlays correct on-top rendering
+     every frame regardless of scene-graph traversal.
+
+- **Decision**: atlas's current renderOrder hierarchy is
+  sufficient for the rendered feature set. No OIT implementation
+  needed — the advertised "1-2 weeks OIT" would be justified only
+  if atlas adds overlapping translucent volumes (multi-planet
+  atmospheres in view, nebulae, etc.) which aren't currently on
+  the roadmap.
+- **Status**: audit closed 2026-04-22 (doc-only ship). Re-open if
+  new transparent-layer categories ship (e.g. T4.3 particle
+  system's dust clouds + MW nebulae could reintroduce the
+  multi-additive stack).
 
 ---
 

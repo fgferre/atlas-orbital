@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-22 after **ROADMAP hygiene pass** — R1 re-verification against `/tmp/gaiasky/` surfaced three more ROADMAP drifts (all matching the L30 / L31 pattern): T3.7 is moot (superseded by θ.5b+c Nishita scattering, the rim-glow hardcode it referenced no longer exists); T3.8 audit closed (roughness map `NoColorSpace` verified correct via Solar System Scope linear-TIFF → atlas bake chain); T3.9 demoted to ❌ NOT PORTING because `LightScattering.java` is Gaia dead code (zero `new LightScattering()` hits — Gaia's "light scattering" UI toggle actually controls LightGlow, which atlas shipped as θ.3). L31 captured. T3.3 shipped earlier `c44f913`; Lens Closure Wave default path done (T2.0 `cd626dc`, T2.3a `51750c3`, T2.1 `a2c6594`)._
+_Last updated: 2026-04-22 after **Tier-4 hygiene pass** — T4.7 demoted (ROADMAP called for ESO panorama; Gaia actually renders Milky Way as `BillboardDataset` particles via `BillboardSetExtractor`, so the correct port lives inside T4.3 scope, not as an atlas-native backdrop — L31 pattern again) and T4.8 audit closed (renderOrder hierarchy sufficient for current scope; ROADMAP's cloud+atmosphere additive-flicker risk resolved by T3.6 `CustomBlending` + T3.4 `receiveShadow:false`; inventory refreshed with SunScreenFlare removed per T2.0). Preceded by Tier-3 hygiene (T3.7 moot, T3.8 audit closed, T3.9 ❌ not porting) and T3.3 eclipse geometry ship (`c44f913`). Lens Closure Wave default path done (T2.0 `cd626dc`, T2.3a `51750c3`, T2.1 `a2c6594`)._
 
 ---
 
@@ -94,7 +94,7 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **mostly cleared — pick direction**: T2.3b still BLOCKED (user asset delivery); T3.7 / T3.8 / T3.9 closed via hygiene pass (see below); Tier-4 foundations (T4.1 camera-relative rendering, T4.2 camera cinematics, T4.3 particle systems, T4.7 Milky Way backdrop) are the next unblocked ondas if user wants more
+## → Next up: **Tier-4 candidates after hygiene**: T2.3b still BLOCKED (user asset delivery); T3.7 / T3.8 / T3.9 / T4.7 / T4.8 all closed via hygiene passes. Remaining unblocked work: **T4.1 camera-relative rendering** (2-3w, jitter fix), **T4.2 camera cinematics** (1-2w, NaturalCamera damping + surface mode), **T4.3 particle systems** (2-3w, ASTEROID BELT + KUIPER + MW particles — subsumes the old T4.7 panorama gap), T4.4 additional grids (1w), T4.5 MSDF text / constellations (1-2w), T4.6 quad-SDF line rendering (1w)
 
 Lens Closure Wave (default path) complete: T2.0 ✅ `cd626dc`,
 T2.3a ✅ `51750c3`, T2.1 ✅ `a2c6594`. T3.3 ✅ `c44f913` adds
@@ -103,9 +103,35 @@ placeholders once user delivers CC-BY-4.0 replacements — no
 activity in `references/gaia-sky-source/` at last check), **T2.2**
 (opt-in PSEUDO blur, not on Gaia default path).
 
-**Tier-3 hygiene pass (2026-04-22)**: R1-reading each remaining
-T3.x item against `/tmp/gaiasky/` surfaced three more ROADMAP
-drifts matching the L30 / L31 pattern:
+**Tier-4 hygiene pass (2026-04-22)**: two more items closed via
+L31-style re-verification:
+
+- **T4.7** (Milky Way backdrop) — **❌ NOT PORTING as described**.
+  ROADMAP said "Gaia: panoramic cubemap with dust"; reality is
+  Gaia renders the MW as a `BillboardDataset` (procedural
+  particle set) via `BillboardSetExtractor`. The only Gaia
+  skybox reference (`config.yaml:20 reflectionSkyboxLocation`)
+  is for cubemap REFLECTIONS, not a backdrop. An ESO panorama
+  ship would be atlas-opinion, not Gaia-fidelity; the MW gap
+  properly belongs inside T4.3 scope expansion (which already
+  covers asteroid belt + Kuiper + clusters + nebulae via
+  Gaia's particle pipeline).
+- **T4.8** (transparency sorting / OIT) — **AUDIT CLOSED**.
+  Refreshed renderOrder inventory (SunScreenFlare removed per
+  T2.0; EclipticGrid labels at -97 were missed in pre-audit).
+  Both known risks from the ROADMAP text are addressed:
+  cloud+atmosphere additive stacking fixed by T3.6 (`CustomBlending`
+  flipped clouds from additive to multiplicative BlendMode.COLOR)
+  - T3.4 (`receiveShadow:false` on cloud mesh fixed the 15-unit
+    maxDelta L26 caught); ring vs overlay composition correct at
+    1000 vs 2000 regardless of traversal. No OIT needed at
+    current atlas scope; re-open if multi-overlapping translucent
+    layers ship later (T4.3 nebulae etc.).
+
+**Tier-3 hygiene pass (2026-04-22, earlier this session)**:
+R1-reading each remaining T3.x item against `/tmp/gaiasky/`
+surfaced three more ROADMAP drifts matching the L30 / L31
+pattern:
 
 - **T3.7** (atmosphere exponent parameterization) — **MOOT**.
   The `pow(max(..), 4.0)` rim-glow hardcode it referenced
