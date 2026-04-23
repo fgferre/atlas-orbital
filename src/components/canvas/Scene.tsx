@@ -25,12 +25,12 @@ import {
 import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
 import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
-import { SunBillboard } from "./SunBillboard";
+// import { SunBillboard } from "./SunBillboard"; // see DISABLED note below
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
-import { PlanetLabels3D } from "./PlanetLabels3D";
+// import { PlanetLabels3D } from "./PlanetLabels3D"; // see DISABLED note below
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { GridAuLabels } from "./GridAuLabels";
@@ -360,6 +360,35 @@ export const Scene = () => {
       gl.toneMapping = THREE.NoToneMapping;
       gl.outputColorSpace = THREE.SRGBColorSpace;
 
+      // GPU diagnostic (added 2026-04-23 for white-canvas boot
+      // investigation). Logs the WebGL renderer info on first mount
+      // so a user-pasted console reveals the GPU + driver atlas is
+      // running on. WEBGL_debug_renderer_info is privacy-gated in
+      // some browsers; falls back to gl.getParameter alone in that
+      // case. Also surfaces max-texture-size + max-cube-map-size to
+      // confirm the GPU isn't running with degraded limits.
+      try {
+        const webglCtx = gl.getContext();
+        const debugInfo = webglCtx.getExtension("WEBGL_debug_renderer_info");
+        const vendor = debugInfo
+          ? webglCtx.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)
+          : "(privacy-masked)";
+        const renderer = debugInfo
+          ? webglCtx.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+          : "(privacy-masked)";
+        console.info("[atlas] WebGL renderer info:", {
+          vendor,
+          renderer,
+          maxTextureSize: webglCtx.getParameter(webglCtx.MAX_TEXTURE_SIZE),
+          maxCubeMapSize: webglCtx.getParameter(
+            webglCtx.MAX_CUBE_MAP_TEXTURE_SIZE
+          ),
+          version: webglCtx.getParameter(webglCtx.VERSION),
+        });
+      } catch (err) {
+        console.warn("[atlas] WebGL diagnostic probe failed:", err);
+      }
+
       // WebGL context-loss recovery (added 2026-04-23 after a user
       // report showed `THREE.WebGLRenderer: Context Lost.` followed by
       // the SceneReadyChecker safety hatch firing — frame loop dead).
@@ -493,22 +522,29 @@ export const Scene = () => {
               qualityProfileName={qualityProfile.name}
               sunVisualRadiusWorld={sunVisualRadiusWorld}
             />
-            {/* T4.9a' — Sun star-billboard fallback at stellar
-                distances. Self-gates via `SUN_BILLBOARD_THRESHOLD_AU`
-                so it composites with `ProceduralSun3D`'s inverse gate
-                without overlap. Procedural-mode-only for the first
-                ship; the textured `Planet`-mesh path stays unchanged
-                (out of scope for T4.9a' first ship). */}
-            <SunBillboard />
+            {/* T4.9a' — TEMPORARILY DISABLED 2026-04-23 alongside
+                PlanetLabels3D as a defensive bisect for the user-
+                reported white-canvas boot bug. The SunBillboard cap
+                + intro-suppression fixes already shipped (a9fc1bf)
+                should make this safe; this disable confirms whether
+                a remaining SunBillboard interaction is contributing
+                to the Context Lost. Re-enable once bisect identifies
+                the actual culprit. */}
+            {/* <SunBillboard /> */}
           </Suspense>
         )}
         <OverlayPositionTracker />
-        {/* T4.5-β — Gaia-native SDF body labels (drei <Text>); self-
-            gates on `labelMode === "sdf" && showLabels` so it's a
-            no-op in default HTML mode. The HTML `PlanetOverlay`
-            below the Canvas keeps the icon a11y surface in both
-            modes (3D text isn't focusable / screen-readable). */}
-        <PlanetLabels3D />
+        {/* T4.5-β — TEMPORARILY DISABLED 2026-04-23 as a defensive
+            bisect for a user-reported white-canvas boot bug. The
+            component is a no-op when `labelMode === "html"` (the
+            default), so removing the mount has no observable user
+            impact unless someone had explicitly opted into SDF labels
+            via the LayersPanel. If the canvas comes back after this
+            mount is removed, PlanetLabels3D's drei <Text> imports +
+            troika worker setup are the smoking gun and a fix lands
+            before re-enabling. If the canvas still goes white, the
+            mount can be restored and bisect moves elsewhere. */}
+        {/* <PlanetLabels3D /> */}
         <CameraController />
         <InitialCameraAnimation />
         <DreiOrbitControls
