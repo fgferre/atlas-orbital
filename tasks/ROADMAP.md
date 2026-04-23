@@ -800,32 +800,50 @@ clipping/jitter`.
   (Equatorial), `"eclipticToEquatorial"` (Ecliptic), and
   `"galacticToEquatorial"` (Galactic). The mesh is the same
   recursive grid either way.
+- **Step 3 PRE-CHECK (2026-04-23, during T4.4a ship)**: ROADMAP
+  said "`gridrec.fragment.glsl` + `gridrec.vertex.glsl`" but only
+  the fragment exists. `RenderAssets.java:211` pairs the fragment
+  with the shared `shader/default.vertex.glsl`. The `simple_noise.glsl`
+  include in the fragment is defensive only — `main()` never calls
+  any noise function. Gaia's default `recursiveGrid.style` is
+  `CIRCULAR` per `config.yaml:384` (NOT SQUARE), so the port target
+  for the default render path is the `circle()` branch.
 - **Gaia source**:
   - `assets/shader/gridrec.fragment.glsl` (133 LOC) — circular vs
     square mode via `u_elevationMultiplier`; `dFdx`-based
     screen-space line-width adaptation; 2-level subdivision
     fade via `u_heightScale`; camera-distance encoded in
-    `u_tessQuality`. Uses log-depth buffer + `simple_noise.glsl`.
-  - `assets/conf/config.yaml:377-385` recursive grid config:
-    origin `[FOCUS|REFSYS]`, style `[CIRCULAR|SQUARE]`.
-- **Atlas**: `EclipticGrid.tsx` — custom shader, single-pass,
+    `u_tessQuality`. Paired with shared `shader/default.vertex.glsl`.
+  - `assets/conf/config.yaml:377-384` recursive grid config:
+    origin `[FOCUS|REFSYS]` (default REFSYS), style
+    `[CIRCULAR|SQUARE]` (default CIRCULAR).
+- **Atlas (pre-port)**: `EclipticGrid.tsx` — custom shader, single-pass,
   radial fade `smoothstep(uFadeStart, uFadeEnd, dist)`. Fixed
   plane, no camera-distance adaptation, no orientation toggle.
-- **Port scope** (1 week):
-  1. `gridrec.fragment.glsl` + `gridrec.vertex.glsl` → atlas
-     shader module.
-  2. Per-frame driver for `u_tessQuality` (camera distance) +
-     `u_heightScale` (subgrid fade).
-  3. Camera-centered (or focus-centered) quad mesh that follows
-     the camera/focus.
-  4. Orientation transform matrices for Equatorial ↔ Ecliptic
-     ↔ Galactic. Atlas's current `EclipticGrid` becomes the
-     Ecliptic-mode default of the new recursive grid; Equatorial
-     and Galactic gain UI toggles.
-  5. Under `feedback_no_effect_stacking.md`: remove the old
-     `EclipticGrid.tsx` when shipping to avoid stacking the
-     fixed-plane and recursive grids.
-- **Effort**: 1 week.
+- **Sub-wave ship plan** (pattern: θ.5a-d):
+  - **T4.4a ✅ SHIPPED (2026-04-23, `49fdaf0`)** — pure-TS math
+    mirror. `src/components/canvas/shaders/gridRecMath.ts` exports
+    15 constants + 9 helpers covering every GLSL expression in the
+    fragment's building blocks; `gridRecMath.test.ts` pins 59
+    hand-derived sample values. No runtime surface; the upcoming
+    shader port imports these so GLSL literals and TS mirrors stay
+    in lockstep. DIFF GATE + SUBAGENT VERIFY 15/15 + 9/9 PASS.
+  - **T4.4b** — fragment shader port + quad mount + predecessor
+    sweep. Ports `circle()`, `square()`, `circle_rec()`, `square_rec()`,
+    `main()` composites to a Three.js shader material (import
+    constants from T4.4a); mounts on a camera/focus-centered quad;
+    deletes `EclipticGrid.tsx` in the same commit under
+    `feedback_no_effect_stacking.md`. Static uniforms first
+    (CIRCULAR style, neutral u_tessQuality / u_heightScale) so
+    smoke can isolate the shader. Effort: 2-3 d.
+  - **T4.4c** — per-frame drivers + orientation toggle. Implements
+    `getGridScaling(body.distToCamera, ...)` to drive
+    `u_tessQuality` + `u_heightScale`; UI toggle for
+    Equatorial / Ecliptic / Galactic via transform matrix swap
+    (`GridRecursiveRadio.java:34-44`); projection lines when
+    origin=REFSYS + focus active. Effort: 2 d.
+- **Effort**: T4.4a done (0.5 d), T4.4b 2-3 d, T4.4c 2 d →
+  remaining ~4-5 d.
 - **Dependencies**: none.
 
 ### T4.5 — MSDF / 3D text labels + constellations
