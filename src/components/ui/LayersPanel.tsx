@@ -3,6 +3,10 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import {
+  GRID_ORIENTATION_LABELS,
+  GRID_ORIENTATIONS,
+} from "../../lib/gridOrientation";
 import { STARFIELD_SOURCE_LABELS } from "../../lib/starfield";
 import { useStore } from "../../store";
 import { RailTabContent } from "./RightControlRail";
@@ -84,6 +88,8 @@ export const LayersPanel = ({
   );
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const toggleEclipticGrid = useStore((state) => state.toggleEclipticGrid);
+  const gridOrientation = useStore((state) => state.gridOrientation);
+  const setGridOrientation = useStore((state) => state.setGridOrientation);
   const showProgradeVector = useStore((state) => state.showProgradeVector);
   const toggleProgradeVector = useStore((state) => state.toggleProgradeVector);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -265,10 +271,29 @@ export const LayersPanel = ({
               </div>
             )}
             <Toggle
-              label="Ecliptic Grid"
+              label="Coordinate Grid"
               checked={showEclipticGrid}
               onChange={toggleEclipticGrid}
             />
+            {showEclipticGrid && (
+              <div className="space-y-2 border border-white/5 bg-black/20 p-3">
+                <SubsectionLabel>Grid Orientation</SubsectionLabel>
+                <div
+                  role="group"
+                  aria-label="Grid orientation"
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {GRID_ORIENTATIONS.map((orientation) => (
+                    <ChoiceButton
+                      key={orientation}
+                      label={GRID_ORIENTATION_LABELS[orientation]}
+                      isActive={gridOrientation === orientation}
+                      onClick={() => setGridOrientation(orientation)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             <Toggle
               label="Prograde Vector"
               checked={showProgradeVector}

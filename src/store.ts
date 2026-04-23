@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
+import type { GridOrientation } from "./lib/gridOrientation";
 import type { QualityMode } from "./lib/qualityProfile";
 import { simulationClock } from "./lib/simulationClock";
 import type { SunRenderMode } from "./lib/sunRenderMode";
@@ -58,6 +59,17 @@ interface AppState {
   showOrbits: boolean;
   declutterOrbits: boolean;
   showEclipticGrid: boolean;
+  /**
+   * T4.4d — which coordinate frame the recursive grid renders on.
+   * "ecliptic" is atlas's implicit default (matches the XZ plane
+   * planets orbit on); "equatorial" re-tilts by obliquity;
+   * "galactic" applies the ICRS→galactic rotation. The visibility
+   * flag above continues to gate the grid on/off regardless of
+   * orientation (atlas-native UX; Gaia uses three independent
+   * ComponentType visibility flags internally but exposes the same
+   * "grid on/off" affordance).
+   */
+  gridOrientation: GridOrientation;
   showProgradeVector: boolean;
   scaleMode: "didactic" | "realistic";
   qualityMode: QualityMode;
@@ -125,6 +137,7 @@ interface AppState {
   toggleOrbits: () => void;
   toggleDeclutterOrbits: () => void;
   toggleEclipticGrid: () => void;
+  setGridOrientation: (orientation: GridOrientation) => void;
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
   setQualityMode: (mode: QualityMode) => void;
@@ -210,6 +223,7 @@ export const useStore = create<AppState>()(
       showOrbits: true,
       declutterOrbits: true,
       showEclipticGrid: true,
+      gridOrientation: "ecliptic",
       showProgradeVector: true,
       scaleMode: "didactic",
       // Defaults overwritten by the persist middleware's rehydration
@@ -314,6 +328,7 @@ export const useStore = create<AppState>()(
         set((state) => ({ declutterOrbits: !state.declutterOrbits })),
       toggleEclipticGrid: () =>
         set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
+      setGridOrientation: (gridOrientation) => set({ gridOrientation }),
       toggleProgradeVector: () =>
         set((state) => ({ showProgradeVector: !state.showProgradeVector })),
       toggleShowStarfield: () =>

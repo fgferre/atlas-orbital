@@ -3,6 +3,10 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import { VISUAL_PRESETS } from "../../config/visualPresets";
+import {
+  GRID_ORIENTATION_COLORS,
+  getGridOrientationMatrix,
+} from "../../lib/gridOrientation";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
 import { getGridRecScaling } from "./shaders/gridRecScaling";
@@ -25,9 +29,14 @@ import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
  *    as the camera pulls back, matching Gaia's recursive behavior
  *    (`GridRecUpdater.java:80-81`). The level-1 rings swap
  *    smoothly between decades via the `heightScale` fade.
- *  - **T4.4d** (pending): orientation toggle (Equatorial / Ecliptic /
- *    Galactic) per `GridRecursiveRadio.java:34-48` transform-name
- *    swap + per-orientation color callouts.
+ *  - **T4.4d** (this file, below): orientation toggle (Equatorial /
+ *    Ecliptic / Galactic) per `GridRecursiveRadio.java:34-48`
+ *    transform-name swap + per-orientation color callouts. Applied
+ *    via a `<group>` wrapper whose quaternion comes from
+ *    `getGridOrientationMatrix` — identity for ecliptic (atlas's
+ *    world frame), `Rz(obliquity)` for equatorial, full ICRS→galactic
+ *    composition for galactic. Color swatch pushed into
+ *    `u_diffuseColor` whenever orientation flips.
  *  - **T4.4e** (pending): projection lines when `origin=REFSYS` +
  *    camera focus is active (`GridRecUpdater.java:84-102`).
  *  - The AU tick labels `EclipticGrid.tsx` rendered (1/2/5/10/20/
@@ -49,10 +58,19 @@ const noopRaycast: THREE.Object3D["raycast"] = () => null;
 export const GridRecursive = () => {
   const { camera } = useThree();
   const visualPreset = useStore((state) => state.visualPreset);
+  const gridOrientation = useStore((state) => state.gridOrientation);
   const guideIntensity = VISUAL_PRESETS[visualPreset]?.guideIntensity ?? 1;
 
   const material = useMemo(() => buildGridRecShaderMaterial(), []);
   const materialRef = useRef(material);
+
+  // Recompose the orientation quaternion whenever the user flips
+  // the radio. The base mesh keeps its `rotation-x = -π/2` to lay
+  // the plane on XZ; this wrapper rotation applies ON TOP of that.
+  const orientationQuaternion = useMemo(() => {
+    const matrix = getGridOrientationMatrix(gridOrientation);
+    return new THREE.Quaternion().setFromRotationMatrix(matrix);
+  }, [gridOrientation]);
 
   useEffect(() => {
     materialRef.current = material;
@@ -60,6 +78,20 @@ export const GridRecursive = () => {
       material.dispose();
     };
   }, [material]);
+
+  useEffect(() => {
+    // Per-orientation color callout matches `ccEq` / `ccEcl` /
+    // `ccGal` in `GridRecursive.java:21-23`. Mutating the existing
+    // uniform keeps the WebGLProgram bound; rebuilding the
+    // material would drop any per-frame state the shader
+    // accumulated.
+    const [r, g, b, a] = GRID_ORIENTATION_COLORS[gridOrientation];
+    material.uniforms.u_diffuseColor.value.set(r, g, b, a);
+    // Inner color stays atlas-default (lower-alpha variant of the
+    // outer color) so the level-1 fade still reads; if Gaia-parity
+    // requires a per-orientation inner color we'd add it here.
+    material.uniforms.u_emissiveColor.value.set(r, g, b, a * 0.3);
+  }, [material, gridOrientation]);
 
   useFrame(() => {
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
@@ -95,21 +127,23 @@ export const GridRecursive = () => {
   });
 
   return (
-    <mesh
-      rotation-x={-Math.PI / 2}
-      position-y={GRID_RECURSIVE_CONFIG.planeYOffset}
-      renderOrder={GRID_RECURSIVE_CONFIG.renderOrder}
-      raycast={noopRaycast}
-    >
-      <planeGeometry
-        args={[
-          GRID_RECURSIVE_CONFIG.worldSize,
-          GRID_RECURSIVE_CONFIG.worldSize,
-          1,
-          1,
-        ]}
-      />
-      <primitive object={material} attach="material" />
-    </mesh>
+    <group quaternion={orientationQuaternion}>
+      <mesh
+        rotation-x={-Math.PI / 2}
+        position-y={GRID_RECURSIVE_CONFIG.planeYOffset}
+        renderOrder={GRID_RECURSIVE_CONFIG.renderOrder}
+        raycast={noopRaycast}
+      >
+        <planeGeometry
+          args={[
+            GRID_RECURSIVE_CONFIG.worldSize,
+            GRID_RECURSIVE_CONFIG.worldSize,
+            1,
+            1,
+          ]}
+        />
+        <primitive object={material} attach="material" />
+      </mesh>
+    </group>
   );
 };
