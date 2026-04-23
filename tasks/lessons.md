@@ -218,6 +218,21 @@ blind spot:
   that a cold external agent with only repo URL + SHAs catches
   (different framing widens scope from "single-shader port" to
   "architecture"). Schedule cross-AI at phase boundaries.
+- **Texture wrap-mode × edge-pixel contract is invisible to every
+  math/diff gate.** DIFF GATE sees the GLSL tokens; SUBAGENT VERIFY
+  sees source-vs-port; unit tests see the formula. None of them
+  exercise what the shader's sampler DOES with the baked texture's
+  edge row/column. `ClampToEdgeWrapping` replicates the edge pixel
+  **infinitely** along any axis where `glow_tc` overflows [0, 1]
+  — a gaussian with σ=20 in a 128-wide sprite has ~0.006 brightness
+  at the middle of each edge, and that tiny value smeared along 4
+  cardinal rays per light reads as "cartesian cross-spikes on every
+  bright star" when accumulated across multi-light halo effects.
+  Pin a border-zero invariant in the sprite's unit test (every
+  pixel on each of the four edges `=== 0`) any time you ship a
+  procedural sprite sampled under `ClampToEdge`. Gaia's real
+  vendored textures already have zero borders; the trap is
+  atlas-specific to our procedural substitutes.
 
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
