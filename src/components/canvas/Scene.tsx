@@ -359,6 +359,31 @@ export const Scene = () => {
       // doesn't silently change our gamma contract).
       gl.toneMapping = THREE.NoToneMapping;
       gl.outputColorSpace = THREE.SRGBColorSpace;
+
+      // WebGL context-loss recovery (added 2026-04-23 after a user
+      // report showed `THREE.WebGLRenderer: Context Lost.` followed by
+      // the SceneReadyChecker safety hatch firing — frame loop dead).
+      // Common causes: tab backgrounding triggering Chrome to reclaim
+      // GPU resources; GPU driver crash; integrated-GPU memory
+      // pressure. Calling `event.preventDefault()` on `webglcontextlost`
+      // signals the browser that we want the context back; without it
+      // the canvas stays permanently dead. On `webglcontextrestored`
+      // Three.js auto-reinits its WebGL programs / textures on the
+      // next render, so we just unblock the frame loop and log.
+      const canvasEl = gl.domElement;
+      const handleLost = (e: Event) => {
+        e.preventDefault();
+        console.warn(
+          "[atlas] WebGL context lost — preventing default so the browser can attempt recovery."
+        );
+      };
+      const handleRestored = () => {
+        console.warn(
+          "[atlas] WebGL context restored — Three.js will reinit GPU resources on next render."
+        );
+      };
+      canvasEl.addEventListener("webglcontextlost", handleLost);
+      canvasEl.addEventListener("webglcontextrestored", handleRestored);
     },
     []
   );
