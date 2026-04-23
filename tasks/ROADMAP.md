@@ -323,8 +323,16 @@ lensstarburst.jpg}` (gitignored via
   lensstarburst.jpg    10710 bytes  sha256 71da64eb...  mtime 2023-09-29
   ```
 
-  **T2.3b — CC-BY-4.0 asset swap** (blocks on user delivery).
-  When the user drops AI-generated replacements into
+  **T2.3b — CC-BY-4.0 asset swap** (deferred to final asset
+  wave, decision 2026-04-23). The Gaia originals stay in place
+  at `public/textures/lens/` as gitignored placeholders for the
+  duration of regular development; T2.3b is no longer treated
+  as an active blocker. The placeholders MUST NOT be published,
+  committed, or bundled in any release artifact — the
+  `.gitignore` rule is the safety rail. Re-activate T2.3b
+  during the final asset-licensing pass (alongside T4.9a' /
+  any other deferred placeholder-vs-real-asset swaps). When
+  the user drops AI-generated replacements into
   `references/gaia-sky-source/` (validate by hash-delta against
   the fingerprint above AND mtime check — genuine replacements
   MUST show mtimes ≥ `2026-04-22`; failing either check means
@@ -344,7 +352,8 @@ lensstarburst.jpg}` (gitignored via
 - **Dependencies**: T2.0 (remove stacking before calibrating new
   assets — otherwise the assets tune against the sum of two
   effects and the calibration drifts when sprites go away later).
-  T2.3b additionally blocks on user delivery of CC-BY-4.0 assets.
+  T2.3b deferred to the final asset-licensing wave (no longer an
+  active dependency for any non-licensing ship).
 - **Note**: Milky Way panorama separately available from ESO under
   CC-BY-4.0 — can be vendored for T4.7.
 
@@ -925,10 +934,11 @@ clipping/jitter`.
     Decision point: troika-three-text's default `fwidth()`
     smoothing vs override with Gaia's `1/(16×scale)` via the
     `uniforms` hook. Effort: 1-2 d.
-  - **T4.5-γ** — constellation line-segments + rendering.
-    Requires source data (IAU constellation boundaries or
-    Stellarium's `constellationship.fab`). Effort: 2-3 d + data
-    acquisition.
+  - **T4.5-γ — ❌ NOT PORTING** (decision 2026-04-23). Atlas is
+    solar-system-first; constellation line-segments are pure
+    backdrop-style ornament with no orbital-mechanics value.
+    Header kept for traceability against the Gaia source
+    (`ConstellationInitializer.java`); no further work scheduled.
   - **T4.5-δ ✅ SHIPPED (2026-04-23, `7abbc78`)** — AU tick
     label re-mount via drei `<Text>`. `GridAuLabels.tsx` renders
     14 SDF text instances (7 AU × 2 axes: X at `(au*1000, planeY,
@@ -946,9 +956,9 @@ clipping/jitter`.
     labels stay at linear AU — tracked as pre-existing scale-
     mode architectural issue, out of scope for δ).
 - **Effort**: T4.5-α + T4.5-δ done (~1 d combined); T4.5-β
-  1-2 d; T4.5-γ 2-3 d + data. Remaining ~3-5 d.
-- **Dependencies**: T4.5-γ depends on constellation line-segment
-  data acquisition.
+  1-2 d. T4.5-γ retired. Remaining ~1-2 d (β only).
+- **Dependencies**: none (γ retired, removing the constellation-
+  data acquisition blocker).
 
 ### T4.6 — Quad-SDF line rendering ✅ **SHIPPED (`a6a3644`)**
 
@@ -1139,14 +1149,15 @@ path. Under Gaia-fidelity the correct framing is:
     so the Sun uses the star-billboard at `cameraDistance >
 threshold` and keeps the 3D sphere at close range.
   - **Dependencies**: none. Same vendoring pattern as `a9f9bd5`.
-- **T4.9b' — Close-Sun dataset port** (unknown impact, BLOCKED).
-  - Requires downloading the `default-data` pack from
-    gaiasky.space + extracting the Sun body descriptor + its
-    texture(s). Until then, atlas's Perlin cubemap stays as
-    **documented atlas-opinion close-up rendering** with no
-    known Gaia equivalent in-source.
-  - Status: BLOCKED on `default-data` pack acquisition. Not
-    scheduled.
+- **T4.9b' — Close-Sun dataset port** ❌ **NOT SCHEDULED**
+  (decision 2026-04-23, option B). Requires downloading the
+  `default-data` pack from gaiasky.space + extracting the Sun
+  body descriptor + its texture(s). Atlas's `ProceduralSun3D.tsx`
+  (Perlin cubemap + hand-authored ray geometry) covers the
+  close-Sun render path acceptably; the gap is documented atlas-
+  opinion, NOT a visible regression. Re-open only if a user
+  flags close-up Sun fidelity as a noticeable issue. Until then
+  no asset acquisition or porting is scheduled.
 - **T4.9c — Procedural dwarf-planet surfaces** (cosmetic, NOT a fix).
   - `proceduralSurface.ts` canvas-renders 512×256 per-body
     textures for asteroids + Kuiper bodies when no real survey

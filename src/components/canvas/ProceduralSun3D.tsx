@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import { resolveSunRenderRange } from "../../lib/sunRenderRange";
 import {
   proceduralSunFlaresFragmentShader,
   proceduralSunFlaresVertexShader,
@@ -545,6 +546,17 @@ export const ProceduralSun3D = ({
 
     const group = groupRef.current;
     if (!group) return;
+
+    // T4.9a' — at stellar distances (cam beyond ~100 AU) Gaia hides
+    // the body-pipeline mesh and renders the Sun as a star billboard
+    // (`SunBillboard.tsx`). Self-gate visibility against the same
+    // threshold the billboard uses so the two never composite (no
+    // `feedback_no_effect_stacking.md` violation).
+    const camDistance = state.camera.position.length();
+    const isClose = resolveSunRenderRange(camDistance) === "close";
+    group.visible = isClose;
+    if (!isClose) return;
+
     const perlinResources = perlinResourcesRef.current;
     const sunMaterial = sunMaterialRef.current;
     const glowMaterial = glowMaterialRef.current;

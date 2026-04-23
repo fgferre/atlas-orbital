@@ -25,6 +25,7 @@ import {
 import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
 import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
+import { SunBillboard } from "./SunBillboard";
 import { CameraController } from "./CameraController";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
@@ -387,6 +388,13 @@ export const Scene = () => {
               qualityProfileName={qualityProfile.name}
               sunVisualRadiusWorld={sunVisualRadiusWorld}
             />
+            {/* T4.9a' — Sun star-billboard fallback at stellar
+                distances. Self-gates via `SUN_BILLBOARD_THRESHOLD_AU`
+                so it composites with `ProceduralSun3D`'s inverse gate
+                without overlap. Procedural-mode-only for the first
+                ship; the textured `Planet`-mesh path stays unchanged
+                (out of scope for T4.9a' first ship). */}
+            <SunBillboard />
           </Suspense>
         )}
         <OverlayPositionTracker />
