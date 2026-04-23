@@ -233,6 +233,22 @@ blind spot:
   procedural sprite sampled under `ClampToEdge`. Gaia's real
   vendored textures already have zero borders; the trap is
   atlas-specific to our procedural substitutes.
+- **Subagent `file:line` citations need spot-check verification
+  before you build on them.** Broad-scope audit prompts nudge
+  subagents toward confident-sounding but fabricated citations —
+  `SunComponent.java:50-70` and `$GS_DATA/tex/base/sun-{surface,
+glow,corona}` both came back in the 2026-04-23 T4.9 Sun audit,
+  and neither exists in `/tmp/gaiasky/`. The ROADMAP picked up an
+  entire sub-wave plan (T4.9a/b/c) on those fabricated paths
+  before the next iteration's R1 grep caught it. Mitigation:
+  grep the file path + read the cited lines on at least 2-3
+  claims from any subagent verdict before using it as a ship
+  basis. If ANY cite is wrong, treat the whole report as
+  unreliable (the confidence of the language is uncorrelated
+  with accuracy — fabrication is cheaper than real analysis for
+  a subagent under broad scope). Pair this with M1 ("ground
+  truth is the wired runtime, not prose") — Gaia source IS the
+  wired runtime for port-direction claims; subagent prose is not.
 
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
