@@ -84,19 +84,25 @@ export const SunBillboard = () => {
     };
   }, [material]);
 
+  // Defensive try/catch (added 2026-04-23): a throw here would kill
+  // R3F's frame loop and hang the loader at 96 %.
   useFrame((state) => {
-    const sprite = spriteRef.current;
-    if (!sprite) return;
+    try {
+      const sprite = spriteRef.current;
+      if (!sprite) return;
 
-    // Camera distance to the Sun (origin in atlas's world frame).
-    const dist = state.camera.position.length();
-    const range = resolveSunRenderRange(dist);
-    const isFar = range === "far";
-    sprite.visible = isFar;
-    if (!isFar) return;
+      // Camera distance to the Sun (origin in atlas's world frame).
+      const dist = state.camera.position.length();
+      const range = resolveSunRenderRange(dist);
+      const isFar = range === "far";
+      sprite.visible = isFar;
+      if (!isFar) return;
 
-    const screenSize = dist * SCREEN_SIZE_FACTOR;
-    sprite.scale.setScalar(screenSize);
+      const screenSize = dist * SCREEN_SIZE_FACTOR;
+      sprite.scale.setScalar(screenSize);
+    } catch (err) {
+      console.error("[SunBillboard] frame error:", err);
+    }
   });
 
   return (

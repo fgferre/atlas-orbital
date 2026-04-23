@@ -362,17 +362,26 @@ export const CameraController = () => {
     // resulting damping factor to OrbitControls. The control's update()
     // reads scope.dampingFactor each frame, so this live mutation
     // takes effect immediately.
-    const focusBody = BODIES_BY_ID.get(focusId);
-    if (focusBody) {
-      const focusRadius = AstroPhysics.resolveSemanticBodyRadius({
-        body: focusBody,
-        scaleMode: useStore.getState().scaleMode,
-      });
-      const cameraDistance = cameraInstance.position.distanceTo(worldPos);
-      controlsInstance.dampingFactor = computeProximityDamping(
-        cameraDistance,
-        focusRadius
-      );
+    // Defensive try/catch (added 2026-04-23 alongside SceneReadyChecker
+    // safety hatch): any throw here kills R3F's frame loop, which
+    // hangs the loader at 96 %. Wrap so a stale focus / missing body
+    // logs an error instead of taking the whole canvas down.
+    try {
+      const focusBody = BODIES_BY_ID.get(focusId);
+      if (focusBody) {
+        const focusRadius = AstroPhysics.resolveSemanticBodyRadius({
+          body: focusBody,
+          scaleMode: useStore.getState().scaleMode,
+        });
+        const cameraDistance = cameraInstance.position.distanceTo(worldPos);
+        controlsInstance.dampingFactor = computeProximityDamping(
+          cameraDistance,
+          focusRadius
+        );
+      }
+    } catch (err) {
+      console.error("[CameraController] proximity-damping error:", err);
+      controlsInstance.dampingFactor = PROXIMITY_DAMPING_BASE;
     }
 
     const prevTarget = TMP_PREV_TARGET.copy(controlsInstance.target);

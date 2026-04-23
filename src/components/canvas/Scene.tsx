@@ -220,38 +220,51 @@ const NormalizedWheelZoom = ({
   // OrbitControls reads `scope.scale` inside `update()` and resets
   // it each frame, so dispatching multiple dolly calls per frame is
   // safe (they compose into the next `scale`).
+  // Defensive try/catch (added 2026-04-23 alongside SceneReadyChecker
+  // safety hatch): any throw here would kill R3F's entire frame loop,
+  // which prevents SceneReadyChecker from advancing → loader hangs at
+  // 96 %. Wrap so the worst case is a single dropped zoom-tick + a
+  // console error, instead of the whole canvas being dead.
   useFrame((_, dt) => {
-    const controls = controlsRef.current;
-    if (!controls) return;
+    try {
+      const controls = controlsRef.current;
+      if (!controls) return;
 
-    const velocity = zoomVelocityRef.current;
-    if (velocity === 0) return;
+      const velocity = zoomVelocityRef.current;
+      if (velocity === 0) return;
 
-    const { nextVelocity, frameSteps } = consumeZoomVelocity(velocity, dt);
-    zoomVelocityRef.current = nextVelocity;
+      const { nextVelocity, frameSteps } = consumeZoomVelocity(velocity, dt);
+      zoomVelocityRef.current = nextVelocity;
 
-    if (frameSteps !== 0) {
-      // Convert fractional steps to OrbitControls' multiplicative
-      // dolly API. `controls.getZoomScale()` returns the per-step
-      // scale factor (typically ~0.9 with zoomSpeed=2); raising it
-      // to the absolute frameSteps preserves the sign-aware
-      // cumulative effect.
-      const dollyScale = Math.pow(
-        controls.getZoomScale(),
-        Math.abs(frameSteps)
-      );
-      if (frameSteps > 0) {
-        controls.dollyOut(dollyScale);
-      } else {
-        controls.dollyIn(dollyScale);
+      if (frameSteps !== 0) {
+        // Convert fractional steps to OrbitControls' multiplicative
+        // dolly API. `controls.getZoomScale()` returns the per-step
+        // scale factor (typically ~0.9 with zoomSpeed=2); raising it
+        // to the absolute frameSteps preserves the sign-aware
+        // cumulative effect.
+        const dollyScale = Math.pow(
+          controls.getZoomScale(),
+          Math.abs(frameSteps)
+        );
+        if (frameSteps > 0) {
+          controls.dollyOut(dollyScale);
+        } else {
+          controls.dollyIn(dollyScale);
+        }
+        controls.update();
       }
-      controls.update();
-    }
 
-    if (nextVelocity === 0 && isCoastingRef.current) {
-      // Velocity decayed below deadzone — fire `end` so callers can
-      // resume any logic that was paused at `start`.
-      controls.dispatchEvent({ type: "end", target: controls });
+      if (nextVelocity === 0 && isCoastingRef.current) {
+        // Velocity decayed below deadzone — fire `end` so callers can
+        // resume any logic that was paused at `start`.
+        controls.dispatchEvent({ type: "end", target: controls });
+        isCoastingRef.current = false;
+      }
+    } catch (err) {
+      console.error("[NormalizedWheelZoom] frame error:", err);
+      // Reset to a known-good state so subsequent frames don't keep
+      // throwing on a stuck velocity.
+      zoomVelocityRef.current = 0;
       isCoastingRef.current = false;
     }
   });

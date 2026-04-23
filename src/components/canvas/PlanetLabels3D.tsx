@@ -99,49 +99,56 @@ export const PlanetLabels3D = () => {
     []
   );
 
+  // Defensive try/catch (added 2026-04-23): a throw here would kill
+  // R3F's frame loop and hang the loader at 96 %. Worst case is that
+  // SDF labels stop tracking for a frame; the next frame retries.
   useFrame(() => {
-    if (labelMode !== "sdf" || !showLabels) return;
+    try {
+      if (labelMode !== "sdf" || !showLabels) return;
 
-    const { overlayItems } = useStore.getState();
-    visibilityRef.current.clear();
-    for (const item of overlayItems) {
-      visibilityRef.current.set(item.id, item.showLabel);
-    }
-
-    for (const body of SOLAR_SYSTEM_BODIES) {
-      const group = groupRefs.current.get(body.id);
-      if (!group) continue;
-
-      const shouldShow = visibilityRef.current.get(body.id) === true;
-      group.visible = shouldShow;
-      if (!shouldShow) continue;
-
-      let mesh = meshCache.get(body.id);
-      if (!mesh || mesh.parent === null) {
-        mesh = scene.getObjectByName(body.id) ?? undefined;
-        if (mesh) {
-          meshCache.set(body.id, mesh);
-        } else {
-          meshCache.delete(body.id);
-          group.visible = false;
-          continue;
-        }
+      const { overlayItems } = useStore.getState();
+      visibilityRef.current.clear();
+      for (const item of overlayItems) {
+        visibilityRef.current.set(item.id, item.showLabel);
       }
 
-      mesh.getWorldPosition(TMP_WORLD);
-      group.position.copy(TMP_WORLD);
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        const group = groupRefs.current.get(body.id);
+        if (!group) continue;
 
-      // Billboard the text toward the camera — libGDX's TextRenderer
-      // does this implicitly via the view matrix; troika renders in
-      // the group's local frame so we have to orient the group
-      // ourselves. A `lookAt` toward the camera with the default
-      // Three.js up vector produces the billboard we want.
-      TMP_BILLBOARD.lookAt(group.position, camera.position, camera.up);
-      group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
+        const shouldShow = visibilityRef.current.get(body.id) === true;
+        group.visible = shouldShow;
+        if (!shouldShow) continue;
 
-      const distance = group.position.distanceTo(camera.position);
-      const fontScale = (distance / FONT_DISTANCE_DIVISOR) * FONT_WORLD_BASE;
-      group.scale.setScalar(Math.max(fontScale, FONT_WORLD_BASE));
+        let mesh = meshCache.get(body.id);
+        if (!mesh || mesh.parent === null) {
+          mesh = scene.getObjectByName(body.id) ?? undefined;
+          if (mesh) {
+            meshCache.set(body.id, mesh);
+          } else {
+            meshCache.delete(body.id);
+            group.visible = false;
+            continue;
+          }
+        }
+
+        mesh.getWorldPosition(TMP_WORLD);
+        group.position.copy(TMP_WORLD);
+
+        // Billboard the text toward the camera — libGDX's TextRenderer
+        // does this implicitly via the view matrix; troika renders in
+        // the group's local frame so we have to orient the group
+        // ourselves. A `lookAt` toward the camera with the default
+        // Three.js up vector produces the billboard we want.
+        TMP_BILLBOARD.lookAt(group.position, camera.position, camera.up);
+        group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
+
+        const distance = group.position.distanceTo(camera.position);
+        const fontScale = (distance / FONT_DISTANCE_DIVISOR) * FONT_WORLD_BASE;
+        group.scale.setScalar(Math.max(fontScale, FONT_WORLD_BASE));
+      }
+    } catch (err) {
+      console.error("[PlanetLabels3D] frame error:", err);
     }
   });
 
