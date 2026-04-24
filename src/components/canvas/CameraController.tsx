@@ -18,6 +18,7 @@ import {
   PROXIMITY_DAMPING_BASE,
 } from "../../lib/camera/proximityDamping";
 import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
+import { computeSurfaceLookTarget } from "../../lib/camera/surfaceLookTarget";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
 // because the frame loop is single-threaded and every read is paired
@@ -26,6 +27,9 @@ import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
 // so passing these refs never leaks mutation back into the caller.
 const TMP_WORLD_POS = new THREE.Vector3();
 const TMP_PREV_TARGET = new THREE.Vector3();
+// T4.2-β-handler scratch vectors for the surface-mode target swap.
+const TMP_CAMERA_FORWARD = new THREE.Vector3();
+const TMP_SURFACE_TARGET = new THREE.Vector3();
 
 export const CameraController = () => {
   const { camera, scene, size } = useThree();
@@ -411,7 +415,47 @@ export const CameraController = () => {
       focusWorldPos: worldPos,
       state: focusTrackingRef.current,
     });
-    controlsInstance.target.copy(nextTarget);
+
+    // T4.2-β-handler — free-look approximation when surface mode is
+    // active. Gaia swaps `directionToTarget` → `updateRotationFree`
+    // (`NaturalCamera.java:529-535`), making the camera yaw/pitch
+    // around its own axes instead of tracking the focus center.
+    // atlas's three-stdlib OrbitControls has no free-look mode, but
+    // moving `controls.target` to a point just in front of the
+    // camera collapses the orbit sphere onto camera-local axes —
+    // a directionally-correct approximation (see
+    // `src/lib/camera/surfaceLookTarget.ts` header for caveats).
+    //
+    // When surface mode active we also zero the focus-tracking
+    // cameraDelta so the camera stays at its current world position
+    // (doesn't get pulled toward the body's center while the user
+    // is looking around). This is the "stand still and look around"
+    // feel the surface-mode UX wants.
+    //
+    // **Known transition artifact.** When `surfaceModeActive` flips
+    // (on the mode boundary `distFromFocus ≈ 2.5 × focusRadius /
+    // fovFactor`), `controls.target` snaps between the two branches:
+    // surface→normal jumps from `camera.position + forward` back to
+    // the focus body's world position, and normal→surface jumps the
+    // opposite way. Gaia transitions smoothly because its rotation
+    // handlers don't use a `target` — they just swap. Smoothing the
+    // snap (e.g., lerping `controls.target` between the two
+    // endpoints over ~200 ms) is a future T4.2-β-handler-smooth
+    // refinement; the current ship accepts the snap as the price of
+    // keeping the port architecturally cheap.
+    const surfaceModeActive = useStore.getState().surfaceModeActive;
+    if (surfaceModeActive && !flyingRef.current.isFlying) {
+      cameraInstance.getWorldDirection(TMP_CAMERA_FORWARD);
+      const surfaceTarget = computeSurfaceLookTarget(
+        cameraInstance.position,
+        TMP_CAMERA_FORWARD,
+        TMP_SURFACE_TARGET
+      );
+      controlsInstance.target.copy(surfaceTarget);
+      cameraDelta.set(0, 0, 0);
+    } else {
+      controlsInstance.target.copy(nextTarget);
+    }
 
     if (flyingRef.current.isFlying) {
       const newPos = transitionRef.current.update();
