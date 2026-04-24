@@ -30,7 +30,16 @@ interface PostProcessingPipelineProps {
   bloomRef: RefObject<BloomController | null>;
   hueSatRef: RefObject<HueSaturationController | null>;
   brightnessRef: RefObject<BrightnessContrastController | null>;
-  bloomEnabled: boolean;
+  /**
+   * True when the Bloom effect should be mounted into the composer.
+   * Computed at Scene level via `shouldMountBloom(bloomEnabled,
+   * effectiveBloomIntensity)` (see `src/lib/graphics/bloomGate.ts`).
+   * Renamed from `bloomEnabled` in T5.3a to reflect the composite
+   * gate — it's NOT the quality-profile `bloomEnabled` flag alone,
+   * it's the Gaia `MainPostProcessor.java:335` equivalent
+   * `bloomEnabled && intensity > 0`.
+   */
+  bloomMounted: boolean;
   toneMapping: ToneMappingName;
 }
 
@@ -46,7 +55,7 @@ export const PostProcessingPipeline = memo(
     bloomRef,
     hueSatRef,
     brightnessRef,
-    bloomEnabled,
+    bloomMounted,
     toneMapping,
   }: PostProcessingPipelineProps) => {
     const assignBloomRef = useCallback(
@@ -144,7 +153,7 @@ export const PostProcessingPipeline = memo(
       <EffectComposer frameBufferType={THREE.HalfFloatType}>
         <LightGlowSlot />
         <LensFlareSlot />
-        {bloomEnabled ? (
+        {bloomMounted ? (
           <Bloom
             ref={assignBloomRef}
             mipmapBlur

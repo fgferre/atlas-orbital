@@ -18,6 +18,7 @@ import * as THREE from "three";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useEffectiveGraphics } from "../../hooks/useEffectiveGraphics";
+import { shouldMountBloom } from "../../lib/graphics/bloomGate";
 import {
   resolveDeferredTextureBudget,
   setDeferredTextureBudget,
@@ -579,7 +580,10 @@ export const Scene = () => {
             bloomRef={bloomRef}
             hueSatRef={hueSatRef}
             brightnessRef={brightnessRef}
-            bloomEnabled={qualityProfile.bloomEnabled}
+            bloomMounted={shouldMountBloom(
+              qualityProfile.bloomEnabled,
+              effectiveGraphics.bloomIntensity
+            )}
             toneMapping={effectiveGraphics.toneMapping}
           />
         )}
