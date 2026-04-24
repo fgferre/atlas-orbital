@@ -852,9 +852,30 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     both modes; the surface-mode flag is observable via the store
     so a future T4.2-β-handler ship can swap to a free-look mode
     (likely by repointing `controls.target` at camera+offset OR
-    swapping to `FlyControls`). This first ship lands the predicate
-    - signal; the handler swap is the deferred half. Depends on
-      T4.2-α (shipped).
+    swapping to `FlyControls`). This first ship lands the predicate - signal; the handler swap is the deferred half. Depends on
+    T4.2-α (shipped).
+  - **T4.2-β-handler ✅ SHIPPED (2026-04-23, `4571e86`)** —
+    free-look target swap. Wires the `surfaceModeActive` store flag
+    into a real rotation-behavior change. `src/lib/camera/surfaceLookTarget.ts`
+    pins `SURFACE_LOOK_OFFSET_WORLD_UNITS=1.0` + `computeSurfaceLookTarget`
+    helper (pure geometry, 7 pinned tests). `CameraController`'s
+    focus useFrame gains a new branch: when `surfaceModeActive &&
+!isFlying`, reads `camera.getWorldDirection`, computes
+    `controls.target = camera.position + forward × 1.0`, zeros the
+    focus-tracking `cameraDelta` so the camera stays put while the
+    user looks around. Approximation of Gaia's `updateRotationFree`
+    (`NaturalCamera.java:1111-1127`) which rotates `direction` +
+    `up` directly around camera-local axes — OrbitControls has no
+    free-look mode, so the near-target trick collapses the orbit
+    sphere onto camera-local yaw/pitch. SUBAGENT VERIFY flagged
+    mode-boundary target snap as undocumented (FAIL); fixed
+    pre-commit with a "Known transition artifact" block in
+    `CameraController.tsx`. All 6 divergences now documented.
+    Known limits: orbit-around-near-target vs pure free-look
+    (~1-unit camera wobble on drag), no roll, OrbitControls
+    polar-angle clamps inherited, mode-boundary target snap
+    (smoothing deferred to future T4.2-β-handler-smooth
+    refinement). Independent follow-up to T4.2-β.
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
     pins three constants + three pure functions for a 1D
