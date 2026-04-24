@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 32 incidents (sessions 2026-04-17 → 2026-04-23).
+Meta-rules distilled from 33 incidents (sessions 2026-04-17 → 2026-04-24).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -249,6 +249,33 @@ glow,corona}` both came back in the 2026-04-23 T4.9 Sun audit,
   a subagent under broad scope). Pair this with M1 ("ground
   truth is the wired runtime, not prose") — Gaia source IS the
   wired runtime for port-direction claims; subagent prose is not.
+- **Per-commit gates miss cross-commit cumulative regressions.**
+  DIFF GATE + SUBAGENT VERIFY scope to the ship under review;
+  they cannot see that commit N's pure-TS math helper + commit
+  N+2's new useFrame + commit N+4's new `document` listener
+  together push a frame over the 10 s Chrome GPU watchdog
+  threshold. The 2026-04-23 session shipped 18 feats in one day,
+  every gate green on each; the COMPOSITION produced a
+  white-canvas regression that took a 2026-04-24 external-agent
+  audit (Codex) + 4 parallel Sonnet subagents to root-cause.
+  Primary mechanism turned out to be a 100 ms race window in
+  `InitialCameraAnimation` where the camera was at ~1e12 world
+  units but the `isIntroAnimating` gate had not yet flipped, so
+  distance-sensitive consumers uploaded ~1e10-scale vertices and
+  ANGLE/D3D11 stalled — a physics problem invisible to any
+  CPU-side gate. Amplifiers landed as debug helpers in the same
+  session (`main.tsx` error listener leak across HMR,
+  `SurfaceModeFirstPerson` pointer-lock retry loop). Mitigation
+  for future waves: after ≥3 commits touching the same subsystem
+  (Camera / Scene / Planet / postprocess), run a cumulative-smoke
+  step — build prod bundle, serve, record Chrome Performance
+  from cold boot, confirm first-frame <100 ms and no long tasks
+  > 50 ms. If preview-MCP runtime smoke is unavailable (the
+  > 2026-04-23 session's known HMR-env issue), schedule an external
+  > audit at the wave boundary instead of waiting for a user bug
+  > report. Dovetails with the "cross-AI at phase boundaries"
+  > bullet above: the trigger threshold is "≥3 commits to same
+  > subsystem", not just "phase complete".
 
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light

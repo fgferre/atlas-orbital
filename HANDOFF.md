@@ -1,12 +1,30 @@
 # Atlas Orbital Handoff
 
-Last updated: 2026-04-18 (Wave α shipped)
+Last updated: 2026-04-24 (white-canvas remediation + Phase θ progress)
 
 ## Purpose
 
 This file is the canonical handoff for starting a new Codex conversation on this repository without relying on prior thread memory.
 
 The goal is to preserve validated context, prevent repeated false assumptions, and give the next conversation a low-noise starting point.
+
+## Current position (2026-04-24)
+
+**Phase θ (Gaia Sky port) is the active work, not Wave α.** See `tasks/STATUS.md` for the authoritative state — §Shipped ondas covers everything through T5.2 atmosphere blend, T4.2-β-handler Silver pointer-lock, and the 2026-04-24 white-canvas remediation wave (4 commits: `720f60f`, `34f1dde`, `9e84638`, + doc sync). §Next up pipeline starts at T5.3 Bloom/LightGlow perf gates.
+
+The Wave α section below is **historical** — Wave α shipped at `4601969` on 2026-04-18 and is now the foundation for everything Phase θ has layered on top. The Gaia Sky port waves (T2, T3, T4, T5) are the current delivery stream; Wave α's HDR pipeline + graphics panel are load-bearing inputs but no longer active work.
+
+### Load-bearing current docs
+
+- `tasks/STATUS.md` — single source of truth (read FIRST).
+- `tasks/ROADMAP.md` — full tiered plan with commit SHAs.
+- `tasks/lessons.md` — meta-rules (M1-M6 as of 2026-04-24; latest append is the white-canvas cross-commit bullet under M5).
+- `tasks/white-canvas-bug-external-prompt.md` — 2026-04-24 post-mortem material if the white-canvas symptom recurs.
+- `AGENTS.md` + `CLAUDE.md` — engineering standards (unchanged).
+
+---
+
+## Historical: Wave α shipped 2026-04-18
 
 ## Status update — 2026-04-18 (Wave α)
 
