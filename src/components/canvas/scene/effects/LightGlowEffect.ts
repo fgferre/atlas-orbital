@@ -7,19 +7,34 @@ import { getLightGlowSprite } from "./lightGlowSprite";
 /**
  * Gaia Sky LightGlow post-process port (θ.3). 1:1 port of
  * `assets/shader/postprocess/lightglow.frag.glsl` +
- * `lightglow.vert.glsl`, with one documented engineering choice:
+ * `lightglow.vert.glsl`.
  *
- * **Fragment-stage Archimedean spiral sampling.** Gaia Sky's vertex
- * shader computes per-light `v_lums[N]` via an Archimedean spiral
- * around each `u_lightPositions[li]` (runtime-forced to 1 sample by
- * `MainPostProcessor.updateGlow()`), then passes the array to the
- * fragment via a varying. The computation is uniform-constant per
- * frame, so moving it to fragment-stage is a correctness-preserving
- * re-arrangement (same math, same output). Fragment-stage fits the
- * pmndrs `Effect` base class, which does not expose a custom
- * vertex-shader slot for full-screen passes.
+ * **T5.3b shipped 2026-04-24**: per-light `v_lums` spiral sampling
+ * moved from the fragment stage back to the vertex stage, matching
+ * Gaia's original architecture at `lightglow.vert.glsl:49-78`. The
+ * pre-T5.3b atlas port ran the spiral loop inside `mainImage` — ~3M
+ * fragments × N lights × 2 texture samples per frame. The 2026-04-24
+ * audit measured this at ~400M texture samples/sec per active light
+ * at 1080p/60Hz; the vertex-stage move drops that to 4 vertices × N
+ * × 2 = ≤64 samples/frame (vanishing noise-floor cost).
  *
- * Everything else is literal:
+ * The pre-T5.3b rationale ("pmndrs `Effect` does not expose a custom
+ * vertex-shader slot") turned out to be obsolete — pmndrs does
+ * support per-Effect custom vertex shaders via the `mainSupport(uv)`
+ * convention (see the stdlib FXAA / SMAA / Chromatic Aberration
+ * effects), AND extracts `varying` declarations from the custom
+ * vertex shader + adds them to the composed program (see
+ * `postprocessing/build/postprocessing.js:15381-15395 integrateEffect`).
+ *
+ * Atlas packs the 8-light `v_lums` array into 2× `vec4` varyings
+ * (`v_lumsA` for lights 0..3, `v_lumsB` for lights 4..7) rather than
+ * a `float[8]` array varying. pmndrs' varying-extraction regex
+ * handles both, but scalar array varyings are fragile across GPU
+ * drivers — packed vec4s are the bulletproof format every
+ * shader pipeline supports, and cost nothing semantically (scalar
+ * access via `.x/.y/.z/.w` in the fragment is trivial).
+ *
+ * Everything else stays literal:
  *   - Same spiral parameters: `t ∈ [0, 3π]`, `dt = 3π / n`,
  *     `fx = a·t·cos(t)`, `fy = a·t·sin(t)`.
  *   - Same 0.95 luma threshold via `step(0.95, value)` gate.
@@ -48,6 +63,11 @@ import { getLightGlowSprite } from "./lightGlowSprite";
  *   - `u_orientation = 0` (Gaia Sky disables the orientation animation
  *     in the final shader — comment block in lightglow.frag.glsl).
  *   - `u_backbufferScale = 1.0` (non-OpenXR path).
+ *
+ * **MAX_LIGHTS = 8 assumption.** The vec4 packing below hard-codes
+ * the 2-varying layout for exactly 8 slots. If
+ * `src/lib/lightRegistry.ts MAX_LIGHTS` ever changes, this file
+ * needs a matching update (test pins the invariant at module load).
  */
 
 export const LIGHT_GLOW_DEFAULT_SAMPLES = 1;
@@ -70,9 +90,98 @@ export const LIGHT_GLOW_POLAR_TIME_MULS: Readonly<[number, number, number]> = [
 ];
 
 /**
- * Fragment shader — ports both the vertex-stage spiral sampling (now
- * inlined at the top of `mainImage`) and the fragment-stage halo
- * rendering 1:1.
+ * **Vertex shader** (T5.3b) — ports Gaia's `lightglow.vert.glsl:49-78`
+ * spiral-sampling pass. pmndrs calls `mainSupport(vUv)` from its
+ * composed vertex shader (see
+ * `postprocessing/build/postprocessing.js:15381-15395`). Runs 4
+ * times per frame (fullscreen quad corners). Each invocation walks
+ * the Archimedean spiral around each light and samples `inputBuffer`
+ * in the vertex stage — WebGL 2 supports vertex texture fetch.
+ *
+ * Output varyings `v_lumsA` / `v_lumsB` pack 8 per-light lums into
+ * two vec4s (N=8 is pinned by `MAX_LIGHTS` in `lightRegistry.ts`).
+ * All 4 vertices write the same values (sampling inputs don't
+ * depend on vertex position), so the interpolated fragment value
+ * is the same scalar → correct behavior with no fragment-stage
+ * recomputation cost.
+ *
+ * `inputBuffer` is declared in both stages; three.js's program
+ * linker binds it once per WebGLTexture, so fragment + vertex share
+ * the same sampler.
+ */
+const vertexShader = /* glsl */ `
+  uniform sampler2D inputBuffer;
+  uniform int u_nLights;
+  uniform int u_nSamples;
+  uniform float u_spiralScale;
+  uniform vec2 u_lightPositions[N];
+
+  varying vec4 v_lumsA;
+  varying vec4 v_lumsB;
+
+  float vtxGaiaLuma(vec3 rgb) {
+    return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  }
+
+  float vtxFx(float t, float a) {
+    return a * t * cos(t);
+  }
+
+  float vtxFy(float t, float a) {
+    return a * t * sin(t);
+  }
+
+  float computeLumForLight(int li, float ar) {
+    if (li >= u_nLights) return 0.0;
+    float a = u_spiralScale;
+    float t = 0.0;
+    float dt = 3.0 * 3.14159 / float(u_nSamples);
+    float th = 0.95;
+    float lum = 0.0;
+    for (int idx = 0; idx < 64; idx++) {
+      if (idx >= u_nSamples) break;
+      vec2 curr_coord = clamp(
+        u_lightPositions[li] + vec2(vtxFx(t, a) / ar, vtxFy(t, a)),
+        0.0,
+        1.0
+      );
+      float value = vtxGaiaLuma(texture2D(inputBuffer, curr_coord).rgb);
+      lum += step(th, value) * value;
+      t += dt;
+    }
+    // Gaia Sky samples one extra point post-loop (bonus sample).
+    float value = vtxGaiaLuma(
+      texture2D(
+        inputBuffer,
+        u_lightPositions[li] + vec2(vtxFx(t, a) / ar, vtxFy(t, a) * ar)
+      ).rgb
+    );
+    lum += step(th, value) * value;
+    lum /= float(u_nSamples);
+    return clamp(lum, 0.0, 1.0);
+  }
+
+  void mainSupport(const in vec2 uv) {
+    float ar = resolution.x / resolution.y;
+    v_lumsA = vec4(
+      computeLumForLight(0, ar),
+      computeLumForLight(1, ar),
+      computeLumForLight(2, ar),
+      computeLumForLight(3, ar)
+    );
+    v_lumsB = vec4(
+      computeLumForLight(4, ar),
+      computeLumForLight(5, ar),
+      computeLumForLight(6, ar),
+      computeLumForLight(7, ar)
+    );
+  }
+`;
+
+/**
+ * Fragment shader — halo rendering (pure per-fragment work). Reads
+ * `v_lumsA` / `v_lumsB` varyings populated by the vertex-stage
+ * spiral sampling.
  *
  * pmndrs `Effect` convention:
  *   - `inputColor` is the scene's colour at this UV.
@@ -83,11 +192,7 @@ export const LIGHT_GLOW_POLAR_TIME_MULS: Readonly<[number, number, number]> = [
  *   - `resolution` uniform is auto-provided.
  */
 const fragmentShader = /* glsl */ `
-  #define N 8
-
   uniform int u_nLights;
-  uniform int u_nSamples;
-  uniform float u_spiralScale;
   uniform float u_textureScale;
   uniform float u_backbufferScale;
   uniform float u_orientation;
@@ -97,18 +202,8 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D u_lightGlowTexture;
   uniform float u_timeSeconds;
 
-  // Gaia Sky lib/luma.glsl  \`luma\` definition (sRGB weights).
-  float gaiaLuma(vec3 rgb) {
-    return dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  }
-
-  float fx(float t, float a) {
-    return a * t * cos(t);
-  }
-
-  float fy(float t, float a) {
-    return a * t * sin(t);
-  }
+  varying vec4 v_lumsA;
+  varying vec4 v_lumsB;
 
   vec4 starImage(vec2 tc) {
     // Gaia leaves the orientation rotation commented out; mirror that.
@@ -134,52 +229,29 @@ const fragmentShader = /* glsl */ `
     return clamp(angularMask + center, minVal, 1.0);
   }
 
+  // Unpack N=8 per-light lums from the two vec4 varyings. Indexed by
+  // \`li\` which comes from the per-light halo loop below.
+  float getLum(int li) {
+    if (li == 0) return v_lumsA.x;
+    if (li == 1) return v_lumsA.y;
+    if (li == 2) return v_lumsA.z;
+    if (li == 3) return v_lumsA.w;
+    if (li == 4) return v_lumsB.x;
+    if (li == 5) return v_lumsB.y;
+    if (li == 6) return v_lumsB.z;
+    return v_lumsB.w;
+  }
+
   void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
     // Gaia uses \`resolution\` (provided by pmndrs) for aspect ratio.
     float ar = resolution.x / resolution.y;
-
-    // Spiral sampling (moved from vertex to fragment; see class-level
-    // doc for why this is a correctness-preserving rearrangement).
-    float lums[N];
-    for (int li = 0; li < N; li++) {
-      if (li >= u_nLights) {
-        lums[li] = 0.0;
-        continue;
-      }
-      float a = u_spiralScale;
-      float t = 0.0;
-      float dt = 3.0 * 3.14159 / float(u_nSamples);
-      float th = 0.95;
-      float lum = 0.0;
-      for (int idx = 0; idx < 64; idx++) {
-        if (idx >= u_nSamples) break;
-        vec2 curr_coord = clamp(
-          u_lightPositions[li] + vec2(fx(t, a) / ar, fy(t, a)),
-          0.0,
-          1.0
-        );
-        float value = gaiaLuma(texture2D(inputBuffer, curr_coord).rgb);
-        lum += step(th, value) * value;
-        t += dt;
-      }
-      // Gaia Sky samples one extra point post-loop (bonus sample).
-      float value = gaiaLuma(
-        texture2D(
-          inputBuffer,
-          u_lightPositions[li] + vec2(fx(t, a) / ar, fy(t, a) * ar)
-        ).rgb
-      );
-      lum += step(th, value) * value;
-      lum /= float(u_nSamples);
-      lums[li] = clamp(lum, 0.0, 1.0);
-    }
 
     // Halo rendering per light (fragment-local).
     vec3 effectColor = vec3(0.0);
     for (int li = 0; li < N; li++) {
       if (li >= u_nLights) break;
 
-      float lum = lums[li];
+      float lum = getLum(li);
       vec3 lightColor = u_lightColors[li];
       float viewAngle = min(0.0001, u_lightViewAngles[li]);
       float size = u_textureScale * min(1.6, viewAngle * 5.0e5) * lum;
@@ -264,6 +336,7 @@ export class LightGlowEffect extends Effect {
       blendFunction: BlendFunction.ADD,
       defines,
       uniforms,
+      vertexShader,
     });
   }
 

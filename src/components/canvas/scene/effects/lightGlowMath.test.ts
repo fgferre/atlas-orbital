@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_LIGHTS } from "../../../../lib/lightRegistry";
 import { archimedesSpiralSamples, haloSize, polarMask } from "./lightGlowMath";
 import {
   LIGHT_GLOW_DEFAULT_SAMPLES,
@@ -9,6 +10,18 @@ import {
   LIGHT_GLOW_POLAR_MASK_MIN_VAL,
   LIGHT_GLOW_POLAR_TIME_MULS,
 } from "./LightGlowEffect";
+
+describe("T5.3b vec4 packing assumption — MAX_LIGHTS must equal 8", () => {
+  it("MAX_LIGHTS is exactly 8 (two vec4 varyings in LightGlowEffect vertex shader)", () => {
+    // Pin: LightGlowEffect's vertex shader packs v_lumsA (lights
+    // 0..3) + v_lumsB (lights 4..7). If MAX_LIGHTS ever grows, the
+    // two-vec4 layout in `LightGlowEffect.ts` needs a corresponding
+    // update (add v_lumsC, extend the getLum() branching in the
+    // fragment stage). This assertion failing is a reminder to
+    // touch BOTH files, not just lightRegistry.
+    expect(MAX_LIGHTS).toBe(8);
+  });
+});
 
 const approxEq = (actual: number, expected: number, tol = 1e-6) => {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
