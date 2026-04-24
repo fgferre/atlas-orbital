@@ -80,6 +80,19 @@ export const SurfaceModeFirstPerson = () => {
   const surfaceModeActive = useStore((state) => state.surfaceModeActive);
   const isIntroAnimating = useStore((state) => state.isIntroAnimating);
 
+  // **Retry-loop guard** (2026-04-24 white-canvas post-mortem).
+  // If the browser denies pointer lock (no user gesture, detached
+  // element, transient activation crossed), `pointerlockerror` fires
+  // but `surfaceModeActive` stays true and `isLocked` stays false,
+  // which means the effect below can re-invoke `request()` on any
+  // subsequent render. The 2026-04-23 audit flagged this as a real
+  // retry storm vector. Mitigation: count consecutive errors and
+  // stop requesting after 3 failures for the remainder of the
+  // current surface-mode session. Counter resets on successful
+  // lock + on `surfaceModeActive` flipping false.
+  const lockErrorCountRef = useRef(0);
+  const LOCK_ERROR_BACKOFF_THRESHOLD = 3;
+
   // Accumulators for clamp-safe incremental rotation. We don't
   // re-derive pitch from `camera.rotation.x` every frame because
   // that's Euler-order dependent (YXZ vs XYZ yield different
@@ -137,6 +150,8 @@ export const SurfaceModeFirstPerson = () => {
       // from a hook, but the Three.js OrbitControls pattern treats
       // these mutations as legitimate. Ignore both writes below.
       if (locked) {
+        // Successful lock — reset the retry-error backoff counter.
+        lockErrorCountRef.current = 0;
         // Snapshot + disable. OrbitControls.update() is idempotent
         // so leaving it "enabled = false" doesn't leak state.
         if (prevControlsEnabledRef.current === null) {
@@ -162,10 +177,16 @@ export const SurfaceModeFirstPerson = () => {
       // Browsers throw here when the target is detached or when a
       // transient user-activation boundary was crossed. Log so user
       // reports surface the cause; don't crash the frame loop.
+      lockErrorCountRef.current += 1;
       console.warn(
-        "[SurfaceModeFirstPerson] pointerlockerror — lock denied:",
+        `[SurfaceModeFirstPerson] pointerlockerror — lock denied (attempt ${lockErrorCountRef.current}/${LOCK_ERROR_BACKOFF_THRESHOLD}):`,
         event
       );
+      if (lockErrorCountRef.current >= LOCK_ERROR_BACKOFF_THRESHOLD) {
+        console.warn(
+          "[SurfaceModeFirstPerson] backoff engaged — no further lock attempts until surfaceModeActive flips false."
+        );
+      }
     },
   });
 
@@ -184,7 +205,16 @@ export const SurfaceModeFirstPerson = () => {
   // require an explicit click fallback (out of scope for Silver).
   useEffect(() => {
     if (isIntroAnimating) return;
-    if (surfaceModeActive && !isLocked) {
+    // When the user leaves surface mode, reset the error backoff so
+    // the next entry gets a fresh retry budget.
+    if (!surfaceModeActive) {
+      lockErrorCountRef.current = 0;
+    }
+    if (
+      surfaceModeActive &&
+      !isLocked &&
+      lockErrorCountRef.current < LOCK_ERROR_BACKOFF_THRESHOLD
+    ) {
       request();
     } else if (!surfaceModeActive && isLocked) {
       exit();

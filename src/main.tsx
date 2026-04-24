@@ -4,34 +4,20 @@ import "./index.css";
 import App from "./App.tsx";
 import { initializeOrbitalEngine } from "./lib/orbital/setup";
 
-// Global error listeners (added 2026-04-23 for white-canvas boot
-// investigation). Captures unhandled errors + promise rejections that
-// React's error boundaries / try/catch wrappers would otherwise
-// swallow silently — useful when a user reports the canvas going
-// blank with no obvious console output.
-if (typeof window !== "undefined") {
-  window.addEventListener("error", (event) => {
-    // Print message + stack as separate strings so the browser
-    // console formats them readably (passing an object literal
-    // shows up as "[object Object]" in some contexts).
-    console.error(
-      `[atlas] Uncaught error: ${event.message} (${event.filename}:${event.lineno}:${event.colno})`
-    );
-    if (event.error?.stack) {
-      console.error("[atlas] Stack:", event.error.stack);
-    }
-  });
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
-    const message =
-      reason instanceof Error
-        ? `${reason.message}\n${reason.stack ?? ""}`
-        : typeof reason === "string"
-          ? reason
-          : JSON.stringify(reason, null, 2);
-    console.error(`[atlas] Unhandled promise rejection: ${message}`);
-  });
-}
+// Global error listeners (debug helper from 2026-04-23 white-canvas
+// bisect, commit `b5df427`). REMOVED 2026-04-24 after post-mortem
+// identified the listeners themselves as a cumulative amplifier of
+// the bug they were added to diagnose: every Vite HMR hot-update
+// re-executes `main.tsx` and appends a fresh pair of listeners
+// without removing the previous ones. After ~N save-cycles in a
+// long dev session the `window` accumulates N duplicated error
+// handlers; each caught error logs N times with stack trace,
+// flooding the main thread during the exact scenarios we wanted
+// to diagnose (a 7-second rAF stall). Removing the listener pair
+// entirely is simpler than adding `import.meta.hot.dispose()`
+// just to defuse a debug helper — if a fresh diagnostic session
+// needs them back, re-add WITH a dispose handler (see
+// `tasks/white-canvas-bug-external-prompt.md` for the audit notes).
 
 initializeOrbitalEngine();
 
