@@ -910,65 +910,65 @@ fovFactor × movementMultiplier` chain (constant works at 60+
     signatures from this ship in console. **T4.2 wave closed at
     full Gaia parity.**
 
-                                        **UX refinement candidates** (AAA proposal per
-                                        `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
-                                        divergences are user-perceivable in normal use; listing three
-                                        tiers so the user can pick the depth of the follow-up:
+                                            **UX refinement candidates** (AAA proposal per
+                                            `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
+                                            divergences are user-perceivable in normal use; listing three
+                                            tiers so the user can pick the depth of the follow-up:
 
-                                        - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
-                                          Solves #2 (mode-boundary target snap) + #3 (polar clamp in
-                                          surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
-                                          Implementation: (a) lerp `controls.target` over ~200 ms
-                                          (cubic-out easing) between the focus worldpos and the
-                                          `camera.position + forward × 1.0` endpoint when
-                                          `surfaceModeActive` flips; add a `targetLerpRef` in
-                                          `CameraController` + a tiny `lerpTarget.ts` helper so the
-                                          behavior is unit-testable. (b) In the same useFrame branch,
-                                          temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
-                                          to 0 / π (full sphere) when `surfaceModeActive`, restoring
-                                          atlas defaults on exit. No architectural churn; ships in
-                                          one commit. Bronze is a band-aid — the wobble remains
-                                          because OrbitControls is still the rotation authority.
+                                            - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
+                                              Solves #2 (mode-boundary target snap) + #3 (polar clamp in
+                                              surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
+                                              Implementation: (a) lerp `controls.target` over ~200 ms
+                                              (cubic-out easing) between the focus worldpos and the
+                                              `camera.position + forward × 1.0` endpoint when
+                                              `surfaceModeActive` flips; add a `targetLerpRef` in
+                                              `CameraController` + a tiny `lerpTarget.ts` helper so the
+                                              behavior is unit-testable. (b) In the same useFrame branch,
+                                              temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
+                                              to 0 / π (full sphere) when `surfaceModeActive`, restoring
+                                              atlas defaults on exit. No architectural churn; ships in
+                                              one commit. Bronze is a band-aid — the wobble remains
+                                              because OrbitControls is still the rotation authority.
 
-                                        - **Silver — pointer-lock first-person look** (~1-2 d,
-                                          recommended default). Solves #1 + #2 + #3 + #4 completely.
-                                          Replaces the near-target approximation with a genuine
-                                          first-person control path that takes over from OrbitControls
-                                          while `surfaceModeActive` is true. Architecture: new
-                                          `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
-                                          `useSurfaceModePointerLock.ts`. On entry, call
-                                          `canvas.requestPointerLock()`; subscribe `mousemove`; apply
-                                          yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
-                                          (`camera.rotateX(-dy × sensitivity)`) directly, no target.
-                                          Add Q/E keybind for roll (`camera.rotateZ`), matches the
-                                          Gaia-equivalent `updateRoll` path at
-                                          `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
-                                          flips false OR user hits Esc), `document.exitPointerLock()`
-                                          + restore `controls.enabled = true`. Full AAA surface-walk
-                                          feel (Half-Life / No Man's Sky parity). Closes the T4.2
-                                          wave at real Gaia parity instead of approximation.
+                                            - **Silver — pointer-lock first-person look** (~1-2 d,
+                                              recommended default). Solves #1 + #2 + #3 + #4 completely.
+                                              Replaces the near-target approximation with a genuine
+                                              first-person control path that takes over from OrbitControls
+                                              while `surfaceModeActive` is true. Architecture: new
+                                              `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
+                                              `useSurfaceModePointerLock.ts`. On entry, call
+                                              `canvas.requestPointerLock()`; subscribe `mousemove`; apply
+                                              yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
+                                              (`camera.rotateX(-dy × sensitivity)`) directly, no target.
+                                              Add Q/E keybind for roll (`camera.rotateZ`), matches the
+                                              Gaia-equivalent `updateRoll` path at
+                                              `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
+                                              flips false OR user hits Esc), `document.exitPointerLock()`
+                                              + restore `controls.enabled = true`. Full AAA surface-walk
+                                              feel (Half-Life / No Man's Sky parity). Closes the T4.2
+                                              wave at real Gaia parity instead of approximation.
 
-                                        - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
-                                          atlas polish). Adds on top of Silver: (a) a minimal HUD
-                                          that appears during surface mode — crosshair, altitude
-                                          readout (camera → focus surface in km), roll-angle
-                                          indicator (subtle horizon line), body-relative compass.
-                                          (b) Haptic-style rumble via the GamepadAPI when a gamepad
-                                          is attached (noop for mouse-only users). (c) An A11y
-                                          reduced-motion alternative: disable pointer-lock, fall
-                                          back to Bronze's lerp+clamp-lift when `prefers-reduced-
-                                          motion` is set OR the user has enabled the reduced-motion
-                                          accessibility toggle. Reserve for when surface mode is
-                                          promoted to a core feature (probably alongside T4.3
-                                          particle system or a planetary-surface texture wave).
+                                            - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
+                                              atlas polish). Adds on top of Silver: (a) a minimal HUD
+                                              that appears during surface mode — crosshair, altitude
+                                              readout (camera → focus surface in km), roll-angle
+                                              indicator (subtle horizon line), body-relative compass.
+                                              (b) Haptic-style rumble via the GamepadAPI when a gamepad
+                                              is attached (noop for mouse-only users). (c) An A11y
+                                              reduced-motion alternative: disable pointer-lock, fall
+                                              back to Bronze's lerp+clamp-lift when `prefers-reduced-
+                                              motion` is set OR the user has enabled the reduced-motion
+                                              accessibility toggle. Reserve for when surface mode is
+                                              promoted to a core feature (probably alongside T4.3
+                                              particle system or a planetary-surface texture wave).
 
-                                        **Recommended default**: Silver. Bronze is a band-aid that
-                                        leaves the user-perceivable wobble intact; Gold is over-scope
-                                        without a concrete user need yet. Silver closes the
-                                        Gaia-parity gap cleanly and fits atlas's current architecture
-                                        without a large refactor. User can pick Bronze if they want
-                                        the quickest path to closing the known issues, or Gold if
-                                        surface mode becomes central to the atlas product.
+                                            **Recommended default**: Silver. Bronze is a band-aid that
+                                            leaves the user-perceivable wobble intact; Gold is over-scope
+                                            without a concrete user need yet. Silver closes the
+                                            Gaia-parity gap cleanly and fits atlas's current architecture
+                                            without a large refactor. User can pick Bronze if they want
+                                            the quickest path to closing the known issues, or Gold if
+                                            surface mode becomes central to the atlas product.
 
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
@@ -1699,24 +1699,63 @@ Codex surfaced 4 low-priority hygiene items. Shipped grouped:
   works, useMemo dep correctness, zero stale references to deleted
   shaders, no test references).
 
-### T5.6 — Boot visual-snapshot baseline triage (P2, TEST-GATE)
+### T5.6 — Boot visual-snapshot baseline triage (P2, TEST-GATE) — PARTIAL SHIP (2026-04-24, `d78ddf9`)
 
-- **Symptom**: `e2e/boot.spec.ts:75` visual-identity test fails
-  with 806,860 pixel diffs, ratio 0.88. Not confirmed stale
-  baseline; could be a real regression or a re-bake miss from
-  an earlier ship.
-- **Fix** (~0.5 d): triage per L32 (human review before
-  re-baking any PNG baseline):
-  1. Pull the current failing PNG + the baseline PNG side-by-
-     side.
-  2. If the delta is explainable (e.g., atmosphere blend mode
-     change from T5.2 re-baked the expected shell color),
-     re-bake with explicit review.
-  3. If the delta is unexplained, trace back via `git log
---follow e2e/boot.spec.ts-snapshots/`.
+- **Symptom** (confirmed): `e2e/boot.spec.ts` visual-identity test
+  fails with 806,860 pixel diffs, ratio 0.88. Triage found TWO
+  independent issues:
+  1. **Baseline is stale**: committed PNG was baked at `a722bba`
+     (2026-04-23 pre-remediation-wave) and captured a mid-intro
+     grey-canvas frame, NOT a post-boot scene. 50+ commits of
+     visual-touching ships landed since.
+  2. **Spec was fragile**: `waitForTimeout(3500)` flat wait
+     captured the loader at 79 % on current HEAD because the
+     Playwright prod-preview env takes ~30 s to reach
+     `isSceneReady + displayProgress >= 99.5` (vs ~6 s in dev).
+- **Shipped (`d78ddf9`)** — spec hardening:
+  - `Loader.tsx` `motion.div` tagged with
+    `data-testid="atlas-loader"`.
+  - `e2e/boot.spec.ts` waits for the testid to have count 0 with
+    a 45 s timeout, then 1 s post-settle.
+  - `test.setTimeout(90_000)` to fit the new budget.
+  - Runtime verification: new spec captures a clean post-boot
+    frame (starfield + SUN label + nav chrome) at
+    `test-results/.../boot-frozen-actual.png`.
+- **PENDING (L32 human gate)** — PNG baseline re-bake:
+  - User reviews the new candidate PNG.
+  - If approved: run
+    `npx playwright test e2e/boot.spec.ts --workers=1 -g "visual identity" --update-snapshots`
+    and commit the updated `boot-frozen-chromium-win32.png`.
+  - L32 requires explicit human sign-off before any committed
+    visual baseline flips; auto-mode ran the analysis + spec
+    fix but stopped here.
 - **Loudness**: N/A (test-gate concern, not a runtime UX
-  divergence). Ship as triage + either re-bake or revert to
-  last good.
+  divergence).
+
+### T5.7 — Playwright prod-preview loader-exit perf investigation (P3, NEW)
+
+**Surfaced during T5.6 triage (2026-04-24)**: the atlas-loader
+reaches 100 % after ~30 s in the Playwright prod-preview env
+(`vite preview` on `dist/`), whereas the same loader exits in
+~6 s on the dev preview MCP env. The chain that flips
+`isSceneReady=true` then animates display progress to 99.5 then
+fires the AnimatePresence exit is serial, but the individual
+stage timings don't obviously explain a 4-5× delta.
+
+- **Candidates to profile**:
+  - HYG catalog fetch from `public/data/hyg-stars/*.gz` — prod
+    bundle uses hashed filenames; maybe a 404 or slow-path.
+  - `SceneReadyChecker` 8 s safety hatch firing late because
+    `criticalAssetsReady` oscillates in the prod build.
+  - First-paint shader compile storm (T5.1 atmosphere + T5.3b
+    LightGlow vertex + T4.4 grid-rec) all hitting Chrome's
+    program cache cold.
+  - `frameCount` poll in `SceneReadyChecker` requiring 6 frames
+    that render after assets ready — maybe the frame loop is
+    waiting on something.
+- **Not blocking anything else** — the T5.6 spec now tolerates
+  the slow boot with its 45 s timeout. If T5.7 lands, T5.6's
+  timeout can be relaxed.
 
 ### Codex audit — verification trail
 
