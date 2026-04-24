@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 33 incidents (sessions 2026-04-17 → 2026-04-24).
+Meta-rules distilled from 34 incidents (sessions 2026-04-17 → 2026-04-24).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -276,6 +276,26 @@ glow,corona}` both came back in the 2026-04-23 T4.9 Sun audit,
   > report. Dovetails with the "cross-AI at phase boundaries"
   > bullet above: the trigger threshold is "≥3 commits to same
   > subsystem", not just "phase complete".
+- **`setInterval`-driven state is the wrong authority for critical
+  UI gates.** The loader's `canExitLoader` gate was conditioned on
+  `displayProgress >= 99.5`, where `displayProgress` was a React
+  state lerped by a 16 ms `setInterval`. Under main-thread
+  congestion (R3F scene-ready shader compiles + first paint), the
+  interval callback can be queued for 10-20 s without firing —
+  a Playwright dense-timeline diag measured an 18-second stall of
+  `displayProgress === 73 %` with the stage already "ready" and
+  `getNextLoaderDisplayProgress` returning 100 unconditionally.
+  The gate was scoped to a state that implicitly assumed "timer
+  fires on schedule"; when that assumption broke, the gate silently
+  froze. **Mitigation**: for critical gate conditions, derive the
+  value in render instead of relying on a timer-driven state. In
+  T5.7 the fix was `effectiveDisplayProgress = stage === "ready"
+? 100 : displayProgress` — the gate became independent of
+  `setInterval` scheduling. Fires when: gating an exit animation,
+  a route transition, or any handoff on a value that gets updated
+  by a callback (`setInterval`, rAF, listener) rather than by a
+  pure render-time derivation. Also applicable to `setTimeout`-
+  delayed state flips — same starvation pattern.
 
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
