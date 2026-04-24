@@ -154,17 +154,34 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **T4.2 wave CLOSED + handler approximation shipped (`dae3815` + `032cba9` + `06e7f5e` + `4571e86`)**. T4.5 fully closed (α + β + δ shipped; γ retired). T4.9a' shipped with placeholder asset; T4.9b' retired; T2.3b deferred. T4.4 fully closed. **User decision required** — T4.2-β-handler shipped as an approximation with 4 user-perceivable divergences from Gaia; new `feedback_divergence_aaa_ux.md` rule now requires a three-tier UX refinement proposal (see ROADMAP §T4.2-β-handler "UX refinement candidates" for the full plan):
+## → Next up: **T4.2 wave CLOSED + Codex audit intake landed (T5 pipeline)**. T4.5 fully closed (α + β + δ shipped; γ retired). T4.9a' shipped with placeholder asset; T4.9b' retired; T2.3b deferred. T4.4 fully closed. **Pipeline below is priority-ordered**; pick top-down unless user redirects.
 
-1. **T4.2-β-handler UX refinement** (user picks a tier):
-   - **Bronze** (~0.5 d, cosmetic): lerp `controls.target` over 200 ms on mode flip + lift polar clamp in surface mode. Closes #2 (target snap) + #3 (polar clamp). Leaves #1 (camera wobble) + #4 (no roll).
-   - **Silver** (~1-2 d, **recommended**): pointer-lock-based first-person look replacing the near-target trick entirely. Closes all 4 divergences. Gaia-parity surface-walk feel (Half-Life / No Man's Sky reference).
-   - **Gold** (~3-5 d, atlas polish): Silver + surface-mode HUD (crosshair + altimeter + roll indicator + compass) + reduced-motion A11y fallback. Reserve for when surface mode is central to the product.
-2. **T4.1 — Camera-relative rendering** (~2-3 w, large refactor). Unlocks T4.4e-α's Gaia-faithful projection-line math (currently atlas computes endpoints in absolute-world frame; Gaia uses camera-relative). Real impact on jitter at very large camera distances.
-3. **T4.3 — Particle system pipeline** (~2-3 w, new subsystem). Subsumes Milky Way backdrop gap + asteroid/Kuiper/cluster/nebula rendering.
-4. **T2.3b / T4.9a' real-asset swap** (final asset-licensing wave, blocks on user-supplied CC-BY-4.0 replacements).
+**P1 (LOUD, ship ASAP):**
 
-Out of current session's scope.
+1. **T5.1 — Atmosphere dynamic uniforms** (~0.5-1 d, Silver recommended). Gaia recomputes `KrESun`/`KmESun` per frame when camera descends into atmosphere (`AtmosphereComponent.java:230-288`); atlas freezes them at material creation. Missing "atmosphere brightens as you enter it" effect. **Bronze**: port the inside-atmosphere conditional only (~0.5 d). **Silver**: port all 4 uniforms per-frame, match Gaia write schedule 1:1 (~1 d, **recommended**). **Gold**: +DisplayPanel density/scattering sliders (~2 d, atlas polish).
+
+**P2 (LOUD, visible):**
+
+2. **T5.2 — Atmosphere blend mode** (~0.1-0.5 d, Silver recommended). Atlas uses `AdditiveBlending`; Gaia uses `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` (`AtmosphereComponent.java:88-89`). Bright atmospheres over-expose. **Bronze**: one-line blend swap. **Silver**: Bronze + L32 baseline review + visual-diff re-bake (~0.3 d, **recommended**). **Gold**: Display-panel realistic/cinematic toggle (~0.5 d).
+3. **T4.2-β-handler UX refinement** (ROADMAP §T4.2-β-handler tiers). **Silver recommended** (~1-2 d, pointer-lock first-person) — closes all 4 surface-mode divergences.
+
+**P2 (performance + hygiene):**
+
+4. **T5.3 — Bloom/LightGlow performance gates** (~0.8 d total). T5.3a: skip Bloom pass at intensity=0. T5.3b: move LightGlow `v_lums` collection back to vertex stage. No visual change.
+5. **T5.4 — SDF line patch HMR restore** (~0.3 d). Dev-only correctness fix.
+6. **T5.5 — Hygiene sweep** (~0.5 d). `#define N 8` dup, dead `uShadowIntensity` uniform, dead shader files, STATUS/ROADMAP stale trechos.
+7. **T5.6 — Boot visual-snapshot baseline triage** (~0.5 d). L32 human-gate review of the 806k-pixel diff in `e2e/boot.spec.ts:75`.
+
+**Big new waves (weeks, not days):**
+
+8. **T4.1 — Camera-relative rendering** (~2-3 w). Unlocks T4.4e-α's Gaia-faithful projection-line math. Jitter fix at astronomical distances.
+9. **T4.3 — Particle system pipeline** (~2-3 w). Subsumes Milky Way backdrop + asteroid/Kuiper/cluster/nebula rendering.
+
+**Asset-blocked:**
+
+10. **T2.3b / T4.9a' real-asset swap** (final asset-licensing wave, blocks on user-supplied CC-BY-4.0 replacements).
+
+Out of current session's scope unless user redirects.
 
 **Asset-deferred (shipped what was possible, asset swap waits)**: T4.9a' (Sun billboard at stellar distances) shipped at `3c3846d` with `star-tex-04-low.jpg` placeholder = byte-identical copy of existing `star-tex-03.jpg`. Real asset swap aligned with T2.3b in the final asset-licensing wave.
 

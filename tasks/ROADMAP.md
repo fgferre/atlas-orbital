@@ -876,65 +876,65 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     polar-angle clamps inherited, mode-boundary target snap.
     Independent follow-up to T4.2-β.
 
-        **UX refinement candidates** (AAA proposal per
-        `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
-        divergences are user-perceivable in normal use; listing three
-        tiers so the user can pick the depth of the follow-up:
+            **UX refinement candidates** (AAA proposal per
+            `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
+            divergences are user-perceivable in normal use; listing three
+            tiers so the user can pick the depth of the follow-up:
 
-        - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
-          Solves #2 (mode-boundary target snap) + #3 (polar clamp in
-          surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
-          Implementation: (a) lerp `controls.target` over ~200 ms
-          (cubic-out easing) between the focus worldpos and the
-          `camera.position + forward × 1.0` endpoint when
-          `surfaceModeActive` flips; add a `targetLerpRef` in
-          `CameraController` + a tiny `lerpTarget.ts` helper so the
-          behavior is unit-testable. (b) In the same useFrame branch,
-          temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
-          to 0 / π (full sphere) when `surfaceModeActive`, restoring
-          atlas defaults on exit. No architectural churn; ships in
-          one commit. Bronze is a band-aid — the wobble remains
-          because OrbitControls is still the rotation authority.
+            - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
+              Solves #2 (mode-boundary target snap) + #3 (polar clamp in
+              surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
+              Implementation: (a) lerp `controls.target` over ~200 ms
+              (cubic-out easing) between the focus worldpos and the
+              `camera.position + forward × 1.0` endpoint when
+              `surfaceModeActive` flips; add a `targetLerpRef` in
+              `CameraController` + a tiny `lerpTarget.ts` helper so the
+              behavior is unit-testable. (b) In the same useFrame branch,
+              temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
+              to 0 / π (full sphere) when `surfaceModeActive`, restoring
+              atlas defaults on exit. No architectural churn; ships in
+              one commit. Bronze is a band-aid — the wobble remains
+              because OrbitControls is still the rotation authority.
 
-        - **Silver — pointer-lock first-person look** (~1-2 d,
-          recommended default). Solves #1 + #2 + #3 + #4 completely.
-          Replaces the near-target approximation with a genuine
-          first-person control path that takes over from OrbitControls
-          while `surfaceModeActive` is true. Architecture: new
-          `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
-          `useSurfaceModePointerLock.ts`. On entry, call
-          `canvas.requestPointerLock()`; subscribe `mousemove`; apply
-          yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
-          (`camera.rotateX(-dy × sensitivity)`) directly, no target.
-          Add Q/E keybind for roll (`camera.rotateZ`), matches the
-          Gaia-equivalent `updateRoll` path at
-          `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
-          flips false OR user hits Esc), `document.exitPointerLock()`
-          + restore `controls.enabled = true`. Full AAA surface-walk
-          feel (Half-Life / No Man's Sky parity). Closes the T4.2
-          wave at real Gaia parity instead of approximation.
+            - **Silver — pointer-lock first-person look** (~1-2 d,
+              recommended default). Solves #1 + #2 + #3 + #4 completely.
+              Replaces the near-target approximation with a genuine
+              first-person control path that takes over from OrbitControls
+              while `surfaceModeActive` is true. Architecture: new
+              `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
+              `useSurfaceModePointerLock.ts`. On entry, call
+              `canvas.requestPointerLock()`; subscribe `mousemove`; apply
+              yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
+              (`camera.rotateX(-dy × sensitivity)`) directly, no target.
+              Add Q/E keybind for roll (`camera.rotateZ`), matches the
+              Gaia-equivalent `updateRoll` path at
+              `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
+              flips false OR user hits Esc), `document.exitPointerLock()`
+              + restore `controls.enabled = true`. Full AAA surface-walk
+              feel (Half-Life / No Man's Sky parity). Closes the T4.2
+              wave at real Gaia parity instead of approximation.
 
-        - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
-          atlas polish). Adds on top of Silver: (a) a minimal HUD
-          that appears during surface mode — crosshair, altitude
-          readout (camera → focus surface in km), roll-angle
-          indicator (subtle horizon line), body-relative compass.
-          (b) Haptic-style rumble via the GamepadAPI when a gamepad
-          is attached (noop for mouse-only users). (c) An A11y
-          reduced-motion alternative: disable pointer-lock, fall
-          back to Bronze's lerp+clamp-lift when `prefers-reduced-
-          motion` is set OR the user has enabled the reduced-motion
-          accessibility toggle. Reserve for when surface mode is
-          promoted to a core feature (probably alongside T4.3
-          particle system or a planetary-surface texture wave).
+            - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
+              atlas polish). Adds on top of Silver: (a) a minimal HUD
+              that appears during surface mode — crosshair, altitude
+              readout (camera → focus surface in km), roll-angle
+              indicator (subtle horizon line), body-relative compass.
+              (b) Haptic-style rumble via the GamepadAPI when a gamepad
+              is attached (noop for mouse-only users). (c) An A11y
+              reduced-motion alternative: disable pointer-lock, fall
+              back to Bronze's lerp+clamp-lift when `prefers-reduced-
+              motion` is set OR the user has enabled the reduced-motion
+              accessibility toggle. Reserve for when surface mode is
+              promoted to a core feature (probably alongside T4.3
+              particle system or a planetary-surface texture wave).
 
-        **Recommended default**: Silver. Bronze is a band-aid that
-        leaves the user-perceivable wobble intact; Gold is over-scope
-        without a concrete user need yet. Silver closes the
-        Gaia-parity gap cleanly and fits atlas's current architecture
-        without a large refactor. User can pick Bronze if they want
-        the quickest path to closing the known issues, or Gold if
-        surface mode becomes central to the atlas product.
+            **Recommended default**: Silver. Bronze is a band-aid that
+            leaves the user-perceivable wobble intact; Gold is over-scope
+            without a concrete user need yet. Silver closes the
+            Gaia-parity gap cleanly and fits atlas's current architecture
+            without a large refactor. User can pick Bronze if they want
+            the quickest path to closing the known issues, or Gold if
+            surface mode becomes central to the atlas product.
 
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
@@ -1383,6 +1383,198 @@ threshold` and keeps the 3D sphere at close range.
     NOT a divergence, NOT scheduled.
 - **Dependencies**: T4.9a' is independent and ship-ready.
 - **Effort**: T4.9a' ~0.5-1 d; T4.9b' blocked; T4.9c not scheduled.
+
+---
+
+## Tier 5 — Codex audit 2026-04-23 intake
+
+Fresh-context Codex pass against the current atlas HEAD surfaced 7
+divergences + 4 hygiene items. Each finding verified against atlas
+source + Gaia source before being accepted (per
+`feedback_codex_findings_toward_1to1.md` — Codex can be wrong about
+direction). Divergences are classified by loudness per
+`feedback_divergence_aaa_ux.md`: **LOUD** = user-perceivable, needs
+three-tier AAA proposal; **QUIET** = doc-only or perf-only.
+
+### T5.1 — Atmosphere dynamic uniforms (P1, LOUD)
+
+- **Gaia**: `AtmosphereComponent.java:230-288` recalculates
+  `KrESun`/`KmESun` per frame when the camera is inside the
+  atmosphere (`camHeightGr < m_fAtmosphereHeight` → `m_ESun +=
+atmFactor * 100f`, writes both via `AtmosphereAttribute`); `Alpha`
+  and `nSamples` are also written unconditionally per frame via
+  `mat.get(AtmosphereAttribute.Alpha).value = alpha` and
+  `mat.get(AtmosphereAttribute.nSamples).value = samples`
+  (`AtmosphereComponent.java:285-288`).
+- **Atlas**: `Planet.tsx:317-330` only updates `v3CameraPos`,
+  `v3LightPos`, `fCameraHeight` per frame; `fKrESun`, `fKmESun`,
+  `fAlpha`, `nSamples` are set once at material creation
+  (`atmosphereShader.ts:188-197`). Descending into the atmosphere
+  does NOT boost scattering, so the characteristic "atmosphere
+  brightens as you enter it" look is missing.
+- **Loudness verdict**: LOUD. User-perceivable every time the
+  camera crosses the atmosphere boundary — currently the shell
+  looks flat instead of gaining the expected brightness wash.
+- **UX refinement candidates** (3-tier):
+  - **Bronze** (~0.5 d, partial). Port only the
+    `camHeightGr < atmosphereHeight` conditional + per-frame
+    `fKrESun`/`fKmESun` write. Leave `fAlpha`/`nSamples` static
+    (their per-frame write in Gaia is unconditional with constant
+    values, so static is byte-identical for atlas). Closes the
+    "atmosphere doesn't brighten on descent" symptom. Docs
+    cite the Gaia conditional + justify leaving alpha/nSamples
+    static.
+  - **Silver** (~1 d, recommended). Bronze + write all four
+    uniforms (`fKrESun`, `fKmESun`, `fAlpha`, `nSamples`) per
+    frame unconditionally to match Gaia 1:1 (cheap uniform
+    writes, no GPU cost; keeps atlas behaviourally identical to
+    Gaia if the Gaia code ever changes to condition alpha/nSamples
+    on something dynamic). Full fidelity, minimal extra scope.
+  - **Gold** (~2 d, atlas polish). Silver + expose atmosphere
+    density / scattering-strength sliders in DisplayPanel for
+    user tuning (not a Gaia feature; atlas-opinion polish).
+    Reserve for when atmosphere tuning becomes part of the
+    product story.
+- **Recommended default**: Silver. Costs nothing extra on top of
+  Bronze and locks atlas to the Gaia write schedule.
+- **Dependencies**: none. θ.5b+c already ported the shader; this
+  is just wiring more uniform writes into the existing
+  `Planet.tsx` useFrame.
+
+### T5.2 — Atmosphere blend mode (P2, LOUD)
+
+- **Gaia**: `AtmosphereComponent.java:88-89` —
+  `mat.set(new BlendingAttribute(GL20.GL_SRC_ALPHA,
+GL20.GL_ONE_MINUS_SRC_ALPHA))`, standard alpha blend. Atmosphere
+  shell alpha composites against the sky color; brighter
+  atmospheres don't over-saturate.
+- **Atlas**: `usePlanetMaterials.ts:285` — `blending:
+THREE.AdditiveBlending`. Atmosphere RGB sums into the
+  framebuffer unconditionally; bright atmospheres (Jupiter,
+  Saturn cloud bands showing through) can over-expose.
+- **Loudness verdict**: LOUD. Visible brightness delta on every
+  body with an atmospheric shell. Affects Earth + all gas
+  giants.
+- **UX refinement candidates** (3-tier):
+  - **Bronze** (~0.1 d). One-line swap `AdditiveBlending` →
+    `NormalBlending` (maps to `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA`
+    in Three.js). Locks blend to Gaia.
+  - **Silver** (~0.3 d, recommended). Bronze + visual regression
+    check against atlas's e2e baseline PNGs — the blend change
+    will re-bake the visual-diff target, so run baseline review
+    (L32 human-gate rule) to confirm the delta is expected.
+  - **Gold** (~0.5 d, atlas polish). Silver + Display-panel
+    toggle "Atmosphere blend: Realistic (Gaia, alpha) /
+    Cinematic (atlas-legacy, additive)" so power users can
+    keep the old look if they prefer it.
+- **Recommended default**: Silver. Captures the full Gaia
+  semantic + L32 baseline review; Gold over-scopes for a single
+  blend flag.
+- **Dependencies**: none.
+
+### T5.3 — Performance gates (Bloom + LightGlow) (P2, QUIET)
+
+Not LOUD — visual output unchanged. Pure perf opportunities. No
+three-tier; straightforward ship.
+
+- **T5.3a — Bloom skip at zero intensity** (~0.3 d). Gaia's
+  `MainPostProcessor` doesn't instantiate the bloom effect when
+  `config.yaml postprocess.bloom.intensity === 0` (which is the
+  Gaia default). Atlas's `VISUAL_PRESETS` ship `bloomIntensity=0.0`
+  (correctly matching Gaia) but `PostProcessingPipeline.tsx:147`
+  still mounts the Bloom effect (runs the 5-mip downsample +
+  upsample + blend pass every frame for zero visual output). Fix:
+  gate the Bloom mount on `bloomIntensity > 0` so a zero-intensity
+  preset skips the composer pass entirely.
+- **T5.3b — LightGlow v_lums in vertex stage** (~0.5 d). Gaia
+  computes `v_lums` in the fullscreen-quad vertex shader
+  (`lightglow.vert.glsl:51-74`) — 4 vertices / pass. Atlas's
+  `LightGlowEffect.ts:155-192` moved the collection into
+  `mainImage` (fragment stage) for pmndrs Effect-compat reasons,
+  so each screen fragment recomputes the per-light spiral/luma.
+  Visually identical, but at 1080p × 60Hz on 8 lights that's
+  ~1M unnecessary texture samples/sec. Move back to a vertex-
+  stage pre-pass (custom pass composition), OR accept the perf
+  cost as documented architectural divergence if the fragment-
+  stage approach is forced by pmndrs Effect's single-stage API.
+
+### T5.4 — SDF line patch HMR restore (P2, DEV-ONLY)
+
+- **Gaia**: applies `line.quad.cpu.fragment.glsl:22-33` once via
+  `RenderAssets.java` shader binding. No re-patch cycle.
+- **Atlas**: `useGaiaSdfLinePatch.ts:66-97` wraps the
+  `LineMaterial.onBeforeCompile` handler + forces `needsUpdate =
+true`. Cleanup doesn't restore the original handler — under
+  React StrictMode / HMR / component remount, the already-
+  patched handler becomes the new "original" and the SDF block
+  can be injected multiple times into the same material source.
+  Prod builds don't hit this (no HMR, no double-mount). Dev
+  experience risk only.
+- **Loudness**: QUIET (dev-only; no production path). Ship as
+  straightforward correctness fix without three-tier.
+- **Fix** (~0.3 d): capture the original handler before the
+  wrap, restore it in the hook's cleanup effect, clear
+  `needsUpdate` after restore.
+
+### T5.5 — Hygiene cleanup (sub-P2 sweeps)
+
+Codex surfaced 4 low-priority hygiene items. Group into a single
+commit:
+
+- **T5.5a — `LightGlowEffect.ts` duplicate `#define N 8`**. The
+  effect declares `N` both manually in the GLSL source and via
+  pmndrs `Effect` defines map. Likely produces a silent shader
+  warning in dev consoles. Pick one source of truth.
+- **T5.5b — `cloudMaterial` unused `uShadowIntensity`**. Uniform
+  declared + written per-frame but not read in the cloud
+  fragment shader. Either wire the shader to use it (if the
+  intent was ring-shadow modulation on clouds) or drop the
+  uniform. Trace the commit that introduced it.
+- **T5.5c — Dead pre-Gaia shader files**. `earthDayNightShader.ts`
+  - `cloudShader.ts` appear to carry pre-Gaia (θ.5-pre) logic
+    that's been superseded by the current `atmosphereShader.ts` +
+    the cloud material chunks. Grep for live imports; if none,
+    delete (L29 predecessor-sweep rule).
+- **T5.5d — STATUS/ROADMAP stale trechos**. Codex flagged stale
+  language around Sun billboard, LightGlow, and PseudoLensFlare
+  being "1:1" in some spots — re-read the relevant sections and
+  re-word where current ship state contradicts.
+
+### T5.6 — Boot visual-snapshot baseline triage (P2, TEST-GATE)
+
+- **Symptom**: `e2e/boot.spec.ts:75` visual-identity test fails
+  with 806,860 pixel diffs, ratio 0.88. Not confirmed stale
+  baseline; could be a real regression or a re-bake miss from
+  an earlier ship.
+- **Fix** (~0.5 d): triage per L32 (human review before
+  re-baking any PNG baseline):
+  1. Pull the current failing PNG + the baseline PNG side-by-
+     side.
+  2. If the delta is explainable (e.g., atmosphere blend mode
+     change from T5.2 re-baked the expected shell color),
+     re-bake with explicit review.
+  3. If the delta is unexplained, trace back via `git log
+--follow e2e/boot.spec.ts-snapshots/`.
+- **Loudness**: N/A (test-gate concern, not a runtime UX
+  divergence). Ship as triage + either re-bake or revert to
+  last good.
+
+### Codex audit — verification trail
+
+- Each finding above was verified against atlas source + Gaia
+  source before being accepted. P1 atmosphere: `Planet.tsx:
+317-330` + `atmosphereShader.ts:180-197` read and cross-
+  referenced with `AtmosphereComponent.java:230-288` (spot-
+  checked 2026-04-23). P2 blend: `usePlanetMaterials.ts:285` +
+  `AtmosphereComponent.java:88-89` read and cross-referenced.
+  Other findings accepted at lower confidence (0.8–0.95);
+  triaged + incorporated in their owning sub-items above.
+- Codex's "not-a-divergence" findings (no orphan uniform writes
+  on main materials, no clear material/geometry leak in
+  `ProceduralSun3D`, singleton texture caches deliberate but
+  HMR-risk-worthy) are consistent with prior audit passes;
+  fold into the existing T4.4 / T4.9 hygiene notes if any
+  specific case surfaces later.
 
 ---
 
