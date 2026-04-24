@@ -282,7 +282,22 @@ export function usePlanetMaterials({
       vertexShader: atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      // T5.2 (Silver) — standard alpha blend. Gaia uses
+      // `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` at
+      // `/tmp/gaiasky/core/src/gaiasky/scene/record/AtmosphereComponent.java:88-89`
+      // for the atmosphere material. Three.js `NormalBlending` with
+      // the default `premultipliedAlpha = false` maps exactly to
+      // that `glBlendFuncSeparate(SRC_ALPHA, ONE_MINUS_SRC_ALPHA,
+      // ONE, ONE_MINUS_SRC_ALPHA)` per `three/renderers/webgl/
+      // WebGLState.js:683`. The alpha-channel factor
+      // (`ONE` vs Gaia's implicit `SRC_ALPHA`) diverges only when
+      // atmosphere composites against another transparent layer,
+      // which atlas never does (atmosphere sits on top of the
+      // opaque planet mesh + opaque skybox). Pre-T5.2 used
+      // `AdditiveBlending` (`SRC_ALPHA, ONE`) which summed the
+      // atmosphere RGB into the backdrop unconditionally →
+      // over-exposed bright atmospheres on Jupiter/Saturn/Earth.
+      blending: THREE.NormalBlending,
       side: THREE.BackSide, // Render on the inside of a slightly larger sphere
       depthWrite: false,
     });
