@@ -13,6 +13,7 @@ _Last updated: 2026-04-23 — session ship summary below; details per onda in §
 **T5 perf wave kickoff (2026-04-24)**:
 
 - **`16079aa` T5.3a shipped** — Bloom skip at zero intensity (Codex P2 QUIET). New pure `shouldMountBloom(bloomEnabled, effectiveBloomIntensity)` in `src/lib/graphics/bloomGate.ts` + 7 pinned tests. `PostProcessingPipeline`'s `bloomEnabled` prop renamed to `bloomMounted` (composite gate). Ports `MainPostProcessor.java:335` (`bloom.setEnabled(intensity > 0)`). All 5 `VISUAL_PRESETS` ship `bloomIntensity: 0.0` (Gaia default); the 5-mip downsample + upsample + blend pass no longer runs out-of-box. Zero visual change. DIFF GATE + SUBAGENT VERIFY PASS. Test count 1189/1189 (+7).
+- **`aa31a15` T5.3b shipped** — LightGlow `v_lums` back to vertex stage (Codex P2 QUIET). Ports `lightglow.vert.glsl:49-78` — moves per-light Archimedean spiral sampling from fragment `mainImage` (running ~3.4M fragments × N lights × 2 texture samples at 1080p DPR 1.75) back to vertex `mainSupport` (4 vertices × N × 2 = ≤64 samples/frame). Key finding during R1: pmndrs postprocessing DOES support per-Effect custom vertex shaders via `mainSupport(uv)` convention (atlas's pre-T5.3b rationale "pmndrs doesn't expose a vertex shader slot" was obsolete). `LightGlowEffect.ts` now has two GLSL blocks: vertex (samples `inputBuffer` in vertex stage, writes `v_lumsA`/`v_lumsB` vec4 varyings) + fragment (unchanged halo rendering + new `getLum(li)` branch-selector unpacking the varyings). 8-light `v_lums` packed into 2× vec4 (bulletproof vs scalar-array varyings across GPU drivers). MAX_LIGHTS=8 invariant pinned by test. Zero visual change; ~400M texture samples/sec dropped to noise-floor per active light. DIFF GATE + SUBAGENT VERIFY PASS. Test count 1190/1190 (+1).
 - **Post-mortem artifacts**: `tasks/white-canvas-bug-external-prompt.md` carries the external-agent prompt used to cross-check with Codex. Four parallel Sonnet subagents (bisect / listener-audit / Zustand-cascade / WebGL-research) transcripts in the session's tmp.
 
 **Lesson captured** (lessons.md addition): session-long waves touching the same subsystem need a cumulative-smoke step beyond per-commit DIFF GATE + SUBAGENT VERIFY — those gates test ports in isolation and cannot catch multi-commit interaction bugs.
@@ -188,9 +189,9 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 **P2 (performance + hygiene):**
 
-4. **T5.3 — Performance gates**. **T5.3a ✅ SHIPPED `16079aa`**. **T5.3b** (~0.5 d) remaining: move LightGlow `v_lums` collection from fragment back to vertex stage. Gaia computes 4× (per quad corner) vs atlas's 1920×1080=~2M samples/frame at 8 lights; may or may not be possible under pmndrs Effect single-stage API (document as architectural divergence if not).
-5. **T5.4 — SDF line patch HMR restore** (~0.3 d). Dev-only correctness fix.
-6. **T5.5 — Hygiene sweep** (~0.5 d). `#define N 8` dup, dead `uShadowIntensity` uniform, dead shader files, STATUS/ROADMAP stale trechos.
+4. **T5.3 — Performance gates ✅ CLOSED**. T5.3a `16079aa` + T5.3b `aa31a15` both shipped.
+5. **T5.4 — SDF line patch HMR restore** (~0.3 d). Dev-only correctness fix. **Top of queue.**
+6. **T5.5 — Hygiene sweep** (~0.5 d). `#define N 8` dup (already auto-resolved by T5.3b since the define is now consumed by both stages from a single pmndrs `defines` map), dead `uShadowIntensity` uniform, dead shader files, STATUS/ROADMAP stale trechos.
 7. **T5.6 — Boot visual-snapshot baseline triage** (~0.5 d). L32 human-gate review of the 806k-pixel diff in `e2e/boot.spec.ts:75`.
 
 **Big new waves (weeks, not days):**
