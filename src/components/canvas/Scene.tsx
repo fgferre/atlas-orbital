@@ -414,6 +414,20 @@ export const Scene = () => {
       };
       canvasEl.addEventListener("webglcontextlost", handleLost);
       canvasEl.addEventListener("webglcontextrestored", handleRestored);
+
+      // HMR hygiene (2026-04-24 white-canvas audit — Codex P3). The
+      // listeners above attach inside `onCreated` which fires once
+      // per Canvas mount; Vite HMR hot-replaces Scene.tsx can keep
+      // the old canvas element alive briefly, stacking duplicate
+      // handlers each iteration. Register a dispose hook so a single
+      // `webglcontextlost` doesn't log N times (where N = number of
+      // in-session hot updates).
+      if (import.meta.hot) {
+        import.meta.hot.dispose(() => {
+          canvasEl.removeEventListener("webglcontextlost", handleLost);
+          canvasEl.removeEventListener("webglcontextrestored", handleRestored);
+        });
+      }
     },
     []
   );

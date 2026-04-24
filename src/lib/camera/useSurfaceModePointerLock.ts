@@ -204,3 +204,19 @@ export const useSurfaceModePointerLock = ({
 
   return { isLocked, keys: keysRef, request, exit };
 };
+
+// HMR hygiene (2026-04-24 white-canvas audit). Vite hot-replacing
+// this module could preserve stale closures on `document` listeners
+// that attached via React useEffects — the cleanup runs only when
+// React unmounts the hook, which doesn't happen if Fast Refresh
+// preserves the component identity across the edit. Module-level
+// dispose force-exits any active pointer lock on hot update so the
+// browser's pointer-lock state matches the code that's about to
+// replace it. No-op in prod or when no session had an active lock.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (typeof document !== "undefined" && document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+  });
+}
