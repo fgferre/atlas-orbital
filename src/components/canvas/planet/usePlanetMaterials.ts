@@ -106,7 +106,17 @@ export function usePlanetMaterials({
       mat.userData.shader = shader;
       // Sun is always at world origin — pass as world-space uniform, no CPU transform needed.
       shader.uniforms.uSunPositionWorld = { value: new THREE.Vector3(0, 0, 0) };
-      shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
+      // T5.5b (2026-04-24 hygiene sweep) — removed dead
+      // `shader.uniforms.uShadowIntensity = { value: ringShadowIntensity }`
+      // write. The cloud fragment shader never declared or sampled
+      // the uniform (unlike the ring material at L635 which actually
+      // uses it via `planetShadowShader.ts:37,54`), so the CPU slot
+      // assignment was writing to a uniform Three.js's WebGLUniforms
+      // map never allocated — zero visible effect, tiny compile
+      // overhead. If a future port needs cloud-shadow intensity
+      // modulation, re-add the write AND inject a matching
+      // `uniform float uShadowIntensity;` + a read site in the cloud
+      // fragment shader (see L645 for the ring-material pattern).
       if (cloudEclipseEnabled) {
         shader.uniforms.uEclipsingBodyPos = {
           value: new THREE.Vector3(0, 0, 0),
@@ -202,7 +212,11 @@ export function usePlanetMaterials({
     };
 
     return mat;
-  }, [textureClouds, ringShadowIntensity, body.eclipsingBodyId]);
+    // T5.5b — `ringShadowIntensity` dep removed alongside the dead
+    // uniform write above. Keeping it would force the cloud material
+    // to rebuild on every ring-shadow-intensity change even though
+    // the material no longer observes that value.
+  }, [textureClouds, body.eclipsingBodyId]);
 
   // Shadow Caster Material (Custom Depth Material) — T3.4.
   // Used as the cloud mesh's `customDepthMaterial` during Three.js's
