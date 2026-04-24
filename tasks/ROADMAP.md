@@ -910,65 +910,65 @@ fovFactor × movementMultiplier` chain (constant works at 60+
     signatures from this ship in console. **T4.2 wave closed at
     full Gaia parity.**
 
-                                **UX refinement candidates** (AAA proposal per
-                                `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
-                                divergences are user-perceivable in normal use; listing three
-                                tiers so the user can pick the depth of the follow-up:
+                                    **UX refinement candidates** (AAA proposal per
+                                    `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
+                                    divergences are user-perceivable in normal use; listing three
+                                    tiers so the user can pick the depth of the follow-up:
 
-                                - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
-                                  Solves #2 (mode-boundary target snap) + #3 (polar clamp in
-                                  surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
-                                  Implementation: (a) lerp `controls.target` over ~200 ms
-                                  (cubic-out easing) between the focus worldpos and the
-                                  `camera.position + forward × 1.0` endpoint when
-                                  `surfaceModeActive` flips; add a `targetLerpRef` in
-                                  `CameraController` + a tiny `lerpTarget.ts` helper so the
-                                  behavior is unit-testable. (b) In the same useFrame branch,
-                                  temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
-                                  to 0 / π (full sphere) when `surfaceModeActive`, restoring
-                                  atlas defaults on exit. No architectural churn; ships in
-                                  one commit. Bronze is a band-aid — the wobble remains
-                                  because OrbitControls is still the rotation authority.
+                                    - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
+                                      Solves #2 (mode-boundary target snap) + #3 (polar clamp in
+                                      surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
+                                      Implementation: (a) lerp `controls.target` over ~200 ms
+                                      (cubic-out easing) between the focus worldpos and the
+                                      `camera.position + forward × 1.0` endpoint when
+                                      `surfaceModeActive` flips; add a `targetLerpRef` in
+                                      `CameraController` + a tiny `lerpTarget.ts` helper so the
+                                      behavior is unit-testable. (b) In the same useFrame branch,
+                                      temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
+                                      to 0 / π (full sphere) when `surfaceModeActive`, restoring
+                                      atlas defaults on exit. No architectural churn; ships in
+                                      one commit. Bronze is a band-aid — the wobble remains
+                                      because OrbitControls is still the rotation authority.
 
-                                - **Silver — pointer-lock first-person look** (~1-2 d,
-                                  recommended default). Solves #1 + #2 + #3 + #4 completely.
-                                  Replaces the near-target approximation with a genuine
-                                  first-person control path that takes over from OrbitControls
-                                  while `surfaceModeActive` is true. Architecture: new
-                                  `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
-                                  `useSurfaceModePointerLock.ts`. On entry, call
-                                  `canvas.requestPointerLock()`; subscribe `mousemove`; apply
-                                  yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
-                                  (`camera.rotateX(-dy × sensitivity)`) directly, no target.
-                                  Add Q/E keybind for roll (`camera.rotateZ`), matches the
-                                  Gaia-equivalent `updateRoll` path at
-                                  `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
-                                  flips false OR user hits Esc), `document.exitPointerLock()`
-                                  + restore `controls.enabled = true`. Full AAA surface-walk
-                                  feel (Half-Life / No Man's Sky parity). Closes the T4.2
-                                  wave at real Gaia parity instead of approximation.
+                                    - **Silver — pointer-lock first-person look** (~1-2 d,
+                                      recommended default). Solves #1 + #2 + #3 + #4 completely.
+                                      Replaces the near-target approximation with a genuine
+                                      first-person control path that takes over from OrbitControls
+                                      while `surfaceModeActive` is true. Architecture: new
+                                      `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
+                                      `useSurfaceModePointerLock.ts`. On entry, call
+                                      `canvas.requestPointerLock()`; subscribe `mousemove`; apply
+                                      yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
+                                      (`camera.rotateX(-dy × sensitivity)`) directly, no target.
+                                      Add Q/E keybind for roll (`camera.rotateZ`), matches the
+                                      Gaia-equivalent `updateRoll` path at
+                                      `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
+                                      flips false OR user hits Esc), `document.exitPointerLock()`
+                                      + restore `controls.enabled = true`. Full AAA surface-walk
+                                      feel (Half-Life / No Man's Sky parity). Closes the T4.2
+                                      wave at real Gaia parity instead of approximation.
 
-                                - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
-                                  atlas polish). Adds on top of Silver: (a) a minimal HUD
-                                  that appears during surface mode — crosshair, altitude
-                                  readout (camera → focus surface in km), roll-angle
-                                  indicator (subtle horizon line), body-relative compass.
-                                  (b) Haptic-style rumble via the GamepadAPI when a gamepad
-                                  is attached (noop for mouse-only users). (c) An A11y
-                                  reduced-motion alternative: disable pointer-lock, fall
-                                  back to Bronze's lerp+clamp-lift when `prefers-reduced-
-                                  motion` is set OR the user has enabled the reduced-motion
-                                  accessibility toggle. Reserve for when surface mode is
-                                  promoted to a core feature (probably alongside T4.3
-                                  particle system or a planetary-surface texture wave).
+                                    - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
+                                      atlas polish). Adds on top of Silver: (a) a minimal HUD
+                                      that appears during surface mode — crosshair, altitude
+                                      readout (camera → focus surface in km), roll-angle
+                                      indicator (subtle horizon line), body-relative compass.
+                                      (b) Haptic-style rumble via the GamepadAPI when a gamepad
+                                      is attached (noop for mouse-only users). (c) An A11y
+                                      reduced-motion alternative: disable pointer-lock, fall
+                                      back to Bronze's lerp+clamp-lift when `prefers-reduced-
+                                      motion` is set OR the user has enabled the reduced-motion
+                                      accessibility toggle. Reserve for when surface mode is
+                                      promoted to a core feature (probably alongside T4.3
+                                      particle system or a planetary-surface texture wave).
 
-                                **Recommended default**: Silver. Bronze is a band-aid that
-                                leaves the user-perceivable wobble intact; Gold is over-scope
-                                without a concrete user need yet. Silver closes the
-                                Gaia-parity gap cleanly and fits atlas's current architecture
-                                without a large refactor. User can pick Bronze if they want
-                                the quickest path to closing the known issues, or Gold if
-                                surface mode becomes central to the atlas product.
+                                    **Recommended default**: Silver. Bronze is a band-aid that
+                                    leaves the user-perceivable wobble intact; Gold is over-scope
+                                    without a concrete user need yet. Silver closes the
+                                    Gaia-parity gap cleanly and fits atlas's current architecture
+                                    without a large refactor. User can pick Bronze if they want
+                                    the quickest path to closing the known issues, or Gold if
+                                    surface mode becomes central to the atlas product.
 
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
@@ -1619,23 +1619,40 @@ v_lumsB;`, executes Gaia's Archimedean spiral sampling in
   MAX_LIGHTS=8 invariant pinned by new test. Zero visual change.
   DIFF GATE + SUBAGENT VERIFY both PASS. Test count 1190/1190.
 
-### T5.4 — SDF line patch HMR restore (P2, DEV-ONLY)
+### T5.4 ✅ SHIPPED (2026-04-24, `89a4475`) — SDF line patch HMR restore (P2, DEV-ONLY)
 
 - **Gaia**: applies `line.quad.cpu.fragment.glsl:22-33` once via
   `RenderAssets.java` shader binding. No re-patch cycle.
-- **Atlas**: `useGaiaSdfLinePatch.ts:66-97` wraps the
-  `LineMaterial.onBeforeCompile` handler + forces `needsUpdate =
-true`. Cleanup doesn't restore the original handler — under
-  React StrictMode / HMR / component remount, the already-
-  patched handler becomes the new "original" and the SDF block
-  can be injected multiple times into the same material source.
-  Prod builds don't hit this (no HMR, no double-mount). Dev
-  experience risk only.
-- **Loudness**: QUIET (dev-only; no production path). Ship as
-  straightforward correctness fix without three-tier.
-- **Fix** (~0.3 d): capture the original handler before the
-  wrap, restore it in the hook's cleanup effect, clear
-  `needsUpdate` after restore.
+- **Pre-T5.4 atlas bug**: `useGaiaSdfLinePatch.ts:66-97` wrapped
+  `LineMaterial.onBeforeCompile` without cleanup. Under React
+  StrictMode double-invoke / Vite HMR / component remount, the
+  already-patched handler became the new "original" → second
+  wrap stacked another SDF block → shader source had the block
+  N times per N re-entries. Prod builds (no HMR, no double-mount)
+  never hit it; dev-session regression.
+- **Fix shipped**: sentinel-tag + cleanup. `ATLAS_SDF_PATCH_TAG`
+  - `ATLAS_SDF_PATCH_ORIGINAL` properties on the patched fn make
+    re-entry idempotent: if the tag is detected on re-entry, skip
+    the wrap (existing patch already does the right thing) + pull
+    the real original from the patch's own property so cleanup
+    still restores correctly. `useLayoutEffect` now returns a
+    cleanup that restores the true original + bumps
+    `Material.version` (forces recompile on next render). Strict
+    `===` identity check on cleanup prevents clobbering a handler
+    something else installed between mount and unmount. Fallback
+    `NOOP_ON_BEFORE_COMPILE` satisfies the non-optional three.js
+    type contract when the real original was never a function.
+- **Tests**: 7 new HMR-scenario pinned tests in a new
+  `useGaiaSdfLinePatch.test.tsx` (renamed from `.test.ts` for
+  JSX + React Testing Library) — StrictMode double-invoke,
+  ten-round remount loop (Codex's N-stacking scenario), cleanup
+  restore, version bump, null-ref early-return, no console
+  noise. 3 pre-existing shader-contract tests retained.
+- **Loudness**: QUIET (dev-only; no production-path visual
+  delta). Shipped without three-tier.
+- **Gates**: 1197/1197 tests (+7), lint + build clean. DIFF
+  GATE + fresh-Explore SUBAGENT VERIFY both PASS across 8
+  contract points.
 
 ### T5.5 — Hygiene cleanup (sub-P2 sweeps)
 
