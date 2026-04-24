@@ -154,11 +154,14 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 ---
 
-## → Next up: **T4.2 wave CLOSED + handler approximation shipped (`dae3815` + `032cba9` + `06e7f5e` + `4571e86`)**. T4.5 fully closed (α + β + δ shipped; γ retired). T4.9a' shipped with placeholder asset; T4.9b' retired; T2.3b deferred. T4.4 fully closed. **Recommend user choose next direction** — most ROADMAP wave headers now closed:
+## → Next up: **T4.2 wave CLOSED + handler approximation shipped (`dae3815` + `032cba9` + `06e7f5e` + `4571e86`)**. T4.5 fully closed (α + β + δ shipped; γ retired). T4.9a' shipped with placeholder asset; T4.9b' retired; T2.3b deferred. T4.4 fully closed. **User decision required** — T4.2-β-handler shipped as an approximation with 4 user-perceivable divergences from Gaia; new `feedback_divergence_aaa_ux.md` rule now requires a three-tier UX refinement proposal (see ROADMAP §T4.2-β-handler "UX refinement candidates" for the full plan):
 
-1. **T4.2-β-handler-smooth** (~1 d, optional refinement). Lerp `controls.target` between camera+forward and focus worldpos over ~200 ms when `surfaceModeActive` flips, replacing the current snap-on-mode-boundary (documented inline in `CameraController.tsx`). Purely cosmetic.
-2. **T4.1 — Camera-relative rendering** (~2-3 w, large refactor). Unlocks T4.4e-α's Gaia-faithful projection-line math (currently atlas computes endpoints in absolute-world frame; Gaia uses camera-relative). Real impact on jitter at very large camera distances. Big scope.
-3. **T4.3 — Particle system pipeline** (~2-3 w, new subsystem). Subsumes Milky Way backdrop gap + asteroid/Kuiper/cluster/nebula rendering. New shaders + data loading.
+1. **T4.2-β-handler UX refinement** (user picks a tier):
+   - **Bronze** (~0.5 d, cosmetic): lerp `controls.target` over 200 ms on mode flip + lift polar clamp in surface mode. Closes #2 (target snap) + #3 (polar clamp). Leaves #1 (camera wobble) + #4 (no roll).
+   - **Silver** (~1-2 d, **recommended**): pointer-lock-based first-person look replacing the near-target trick entirely. Closes all 4 divergences. Gaia-parity surface-walk feel (Half-Life / No Man's Sky reference).
+   - **Gold** (~3-5 d, atlas polish): Silver + surface-mode HUD (crosshair + altimeter + roll indicator + compass) + reduced-motion A11y fallback. Reserve for when surface mode is central to the product.
+2. **T4.1 — Camera-relative rendering** (~2-3 w, large refactor). Unlocks T4.4e-α's Gaia-faithful projection-line math (currently atlas computes endpoints in absolute-world frame; Gaia uses camera-relative). Real impact on jitter at very large camera distances.
+3. **T4.3 — Particle system pipeline** (~2-3 w, new subsystem). Subsumes Milky Way backdrop gap + asteroid/Kuiper/cluster/nebula rendering.
 4. **T2.3b / T4.9a' real-asset swap** (final asset-licensing wave, blocks on user-supplied CC-BY-4.0 replacements).
 
 Out of current session's scope.

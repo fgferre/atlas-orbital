@@ -873,9 +873,69 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     `CameraController.tsx`. All 6 divergences now documented.
     Known limits: orbit-around-near-target vs pure free-look
     (~1-unit camera wobble on drag), no roll, OrbitControls
-    polar-angle clamps inherited, mode-boundary target snap
-    (smoothing deferred to future T4.2-β-handler-smooth
-    refinement). Independent follow-up to T4.2-β.
+    polar-angle clamps inherited, mode-boundary target snap.
+    Independent follow-up to T4.2-β.
+
+        **UX refinement candidates** (AAA proposal per
+        `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
+        divergences are user-perceivable in normal use; listing three
+        tiers so the user can pick the depth of the follow-up:
+
+        - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
+          Solves #2 (mode-boundary target snap) + #3 (polar clamp in
+          surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
+          Implementation: (a) lerp `controls.target` over ~200 ms
+          (cubic-out easing) between the focus worldpos and the
+          `camera.position + forward × 1.0` endpoint when
+          `surfaceModeActive` flips; add a `targetLerpRef` in
+          `CameraController` + a tiny `lerpTarget.ts` helper so the
+          behavior is unit-testable. (b) In the same useFrame branch,
+          temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
+          to 0 / π (full sphere) when `surfaceModeActive`, restoring
+          atlas defaults on exit. No architectural churn; ships in
+          one commit. Bronze is a band-aid — the wobble remains
+          because OrbitControls is still the rotation authority.
+
+        - **Silver — pointer-lock first-person look** (~1-2 d,
+          recommended default). Solves #1 + #2 + #3 + #4 completely.
+          Replaces the near-target approximation with a genuine
+          first-person control path that takes over from OrbitControls
+          while `surfaceModeActive` is true. Architecture: new
+          `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
+          `useSurfaceModePointerLock.ts`. On entry, call
+          `canvas.requestPointerLock()`; subscribe `mousemove`; apply
+          yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
+          (`camera.rotateX(-dy × sensitivity)`) directly, no target.
+          Add Q/E keybind for roll (`camera.rotateZ`), matches the
+          Gaia-equivalent `updateRoll` path at
+          `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
+          flips false OR user hits Esc), `document.exitPointerLock()`
+          + restore `controls.enabled = true`. Full AAA surface-walk
+          feel (Half-Life / No Man's Sky parity). Closes the T4.2
+          wave at real Gaia parity instead of approximation.
+
+        - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
+          atlas polish). Adds on top of Silver: (a) a minimal HUD
+          that appears during surface mode — crosshair, altitude
+          readout (camera → focus surface in km), roll-angle
+          indicator (subtle horizon line), body-relative compass.
+          (b) Haptic-style rumble via the GamepadAPI when a gamepad
+          is attached (noop for mouse-only users). (c) An A11y
+          reduced-motion alternative: disable pointer-lock, fall
+          back to Bronze's lerp+clamp-lift when `prefers-reduced-
+          motion` is set OR the user has enabled the reduced-motion
+          accessibility toggle. Reserve for when surface mode is
+          promoted to a core feature (probably alongside T4.3
+          particle system or a planetary-surface texture wave).
+
+        **Recommended default**: Silver. Bronze is a band-aid that
+        leaves the user-perceivable wobble intact; Gold is over-scope
+        without a concrete user need yet. Silver closes the
+        Gaia-parity gap cleanly and fits atlas's current architecture
+        without a large refactor. User can pick Bronze if they want
+        the quickest path to closing the known issues, or Gold if
+        surface mode becomes central to the atlas product.
+
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
     pins three constants + three pure functions for a 1D
@@ -914,6 +974,7 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     replaces fullStop, force-accumulator step collapsed (impulses
     are already discrete), per-body speed scaling preserved through
     `DynamicZoom + getZoomScale()`. Independent of α/β.
+
 - **Effort**: T4.2 total ≈ 8-11 d across α/β/γ; **all three
   shipped** in ~1 d combined actual vs ~8-11 d estimate. Pure-TS
   lib ports with thin wiring landed cleanly — α (damping curve
