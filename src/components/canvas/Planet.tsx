@@ -28,6 +28,15 @@ import { usePlanetAssets } from "./planet/usePlanetAssets";
 import { usePlanetMaterials } from "./planet/usePlanetMaterials";
 import { PlanetOrbitLine } from "./planet/PlanetOrbitLine";
 import { PlanetMotionOverlays } from "./planet/PlanetMotionOverlays";
+// T5.1 — per-frame atmosphere dynamic-uniform recompute. Mirrors
+// Gaia's `updateAtmosphericScatteringParams` at
+// `AtmosphereComponent.java:229-288` which writes `KrESun`, `KmESun`,
+// `Alpha`, `nSamples` on every render + boosts `m_ESun` when the
+// camera is inside the atmosphere shell.
+import {
+  computeDynamicAtmosphereUniforms,
+  resolveAtmosphereDynamicConfig,
+} from "./shaders/atmosphereDynamics";
 
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
@@ -165,6 +174,18 @@ const PlanetVisual = ({
       );
     }
   }, [body.poleRA, body.poleDec, body.axialTilt]);
+
+  // T5.1 — pre-resolve the atmosphere dynamic-config primitives
+  // once per body. The per-frame `computeDynamicAtmosphereUniforms`
+  // call inside useFrame consumes this flat shape instead of
+  // re-resolving `??` defaults every tick.
+  const atmosphereDynamicConfig = useMemo(
+    () =>
+      body.atmosphereScattering
+        ? resolveAtmosphereDynamicConfig(body.atmosphereScattering)
+        : null,
+    [body.atmosphereScattering]
+  );
 
   const {
     cloudMaterial,
@@ -328,6 +349,26 @@ const PlanetVisual = ({
         // mirrors the block-level disable at Starfield.tsx:499-523.
         // eslint-disable-next-line react-hooks/immutability -- scalar uniform update is the intended per-frame Three.js pattern
         atmoUniforms.fCameraHeight.value = TMP_ATMO_CAMERA_LOCAL.length();
+
+        // T5.1 — dynamic scattering uniforms. Gaia writes fKrESun,
+        // fKmESun, fAlpha, nSamples every render; fKrESun/fKmESun get
+        // boosted when the camera descends into the atmosphere shell
+        // (`AtmosphereComponent.java:229-288`), which is the
+        // characteristic "sky brightens as you enter it" effect.
+        // Pre-T5.1 these stayed at their initial-resolve values and
+        // that boost never reached the GPU. Silver tier per
+        // `feedback_divergence_aaa_ux.md`: all four uniforms written
+        // unconditionally so atlas matches Gaia's write schedule 1:1.
+        if (atmosphereDynamicConfig) {
+          const dynamic = computeDynamicAtmosphereUniforms(
+            atmosphereDynamicConfig,
+            atmoUniforms.fCameraHeight.value
+          );
+          atmoUniforms.fKrESun.value = dynamic.fKrESun;
+          atmoUniforms.fKmESun.value = dynamic.fKmESun;
+          atmoUniforms.fAlpha.value = dynamic.fAlpha;
+          atmoUniforms.nSamples.value = dynamic.nSamples;
+        }
       }
 
       // T3.3 — Eclipse uniforms. Runs for any body with an

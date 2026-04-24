@@ -10,12 +10,15 @@ import {
 // Used whenever a body's `AtmosphereScatteringConfig` leaves an
 // optional field unset. Cited line numbers are source-of-truth for
 // future audits.
-const GAIA_DEFAULT_E_SUN = 10.0; // AtmosphereComponent.java:55
-const GAIA_DEFAULT_MIE_ASYMMETRY_G = 0.76; // AtmosphereComponent.java:112
-const GAIA_DEFAULT_SAMPLE_COUNT = 23; // AtmosphereComponent.java:56
-const GAIA_DEFAULT_SCALE_DEPTH = 0.25; // AtmosphereComponent.java:120
-const GAIA_DEFAULT_OUTER_RADIUS_RATIO = 1.025; // AtmosphereComponent.java:118
-const GAIA_DEFAULT_ALPHA = 1.0; // AtmosphereComponent.java:130
+// Exported (added T5.1 2026-04-23) so the per-frame dynamic-uniform
+// lib can reuse the same defaults without duplicating the L27-risky
+// constants.
+export const GAIA_DEFAULT_E_SUN = 10.0; // AtmosphereComponent.java:55
+export const GAIA_DEFAULT_MIE_ASYMMETRY_G = 0.76; // AtmosphereComponent.java:112
+export const GAIA_DEFAULT_SAMPLE_COUNT = 23; // AtmosphereComponent.java:56
+export const GAIA_DEFAULT_SCALE_DEPTH = 0.25; // AtmosphereComponent.java:120
+export const GAIA_DEFAULT_OUTER_RADIUS_RATIO = 1.025; // AtmosphereComponent.java:118
+export const GAIA_DEFAULT_ALPHA = 1.0; // AtmosphereComponent.java:130
 const FOUR_PI = 4.0 * Math.PI;
 
 // θ.5b+c — Rayleigh + Mie atmospheric scattering port + per-frame wiring,
