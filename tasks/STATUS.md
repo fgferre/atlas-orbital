@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-04-23 — session ship summary below; details per onda in §Shipped ondas table._
+_Last updated: 2026-04-24 (T5.8 ship + doc hygiene) — session ship summary below; details per onda in §Shipped ondas table._
 
 **White-canvas remediation wave (2026-04-24)** — Codex external audit + 4 parallel subagents identified the 2026-04-23 session's white-canvas regression as a **multi-commit cumulative physics problem**, not any single port. Primary mechanism: vertex coordinates at ~1e10 world-unit scale (from the ~1e12 intro-camera start position leaking through a 100ms race window before `isIntroAnimating` gate flipped) triggered ANGLE/D3D11 rasterization stalls → Chrome GPU watchdog → WebGL context loss → 7-second rAF signature. Four sequential fixes landed 2026-04-24:
 
@@ -25,7 +25,7 @@ _Last updated: 2026-04-23 — session ship summary below; details per onda in §
 
 ---
 
-**This session (2026-04-23) shipped 18 feats + 4 doc commits + 3 fixes + associated docs**:
+**This session (2026-04-23 → 2026-04-24) shipped 25+ feats + numerous doc commits + 7 fixes across two days**:
 
 - **Unblock pivot** (3c3846d / e9eb1e6 / 49a44f9): T4.9a' Sun billboard at stellar distances (placeholder asset), T4.2 sub-wave plan α/β/γ written, T4.5-β body labels via drei `<Text>` (additive opt-in `labelMode: "html" | "sdf"`). T4.5-γ + T4.9b' retired; T2.3b deferred to final asset wave.
 - **T4.2 wave starts** (`dae3815`): T4.2-α proximity-aware damping shipped. Pure-TS port of `NaturalCamera.java:993-997` `counterAmount` curve in `src/lib/camera/proximityDamping.ts` + per-frame setter on OrbitControls' `dampingFactor` from `CameraController.tsx`.
@@ -430,9 +430,11 @@ T2.1 all shipped 2026-04-22). Only T2.3b remains on the default
 path and blocks on user delivery of CC-BY-4.0 assets. T2.2
 (opt-in, 2-3 d) tracked outside the default-path total.
 
-**Parked during the wave**: T3.3 (eclipse geometry, 3-5 d) — was
-Next up pre-pivot; remains the front-runner once the wave closes.
-T3.2 PBR hooks stay asset-blocked.
+**Parked during the wave** (historical, 2026-04-22 state — T3.3
+shipped at `c44f913` on 2026-04-22): T3.3 (eclipse geometry, 3-5 d)
+was Next up pre-pivot; closed out with the Lens Closure Wave.
+T3.2 PBR hooks stay asset-blocked (Earth ORM texture creation is
+the gating step per ROADMAP §T3.2 "Actual gap").
 
 Under the Gaia-fidelity rule (memory
 `feedback_default_gaia_fidelity.md`), D2/D3/D4/D5 remain resolved —
