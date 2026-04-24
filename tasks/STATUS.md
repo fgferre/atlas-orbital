@@ -4,7 +4,7 @@ Single source of truth for where we are in the visual port. Read FIRST.
 
 _Last updated: 2026-04-23 — session ship summary below; details per onda in §Shipped ondas table._
 
-**This session (2026-04-23) shipped 16 feats + 4 doc commits + 3 fixes + associated docs**:
+**This session (2026-04-23) shipped 17 feats + 4 doc commits + 3 fixes + associated docs**:
 
 - **Unblock pivot** (3c3846d / e9eb1e6 / 49a44f9): T4.9a' Sun billboard at stellar distances (placeholder asset), T4.2 sub-wave plan α/β/γ written, T4.5-β body labels via drei `<Text>` (additive opt-in `labelMode: "html" | "sdf"`). T4.5-γ + T4.9b' retired; T2.3b deferred to final asset wave.
 - **T4.2 wave starts** (`dae3815`): T4.2-α proximity-aware damping shipped. Pure-TS port of `NaturalCamera.java:993-997` `counterAmount` curve in `src/lib/camera/proximityDamping.ts` + per-frame setter on OrbitControls' `dampingFactor` from `CameraController.tsx`.
@@ -16,6 +16,7 @@ _Last updated: 2026-04-23 — session ship summary below; details per onda in §
 - **Diagnostic bisect + re-enable** (`b5df427` + `159090b`): user shared console with full trace; diagnosed root cause as HMR accumulation producing 7-second rAF handler → Chrome GPU watchdog → Context Lost. Not caused by session work; confirmed by checking out pre-session HEAD in preview (same failure). Added global error listener with proper stack serialization + WebGL renderer-info diagnostic in `handleCanvasCreated` to surface GPU + driver info on user reports.
 - **T4.2-β-handler shipped** (`4571e86`): free-look approximation via `controls.target = camera.position + forward × 1.0`. `src/lib/camera/surfaceLookTarget.ts` + 7 tests; `CameraController` repoints target + zeros focus-tracking cameraDelta when `surfaceModeActive`. Documented divergences: orbit-around-near-target vs pure free-look (OrbitControls constraint), no-roll, mode-boundary target snap (smoothing deferred).
 - **T5.1 shipped** (`1612f07`): atmosphere dynamic uniforms (P1 Codex finding). Silver tier — all 4 scattering uniforms written per frame + `m_ESun += atmFactor × 100f` boost ported from `AtmosphereComponent.java:229-288`. Closes the "atmosphere doesn't brighten on descent" LOUD divergence. New `atmosphereDynamics.ts` + 10 pinned tests; Gaia defaults re-exported from `atmosphereShader.ts` for shared source-of-truth. DIFF GATE + SUBAGENT VERIFY PASS (zero harmful divergences).
+- **T5.2 shipped** (`dd02e1a`): atmosphere blend mode (P2 Codex finding). Silver tier — `THREE.AdditiveBlending` → `THREE.NormalBlending` in `usePlanetMaterials.ts:305` (matches Gaia's `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` at `AtmosphereComponent.java:88-89`). Closes the "atmospheres over-expose" LOUD divergence. L32 baseline-review pending — re-bakes e2e snapshots with atmospheric shell visible. DIFF GATE + SUBAGENT VERIFY PASS.
 
 - **T2.5 + T2.6** (`9910eeb` + `444c6c2`) — `shadowIntensity 1.3-1.5 → 0.4`, `envMapIntensity 1.9-2.1 → 0.0`. Closes residual drift T2.4 left behind.
 - **T4.4 full wave CLOSED** across 6 sub-waves: T4.4a (`49fdaf0`, math extraction), T4.4b (`94af1b8`, shader port + mount + `EclipticGrid` predecessor sweep), T4.4c (`2e42b8c`, `getGridScaling` runtime driver), T4.4d (`379fd2e`, Equatorial/Ecliptic/Galactic orientation toggle with per-orientation color callouts), T4.4e-α (`521ae82`, projection-lines math), T4.4e-β (`ae13866`, projection-lines mount). Full 1:1 with Gaia on the recursive grid.
@@ -161,9 +162,12 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 1. **T5.1 ✅ SHIPPED** (`1612f07`) — Atmosphere dynamic uniforms. Silver tier: all 4 uniforms (fKrESun, fKmESun, fAlpha, nSamples) written per-frame unconditionally + m_ESun boost formula ported exactly. 10 pinned tests; DIFF GATE + SUBAGENT VERIFY both PASS.
 
-**P2 (LOUD, visible):**
+**P2 (LOUD, SHIPPED):**
 
-2. **T5.2 — Atmosphere blend mode** (~0.1-0.5 d, Silver recommended, **top of P2 queue**). Atlas uses `AdditiveBlending`; Gaia uses `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` (`AtmosphereComponent.java:88-89`). Bright atmospheres over-expose. **Bronze**: one-line blend swap. **Silver**: Bronze + L32 baseline review + visual-diff re-bake (~0.3 d, **recommended**). **Gold**: Display-panel realistic/cinematic toggle (~0.5 d).
+2. **T5.2 ✅ SHIPPED** (`dd02e1a`) — Atmosphere blend mode. Silver tier: one-line `AdditiveBlending` → `NormalBlending` swap + docs. **L32 baseline-review pending** — re-bakes e2e snapshots with atmospheric shell visible; user reviews PNG deltas.
+
+**P2 (LOUD, still pending):**
+
 3. **T4.2-β-handler UX refinement** (ROADMAP §T4.2-β-handler tiers). **Silver recommended** (~1-2 d, pointer-lock first-person) — closes all 4 surface-mode divergences.
 
 **P2 (performance + hygiene):**
