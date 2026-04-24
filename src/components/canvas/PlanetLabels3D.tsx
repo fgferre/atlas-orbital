@@ -68,6 +68,22 @@ const LABEL_OUTLINE_COLOR = "#000000";
 const LABEL_OUTLINE_WIDTH = 0.15;
 const LABEL_OUTLINE_OPACITY = 1;
 
+// **Vertex-range cap** (2026-04-24 Codex white-canvas audit).
+// During the intro camera animation the camera starts at ~1e12
+// world units, which makes `distance / FONT_DISTANCE_DIVISOR ×
+// FONT_WORLD_BASE` balloon to ~9e9 world units per label — the
+// same class of coordinate that drove `SunBillboard`'s
+// documented context-loss blow-up before `a9fc1bf` capped it at
+// 1e6. Using the identical cap here keeps the two billboard-like
+// pipelines symmetric: any vertex uploaded to ANGLE stays below
+// the float32 / D3D11 rasterization threshold that was causing
+// GPU command-queue stalls → `webglcontextlost`. Active only when
+// `labelMode === "sdf"` (the HTML path does not route through
+// this code); SDF mode is opt-in via the Layers panel so users on
+// the default HTML path never hit the code path either way, but
+// the cap is the defense-in-depth if they do.
+const LABEL_SCALE_MAX_WORLD_UNITS = 1e6;
+
 // Horizontal nudge mirroring PlanetOverlay.tsx:59
 // `transform: translate(12px, -50%)`. Pushed into world units via
 // the same distance scaling so the offset stays visually consistent.
@@ -105,6 +121,15 @@ export const PlanetLabels3D = () => {
   useFrame(() => {
     try {
       if (labelMode !== "sdf" || !showLabels) return;
+
+      // Suppress labels while the intro camera animation is running.
+      // Intro starts the camera at ~1e12 world units; labels scaled
+      // proportionally would upload vertices at ~1e10 scale, which
+      // the 2026-04-24 post-mortem traced to GPU command-queue stalls
+      // → `webglcontextlost`. Mirrors `SunBillboard.tsx`'s intro gate
+      // (commit `a9fc1bf`). Skipping the frame while intro runs costs
+      // nothing visually — intro hides the solar system anyway.
+      if (useStore.getState().isIntroAnimating) return;
 
       const { overlayItems } = useStore.getState();
       visibilityRef.current.clear();
@@ -144,8 +169,17 @@ export const PlanetLabels3D = () => {
         group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
 
         const distance = group.position.distanceTo(camera.position);
-        const fontScale = (distance / FONT_DISTANCE_DIVISOR) * FONT_WORLD_BASE;
-        group.scale.setScalar(Math.max(fontScale, FONT_WORLD_BASE));
+        const rawFontScale =
+          (distance / FONT_DISTANCE_DIVISOR) * FONT_WORLD_BASE;
+        // Clamp to `[FONT_WORLD_BASE, LABEL_SCALE_MAX_WORLD_UNITS]`.
+        // Lower bound keeps labels readable at near distances; upper
+        // bound prevents GPU rasterization stalls at extreme camera
+        // positions (see the `LABEL_SCALE_MAX_WORLD_UNITS` header).
+        const clampedFontScale = Math.min(
+          Math.max(rawFontScale, FONT_WORLD_BASE),
+          LABEL_SCALE_MAX_WORLD_UNITS
+        );
+        group.scale.setScalar(clampedFontScale);
       }
     } catch (err) {
       console.error("[PlanetLabels3D] frame error:", err);

@@ -158,13 +158,35 @@ export const InitialCameraAnimation = () => {
     animationRef.current.startPos.copy(INTRO_START_POSITION);
     animationRef.current.endPos.copy(resolveIntroEndPosition());
 
+    // **Intro race-window fix** (2026-04-24 Codex white-canvas audit).
+    // Previously this block ran in the order:
+    //   1. `camera.position.copy(INTRO_START_POSITION)` → camera at ~1e12
+    //   2. `setTimeout(INTRO_DELAY_MS)` → after 100 ms:
+    //   3. `setIsIntroAnimating(true)`
+    //
+    // During the ~100 ms gap between (1) and (3) the camera was at
+    // ~1e12 world units while the `isIntroAnimating` gate that
+    // distance-sensitive components (SunBillboard, PlanetLabels3D
+    // SDF mode) use to SUPPRESS themselves was still false. Those
+    // components therefore computed vertex scales on the order of
+    // ~1e10 and uploaded them to the GPU, triggering
+    // ANGLE/D3D11 rasterization stalls that Chrome's GPU watchdog
+    // resolved by killing the WebGL context → the white-canvas +
+    // 7-second rAF signature in the bug report.
+    //
+    // Fix: flip `setIsIntroAnimating(true)` BEFORE touching the
+    // camera so consumers see the gate as soon as the position
+    // changes. The setTimeout stays for the physics-runway warm-up
+    // it was ostensibly buying (deferring the first interpolation
+    // to after the first paint), but the gate is now set in the
+    // same synchronous block as the position write.
+    setIsIntroAnimating(true);
     cameraRef.current.position.copy(INTRO_START_POSITION);
     syncControlsToSun();
 
     const timer = window.setTimeout(() => {
       animationRef.current.startTime = performance.now();
       animationRef.current.isRunning = true;
-      setIsIntroAnimating(true);
     }, INTRO_DELAY_MS);
 
     return () => window.clearTimeout(timer);
@@ -193,26 +215,43 @@ export const InitialCameraAnimation = () => {
     };
   }, [controls, setHasPlayed, setIsIntroAnimating]);
 
+  // Defensive try/catch per the session-wide useFrame pattern (see
+  // lessons.md L26 + the CameraController / SurfaceModeFirstPerson
+  // wrappers). A throw here — e.g., `logLerp` hitting a 0/negative
+  // distance that slips the guard at `:58-59`, NaN from float
+  // precision in the 1e12 → 1e3 scale transit — would kill the R3F
+  // frame loop during the exact intro phase the user is most
+  // exposed to. Flagged by the 2026-04-24 audit as the only
+  // session-era useFrame missing the wrapper.
   useFrame(() => {
     if (!animationRef.current.isRunning) return;
 
-    const elapsed = performance.now() - animationRef.current.startTime;
-    const rawT = Math.min(elapsed / INTRO_DURATION_MS, 1);
-    const t = easeInOutCubic(rawT);
+    try {
+      const elapsed = performance.now() - animationRef.current.startTime;
+      const rawT = Math.min(elapsed / INTRO_DURATION_MS, 1);
+      const t = easeInOutCubic(rawT);
 
-    const newPos = interpolatePosition(
-      animationRef.current.startPos,
-      animationRef.current.endPos,
-      t
-    );
-    cameraRef.current.position.copy(newPos);
+      const newPos = interpolatePosition(
+        animationRef.current.startPos,
+        animationRef.current.endPos,
+        t
+      );
+      cameraRef.current.position.copy(newPos);
 
-    const controlsInstance = controlsRef.current;
-    if (controlsInstance) {
-      controlsInstance.target.copy(INTRO_TARGET);
-    }
+      const controlsInstance = controlsRef.current;
+      if (controlsInstance) {
+        controlsInstance.target.copy(INTRO_TARGET);
+      }
 
-    if (rawT >= 1) {
+      if (rawT >= 1) {
+        completeAnimation();
+      }
+    } catch (err) {
+      console.error(
+        "[InitialCameraAnimation] useFrame error — aborting intro:",
+        err
+      );
+      animationRef.current.isRunning = false;
       completeAnimation();
     }
   });
