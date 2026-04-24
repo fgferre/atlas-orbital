@@ -27,6 +27,7 @@ import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
 import { SunBillboard } from "./SunBillboard";
 import { CameraController } from "./CameraController";
+import { SurfaceModeFirstPerson } from "./SurfaceModeFirstPerson";
 import { InitialCameraAnimation } from "./InitialCameraAnimation";
 import { OrbitalEngineDebugReporter } from "./OrbitalEngineDebugReporter";
 import { OverlayPositionTracker } from "./OverlayPositionTracker";
@@ -543,6 +544,7 @@ export const Scene = () => {
             unrelated to this mount. */}
         <PlanetLabels3D />
         <CameraController />
+        <SurfaceModeFirstPerson />
         <InitialCameraAnimation />
         <DreiOrbitControls
           ref={controlsRef}
