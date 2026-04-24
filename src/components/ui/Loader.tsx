@@ -138,8 +138,18 @@ export const Loader = () => {
   const catalogStatus = showStarfield
     ? `${STARFIELD_SOURCE_LABELS[starfieldSource]} ${starfieldStatus ?? "idle"}`
     : "disabled";
+  // T5.7 — effective display progress that bypasses the 16 ms
+  // interval lerp at ready-stage. `displayProgress` is the
+  // interval-driven state (animated during non-ready stages). At
+  // `stageId === "ready"` the raw state can stall for seconds
+  // because the setInterval is starved by main-thread work; deriving
+  // the effective value in render instead of via a setState-in-
+  // effect keeps the `canExitLoader` gate responsive while staying
+  // on the right side of `react-hooks/set-state-in-effect`.
+  const effectiveDisplayProgress =
+    snapshot.currentStageId === "ready" ? 100 : displayProgress;
   const isFinalizingHandoff =
-    snapshot.currentStageId === "ready" && displayProgress < 99.5;
+    snapshot.currentStageId === "ready" && effectiveDisplayProgress < 99.5;
   const progressTitle = isFinalizingHandoff
     ? "Finalizing scene handoff"
     : snapshot.title;
@@ -159,6 +169,21 @@ export const Loader = () => {
 
   useEffect(() => {
     if (!visible) {
+      return;
+    }
+
+    // **T5.7 (2026-04-24) — skip the lerp-interval at ready-stage**.
+    // `getNextLoaderDisplayProgress` at `stageId === "ready"` returns
+    // 100 unconditionally, BUT this setInterval can be starved for
+    // seconds when the main thread is busy with R3F's post-scene-
+    // ready work (shader-program link, first paint, atlas's intro
+    // animation). A dense-timeline Playwright diag measured an 18 s
+    // stall of `displayProgress` at 73 % after `isSceneReady` flipped
+    // true on current HEAD — entirely explained by this setInterval
+    // never firing during that window. Skip the interval at ready;
+    // the derived `effectiveDisplayProgress` below replaces the
+    // interval-driven write with a render-time override.
+    if (snapshot.currentStageId === "ready") {
       return;
     }
 
@@ -197,7 +222,7 @@ export const Loader = () => {
     if (
       !visible ||
       exitStartedRef.current ||
-      !canExitLoader(isSceneReady, displayProgress)
+      !canExitLoader(isSceneReady, effectiveDisplayProgress)
     ) {
       return;
     }
@@ -210,7 +235,7 @@ export const Loader = () => {
     }, delayMs);
 
     return () => window.clearTimeout(timer);
-  }, [active, displayProgress, isSceneReady, progress, visible]);
+  }, [active, effectiveDisplayProgress, isSceneReady, progress, visible]);
 
   return (
     <AnimatePresence onExitComplete={() => setLoaderHidden(true)}>
@@ -286,14 +311,14 @@ export const Loader = () => {
             <div className="w-full max-w-md space-y-3">
               <div className="flex items-center justify-between text-xs uppercase tracking-widest text-cyan-400/80">
                 <span>{progressTitle}</span>
-                <span>{displayProgress.toFixed(0)}%</span>
+                <span>{effectiveDisplayProgress.toFixed(0)}%</span>
               </div>
 
               <div className="relative h-[2px] w-full overflow-hidden bg-white/10">
                 <motion.div
                   className="absolute left-0 top-0 h-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]"
                   initial={{ width: "0%" }}
-                  animate={{ width: `${displayProgress}%` }}
+                  animate={{ width: `${effectiveDisplayProgress}%` }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
                 />
                 <div

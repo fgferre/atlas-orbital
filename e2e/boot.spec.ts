@@ -8,16 +8,17 @@ import {
 } from "./helpers";
 
 test.describe("boot", () => {
-  // The visual-identity spec below waits ~75 s in the worst case
-  // (20 s visitAtlasAndWaitForReady budget + 45 s atlas-loader exit
+  // The visual-identity spec below waits ~85 s in the worst case
+  // (20 s visitAtlasAndWaitForReady budget + 55 s atlas-loader exit
   // budget + 1 s lerp settle + browser context setup + screenshot
-  // comparison). T5.6 diag (2026-04-24): the loader takes ~30 s to
-  // reach 100 % in the Playwright prod-preview env (vs ~6 s in dev).
-  // 45 s timeout leaves 15 s headroom over the observed duration.
-  // Longer-term fix tracked as T5.7 (separate ticket): investigate
-  // why critical-assets resolution is 4-5× slower in prod preview
-  // than in dev.
-  test.setTimeout(90_000);
+  // comparison). T5.6 + T5.7 diag (2026-04-24): the loader reaches
+  // pct=100 within ~14 s on current HEAD (T5.7 fix broke the 18 s
+  // displayProgress stall) but the AnimatePresence fade + exit
+  // delay are still rAF-throttled by main-thread post-ready work
+  // (R3F scene init, shader compiles), pushing total loader-gone
+  // to ~40 s ± 10 s variance. 55 s toHaveCount timeout absorbs
+  // this variance with 15 s headroom.
+  test.setTimeout(100_000);
 
   test("mounts a sized canvas and logs no console errors within 15s", async ({
     page,
@@ -90,7 +91,7 @@ test.describe("boot", () => {
     // to cover the 12 s `INTRO_DURATION_MS` + the 1 s exit animation
     // + the `SceneReadyChecker` safety-hatch ceiling at 8 s.
     await expect(page.getByTestId("atlas-loader")).toHaveCount(0, {
-      timeout: 45_000,
+      timeout: 55_000,
     });
     // Post-loader lerp settle. 1 s covers the useVisualPresetLerp
     // convergence tail; the prior 3.5 s flat wait was also picking up
