@@ -9,6 +9,10 @@ _Last updated: 2026-04-23 — session ship summary below; details per onda in §
 - **`720f60f` fix(boot): remove main.tsx error-listener leak + pointer-lock retry backoff** — removed `window.addEventListener("error"|"unhandledrejection")` pair from main.tsx (originally added in `b5df427` as a DIAGNOSTIC but itself leaked on every Vite HMR hot-update, amplifying the bug it was meant to find). Added 3-strike backoff counter to `SurfaceModeFirstPerson`'s pointer-lock retry hatch (flagged by subagent 1 + subagent 2 as a secondary vector).
 - **`34f1dde` fix(boot): close intro race window + cap SDF label scale (Codex P2×2)** — flipped `setIsIntroAnimating(true)` to fire atomically with the `camera.position.copy(INTRO_START_POSITION)` write in `InitialCameraAnimation.tsx`, closing the 100ms window Codex identified. Added defensive try/catch around the one session-era useFrame that was missing it. Separately capped `PlanetLabels3D.tsx` SDF-mode `group.scale` at `1e6` world units (matching `SunBillboard`'s `a9fc1bf` cap) + suppressed the component during `isIntroAnimating`.
 - **`9e84638` fix(hmr): add import.meta.hot.dispose to Scene webglcontextlost + pointer-lock hook** — Codex P3 + subagent 2. `Scene.tsx:handleCanvasCreated` webglcontextlost/restored listeners + `useSurfaceModePointerLock.ts` module tail now both have dispose handlers that clean up before hot-update.
+
+**T5 perf wave kickoff (2026-04-24)**:
+
+- **`16079aa` T5.3a shipped** — Bloom skip at zero intensity (Codex P2 QUIET). New pure `shouldMountBloom(bloomEnabled, effectiveBloomIntensity)` in `src/lib/graphics/bloomGate.ts` + 7 pinned tests. `PostProcessingPipeline`'s `bloomEnabled` prop renamed to `bloomMounted` (composite gate). Ports `MainPostProcessor.java:335` (`bloom.setEnabled(intensity > 0)`). All 5 `VISUAL_PRESETS` ship `bloomIntensity: 0.0` (Gaia default); the 5-mip downsample + upsample + blend pass no longer runs out-of-box. Zero visual change. DIFF GATE + SUBAGENT VERIFY PASS. Test count 1189/1189 (+7).
 - **Post-mortem artifacts**: `tasks/white-canvas-bug-external-prompt.md` carries the external-agent prompt used to cross-check with Codex. Four parallel Sonnet subagents (bisect / listener-audit / Zustand-cascade / WebGL-research) transcripts in the session's tmp.
 
 **Lesson captured** (lessons.md addition): session-long waves touching the same subsystem need a cumulative-smoke step beyond per-commit DIFF GATE + SUBAGENT VERIFY — those gates test ports in isolation and cannot catch multi-commit interaction bugs.
@@ -184,7 +188,7 @@ After reading, the **→ Next up** section tells you exactly what to do.
 
 **P2 (performance + hygiene):**
 
-4. **T5.3 — Bloom/LightGlow performance gates** (~0.8 d total). T5.3a: skip Bloom pass at intensity=0. T5.3b: move LightGlow `v_lums` collection back to vertex stage. No visual change.
+4. **T5.3 — Performance gates**. **T5.3a ✅ SHIPPED `16079aa`**. **T5.3b** (~0.5 d) remaining: move LightGlow `v_lums` collection from fragment back to vertex stage. Gaia computes 4× (per quad corner) vs atlas's 1920×1080=~2M samples/frame at 8 lights; may or may not be possible under pmndrs Effect single-stage API (document as architectural divergence if not).
 5. **T5.4 — SDF line patch HMR restore** (~0.3 d). Dev-only correctness fix.
 6. **T5.5 — Hygiene sweep** (~0.5 d). `#define N 8` dup, dead `uShadowIntensity` uniform, dead shader files, STATUS/ROADMAP stale trechos.
 7. **T5.6 — Boot visual-snapshot baseline triage** (~0.5 d). L32 human-gate review of the 806k-pixel diff in `e2e/boot.spec.ts:75`.
