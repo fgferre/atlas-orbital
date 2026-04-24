@@ -854,27 +854,61 @@ focus.getRadius() * 2.5 / fovFactor)`). When true, rotation
     (likely by repointing `controls.target` at camera+offset OR
     swapping to `FlyControls`). This first ship lands the predicate - signal; the handler swap is the deferred half. Depends on
     T4.2-α (shipped).
-  - **T4.2-β-handler ✅ SHIPPED (2026-04-23, `4571e86`)** —
+  - **T4.2-β-handler (Bronze, SUPERSEDED) ✅ SHIPPED (2026-04-23, `4571e86`)** —
     free-look target swap. Wires the `surfaceModeActive` store flag
     into a real rotation-behavior change. `src/lib/camera/surfaceLookTarget.ts`
-    pins `SURFACE_LOOK_OFFSET_WORLD_UNITS=1.0` + `computeSurfaceLookTarget`
+    pinned `SURFACE_LOOK_OFFSET_WORLD_UNITS=1.0` + `computeSurfaceLookTarget`
     helper (pure geometry, 7 pinned tests). `CameraController`'s
-    focus useFrame gains a new branch: when `surfaceModeActive &&
-!isFlying`, reads `camera.getWorldDirection`, computes
-    `controls.target = camera.position + forward × 1.0`, zeros the
-    focus-tracking `cameraDelta` so the camera stays put while the
-    user looks around. Approximation of Gaia's `updateRotationFree`
-    (`NaturalCamera.java:1111-1127`) which rotates `direction` +
-    `up` directly around camera-local axes — OrbitControls has no
-    free-look mode, so the near-target trick collapses the orbit
-    sphere onto camera-local yaw/pitch. SUBAGENT VERIFY flagged
-    mode-boundary target snap as undocumented (FAIL); fixed
-    pre-commit with a "Known transition artifact" block in
-    `CameraController.tsx`. All 6 divergences now documented.
-    Known limits: orbit-around-near-target vs pure free-look
-    (~1-unit camera wobble on drag), no roll, OrbitControls
-    polar-angle clamps inherited, mode-boundary target snap.
-    Independent follow-up to T4.2-β.
+    focus useFrame gained a branch: when `surfaceModeActive &&
+!isFlying`, read `camera.getWorldDirection`, compute
+    `controls.target = camera.position + forward × 1.0`, zero the
+    focus-tracking `cameraDelta`. Approximation of Gaia's
+    `updateRotationFree` (`NaturalCamera.java:1111-1127`) —
+    OrbitControls has no free-look mode, so the near-target trick
+    collapsed the orbit sphere onto camera-local yaw/pitch.
+    **SUPERSEDED by T4.2-β-handler Silver (`e0f7ae1`, 2026-04-23)** —
+    predecessor sweep (L29 / `feedback_no_effect_stacking.md`)
+    removed `surfaceLookTarget.ts` + test + the CameraController
+    branch in the same commit that shipped Silver's pointer-lock
+    path.
+
+  - **T4.2-β-handler (Silver) ✅ SHIPPED (2026-04-23, `e0f7ae1`)** —
+    pointer-lock first-person look. Replaces Bronze's near-target
+    orbit approximation with a genuine Pointer Lock API control
+    path that takes over from OrbitControls while `surfaceModeActive`
+    is true. Closes all 4 prior surface-mode divergences
+    (orbit-around-near-target wobble, mode-boundary target snap,
+    polar-angle clamp, no roll). Three new modules:
+    `src/lib/camera/surfaceLook.ts` (+21 pinned tests; 3 constants
+    — `SURFACE_LOOK_MOUSE_SENSITIVITY_RAD_PER_PX=0.002`,
+    `SURFACE_LOOK_ROLL_RAD_PER_SEC=π/2`,
+    `SURFACE_LOOK_MAX_PITCH_RAD=π/2-0.01`; 3 pure functions —
+    `computeMouseLookDelta` / `clampPitch` / `computeRollDelta`).
+    `src/lib/camera/useSurfaceModePointerLock.ts` — hook managing
+    the Pointer Lock API lifecycle; attaches mousemove + Q/E
+    keydown listeners only while locked; cleans up on unlock.
+    `src/components/canvas/SurfaceModeFirstPerson.tsx` — R3F
+    component that requests lock on `surfaceModeActive` flip,
+    disables OrbitControls during the lock, and applies
+    accumulated yaw/pitch/roll via `camera.rotateY/rotateX/rotateZ`
+    in useFrame. Ports `NaturalCamera.java:1111-1137`
+    (updateRotationFree + updateRoll) + `GameMouseKbdListener.java:
+74-80, 152-172` (Q/E roll binding + mouse-move input) at 1:1
+    user-visible intent (mouse right → look right, mouse down →
+    look down, Q → roll left CCW, E → roll right CW). Documented
+    divergences: no acceleration/velocity integrator (Pointer Lock
+    already integrates `movementX/Y` since last event); no
+    low-pass smoothing (browser/OS RawInput already filters); flat
+    sensitivity constant vs Gaia's `1/(dt × 2e2) × rotateSpeed ×
+fovFactor × movementMultiplier` chain (constant works at 60+
+    FPS); pitch clamp at ±(π/2 − 0.01) for gimbal-lock safety
+    (Gaia has no clamp). DIFF GATE + SUBAGENT VERIFY (fresh
+    Explore) both PASS with zero undocumented divergences.
+    Runtime smoke deferred to user's local browser — preview-MCP
+    env reproduces the pre-existing HMR + GPU-watchdog white-
+    canvas issue from earlier this session; no new error
+    signatures from this ship in console. **T4.2 wave closed at
+    full Gaia parity.**
 
                     **UX refinement candidates** (AAA proposal per
                     `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
