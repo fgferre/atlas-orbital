@@ -38,6 +38,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { simulationClock } from "../../lib/simulationClock";
+import { buildSkipMaskAttribute } from "./starfieldSkipMask";
 import {
   getCachedHygCatalog,
   hygTierForQuality,
@@ -105,6 +106,15 @@ const vertexShader = /* glsl */ `
   attribute float a_size;
   attribute vec3 starColor;
 
+  // T6.0 — per-instance visibility flag (default 0). When T6.3
+  // spawns a procedural stellar mesh for star K, the CPU writes
+  // skipMaskArray[K] = 1 + attribute.needsUpdate = true; this
+  // shader then nulls the quad so the sprite + mesh don't render
+  // stacked (feedback_no_effect_stacking.md). Read as float (the
+  // > 0.5 cutoff matches the <= 1e-3 floating-tolerance idiom
+  // used in the same conditional below).
+  attribute float a_skipMask;
+
   uniform float yearsSinceJ2000;
 
   // Gaia Sky vertex uniforms (verified host defaults from
@@ -171,8 +181,11 @@ const vertexShader = /* glsl */ `
     float alpha = clamp(opacity * u_alphaFactor * boundaryFade, 0.0, 1.0);
 
     // 5. Quad nulling for invisible / near stars (source perf trick
-    //    from star.group.quad.vertex.glsl:121).
-    if (alpha <= 1e-3 || dist < u_LEN0) {
+    //    from star.group.quad.vertex.glsl:121). T6.0 adds the
+    //    a_skipMask branch — when T6.3 spawns a procedural mesh
+    //    for star K it writes skipMaskArray[K]=1 and this conditional
+    //    suppresses the sprite (no stacking with the mesh).
+    if (alpha <= 1e-3 || dist < u_LEN0 || a_skipMask > 0.5) {
       alpha = 0.0;
       solidAngle = 0.0;
     }
@@ -491,6 +504,16 @@ export const Starfield = () => {
     geom.setAttribute(
       "a_size",
       new THREE.InstancedBufferAttribute(sizeArray, 1)
+    );
+    // T6.0 — `a_skipMask` is dormant infrastructure: the array is
+    // zero-filled by default (every star renders as today). T6.3
+    // will retrieve the attribute via
+    // `meshRef.current.geometry.getAttribute("a_skipMask")` and
+    // toggle entries in concert with the procedural-mesh
+    // spawn / despawn lifecycle.
+    geom.setAttribute(
+      "a_skipMask",
+      new THREE.InstancedBufferAttribute(buildSkipMaskAttribute(count), 1)
     );
 
     return geom;

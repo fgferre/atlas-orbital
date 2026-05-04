@@ -18,6 +18,10 @@ import {
   PROXIMITY_DAMPING_BASE,
 } from "../../lib/camera/proximityDamping";
 import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
+import {
+  HYG_FOCUS_DEFAULT_RADIUS_WORLD,
+  parseHygFocusId,
+} from "../../lib/focus/hygFocusResolver";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
 // because the frame loop is single-threaded and every read is paired
@@ -307,9 +311,19 @@ export const CameraController = () => {
     if (!focusId || !cameraInstance || !controlsInstance) return;
 
     const bodyData = BODIES_BY_ID.get(focusId);
-    if (!bodyData) return;
+    // T6.0 — HYG fallback. When focusId carries the `hyg:<index>`
+    // prefix, the curated `BODIES_BY_ID` lookup misses; resolve a
+    // placeholder radius so OrbitControls' minDistance + the
+    // perspective `near` plane still get sane values. Real per-star
+    // radius lands in T6.2 (`radiusFromSpect`) and T6.3 wires it.
+    let targetRadius: number | null = null;
+    if (bodyData) {
+      targetRadius = getBodyRadius(bodyData);
+    } else if (parseHygFocusId(focusId) !== null) {
+      targetRadius = HYG_FOCUS_DEFAULT_RADIUS_WORLD;
+    }
+    if (targetRadius == null) return;
 
-    const targetRadius = getBodyRadius(bodyData);
     controlsInstance.minDistance = targetRadius * 1.1;
 
     const newNear = Math.max(1e-7, controlsInstance.minDistance * 0.01);
