@@ -2,7 +2,7 @@
 
 Single source of truth for where we are in the visual port. Read FIRST.
 
-_Last updated: 2026-05-04 (T6 plan polish post-Codex-meta-review — user critique-pass on Codex's 8 loop-process recommendations rejected most as restating already-planned items; integrated only 3 genuine additions: hysteresis on T6.3 threshold (`STELLAR_MESH_ENTER_RAD` / `STELLAR_MESH_EXIT_RAD` 2× cushion), concrete acceptance criteria (4 named-stars × 2 zoom cycles + single-mesh + single-sprite-suppressed + flicker readPixels invariants), per-sub-onda Gaia-informed/atlas-native scope tags so DIFF GATE applies surgically. AGENTS.md gains a Test commands section pinning `npm run test:run` over deprecated `npm test --run`. Codex's "DIFF GATE → SOURCE-PARITY GATE" rename rejected as cosmetic — existing L25/M1 rule already accommodates documented divergences. T6 Codex review integrated — verdict SHIP WITH MODIFICATIONS, all 12 Codex claims spot-checked against atlas+Gaia source first, sub-wave restructured to T6.0+T6.1+T6.2+T6.3 ≈ 3.5-4.5 d MVP. Codex caught 5 P1/P2 holes Sonnet missed: HYG focus rejects HYG IDs today, build-hyg-binary drops `spect` field [~24.7% of HYG are giants → Stefan-Boltzmann mis-renders], threshold should be solid-angle not parsec, ProceduralSun3D origin-locked at line 558+613, and 9 additional hardcoded uniforms beyond Sonnet's count. Roadmap restructure: Tier 6 stellar-zoom wave (T6.0+T6.1/T6.2/T6.3 + optional T6.4/T6.5) added pending user scheduling, plus T-Closeout licensing-audit wave queued as final pre-release step; T2.3b + T4.9a' explicitly DEFERRED-TO-CLOSEOUT per user direction 2026-05-04 — gitignored Gaia placeholders stay through development, no licensing risk during dev. T4.1-β-wire wave CLOSED-AS-MOOT IN FULL — α Starfield (`7b6ef89`) + β Planet + γ Overlays (`7ec3787`); all three sites use float32 matrix-multiply pipelines (atlas's Three.js modelViewMatrix ≡ Gaia's libGDX `u_projViewTrans * u_worldTrans`). T2.1-fix wave closed: α `7674523` + β `2f88c6a` + γ `61ece1e`; chronic dev Context Lost fixed via StrictMode removal `b564c3d`; T5.8 reverted at `5792dc0`; T4.1-β bridge helper ship retained) — session ship summary below; details per onda in §Shipped ondas table._
+_Last updated: 2026-05-04 (Fresh-context readiness pass — kickoff prompt at §Kickoff updated: gates-step uses canonical `npm run test:run` form, preamble documents sub-onda scope-tag application to /loop steps 4+7 [atlas-native sub-ondas scope to rationale-doc, not mechanical Gaia diff], and recovery command for empty `/tmp/gaiasky` added inline. Fresh `/loop` fire from zero-context can now pick T6.0 cleanly. Plus T6 plan polish post-Codex-meta-review — user critique-pass on Codex's 8 loop-process recommendations rejected most as restating already-planned items; integrated only 3 genuine additions: hysteresis on T6.3 threshold (`STELLAR_MESH_ENTER_RAD` / `STELLAR_MESH_EXIT_RAD` 2× cushion), concrete acceptance criteria (4 named-stars × 2 zoom cycles + single-mesh + single-sprite-suppressed + flicker readPixels invariants), per-sub-onda Gaia-informed/atlas-native scope tags so DIFF GATE applies surgically. AGENTS.md gains a Test commands section pinning `npm run test:run` over deprecated `npm test --run`. Codex's "DIFF GATE → SOURCE-PARITY GATE" rename rejected as cosmetic — existing L25/M1 rule already accommodates documented divergences. T6 Codex review integrated — verdict SHIP WITH MODIFICATIONS, all 12 Codex claims spot-checked against atlas+Gaia source first, sub-wave restructured to T6.0+T6.1+T6.2+T6.3 ≈ 3.5-4.5 d MVP. Codex caught 5 P1/P2 holes Sonnet missed: HYG focus rejects HYG IDs today, build-hyg-binary drops `spect` field [~24.7% of HYG are giants → Stefan-Boltzmann mis-renders], threshold should be solid-angle not parsec, ProceduralSun3D origin-locked at line 558+613, and 9 additional hardcoded uniforms beyond Sonnet's count. Roadmap restructure: Tier 6 stellar-zoom wave (T6.0+T6.1/T6.2/T6.3 + optional T6.4/T6.5) added pending user scheduling, plus T-Closeout licensing-audit wave queued as final pre-release step; T2.3b + T4.9a' explicitly DEFERRED-TO-CLOSEOUT per user direction 2026-05-04 — gitignored Gaia placeholders stay through development, no licensing risk during dev. T4.1-β-wire wave CLOSED-AS-MOOT IN FULL — α Starfield (`7b6ef89`) + β Planet + γ Overlays (`7ec3787`); all three sites use float32 matrix-multiply pipelines (atlas's Three.js modelViewMatrix ≡ Gaia's libGDX `u_projViewTrans * u_worldTrans`). T2.1-fix wave closed: α `7674523` + β `2f88c6a` + γ `61ece1e`; chronic dev Context Lost fixed via StrictMode removal `b564c3d`; T5.8 reverted at `5792dc0`; T4.1-β bridge helper ship retained) — session ship summary below; details per onda in §Shipped ondas table._
 
 **T2.1-fix wave (2026-05-04) — LensFlare 1:1 visual parity restored after Codex review + 3-subagent double-check**: User reported huge white halo + chromatic edges + hex blob "exploding" at 5-30 AU. Codex review (`gpt-5.2`, read-only against `/tmp/gaiasky` + working tree) flagged 3 divergences. Double-check via 3 parallel Explore subagents verified+aggravated #2 (pmndrs `BlendFunction.ADD` does NOT chain via `inputBuffer` — atlas LF reads raw HDR scene WITHOUT LightGlow halo, more divergent than Codex characterized) and clarified #1 (Codex confused `EffectAttribute.CONVOLUTION` with auto-downscaling — it's a read-semantic flag, no buffer-size effect). Novel blindspot identified: atlas's `EffectComposer` runs on `HalfFloatType` per `PostProcessingPipeline.tsx:153` — declared "§5.1 hard invariant" justified by "Chapman ghost weights" (PSEUDO mechanism), but T2.1 (`a2c6594`) flipped default to COMPLEX which doesn't use Chapman weights. Stale justification, but invariant still load-bearing for the selective Bloom (`luminanceThreshold={1.0}` requires HDR scene values). Three sequential fixes landed:
 
@@ -80,6 +80,30 @@ the agent reads this file and the docs it references, so reading
 order, rules, Gaia source path, and §Next up are all discovered
 automatically.
 
+**Sub-onda scope tags** (added 2026-05-04 with Tier 6): each
+sub-onda in ROADMAP carries a scope tag — `(Gaia-informed)`,
+`(atlas-native)`, or hybrid. **For atlas-native sub-ondas, steps
+4 (R1 source-read) and 7 (DIFF GATE) scope to any Gaia-borrowed
+sub-component only**; the atlas-native parts document rationale
+inline instead of mechanical diff (the existing L25/M1 rule
+already says "every divergence carries a one-line rationale or
+it's a ship blocker"). Read the scope tag in the ROADMAP entry
+before mechanically applying steps 4/7.
+
+**If `/tmp/gaiasky/` is empty or corrupt** (e.g. `find /tmp/gaiasky
+-name '*.java'` returns 0): recover with a shallow blobless clone:
+
+```sh
+git clone --depth=1 --filter=blob:none --no-tags \
+  https://codeberg.org/gaiasky/gaiasky.git /tmp/gaiasky
+```
+
+If `/tmp/gaiasky/` already exists with corrupt git metadata, clone
+to a fresh path (`/tmp/gaiasky-fresh`) and rename-swap (`mv
+/tmp/gaiasky /tmp/gaiasky-corrupt && mv /tmp/gaiasky-fresh
+/tmp/gaiasky`) — non-destructive, preserves the corrupt state for
+inspection.
+
 ```
 1.  Read tasks/STATUS.md fully, then the docs it references
     (AGENTS.md, CLAUDE.md, tasks/ROADMAP.md, tasks/lessons.md,
@@ -124,7 +148,9 @@ automatically.
     file> against Gaia source at <file:line>. Cite file:line for
     every divergence. Flag any undocumented divergence." Resolve
     findings before proceeding.
-9.  Gates: `npm test -- --run`, `npm run lint`, `npm run build`.
+9.  Gates: `npm run test:run`, `npm run lint`, `npm run build`
+    (canonical npm-script forms; not `npm test --run` which uses
+    deprecated arg-passthrough — see AGENTS.md "Test commands").
 10. Runtime smoke: Claude Preview MCP — confirm no shader compile
     errors AND scene renders AND **does not flicker over time**
     (L26: screenshots don't catch temporal bugs; use multi-frame
