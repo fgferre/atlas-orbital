@@ -296,6 +296,31 @@ glow,corona}` both came back in the 2026-04-23 T4.9 Sun audit,
   by a callback (`setInterval`, rAF, listener) rather than by a
   pure render-time derivation. Also applicable to `setTimeout`-
   delayed state flips — same starvation pattern.
+- **Headless Playwright smoke is not a substitute for live browser
+  console-error read on every commit.** T5.8 (`9b81b81`) added two
+  `gl.compileAsync(scene, camera)` call sites to `SceneReadyChecker`.
+  The full gate trio passed (1197/1197 tests, lint clean, build
+  clean), DIFF GATE + SUBAGENT VERIFY both PASSED, and the commit
+  message claimed "Measured impact (Playwright prod-preview headless
+  env): neutral." But the headless env runs different code paths
+  than a real browser — Three.js's internal `checkMaterialsReady`
+  rAF poller crashed with `TypeError: Cannot read properties of
+undefined (reading 'isReady')` the moment a real browser opened
+  the page, killing the GL context and leaving a white viewport.
+  The crash was 100 % detectable by running `preview_start` →
+  waiting 15-25 s for full boot → reading `preview_console_logs
+level: "error"`. I never opened the dev server in the actual
+  browser, just relied on headless test "passes". User
+  intervention was the only thing that surfaced it.
+  **Mitigation**: per-ship runtime smoke is amended — step 10
+  ("Runtime smoke: Claude Preview MCP") REQUIRES a browser-side
+  console-error read after full boot + a bit of navigation. The
+  "scene renders + does not flicker" check is necessary but not
+  sufficient. Both sub-checks must pass before commit. Skip only
+  for pure-doc / pure-test / pure-build-tooling commits. If
+  preview-MCP is unavailable, ask the user to open the dev URL
+  and paste the console — never skip the gate. Memory pointer:
+  `feedback_browser_console_per_ship.md`.
 
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
