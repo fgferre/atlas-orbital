@@ -164,9 +164,30 @@ export const HygStellarMesh = () => {
   // Compute static per-star data when focus + catalog align. Recomputes
   // when starIndex changes (focus to a different HYG star) OR when
   // catalog flips (tier change, first-load resolution).
+  //
+  // T6.3-ε — quality-downgrade strand handling. HYG tiers are a strict
+  // brightness-sorted prefix (`build-hyg-binary.js:15`), so an index
+  // valid in `full` (e.g. 105913 = Proxima) is out of range in any
+  // smaller tier. Returning null here would silently strand the focus:
+  // mesh disappears, sprite is gone (not in tier), camera frame loop
+  // bails. Instead, defocus explicitly so OrbitControls + UI converge
+  // back to a known state. The `if (catalog && ...)` guard avoids
+  // firing during the transient first-load window when catalog is
+  // null. (Codex round-2 P2 audit, 2026-05-04.)
   const starData = useMemo<HygStarData | null>(() => {
     if (starIndex === null || !catalog) return null;
-    if (starIndex < 0 || starIndex >= catalog.header.count) return null;
+    if (starIndex < 0 || starIndex >= catalog.header.count) {
+      // Defer setState out of the render phase via microtask. Read store
+      // setters inside the closure (no useState dep churn).
+      Promise.resolve().then(() => {
+        const state = useStore.getState();
+        if (state.focusId === focusId) {
+          state.setFocusId(null);
+          if (state.selectedId !== null) state.setSelectedId(null);
+        }
+      });
+      return null;
+    }
 
     const worldPos = resolveHygWorldPosition(starIndex, catalog);
     if (!worldPos) return null;
@@ -194,7 +215,11 @@ export const HygStellarMesh = () => {
     const radiusWorldUnits = radiusSolar * SUN_RADIUS_WORLD_UNITS;
 
     return { worldPos, visualProfile, radiusWorldUnits };
-  }, [starIndex, catalog]);
+    // focusId is a deterministic derivation of starIndex (`parseHygFocusId`)
+    // so listing both is functionally redundant — but the lint rule only
+    // sees the symbolic dep, so we list it to keep `react-hooks/exhaustive-deps`
+    // green while documenting the relation.
+  }, [starIndex, catalog, focusId]);
 
   // Hysteresis state. Ref tracks the live boolean for useFrame; the
   // useState mirror drives React re-renders (mount/unmount of

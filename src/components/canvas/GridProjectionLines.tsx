@@ -4,6 +4,7 @@ import { Line } from "@react-three/drei";
 import * as THREE from "three";
 import type { Line2, LineSegments2 } from "three-stdlib";
 
+import { parseHygFocusId } from "../../lib/focus/hygFocusResolver";
 import { GRID_ORIENTATION_COLORS } from "../../lib/gridOrientation";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
@@ -113,8 +114,21 @@ export const GridProjectionLines = () => {
 
   const orientationColor = GRID_ORIENTATION_COLORS[gridOrientation];
 
+  // T6.3-ε — exclude HYG focus from the active gate. HYG stars have
+  // no per-star scene mesh (the entire catalog is one instanced
+  // billboard in `Starfield.tsx`), so `scene.getObjectByName(focusId)`
+  // returns null inside useFrame and the projection-line geometry is
+  // never updated. Without this gate, the lines stayed mounted with
+  // stale points (carried over from the previous curated focus or
+  // from origin). Lines are a "where on the ecliptic plane is this
+  // focused body" affordance — for a parsec-distance HYG star, that
+  // signal is meaningless anyway. (Codex round-2 P3 audit, 2026-05-04.)
   const active =
-    showEclipticGrid && gridProjectionLines && focusId && focusId !== "sun";
+    showEclipticGrid &&
+    gridProjectionLines &&
+    focusId &&
+    focusId !== "sun" &&
+    parseHygFocusId(focusId) === null;
 
   useFrame(() => {
     if (!active) return;

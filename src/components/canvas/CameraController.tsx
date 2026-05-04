@@ -172,6 +172,26 @@ export const CameraController = () => {
     const hygIndex = bodyData ? null : parseHygFocusId(focusId);
     if (!bodyData && hygIndex === null) return;
     if (hygIndex !== null && !hygCatalog) return;
+    // T6.3-ε — quality-downgrade strand handling. HYG tiers are a
+    // strict brightness-sorted prefix (`build-hyg-binary.js:15`); a
+    // focused index valid in `full` (e.g. 105913 = Proxima) becomes
+    // out of range after a tier drop. Early-return + defocus keeps
+    // the camera state consistent with HygStellarMesh's matching
+    // out-of-range guard. (Codex round-2 P2 audit, 2026-05-04.)
+    if (
+      hygIndex !== null &&
+      hygCatalog &&
+      hygIndex >= hygCatalog.header.count
+    ) {
+      Promise.resolve().then(() => {
+        const state = useStore.getState();
+        if (state.focusId === focusId) {
+          state.setFocusId(null);
+          if (state.selectedId !== null) state.setSelectedId(null);
+        }
+      });
+      return;
+    }
 
     const isSameFocus = prevFocusRef.current === focusId;
     const isModeSwitch = isSameFocus && prevScaleModeRef.current !== scaleMode;

@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 36 incidents (sessions 2026-04-17 → 2026-05-04).
+Meta-rules distilled from 37 incidents (sessions 2026-04-17 → 2026-05-04).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -91,7 +91,18 @@ the executed artefact. Four gates:
   still get spot-checked against actual source per
   `feedback_codex_findings_toward_1to1.md` before applying — Codex can
   hallucinate too — but the cold read materially expands the bug-catch
-  surface for atlas-native code.
+  surface for atlas-native code. **Two-round amplification**: a second
+  audit fired AFTER the first round's fixes shipped found 4 more
+  verified bugs (T6.3-ε vs T6.3-δ on the same T6 wave). Each round
+  catches a different class of issue — round 1 caught the blocker
+  (frame-loop early-return) + active misuse (small-star clamp), round
+  2 caught the latent edge cases (quality-tier strand, click-bypass
+  selection state, stale projection lines, doc-vs-binary mismatch).
+  Pattern: a single audit pass prunes the obvious; a second pass on a
+  cleaner tree exposes the quieter holes the first reviewer didn't
+  budget for. Pay the second-round cost on atlas-native waves where
+  no Gaia 1:1 reference exists; skip on Gaia-borrowed sub-ondas where
+  source-diff already constrains the surface.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes
