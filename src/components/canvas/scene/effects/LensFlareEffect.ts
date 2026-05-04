@@ -197,13 +197,32 @@ const fragmentShader = /* glsl */ `
       float light_intensity_scalar = u_lightIntensities[light];
 
       // Occlusion luma sampling (Archimedean spiral, 6 samples).
+      // **LDR clamp (T2.1-fix-α, 2026-05-04)** — \`inputBuffer\` is HDR
+      // (\`HalfFloatType\` composer per PostProcessingPipeline.tsx). The
+      // procedural Sun's emissive renders pixels with brightness > 1.0
+      // at solar-system camera distances; without a clamp here, those
+      // HDR samples drive the per-light \`perLightIntensity\` past 1.0
+      // and the 10-iteration \`lensFlareCircle\` accumulator amplifies
+      // beyond Gaia's behaviour, producing the "exploding halo + chromatic
+      // edges + hex blob" defect users report at 5-30 AU.
+      // Gaia's chain side-steps this naturally because LightGlow at
+      // \`lightglow.frag.glsl:97\` writes \`saturate(effectColor + scene)\`
+      // — the LDR-composited buffer that LensFlare then reads. atlas's
+      // pmndrs \`BlendFunction.ADD\` LightGlow does NOT chain its output
+      // back into LensFlare's \`inputBuffer\` (subagent-verified vs
+      // \`postprocessing/build/postprocessing.js:1335-1365\`), so
+      // LensFlare here sees the raw scene HDR. The \`clamp(..., 0, 1)\`
+      // emulates the LDR-boundary that Gaia obtains via composite
+      // saturation, restoring 1:1 visual parity for the LF spiral
+      // occlusion sampler without changing the chain order or
+      // LightGlow's HDR-throughput contract.
       float t = 0.0;
       float a = ${LENS_FLARE_SPIRAL_AMPLITUDE.toFixed(2)};
       float dt = ${LENS_FLARE_SPIRAL_STEP_RADIANS.toFixed(6)};
       float lum = 0.0;
       for (int idx = 0; idx < N_SAMPLES; idx++) {
         vec2 curr_coord = light_pos + vec2(0.5) + vec2(lensFlareFx(t, a) / ar, lensFlareFy(t, a));
-        lum += lensFlareLuma(texture2D(inputBuffer, curr_coord).rgb);
+        lum += lensFlareLuma(clamp(texture2D(inputBuffer, curr_coord).rgb, 0.0, 1.0));
         t += dt;
       }
       lum /= float(N_SAMPLES);

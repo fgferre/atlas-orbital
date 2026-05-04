@@ -135,12 +135,26 @@ export const PostProcessingPipeline = memo(
     // selective Bloom below). Reduced-motion gate is internal to the
     // slot component — when active it returns `null` and no
     // LightGlow fragment is compiled into the composer program.
-    // **HDR buffer (§5.1 hard invariant).** The EffectComposer MUST
-    // run on a `HalfFloatType` internal RT so bright-pass based
-    // effects (θ.3 LightGlow, θ.4 pseudo lens flare ghost weighting)
-    // read genuine HDR luminance rather than an early clipped-to-1.0
-    // LDR signal. Without this, Chapman ghost weights collapse and
-    // every ghost renders identically white.
+    // **HDR buffer (§5.1 hard invariant — refreshed 2026-05-04).** The
+    // EffectComposer MUST run on a `HalfFloatType` internal RT so the
+    // selective Bloom downstream (`luminanceThreshold={1.0}` below)
+    // can fire on genuinely-emissive scene pixels (Sun, bright stars
+    // through the procedural emissive path) rather than only on
+    // already-clipped LDR output. Original §5.1 justification cited
+    // PseudoLensFlare's Chapman ghost weights — that branch was retired
+    // by T2.1 (`a2c6594`, default flipped to COMPLEX per
+    // `lensflare.frag.glsl:84-161 #ifdef complexLensFlare`), and
+    // COMPLEX does NOT use ghost-weight bright-pass logic. Bloom is the
+    // current hard consumer of the HDR-throughput invariant.
+    //
+    // **Note on LensFlare**: with HDR-throughput, the LensFlare's
+    // spiral occlusion sampler reads HDR pixels (>1.0 from the
+    // procedural Sun emissive) which previously amplified the
+    // `lensFlareCircle` accumulator beyond Gaia's behavior. T2.1-fix-α
+    // (2026-05-04) added an LDR clamp inside `LensFlareEffect.ts`
+    // spiral sampler emulating Gaia's `lightglow.frag.glsl:97`
+    // `saturate(effectColor + scene)` LDR-boundary — see comment in
+    // `LensFlareEffect.ts:199-218` for the full rationale.
     // θ.4 Pseudo lens flare + lensdirt starburst. Two chained
     // effects (`PseudoLensFlareEffect` then `LensDirtEffect`) sit
     // between LightGlow and Bloom per `phase-gaia-sky.md §5.1` —
