@@ -76,6 +76,101 @@ function parseFloatOrNaN(str) {
 }
 
 /**
+ * T6.2-β-β: canonicalize a HYG spectral classification string into a
+ * stable, low-cardinality form that the runtime parser still reads
+ * cleanly. Three-stage normalization:
+ *
+ *   1. Take the primary component (split on `+` / `/` for binary
+ *      systems; take the first whitespace-separated token).
+ *   2. Round fractional subclass to integer (M5.5V → M5V).
+ *   3. Keep only the canonical letter + integer subclass + first
+ *      luminosity-class match (Ia / Ib / V / III / etc.).
+ *
+ * Examples:
+ *   "G2V"            → "G2V"
+ *   "M1Ib + B2.5V"   → "M1Ib"  (binary primary)
+ *   "M5.5V"          → "M6V"   (round fractional via Math.round; .5 rounds up)
+ *   "G2:Va...e"      → "G2V"   (drop variant tail)
+ *   "DA2"            → "DA2"   (white dwarf — full pattern)
+ *   ""               → ""
+ *
+ * **Why round subclass**: Runtime `parseSpectralClass` accepts
+ * fractional subclasses (M5.5 → linear-interp temperature ≈ 3030K)
+ * but storing all fractional variants explodes the unique-strings
+ * count past the 255 uint8 cap. Rounding to integer keeps temperature
+ * within ~5% (Ballesteros's own error margin) and collapses the
+ * unique-classes count from ~2800 to ~417 (atlas test, 2026-05-04).
+ */
+function canonicalizeSpect(spect) {
+  if (!spect) return "";
+
+  // 1. Primary component.
+  const primary = spect
+    .trim()
+    .split(/\s*[+/]\s*/)[0]
+    ?.split(/\s+/)[0]
+    ?.trim();
+  if (!primary) return "";
+
+  // White-dwarf shortcuts. "WD" and "DA"-style patterns are kept as-is
+  // (with fractional subclass rounded to integer if present).
+  const wdMatch = primary.match(/^(D[A-Z]{0,2})(\d+(?:\.\d+)?)?$/i);
+  if (wdMatch) {
+    const prefix = wdMatch[1].toUpperCase();
+    const sub = wdMatch[2] ? Math.round(Number(wdMatch[2])) : "";
+    return `${prefix}${sub}`;
+  }
+  if (/^WD$/i.test(primary)) return "WD";
+
+  // 2 + 3. Standard MK pattern: <letter><digit>?<luminosity>?.
+  // Match longest luminosity prefix first (Ia, Ib, VII, VI, IV, III,
+  // II, I, V, "0").
+  const mkMatch = primary.match(
+    /^([OBAFGKMLTY])(\d+(?:\.\d+)?)?(0|Ia|Ib|VII|VI|IV|III|II|I|V)?/i
+  );
+  if (!mkMatch) return ""; // unparseable → sentinel
+
+  const letter = mkMatch[1].toUpperCase();
+  const sub = mkMatch[2] !== undefined ? Math.round(Number(mkMatch[2])) : "";
+  const lum = mkMatch[3] ? mkMatch[3] : "";
+  return `${letter}${sub}${lum}`;
+}
+
+/**
+ * T6.2-β-β: top-N cap by frequency. The HYG catalog has ~417 unique
+ * canonical classes after `canonicalizeSpect` — over the uint8 cap of
+ * 255. This pass counts class frequency, keeps the top-254 (reserving
+ * the empty-string sentinel + 1 slot for safety), and rewrites
+ * long-tail spect → "" so they fall back to B-V at runtime.
+ *
+ * Coverage at the 254 cap (catalog audit 2026-05-04): 96.01% of stars
+ * keep their canonical class; 1.5% long-tail (~1,725 stars) get the
+ * sentinel and use B-V fallback. The runtime parses the same way
+ * either path — the difference is whether T_eff comes from the MK
+ * lookup table or the Ballesteros formula (~5% error gap, sub-pixel
+ * visual difference).
+ */
+function capSpectByFrequency(stars, maxClasses) {
+  const counts = new Map();
+  for (const star of stars) {
+    if (!star.spect) continue;
+    counts.set(star.spect, (counts.get(star.spect) ?? 0) + 1);
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const keep = new Set(sorted.slice(0, maxClasses).map(([k]) => k));
+  let dropped = 0;
+  let droppedStars = 0;
+  for (const star of stars) {
+    if (star.spect && !keep.has(star.spect)) {
+      star.spect = "";
+      droppedStars += 1;
+    }
+  }
+  dropped = counts.size - keep.size;
+  return { uniqueClasses: counts.size, kept: keep.size, dropped, droppedStars };
+}
+
+/**
  * Stream-parse the HYG CSV.
  *
  * HYG CSV is standard comma-separated with a single header line. Fields we
@@ -98,7 +193,20 @@ async function parseCsv(inputPath) {
     if (!header) {
       header = line.split(",").map((col) => col.replace(/^"|"$/g, "").trim());
       headerIndex = Object.fromEntries(header.map((name, i) => [name, i]));
-      const required = ["mag", "ci", "x", "y", "z", "pmra", "pmdec"];
+      // T6.2-β-β: spect + absmag added to required columns. Both have
+      // existed in HYG v4.2 since release; the build script just wasn't
+      // reading them before this commit.
+      const required = [
+        "mag",
+        "ci",
+        "x",
+        "y",
+        "z",
+        "pmra",
+        "pmdec",
+        "spect",
+        "absmag",
+      ];
       for (const name of required) {
         if (!(name in headerIndex)) {
           throw new Error(`HYG CSV is missing required column "${name}"`);
@@ -136,6 +244,18 @@ async function parseCsv(inputPath) {
     const pmRA = parseFloatOrNaN(cells[headerIndex.pmra]);
     const pmDec = parseFloatOrNaN(cells[headerIndex.pmdec]);
 
+    // T6.2-β-β: extract spect + absmag for the v2 binary format.
+    // `spect` is canonicalized to its primary component (binary-syntax
+    // tails like "+B2.5V" stripped) so the build-time dedup matches
+    // what the runtime parser would have extracted anyway. Empty
+    // result → "" sentinel at index 0 of the encoder's string table.
+    // `absmag` may be missing for distant / distance-unknown stars;
+    // non-finite → NaN, encoder preserves NaN end-to-end.
+    const spectRaw =
+      cells[headerIndex.spect]?.replace(/^"|"$/g, "").trim() ?? "";
+    const spect = canonicalizeSpect(spectRaw);
+    const absmag = parseFloatOrNaN(cells[headerIndex.absmag]);
+
     const proper =
       cells[headerIndex.proper]?.replace(/^"|"$/g, "").trim() ?? "";
     const bayer = cells[headerIndex.bayer]?.replace(/^"|"$/g, "").trim() ?? "";
@@ -151,6 +271,10 @@ async function parseCsv(inputPath) {
       ci: Number.isFinite(ci) ? ci : 0.65, // Sun-like default when unknown
       pmRA: Number.isFinite(pmRA) ? pmRA : 0,
       pmDec: Number.isFinite(pmDec) ? pmDec : 0,
+      // T6.2-β-β v2 fields. Empty spect / NaN absmag are encoded as
+      // sentinels by the binary encoder so they round-trip cleanly.
+      spect,
+      absmag: Number.isFinite(absmag) ? absmag : NaN,
       proper,
       bayer,
       flam,
@@ -224,6 +348,18 @@ async function main() {
   log(`Output: ${OUTPUT_DIR}`);
 
   const stars = await parseCsv(INPUT_PATH);
+
+  // T6.2-β-β: cap unique canonical spect classes to top-254 by
+  // frequency (uint8 spectIdx → 256 slots, minus index 0 sentinel,
+  // minus 1 safety = 254). HYG has ~417 unique classes after
+  // canonicalization; the top-254 cover ~96% of stars. Long-tail
+  // classes get spect="" → B-V fallback at runtime.
+  const capStats = capSpectByFrequency(stars, 254);
+  log(
+    `Spect cap: ${capStats.kept} of ${capStats.uniqueClasses} canonical classes kept; ` +
+      `${capStats.droppedStars} stars (${((100 * capStats.droppedStars) / stars.length).toFixed(2)}%) ` +
+      `routed to B-V fallback.`
+  );
 
   // Sort ascending by apparent magnitude so the brightest stars sit at the
   // start of every tier file.
