@@ -21,7 +21,21 @@ import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
 import {
   HYG_FOCUS_DEFAULT_RADIUS_WORLD,
   parseHygFocusId,
+  resolveHygWorldPosition,
 } from "../../lib/focus/hygFocusResolver";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
+import {
+  getCachedHygCatalog,
+  hygTierForQuality,
+  loadHygCatalog,
+} from "../../lib/starfield";
+import {
+  SUN_RADIUS_WORLD_UNITS,
+  STELLAR_MESH_ENTER_RAD,
+} from "../../lib/stellarMeshGate";
+import { radiusFromSpect } from "../../lib/stellarPhysics";
+import type { HygCatalogData } from "../../utils/hygBinary";
+import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
 // because the frame loop is single-threaded and every read is paired
@@ -38,8 +52,28 @@ export const CameraController = () => {
   ) as OrbitControlsImpl | null;
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
+  const qualityMode = useStore((state) => state.qualityMode);
   const isIntroAnimating = useStore((state) => state.isIntroAnimating);
   const viewportFraming = useStore((state) => state.viewportFraming);
+
+  // T6.3-γ: subscribe to the same tier-bound HYG catalog Starfield +
+  // StarHoverPicker + HygStellarMesh use, so the focus-setup useEffect
+  // can compute fly-to coordinates for `hyg:K` IDs. Until the catalog
+  // resolves, HYG focus-clicks are no-ops at the camera path (the
+  // store still updates focusId; the user just doesn't see a fly-to
+  // until the catalog finishes loading).
+  const qualityProfile = useQualityProfile(qualityMode);
+  const hygTier = hygTierForQuality(qualityProfile.name);
+  const loadHygForTier = useCallback(() => loadHygCatalog(hygTier), [hygTier]);
+  const getCachedHygForTier = useCallback(
+    () => getCachedHygCatalog(hygTier),
+    [hygTier]
+  );
+  const hygCatalog = useStarfieldCatalog<HygCatalogData>({
+    source: "hyg",
+    loadCatalog: loadHygForTier,
+    getCachedCatalog: getCachedHygForTier,
+  });
 
   const flyingRef = useRef({
     isFlying: false,
@@ -129,7 +163,15 @@ export const CameraController = () => {
     if (!focusId || !cameraInstance || !controlsInstance) return;
 
     const bodyData = BODIES_BY_ID.get(focusId);
-    if (!bodyData) return;
+    // T6.3-γ: HYG focus has no curated CelestialBody. Resolve a
+    // synthetic targetPos via T6.0 + a per-star close-distance via
+    // T6.2 so the fly-to lands the camera at a distance where T6.3-α's
+    // hysteresis gate fires and HygStellarMesh spawns. When the
+    // catalog hasn't loaded yet, return early — the focus-setup
+    // useEffect re-runs when `hygCatalog` flips, retrying then.
+    const hygIndex = bodyData ? null : parseHygFocusId(focusId);
+    if (!bodyData && hygIndex === null) return;
+    if (hygIndex !== null && !hygCatalog) return;
 
     const isSameFocus = prevFocusRef.current === focusId;
     const isModeSwitch = isSameFocus && prevScaleModeRef.current !== scaleMode;
@@ -165,7 +207,98 @@ export const CameraController = () => {
       return;
     }
 
+    const setupCameraHyg = () => {
+      // T6.3-γ — HYG fly-to path. No scene mesh exists for HYG stars
+      // (the entire catalog is one instanced billboard mesh in
+      // Starfield.tsx). We resolve target position via T6.0's helper
+      // and pick a close-distance that puts the per-frame solidAngle
+      // (T6.3-α) clearly above STELLAR_MESH_ENTER_RAD so HygStellarMesh
+      // spawns the procedural mesh on arrival. Skips occlusion +
+      // viewport composition (those are tuned for solar-system
+      // geometry; not meaningful for parsec-distance point sources).
+      if (!hygCatalog || hygIndex === null) return;
+      const resolvedPos = resolveHygWorldPosition(hygIndex, hygCatalog);
+      if (!resolvedPos) return;
+      const targetPos = resolvedPos;
+
+      // Per-star physical radius in world units, same path as
+      // HygStellarMesh (T6.3-β). For long-tail stars where the
+      // canonicalized spect was capped to "" sentinel (T6.2-β-β),
+      // radiusFromSpect returns 1.0 R_sun → ~4.654 wu fallback.
+      const spectIdx = hygCatalog.spectIndices[hygIndex] ?? 0;
+      const spectRaw = hygCatalog.spectStrings[spectIdx] ?? "";
+      const spect = spectRaw.length > 0 ? spectRaw : null;
+      const absmagRaw = hygCatalog.absmag[hygIndex];
+      const absmag = Number.isFinite(absmagRaw) ? absmagRaw : null;
+      const radiusSolar = radiusFromSpect(
+        spect,
+        absmag !== null ? absmag : undefined
+      );
+      const radiusWu = Math.max(
+        HYG_FOCUS_DEFAULT_RADIUS_WORLD,
+        radiusSolar * SUN_RADIUS_WORLD_UNITS
+      );
+
+      // Target solid angle 5× ENTER → distance such that
+      // solidAngle = radius / distance comfortably exceeds the
+      // hysteresis spawn threshold. Extra 5× margin absorbs camera
+      // jitter and any small drift between fly-to settle and the
+      // first per-frame gate eval. Lower-bounded by 10 wu so a
+      // very small star (white dwarf, etc.) doesn't put the camera
+      // inside its own coordinate origin.
+      const targetSolidAngle = STELLAR_MESH_ENTER_RAD * 5;
+      const idealDist = Math.max(10, radiusWu / targetSolidAngle);
+
+      // Direction: from star back along the line to current camera
+      // position, preserving the user's viewing orientation. Falls
+      // back to "from sun toward star" when camera is exactly at
+      // the star's world position (degenerate first-fly case).
+      const cameraOffset = cameraInstance.position.clone().sub(targetPos);
+      const direction =
+        cameraOffset.lengthSq() > 1e-6
+          ? cameraOffset.normalize()
+          : targetPos.clone().normalize().negate();
+
+      const newCamPos = targetPos
+        .clone()
+        .add(direction.multiplyScalar(idealDist));
+
+      // Duration scales with total fly distance (capped at 4s) —
+      // identical curve to the curated-body path so the UX feels
+      // consistent across body / HYG transitions.
+      const duration = Math.min(
+        1500 +
+          Math.min(cameraInstance.position.distanceTo(newCamPos) / 1000, 2.5) *
+            1000,
+        4000
+      );
+
+      const sunPosition = new THREE.Vector3(0, 0, 0);
+      transitionRef.current.start(
+        cameraInstance.position.clone(),
+        newCamPos,
+        sunPosition,
+        duration,
+        () => {
+          flyingRef.current.isFlying = false;
+        }
+      );
+      flyingRef.current.cameraTargetPos.copy(newCamPos);
+      flyingRef.current.isFlying = true;
+      controlsInstance.target.copy(targetPos);
+      resetFocusTrackingState(focusTrackingRef.current, targetPos);
+    };
+
     const setupCamera = () => {
+      // T6.3-γ — branch on focus type. HYG focus dispatches to the
+      // parallel setupCameraHyg above; curated-body path stays
+      // byte-identical to its pre-T6.3-γ shape.
+      if (hygIndex !== null) {
+        setupCameraHyg();
+        return;
+      }
+      if (!bodyData) return;
+
       const targetMesh = scene.getObjectByName(focusId);
       if (!targetMesh) return;
 
@@ -290,6 +423,9 @@ export const CameraController = () => {
     viewportFraming.compositionOffsetXPx,
     viewportFraming.compositionOffsetYPx,
     viewportFraming.usableRect,
+    // T6.3-γ — re-run when the HYG catalog finishes loading so a
+    // pending HYG focus from a click-before-load actually flies.
+    hygCatalog,
   ]);
 
   useEffect(() => {
