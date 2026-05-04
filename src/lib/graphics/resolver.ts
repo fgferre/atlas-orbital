@@ -55,6 +55,15 @@ export interface GraphicsOverrides {
   shadowIntensityMul?: number;
   /** Multiplier on `visualPreset.envMapIntensity`. */
   envMapIntensityMul?: number;
+  /**
+   * Multiplier on the COMPLEX `LensFlareEffect` `u_flareIntensity`
+   * knob (atlas-only UX tuning, not in Gaia). Default 1.0; users can
+   * dial down the lens-flare composite (halo + ghosts) without
+   * touching the underlying COMPLEX shader port. The shader stays 1:1
+   * with `lensflare.frag.glsl` — this multiplier scales the final
+   * additive contribution before the composer ADD blend.
+   */
+  lensFlareIntensityMul?: number;
   /** User-selected tone mapping operator; defaults to Gaia's `none`. */
   toneMapping?: ToneMappingName;
   /** Resolution scale override (dprMax). */
@@ -97,6 +106,7 @@ export interface EffectiveGraphics {
   sunIntensityMul: number;
   shadowIntensityMul: number;
   envMapIntensityMul: number;
+  lensFlareIntensityMul: number;
 }
 
 /**
@@ -126,6 +136,7 @@ export const PRESET_DEFAULTS: Record<
     sunIntensityMul: 1,
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
+    lensFlareIntensityMul: 1,
   },
   high: {
     resolutionScale: 1.75,
@@ -144,6 +155,7 @@ export const PRESET_DEFAULTS: Record<
     sunIntensityMul: 1,
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
+    lensFlareIntensityMul: 1,
   },
   medium: {
     resolutionScale: 1.5,
@@ -162,6 +174,7 @@ export const PRESET_DEFAULTS: Record<
     sunIntensityMul: 1,
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
+    lensFlareIntensityMul: 1,
   },
   low: {
     resolutionScale: 1,
@@ -180,6 +193,7 @@ export const PRESET_DEFAULTS: Record<
     sunIntensityMul: 1,
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
+    lensFlareIntensityMul: 1,
   },
 };
 
@@ -302,6 +316,8 @@ export const resolveEffectiveGraphics = (
     sunIntensityMul: base.sunIntensityMul * (ov.sunIntensityMul ?? 1),
     shadowIntensityMul: base.shadowIntensityMul * (ov.shadowIntensityMul ?? 1),
     envMapIntensityMul: base.envMapIntensityMul * (ov.envMapIntensityMul ?? 1),
+    lensFlareIntensityMul:
+      base.lensFlareIntensityMul * (ov.lensFlareIntensityMul ?? 1),
   };
 };
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, type JSX } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 
+import { useEffectiveGraphics } from "../../../hooks/useEffectiveGraphics";
 import { LensFlareEffect } from "./effects/LensFlareEffect";
 import { ndcToLensFlareUv } from "./effects/lensFlareMath";
 
@@ -55,10 +56,21 @@ export function LensFlareSlot(): JSX.Element {
   const worldPosBuffer = useMemo(() => new THREE.Vector3(), []);
   const ndcBuffer = useMemo(() => new THREE.Vector3(), []);
 
+  // Atlas-only UX knob (not in Gaia): user-tunable multiplier on the
+  // composer-level flare contribution. Default 1.0 = full Gaia
+  // intensity. Drives the existing `u_flareIntensity` uniform in
+  // `LensFlareEffect`. Lives alongside Sun Brightness / Env
+  // Reflections in the Display panel.
+  const lensFlareIntensityMul = useEffectiveGraphics().lensFlareIntensityMul;
+
   useFrame(({ size }) => {
     // Viewport push — Gaia reads this for aspect-ratio correction at
     // `lensflare.frag.glsl:177`.
     effect.setViewportSize(size.width, size.height);
+
+    // Push the effective lens-flare multiplier each frame so slider
+    // changes propagate without remount.
+    effect.setFlareIntensity(lensFlareIntensityMul);
 
     // Codex audit drift fix (2026-04-22): Gaia animates starburstOffset
     // ONLY for PSEUDO — `MainPostProcessor.java:915-917` targets

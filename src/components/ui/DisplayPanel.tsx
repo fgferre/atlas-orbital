@@ -375,6 +375,20 @@ export const DisplayPanel = () => {
           }
         />
 
+        <Slider
+          label="Lens Flare ×"
+          value={graphicsOverrides.lensFlareIntensityMul ?? 1}
+          min={0}
+          max={2}
+          step={0.05}
+          onChange={(v) => setGraphicsOverride("lensFlareIntensityMul", v)}
+          onReset={
+            graphicsOverrides.lensFlareIntensityMul !== undefined
+              ? () => setGraphicsOverride("lensFlareIntensityMul", undefined)
+              : undefined
+          }
+        />
+
         <div>
           <SubsectionLabel>Sun Render</SubsectionLabel>
           <div
