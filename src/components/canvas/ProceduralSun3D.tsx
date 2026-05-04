@@ -5,6 +5,10 @@ import * as THREE from "three";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import { resolveSunRenderRange } from "../../lib/sunRenderRange";
 import {
+  SUN_DEFAULT_VISUAL_PROFILE,
+  type StellarVisualProfile,
+} from "../../lib/stellarVisualProfile";
+import {
   proceduralSunFlaresFragmentShader,
   proceduralSunFlaresVertexShader,
   proceduralSunGlowFragmentShader,
@@ -308,19 +312,46 @@ const createSunFlaresGeometry = (lineCount: number, lineLength: number) => {
 interface ProceduralSun3DProps {
   qualityProfileName: ResolvedQualityName;
   sunVisualRadiusWorld: number;
+  /**
+   * T6.1 — group origin in world space. Default `[0, 0, 0]`
+   * preserves pre-T6.1 Sun-mount behavior. T6.3 will pass per-
+   * star world positions (from `resolveHygWorldPosition`) so a
+   * procedural mesh can be spawned at a focused HYG star.
+   */
+  position?: [number, number, number] | THREE.Vector3;
+  /**
+   * T6.1 — externalized uniform set. Default
+   * `SUN_DEFAULT_VISUAL_PROFILE` is byte-identical to the Sun's
+   * pre-T6.1 hardcoded values (every uniform pinned by
+   * `stellarVisualProfile.test.ts`). T6.3 will pass per-class
+   * profiles produced by T6.2's `stellarVisualProfileFrom`.
+   */
+  visualProfile?: StellarVisualProfile;
+  /**
+   * T6.1 — visibility gate. When omitted, the component falls
+   * back to its pre-T6.1 internal `resolveSunRenderRange` auto-
+   * detection (camera-distance vs `SUN_BILLBOARD_THRESHOLD_AU`).
+   * T6.3 will pass `"close"` / `"far"` explicitly based on
+   * solid-angle gate matching Gaia's
+   * `BillboardEntityRenderSystem.java:122-128` pattern.
+   */
+  renderRange?: "close" | "far";
 }
 
 export const ProceduralSun3D = ({
   qualityProfileName,
   sunVisualRadiusWorld,
+  position = [0, 0, 0],
+  visualProfile = SUN_DEFAULT_VISUAL_PROFILE,
+  renderRange,
 }: ProceduralSun3DProps) => {
   const { gl } = useThree();
   const profile = SUN_FX_PROFILES[qualityProfileName];
   const groupRef = useRef<THREE.Group>(null);
 
   const lightDirWorld = useMemo(
-    () => new THREE.Vector3(1, 1, 1).normalize(),
-    []
+    () => new THREE.Vector3(...visualProfile.lightDirection).normalize(),
+    [visualProfile.lightDirection]
   );
 
   const cameraUpRef = useRef(new THREE.Vector3());
@@ -365,13 +396,16 @@ export const ProceduralSun3D = ({
       fragmentShader: proceduralSunPerlinFragmentShader,
       depthWrite: false,
       side: THREE.BackSide,
+      // T6.1 — granulation uniforms now driven by visualProfile.
+      // Pre-T6.1 hardcoded values (6 / 0.1 / 1 / 0.25 / 0.72) live in
+      // SUN_DEFAULT_VISUAL_PROFILE for byte-identical Sun appearance.
       uniforms: {
         uTime: { value: 0 },
-        uSpatialFrequency: { value: 6 },
-        uTemporalFrequency: { value: 0.1 },
-        uH: { value: 1 },
-        uContrast: { value: 0.25 },
-        uFlatten: { value: 0.72 },
+        uSpatialFrequency: { value: visualProfile.granulationSpatialFreq },
+        uTemporalFrequency: { value: visualProfile.granulationTemporalFreq },
+        uH: { value: visualProfile.granulationH },
+        uContrast: { value: visualProfile.granulationContrast },
+        uFlatten: { value: visualProfile.granulationFlatten },
       },
       toneMapped: false,
     });
@@ -380,7 +414,14 @@ export const ProceduralSun3D = ({
     scene.add(mesh);
 
     return { scene, renderTarget, cubeCamera, material, geometry };
-  }, [profile.cubeResolution]);
+  }, [
+    profile.cubeResolution,
+    visualProfile.granulationSpatialFreq,
+    visualProfile.granulationTemporalFreq,
+    visualProfile.granulationH,
+    visualProfile.granulationContrast,
+    visualProfile.granulationFlatten,
+  ]);
 
   const sunMaterial = useMemo(
     () =>
@@ -391,22 +432,32 @@ export const ProceduralSun3D = ({
         premultipliedAlpha: true,
         blending: THREE.NormalBlending,
         depthWrite: true,
+        // T6.1 — surface uniforms driven by visualProfile.
         uniforms: {
           uTime: { value: 0 },
           uPerlinCube: { value: perlinResources.renderTarget.texture },
-          uFresnelPower: { value: 1 },
-          uFresnelInfluence: { value: 0.8 },
-          uTint: { value: 0.2 },
-          uBase: { value: 4 },
-          uBrightnessOffset: { value: 1 },
-          uBrightness: { value: 0.6 },
+          uFresnelPower: { value: visualProfile.surfaceFresnelPower },
+          uFresnelInfluence: { value: visualProfile.surfaceFresnelInfluence },
+          uTint: { value: visualProfile.surfaceTint },
+          uBase: { value: visualProfile.surfaceBase },
+          uBrightnessOffset: { value: visualProfile.surfaceBrightnessOffset },
+          uBrightness: { value: visualProfile.surfaceBrightness },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
         },
         toneMapped: false,
       }),
-    [lightDirWorld, perlinResources.renderTarget.texture]
+    [
+      lightDirWorld,
+      perlinResources.renderTarget.texture,
+      visualProfile.surfaceFresnelPower,
+      visualProfile.surfaceFresnelInfluence,
+      visualProfile.surfaceTint,
+      visualProfile.surfaceBase,
+      visualProfile.surfaceBrightnessOffset,
+      visualProfile.surfaceBrightness,
+    ]
   );
 
   const glowMaterial = useMemo(
@@ -420,11 +471,12 @@ export const ProceduralSun3D = ({
         depthTest: true,
         blending: THREE.NormalBlending,
         side: THREE.DoubleSide,
+        // T6.1 — glow uniforms driven by visualProfile.
         uniforms: {
-          uRadius: { value: 0.4 },
-          uTint: { value: 0.4 },
-          uBrightness: { value: 1.06 },
-          uFalloffColor: { value: 0.5 },
+          uRadius: { value: visualProfile.glowRadius },
+          uTint: { value: visualProfile.glowTint },
+          uBrightness: { value: visualProfile.glowBrightness },
+          uFalloffColor: { value: visualProfile.glowFalloffColor },
           uCamUp: { value: new THREE.Vector3(0, 1, 0) },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
@@ -432,7 +484,13 @@ export const ProceduralSun3D = ({
         },
         toneMapped: false,
       }),
-    [lightDirWorld]
+    [
+      lightDirWorld,
+      visualProfile.glowRadius,
+      visualProfile.glowTint,
+      visualProfile.glowBrightness,
+      visualProfile.glowFalloffColor,
+    ]
   );
 
   const raysMaterial = useMemo(
@@ -446,23 +504,36 @@ export const ProceduralSun3D = ({
         depthTest: true,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
+        // T6.1 — rays uniforms driven by visualProfile, except
+        // uWidth + uOpacity which stay quality-tier-conditional via
+        // SUN_FX_PROFILES.lowRes (out of T6.1 scope; same value for
+        // every star at a given quality, not class-specific).
         uniforms: {
           uTime: { value: 0 },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
           uWidth: { value: profile.lowRes ? 0.05 : 0.03 },
-          uLength: { value: 0.45 },
+          uLength: { value: visualProfile.raysLength },
           uOpacity: { value: profile.lowRes ? 0.05 : 0.03 },
-          uNoiseFrequency: { value: 8 },
-          uNoiseAmplitude: { value: 0.4 },
-          uAlphaBlended: { value: 0.3 },
-          uHueSpread: { value: 0.2 },
-          uHue: { value: 0.2 },
+          uNoiseFrequency: { value: visualProfile.raysNoiseFrequency },
+          uNoiseAmplitude: { value: visualProfile.raysNoiseAmplitude },
+          uAlphaBlended: { value: visualProfile.raysAlphaBlended },
+          uHueSpread: { value: visualProfile.raysHueSpread },
+          uHue: { value: visualProfile.raysHue },
         },
         toneMapped: false,
       }),
-    [lightDirWorld, profile.lowRes]
+    [
+      lightDirWorld,
+      profile.lowRes,
+      visualProfile.raysLength,
+      visualProfile.raysNoiseFrequency,
+      visualProfile.raysNoiseAmplitude,
+      visualProfile.raysAlphaBlended,
+      visualProfile.raysHueSpread,
+      visualProfile.raysHue,
+    ]
   );
 
   const flaresMaterial = useMemo(
@@ -476,23 +547,35 @@ export const ProceduralSun3D = ({
         depthTest: true,
         blending: THREE.NormalBlending,
         side: THREE.DoubleSide,
+        // T6.1 — flares uniforms driven by visualProfile, except
+        // uWidth + uOpacity which stay quality-tier-conditional via
+        // SUN_FX_PROFILES.lowRes (same scope note as rays).
         uniforms: {
           uTime: { value: 0 },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
           uWidth: { value: profile.lowRes ? 0.01 : 0.005 },
-          uAmp: { value: 0.5 },
+          uAmp: { value: visualProfile.flaresAmp },
           uOpacity: { value: profile.lowRes ? 3 : 0.2 },
-          uAlphaBlended: { value: 0.65 },
-          uHueSpread: { value: 0.16 },
-          uHue: { value: 0 },
-          uNoiseFrequency: { value: 4 },
-          uNoiseAmplitude: { value: 0.2 },
+          uAlphaBlended: { value: visualProfile.flaresAlphaBlended },
+          uHueSpread: { value: visualProfile.flaresHueSpread },
+          uHue: { value: visualProfile.flaresHue },
+          uNoiseFrequency: { value: visualProfile.flaresNoiseFrequency },
+          uNoiseAmplitude: { value: visualProfile.flaresNoiseAmplitude },
         },
         toneMapped: false,
       }),
-    [lightDirWorld, profile.lowRes]
+    [
+      lightDirWorld,
+      profile.lowRes,
+      visualProfile.flaresAmp,
+      visualProfile.flaresAlphaBlended,
+      visualProfile.flaresHueSpread,
+      visualProfile.flaresHue,
+      visualProfile.flaresNoiseFrequency,
+      visualProfile.flaresNoiseAmplitude,
+    ]
   );
   const perlinResourcesRef = useRef(perlinResources);
   const sunMaterialRef = useRef(sunMaterial);
@@ -547,16 +630,20 @@ export const ProceduralSun3D = ({
     const group = groupRef.current;
     if (!group) return;
 
-    // T4.9a' — at stellar distances (cam beyond ~100 AU) Gaia hides
-    // the body-pipeline mesh and renders the Sun as a star billboard
-    // (`SunBillboard.tsx`). Self-gate visibility against the same
-    // threshold the billboard uses so the two never composite (no
-    // `feedback_no_effect_stacking.md` violation).
-    // Re-enabled 2026-04-23 after confirming pre-session HEAD also
-    // breaks under HMR-accumulated dev-server state — the white-
-    // canvas bug is HMR-state, not this gate.
-    const camDistance = state.camera.position.length();
-    const isClose = resolveSunRenderRange(camDistance) === "close";
+    // T6.1 — visibility gate. When `renderRange` prop is passed
+    // (T6.3 will pass it explicitly per solid-angle gate matching
+    // Gaia's `BillboardEntityRenderSystem.java:122-128`), the
+    // caller decides visibility. Falling back to internal
+    // `resolveSunRenderRange` auto-detection preserves pre-T6.1
+    // Sun-mount behavior when no prop is passed (T4.9a' compositing
+    // contract with `SunBillboard` at >100 AU stays intact).
+    let isClose: boolean;
+    if (renderRange !== undefined) {
+      isClose = renderRange === "close";
+    } else {
+      const camDistance = state.camera.position.length();
+      isClose = resolveSunRenderRange(camDistance) === "close";
+    }
     group.visible = isClose;
     if (!isClose) return;
 
@@ -610,7 +697,10 @@ export const ProceduralSun3D = ({
   });
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]}>
+    // T6.1 — group position from prop (default [0,0,0]). Pre-T6.1
+    // hardcoded origin replaced; T6.3 passes per-star world positions
+    // from `resolveHygWorldPosition`.
+    <group ref={groupRef} position={position}>
       <mesh renderOrder={0} frustumCulled={false}>
         <primitive object={sphereGeometry} attach="geometry" />
         <primitive object={sunMaterial} attach="material" />
