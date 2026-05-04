@@ -38,11 +38,18 @@
  *      sidesteps this by ensuring the vertex shader only ever
  *      multiplies small values.
  *   3. **Symmetry across call sites**: atlas has multiple upload
- *      paths (Starfield, Planet, overlay projection, projection-
- *      line endpoints per T4.4e-α). Today each does its own
- *      ad-hoc subtract via `THREE.Vector3.sub`. Having a named
- *      helper makes the camera-relative adoption a one-line swap
- *      per call site once T4.1-γ needs it.
+ *      paths. The ad-hoc `THREE.Vector3.sub` pattern lives at sites
+ *      that compute direction or focus-delta vectors (e.g.
+ *      `PrivilegedPosition.ts`, `controls.ts`, `Planet.tsx:865`'s
+ *      `velDir`); having a named helper makes the camera-relative
+ *      adoption a one-line swap per call site once T4.1-γ needs it.
+ *      Note: `Starfield.tsx` does NOT do an explicit subtract —
+ *      it uses Three.js's `modelViewMatrix * vec4(animatedPos, 1.0)`
+ *      pipeline, which is mathematically equivalent at float32 GPU
+ *      precision to Gaia's `vec3 pos = particlePos - u_camPos` in
+ *      `star.group.quad.vertex.glsl:72` (Gaia's Vector3Q posInv is
+ *      truncated to float32 by `setUniformf` at upload). T4.1-β-wire-α
+ *      was therefore CLOSED-AS-MOOT (2026-05-04) for Starfield.
  *
  * **Why not wire everywhere today**: adoption is invasive (every
  * upload site) and the precision win at atlas's current scale is
