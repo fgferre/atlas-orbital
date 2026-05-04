@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 35 incidents (sessions 2026-04-17 → 2026-05-04).
+Meta-rules distilled from 36 incidents (sessions 2026-04-17 → 2026-05-04).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -71,6 +71,27 @@ the executed artefact. Four gates:
   etc.), say "deferred to user-local interactive verification" in the
   ship row — DO NOT silently claim MVP-closed and let the user
   discover the gap by trying to use the feature.
+- **External cold-read audit catches what internal SUBAGENT VERIFY
+  misses on atlas-native ondas.** T6.3-δ (this commit) closed 3 verified
+  bugs in T6.3-γ that an internal SUBAGENT VERIFY pass cleared
+  ("ship verdict, hermetic isolation confirmed"): P1 frame-loop early
+  return for HYG focus, P2 small-star idealDist clamp pushing white
+  dwarfs below the gate threshold, P2 skipMask deps missing catalog
+  → tier-flip un-suppressed sprite. Internal SUBAGENT VERIFY shares the
+  implementer's mental model — when the implementation is atlas-native
+  (no Gaia 1:1 reference to gate against), both passes can miss the
+  same edge cases. Codex's `gpt-5.2` read-only review of the working
+  tree, with no parent-context briefing on "what the code is supposed
+  to do", surfaced 3 holes Sonnet's SUBAGENT VERIFY across 8 sub-ondas
+  cleared. Asymmetric cost favors the audit: ~5 min Codex burn vs hours
+  of debugging post-release. Protocol: for atlas-native waves declared
+  "MVP closed" or "wave closed" in STATUS, run an external audit
+  (Codex / opposite-model / fresh agent without the wave's commits in
+  context) before the ROADMAP entry's commit-SHA back-fill. Findings
+  still get spot-checked against actual source per
+  `feedback_codex_findings_toward_1to1.md` before applying — Codex can
+  hallucinate too — but the cold read materially expands the bug-catch
+  surface for atlas-native code.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes

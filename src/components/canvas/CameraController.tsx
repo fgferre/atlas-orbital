@@ -234,20 +234,27 @@ export const CameraController = () => {
         spect,
         absmag !== null ? absmag : undefined
       );
-      const radiusWu = Math.max(
-        HYG_FOCUS_DEFAULT_RADIUS_WORLD,
-        radiusSolar * SUN_RADIUS_WORLD_UNITS
-      );
+      // T6.3-δ — use the REAL physical radius for fly-to distance
+      // computation. Must match what `HygStellarMesh` uses in its
+      // per-frame gate (it has no `Math.max(1.0, ...)` clamp). The
+      // earlier clamp pushed white-dwarf-class stars (~0.0465 wu)
+      // to a 200-wu landing distance where solidAngle ≈ 2.3e-4
+      // sat below `STELLAR_MESH_ENTER_RAD` (1e-3), so the procedural
+      // mesh never spawned on arrival. (Codex P2 audit, 2026-05-04.)
+      const radiusWu = radiusSolar * SUN_RADIUS_WORLD_UNITS;
 
       // Target solid angle 5× ENTER → distance such that
       // solidAngle = radius / distance comfortably exceeds the
-      // hysteresis spawn threshold. Extra 5× margin absorbs camera
-      // jitter and any small drift between fly-to settle and the
-      // first per-frame gate eval. Lower-bounded by 10 wu so a
-      // very small star (white dwarf, etc.) doesn't put the camera
-      // inside its own coordinate origin.
+      // hysteresis spawn threshold. Three-way max guarantees the
+      // landing distance is at least:
+      //   - 10 wu (absolute floor, avoids degenerate camera-at-origin)
+      //   - 5 × physical radius (clearance from the star body itself)
+      //   - radius / targetSolidAngle (mesh-spawn gate guarantee)
+      // For Sun-equivalent (4.654 wu) the gate dominates (~931 wu);
+      // for white dwarfs (~0.0465 wu) the 10-wu floor dominates and
+      // still yields solidAngle ≈ 4.6e-3 (~4.6× ENTER margin).
       const targetSolidAngle = STELLAR_MESH_ENTER_RAD * 5;
-      const idealDist = Math.max(10, radiusWu / targetSolidAngle);
+      const idealDist = Math.max(10, radiusWu * 5, radiusWu / targetSolidAngle);
 
       // Direction: from star back along the line to current camera
       // position, preserving the user's viewing orientation. Falls
@@ -497,18 +504,34 @@ export const CameraController = () => {
       return;
     }
 
-    // Validate the cached mesh lazily — if a body was unmounted between
-    // focus change and this frame (extremely rare, but possible during
-    // HMR / hot-swap) re-resolve on the fly.
-    let targetMesh = focusMeshRef.current;
-    if (!targetMesh || targetMesh.parent === null) {
-      targetMesh = scene.getObjectByName(focusId) ?? null;
-      focusMeshRef.current = targetMesh;
-    }
-    if (!targetMesh) return;
-
+    // T6.3-δ — branch on focus type to resolve the target world
+    // position. Curated solar-system bodies have a scene-mesh node
+    // (looked up by name) whose `getWorldPosition` drives the path.
+    // HYG stars have no per-star mesh — the entire catalog is one
+    // instanced billboard in `Starfield.tsx` — so we resolve via
+    // the catalog using T6.0's `resolveHygWorldPosition`. Without
+    // this branch, focusId="hyg:K" hit the `!targetMesh` early
+    // return below before `transitionRef.update()` could run,
+    // leaving the fly-to armed but never consumed. (Codex P1
+    // audit, 2026-05-04.)
+    const hygIndex = parseHygFocusId(focusId);
     const worldPos = TMP_WORLD_POS;
-    targetMesh.getWorldPosition(worldPos);
+    if (hygIndex !== null) {
+      if (!hygCatalog) return;
+      const resolved = resolveHygWorldPosition(hygIndex, hygCatalog, worldPos);
+      if (!resolved) return;
+    } else {
+      // Validate the cached mesh lazily — if a body was unmounted between
+      // focus change and this frame (extremely rare, but possible during
+      // HMR / hot-swap) re-resolve on the fly.
+      let targetMesh = focusMeshRef.current;
+      if (!targetMesh || targetMesh.parent === null) {
+        targetMesh = scene.getObjectByName(focusId) ?? null;
+        focusMeshRef.current = targetMesh;
+      }
+      if (!targetMesh) return;
+      targetMesh.getWorldPosition(worldPos);
+    }
 
     // T4.2-α — proximity-aware damping. Mirrors NaturalCamera.java:993-997
     // counterAmount curve: friction grows as the camera approaches the

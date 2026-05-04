@@ -203,7 +203,6 @@ export const HygStellarMesh = () => {
   const [meshActive, setMeshActive] = useState(false);
 
   // Per-frame gate evaluation.
-  /* eslint-disable react-hooks/immutability */
   useFrame(() => {
     if (!starData) {
       // No focus on a parseable HYG star, or catalog not loaded yet.
@@ -226,8 +225,23 @@ export const HygStellarMesh = () => {
       meshActiveRef.current = next;
       setMeshActive(next);
     }
+
+    // T6.3-δ — re-assert skipMask each frame against whatever
+    // Starfield instanced attribute is currently live. `writeSkipMask`
+    // is idempotent (no-op when the slot already holds the desired
+    // value, see line 133) so the per-frame cost is one scene lookup
+    // + one Float32Array read in the steady state. The defensive
+    // re-write only matters during transient rebuilds: when the user
+    // changes quality while a HYG mesh is active, Starfield re-creates
+    // its `InstancedBufferGeometry` with a fresh zero-filled
+    // `a_skipMask`. Without this re-assert, the useEffect deps
+    // `[scene, starIndex, meshActive]` don't fire on catalog change,
+    // so the sprite would re-emerge under the procedural mesh until
+    // the next hysteresis flip. (Codex P2 audit, 2026-05-04.)
+    if (starIndex !== null) {
+      writeSkipMask(scene, starIndex, meshActiveRef.current ? 1 : 0);
+    }
   });
-  /* eslint-enable react-hooks/immutability */
 
   // Skip-mask sync. When meshActive flips for a given starIndex, push
   // the value to the Starfield instanced attribute. Cleanup on unmount
