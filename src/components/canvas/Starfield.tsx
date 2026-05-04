@@ -550,6 +550,10 @@ export const Starfield = () => {
   return (
     <mesh
       ref={meshRef}
+      // T6.3-β: named so HygStellarMesh can find the geometry via
+      // scene.getObjectByName and mutate `a_skipMask` (T6.0 attribute)
+      // when a focused HYG star spawns its procedural mesh.
+      name="atlas-starfield"
       geometry={geometry}
       material={material}
       frustumCulled={false}

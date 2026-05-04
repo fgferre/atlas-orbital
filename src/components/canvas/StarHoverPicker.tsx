@@ -28,6 +28,7 @@ import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
+import { formatHygFocusId } from "../../lib/focus/hygFocusResolver";
 import {
   getCachedHygCatalog,
   getCachedHygNamesSidecar,
@@ -117,6 +118,12 @@ export const StarHoverPicker = () => {
   const showStarfield = useStore((s) => s.showStarfield);
   const qualityMode = useStore((s) => s.qualityMode);
   const setHoveredStar = useStore((s) => s.setHoveredStar);
+  // T6.3-β: click → focus dispatch. setFocusId accepts any string;
+  // routes "hyg:K"-prefixed IDs through the T6.0 fallback branch in
+  // CameraController (proximity-damping useEffect), and HygStellarMesh
+  // consumes the same focusId to spawn the procedural mesh when the
+  // T6.3-α hysteresis gate fires.
+  const setFocusId = useStore((s) => s.setFocusId);
 
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
@@ -309,17 +316,61 @@ export const StarHoverPicker = () => {
       canvas.style.cursor = "";
     };
 
+    // T6.3-β: click → focus dispatch. Re-projects the current click
+    // position against the candidate set (no reliance on
+    // `pendingCandidate` / hover sustain — clicking should focus
+    // even if the user clicks before the 200 ms hover threshold).
+    // Closure-captures `candidates` from the useEffect's deps so a
+    // catalog-flip recomputes the pick set automatically.
+    const onClick = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const cursorX = event.clientX - rect.left;
+      const cursorY = event.clientY - rect.top;
+      if (
+        cursorX < 0 ||
+        cursorY < 0 ||
+        cursorX > rect.width ||
+        cursorY > rect.height
+      )
+        return;
+
+      const projected = new THREE.Vector3();
+      let best: PickCandidate | null = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      const widthPx = rect.width;
+      const heightPx = rect.height;
+      for (const c of candidates) {
+        projected.set(c.x, c.y, c.z);
+        projected.project(camera);
+        if (projected.z < -1 || projected.z > 1) continue;
+        const sx = (projected.x * 0.5 + 0.5) * widthPx;
+        const sy = (1 - (projected.y * 0.5 + 0.5)) * heightPx;
+        const dx = sx - cursorX;
+        const dy = sy - cursorY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist) {
+          bestDist = d2;
+          best = c;
+        }
+      }
+      if (best !== null && Math.sqrt(bestDist) <= HOVER_PICK_THRESHOLD_PX) {
+        setFocusId(formatHygFocusId(best.entry.index));
+      }
+    };
+
     canvas.addEventListener("mousemove", onMouseMove, { passive: true });
     canvas.addEventListener("mouseleave", onLeave);
+    canvas.addEventListener("click", onClick);
 
     return () => {
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("click", onClick);
       clearSustain();
       setHoveredStar(null);
       canvas.style.cursor = "";
     };
-  }, [enabled, gl, camera, candidates, setHoveredStar]);
+  }, [enabled, gl, camera, candidates, setHoveredStar, setFocusId]);
 
   return null;
 };

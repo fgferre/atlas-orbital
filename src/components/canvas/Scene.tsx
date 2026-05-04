@@ -48,6 +48,16 @@ const ProceduralSun3D = lazy(() =>
   import("./ProceduralSun3D").then((m) => ({ default: m.ProceduralSun3D }))
 );
 
+// T6.3-β: HYG procedural-mesh wrapper. Lazy-loaded to keep the
+// stellar-physics + procedural-sun shader chunk out of the boot
+// path until a user actually focuses a HYG star. Self-gates on
+// `focusId` matching `hyg:K` and the solid-angle hysteresis gate
+// (T6.3-α); inactive when focus is on a curated body or the gate
+// reports below threshold.
+const HygStellarMesh = lazy(() =>
+  import("./HygStellarMesh").then((m) => ({ default: m.HygStellarMesh }))
+);
+
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import {
   ORBIT_MOUSE_BUTTONS,
@@ -550,6 +560,15 @@ export const Scene = () => {
             <SunBillboard />
           </Suspense>
         )}
+        {/* T6.3-β — HYG procedural-mesh wrapper. Self-gates on
+            `focusId` matching `hyg:K` AND solid-angle hysteresis
+            (T6.3-α). Mounted unconditionally (lazy-loaded shader
+            chunk doesn't download until first activation); the
+            single-mesh invariant (only one HygStellarMesh in the
+            tree) is structural — there's exactly one mount. */}
+        <Suspense fallback={null}>
+          <HygStellarMesh />
+        </Suspense>
         <OverlayPositionTracker />
         {/* T4.5-β — Gaia-native SDF body labels (drei <Text>); self-
             gates on `labelMode === "sdf" && showLabels` so it's a
