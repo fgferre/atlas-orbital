@@ -20,6 +20,26 @@
 16. Rationalization: Avoid over-engineering. Ensure technical decisions are rational, sustainable, and the simplest possible way to achieve the goal.
 17. Clean Code Architecture: Ensure meaningful naming, SRP (Single Responsibility), and DRY (Don't Repeat Yourself) are applied to every module.
 
+## Test commands
+
+Use the named scripts from `package.json`, not raw vitest with
+npm-arg-passthrough. The latter emits a deprecation warning
+("Unknown cli config '--run'") and will break in future npm
+major versions.
+
+- `npm run test:run` — vitest in run mode (CI-style, exits
+  after running). **Use this in gate sequences and pre-commit
+  checks**, not `npm test --run` (deprecated form).
+- `npm test` — vitest watch mode (interactive). For local
+  development.
+- `npm run test:coverage` — vitest run with `--coverage`.
+- `npm run test:e2e` — Playwright suite (CI-ready, Chrome).
+- `npm run test:e2e:ui` — Playwright in interactive UI mode.
+
+For targeted runs (single file or pattern), use
+`npm run test:run -- <pattern>` — the `--` is the canonical
+npm passthrough delimiter that vitest receives cleanly.
+
 ## Browser automation
 
 Two paths are available; pick the one that fits the task:
