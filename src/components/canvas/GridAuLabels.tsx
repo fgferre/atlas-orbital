@@ -1,5 +1,6 @@
 import { Text } from "@react-three/drei";
-import { useMemo } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useCallback, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { AU_TO_3D_UNITS } from "../../lib/astrophysics";
@@ -28,6 +29,17 @@ import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
  *   3. Shipping the default first lets us measure visual quality
  *      before committing to a uniform override (T4.5-β dedicated
  *      onda handles the smoothing customization if needed).
+ *
+ * **Billboarding** (added 2026-05-04 after user reported labels
+ * appearing inverted from certain camera angles). Mirrors Gaia's
+ * `DecalUtils.drawFont3D` pattern at `DecalUtils.java:184-189`:
+ *   .rotate(getBillboardRotation(camera.direction, camera.up))
+ *   .rotate(0, 1, 0, 180)
+ * Pre-fix the labels sat in their default world orientation (XY
+ * plane facing +Z), readable from one camera side and mirrored
+ * from the other. Per-frame lookAt + 180° Y flip orients the
+ * readable face toward the camera regardless of orbit angle, same
+ * as the body name labels in `PlanetLabels3D`.
  *
  * **Scale-mode caveat.** Labels sit at `au × AU_TO_3D_UNITS`
  * world-unit positions. This aligns with planet positions in
@@ -59,15 +71,47 @@ const LABEL_OUTLINE_WIDTH = 6;
 
 const noopRaycast: THREE.Object3D["raycast"] = () => null;
 
+// Module-level scratch reused across frames + label groups.
+const TMP_BILLBOARD = new THREE.Matrix4();
+
+// Composite key — `${au}-${axis}` where axis ∈ {"x", "z"} — uniquely
+// identifies each of the 14 label groups (7 AU values × 2 axes).
+type LabelKey = string;
+
 export const GridAuLabels = () => {
   const showEclipticGrid = useStore((s) => s.showEclipticGrid);
   const showLabels = useStore((s) => s.showLabels);
   const gridOrientation = useStore((s) => s.gridOrientation);
+  const { camera } = useThree();
 
   const labelColor = useMemo(() => {
     const [r, g, b] = GRID_ORIENTATION_COLORS[gridOrientation];
     return new THREE.Color(r, g, b);
   }, [gridOrientation]);
+
+  const groupRefs = useRef(new Map<LabelKey, THREE.Group>());
+  const setGroupRef = useCallback(
+    (key: LabelKey) => (group: THREE.Group | null) => {
+      if (group) {
+        groupRefs.current.set(key, group);
+      } else {
+        groupRefs.current.delete(key);
+      }
+    },
+    []
+  );
+
+  // Per-frame billboard. Labels sit at fixed world positions; only
+  // their orientation tracks the camera. Cheap (14 groups × matrix
+  // setup + quaternion write).
+  useFrame(() => {
+    if (!showEclipticGrid || !showLabels) return;
+    for (const group of groupRefs.current.values()) {
+      TMP_BILLBOARD.lookAt(group.position, camera.position, camera.up);
+      group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
+      group.rotateY(Math.PI);
+    }
+  });
 
   if (!showEclipticGrid || !showLabels) return null;
 
@@ -81,34 +125,44 @@ export const GridAuLabels = () => {
         return (
           <group key={au}>
             {/* +X axis tick — positioned in +Z so the label doesn't
-                overlap the grid's center cross. */}
-            <Text
+                overlap the grid's center cross. Outer group owns the
+                world position + per-frame billboard; inner Text sits
+                at local origin. */}
+            <group
+              ref={setGroupRef(`${au}-x`)}
               position={[worldRadius, planeY, LABEL_OFFSET_WORLD_UNITS]}
-              fontSize={LABEL_FONT_SIZE}
-              color={labelColor}
-              anchorX="center"
-              anchorY="middle"
-              outlineWidth={LABEL_OUTLINE_WIDTH}
-              outlineColor="#000000"
-              outlineOpacity={0.7}
-              raycast={noopRaycast}
             >
-              {text}
-            </Text>
+              <Text
+                fontSize={LABEL_FONT_SIZE}
+                color={labelColor}
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={LABEL_OUTLINE_WIDTH}
+                outlineColor="#000000"
+                outlineOpacity={0.7}
+                raycast={noopRaycast}
+              >
+                {text}
+              </Text>
+            </group>
             {/* +Z axis tick — positioned in +X. */}
-            <Text
+            <group
+              ref={setGroupRef(`${au}-z`)}
               position={[LABEL_OFFSET_WORLD_UNITS, planeY, worldRadius]}
-              fontSize={LABEL_FONT_SIZE}
-              color={labelColor}
-              anchorX="center"
-              anchorY="middle"
-              outlineWidth={LABEL_OUTLINE_WIDTH}
-              outlineColor="#000000"
-              outlineOpacity={0.7}
-              raycast={noopRaycast}
             >
-              {text}
-            </Text>
+              <Text
+                fontSize={LABEL_FONT_SIZE}
+                color={labelColor}
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={LABEL_OUTLINE_WIDTH}
+                outlineColor="#000000"
+                outlineOpacity={0.7}
+                raycast={noopRaycast}
+              >
+                {text}
+              </Text>
+            </group>
           </group>
         );
       })}

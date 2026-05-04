@@ -160,13 +160,20 @@ export const PlanetLabels3D = () => {
         mesh.getWorldPosition(TMP_WORLD);
         group.position.copy(TMP_WORLD);
 
-        // Billboard the text toward the camera — libGDX's TextRenderer
-        // does this implicitly via the view matrix; troika renders in
-        // the group's local frame so we have to orient the group
-        // ourselves. A `lookAt` toward the camera with the default
-        // Three.js up vector produces the billboard we want.
+        // Billboard the text toward the camera — mirrors Gaia's
+        // `DecalUtils.drawFont3D` pattern at `DecalUtils.java:184-189`:
+        //   .rotate(getBillboardRotation(camera.direction, camera.up))
+        //   .rotate(0, 1, 0, 180)
+        // The `lookAt(group.position, camera.position, camera.up)`
+        // orients the group's local `-Z` toward the camera (Three.js
+        // camera convention). But `troika-three-text` renders its
+        // readable face on `+Z`, so without the 180° flip the back
+        // face would show (mirrored text). Applying `rotateY(π)` after
+        // the lookAt mirrors Gaia's `.rotate(0, 1, 0, 180)` byte-for-
+        // byte and brings the readable face toward the camera.
         TMP_BILLBOARD.lookAt(group.position, camera.position, camera.up);
         group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
+        group.rotateY(Math.PI);
 
         const distance = group.position.distanceTo(camera.position);
         const rawFontScale =
