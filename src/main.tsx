@@ -8,7 +8,9 @@ import { initializeOrbitalEngine } from "./lib/orbital/setup";
 // identified the listeners themselves as a cumulative amplifier of
 // the bug they were added to diagnose (HMR hot-updates re-executed
 // main.tsx and appended a fresh pair of listeners without removing
-// the previous ones). See `tasks/white-canvas-bug-external-prompt.md`.
+// the previous ones). Full remediation history in `tasks/STATUS.md`
+// §"White-canvas remediation wave (2026-04-24)" + §"Chronic dev-mode
+// Context Lost — root-caused + fixed (2026-05-04, `b564c3d`)".
 
 // React.StrictMode REMOVED 2026-05-04 after diagnosing the chronic
 // dev-mode WebGL `Context Lost` cascade as a StrictMode double-mount

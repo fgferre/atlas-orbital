@@ -19,7 +19,7 @@ The Wave α section below is **historical** — Wave α shipped at `4601969` on 
 - `tasks/STATUS.md` — single source of truth (read FIRST).
 - `tasks/ROADMAP.md` — full tiered plan with commit SHAs.
 - `tasks/lessons.md` — meta-rules (M1-M6 as of 2026-04-24; latest append is the white-canvas cross-commit bullet under M5).
-- `tasks/white-canvas-bug-external-prompt.md` — 2026-04-24 post-mortem material if the white-canvas symptom recurs.
+- White-canvas symptom history: see `tasks/STATUS.md` §"White-canvas remediation wave (2026-04-24)" (4 commits: `720f60f`, `34f1dde`, `9e84638`, doc sync) + §"Chronic dev-mode Context Lost — root-caused + fixed (2026-05-04, `b564c3d`)" — both contain the full bisect trail, root-cause analysis, and remediation rationale. The original 2026-04-24 external-AI prompt is preserved in git history; one-shot artifact deleted post-resolution per AGENTS.md cleanup principle 12.
 - `AGENTS.md` + `CLAUDE.md` — engineering standards (unchanged).
 
 ---
