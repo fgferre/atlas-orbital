@@ -3,8 +3,15 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 
 import { useEffectiveGraphics } from "../../../hooks/useEffectiveGraphics";
+import {
+  computeFovFactor,
+  STAR_BRIGHTNESS_DEFAULT,
+} from "../../../lib/lightRegistry";
 import { LensFlareEffect } from "./effects/LensFlareEffect";
-import { ndcToLensFlareUv } from "./effects/lensFlareMath";
+import {
+  computeLightIntensityAlpha,
+  ndcToLensFlareUv,
+} from "./effects/lensFlareMath";
 
 /**
  * Lens-flare composer slot. Mounts Gaia's COMPLEX lens-flare shader
@@ -46,6 +53,19 @@ import { ndcToLensFlareUv } from "./effects/lensFlareMath";
  */
 
 const SUN_OBJECT_NAME = "sun";
+
+/**
+ * Sun radius in atlas world units. Sun radius is 696,340 km
+ * (`celestialBodies.ts:13`); 1 AU = 149,597,870.7 km; atlas world
+ * scale is 1 AU = 1000 world units. So
+ * `R_sun_world = (696340 / 149597870.7) × 1000 ≈ 4.654`.
+ *
+ * Used by the alpha-ramp per-frame computation below to derive the
+ * Sun's apparent solid angle from camera distance — see
+ * `computeLightIntensityAlpha` for the ramp formula
+ * (Gaia `MainPostProcessor.java:645-653`).
+ */
+const SUN_RADIUS_WORLD_UNITS = (696_340 / 149_597_870.7) * 1000;
 
 export function LensFlareSlot(): JSX.Element {
   const camera = useThree((state) => state.camera);
@@ -105,13 +125,36 @@ export function LensFlareSlot(): JSX.Element {
       effect.setIntensity(0);
       return;
     }
-    // Single-light intensity = 1 (Gaia's `alphas[i] = 1` default when
-    // the solid-angle fade window is not active). Atlas doesn't yet
-    // port the per-light solid-angle ramp because only the Sun drives
-    // the flare and its apparent angle in solar-system scope is always
-    // well above `LENS_FLARE_FULL_ALPHA_ANGLE = 1e-6` — see
-    // `computeLightIntensityAlpha` for the full ramp.
-    effect.setLight([uv[0], uv[1]], 1.0);
+    // **T2.1-fix-γ (2026-05-04)** — wire the per-light alpha ramp.
+    // Replaces the previously hardcoded `1.0` intensity scalar with
+    // Gaia's solid-angle-based fade at
+    // `MainPostProcessor.java:645-653`. The math is
+    // `computeLightIntensityAlpha(angle)` — angle is the Sun's
+    // Gaia-style apparent solid angle:
+    //   solidAngleApparent = (R_sun / dist) × starBrightness / fovFactor
+    // mirroring `lightRegistry.ts:60` + `GraphUpdater.java:182`. At
+    // solar-system distances (< few thousand AU) this stays well
+    // above `LENS_FLARE_FULL_ALPHA_ANGLE = 1e-6` and the ramp returns
+    // 1.0 — same behaviour as the previous hardcoded constant. The
+    // ramp activates only past ~10 kAU where Sun's apparent angle
+    // drops below 1e-6, fading the flare to zero by ~20 kAU. Closes
+    // a documented latent code debt (the math was ported but never
+    // consumed) and prepares the path for future bright-star light
+    // sources.
+    const distanceToSun = worldPosBuffer.distanceTo(camera.position);
+    const perspCam = camera as THREE.PerspectiveCamera;
+    const fovDeg =
+      typeof perspCam.fov === "number" && Number.isFinite(perspCam.fov)
+        ? perspCam.fov
+        : 60;
+    const fovFactor = computeFovFactor(fovDeg);
+    const sunSolidAngle =
+      distanceToSun > 0
+        ? ((SUN_RADIUS_WORLD_UNITS / distanceToSun) * STAR_BRIGHTNESS_DEFAULT) /
+          fovFactor
+        : Number.POSITIVE_INFINITY;
+    const alpha = computeLightIntensityAlpha(sunSolidAngle);
+    effect.setLight([uv[0], uv[1]], alpha);
     // Restore `u_intensity` to the config-time strength (Gaia
     // `config.yaml:608 strength: 1.0`). This was zeroed on a prior
     // off-screen frame and has to be rehydrated before the shader can
