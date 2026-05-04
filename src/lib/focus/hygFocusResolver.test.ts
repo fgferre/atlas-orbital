@@ -16,20 +16,37 @@ const OBLIQUITY_RAD = (23.4 * Math.PI) / 180;
 const buildCatalog = (
   positions: ReadonlyArray<number>,
   count?: number
-): HygCatalogData => ({
-  header: {
-    magic: "HYG1",
-    version: 1,
-    count: count ?? positions.length / 3,
-    flags: 1,
-    hasProperMotion: true,
-  },
-  positions: new Float32Array(positions),
-  magnitudes: new Float32Array(positions.length / 3),
-  colorIndices: new Float32Array(positions.length / 3),
-  pmRA: new Int16Array(positions.length / 3),
-  pmDec: new Int16Array(positions.length / 3),
-});
+): HygCatalogData => {
+  const n = count ?? positions.length / 3;
+  return {
+    header: {
+      magic: "HYG1",
+      version: 1,
+      count: n,
+      flags: 1,
+      hasProperMotion: true,
+      // T6.2-β-α: HygCatalogHeader gained `hasSpectAndAbsmag`. v1
+      // mock buffers don't carry spect/absmag so the flag is false;
+      // matches the v1 parser's default-fill semantics.
+      hasSpectAndAbsmag: false,
+    },
+    positions: new Float32Array(positions),
+    magnitudes: new Float32Array(n),
+    colorIndices: new Float32Array(n),
+    pmRA: new Int16Array(n),
+    pmDec: new Int16Array(n),
+    // T6.2-β-α: HygCatalogData gained spectStrings / spectIndices /
+    // absmag. Mock with v1-equivalent defaults (empty sentinel
+    // string table + zero-filled indices + NaN-filled absmag).
+    spectStrings: [""],
+    spectIndices: new Uint8Array(n),
+    absmag: (() => {
+      const a = new Float32Array(n);
+      a.fill(NaN);
+      return a;
+    })(),
+  };
+};
 
 describe("HYG_FOCUS_PREFIX", () => {
   it("is the lowercase 'hyg:' prefix", () => {
