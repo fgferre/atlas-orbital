@@ -1,0 +1,236 @@
+## Independent review: Tier 6 stellar-zoom design plan in atlas-orbital
+
+You have read-only access to two repositories:
+
+- atlas-orbital (port, current working dir): the project under review
+- Gaia Sky (reference): cloned at `/tmp/gaiasky/`
+
+### Context
+
+A 1M-context Sonnet agent shipped doc-only commits 2026-05-04 closing
+the T4.1-β-wire wave as MOOT for all three sites (Starfield, Planet,
+Overlays) and adding a forward-looking Tier 6 wave (stellar-zoom
+procedural rendering) plus a T-Closeout licensing audit wave. Three
+commits this session:
+
+- `7b6ef89` docs(phase-theta): T4.1-β-wire-α CLOSED-AS-MOOT for Starfield
+- `7ec3787` docs(phase-theta): T4.1-β-wire-β + γ CLOSED-AS-MOOT (Planet + Overlays)
+- `2e7ff77` docs(roadmap): T-Closeout licensing wave + Tier 6 stellar-zoom + DEFERRED markers
+
+The Tier 6 wave was scoped via a Phase-1 Sonnet Explore subagent that
+read `ProceduralSun3D.tsx`, `starPhysics.ts`, the HYG binary parser,
+and `Starfield.tsx`. Verdict: **(b) Adaptable with refactor** — atlas's
+existing `ProceduralSun3D` can be parameterized to render arbitrary
+HYG-catalog stars given physical parameters derived from B-V via the
+Ballesteros formula already present in `starfieldShaderMath.ts:74`.
+Sub-wave structure α/β/γ + optional δ/ε.
+
+The user (project owner) wants an independent cross-AI review of:
+1. Whether the (b) verdict holds up to deeper code-read.
+2. Whether the sub-wave decomposition is well-formed.
+3. Whether there are atlas-architectural or Gaia-fidelity issues we missed.
+
+### Your task
+
+Read `tasks/ROADMAP.md` §"Tier 6 — Stellar-zoom procedural rendering"
+(roughly lines 2065-2200, find by header) for the design as captured.
+Read the files cited in the design. Verify or refute the verdict +
+sub-wave structure with file:line evidence.
+
+Do not assume Sonnet's research is correct. Verify it. Pull
+counter-evidence from atlas + Gaia source where available. Where you
+find a hole, name the hole concretely (file, line, what breaks).
+
+### Specific questions to evaluate
+
+#### A. Refactor feasibility (T6.1)
+
+The design claims ~8 hardcoded uniforms in `ProceduralSun3D.tsx` need
+externalizing:
+
+- `uTint = 0.2`, `uBase = 4`, `uBrightnessOffset = 1`, `uBrightness = 0.6`
+  (lines 399-401 in the surface noise material)
+- `uHue = 0.2`, `uHueSpread = 0.2` (rays, lines 460-461)
+- `uHue = 0` (flares, line 489)
+- Perlin noise: `uSpatialFrequency = 6`, `uTemporalFrequency = 0.1`,
+  `uH = 1`, `uContrast = 0.25`, `uFlatten = 0.72` (lines 370-375)
+- Glow: `uRadius = 0.4`, `uTint = 0.4`, `uBrightness = 1.06` (lines 424-426)
+- Ray/flare widths: lines 454-486
+
+Questions:
+- Are there OTHER hardcoded constants the Sonnet research missed that
+  would also need to be externalized for non-Sun stars to render
+  correctly? (E.g. sphere segments, depth bias, blending modes,
+  geometry construction assumptions.)
+- Is `lightDirWorld = new THREE.Vector3(1, 1, 1).normalize()`
+  (line 322) actually a problem for non-Sun stars? Or is it
+  irrelevant since the Sun is the lighting source for solar-system
+  bodies but stars don't have other-body lighting on their own
+  surface in atlas's scene?
+- The `<group>` is scaled by `sunVisualRadiusWorld / SPHERE_RADIUS`
+  at line 570. Does this scaling chain interact correctly with
+  per-star MeshStandardMaterial defaults if the stellar mesh is
+  parented to a HYG-position node 1+ kpc from origin?
+
+#### B. Stellar physics correctness (T6.2)
+
+The design proposes deriving from B-V:
+- `temperatureFromBV(bv)` via Ballesteros formula
+- `spectralClassFromTemperature(t)` via empirical thresholds
+- `mainSequenceRadiusFromTemperature(t)` via Stefan-Boltzmann +
+  main-sequence assumption
+
+Questions:
+- The Ballesteros formula has known limits — it's calibrated for
+  main-sequence stars. HYG includes giants (e.g. Betelgeuse,
+  Antares), sub-dwarfs, and the occasional white dwarf. What
+  fraction of HYG breaks the formula's range? Is it acceptable
+  to ship MVP knowing some stars render with the wrong color?
+- Stefan-Boltzmann main-sequence radius assumes L = 4πR²σT⁴ AND
+  a mass-luminosity relation (L ∝ M^3.5 for main-sequence). For
+  giants this is very wrong (Betelgeuse: predicted ~10× wrong).
+  Should the MVP include a luminosity-class detector (giant vs.
+  dwarf vs. white dwarf) that uses HYG fields atlas already has?
+- Spectral class thresholds: the design proposes hardcoded T_eff
+  windows. Is this acceptable, or should it use a Morgan-Keenan
+  table interpolation?
+- HYG actually has a `spect` field (spectral class as a string
+  like "G2V" or "M5III") in the v3 raw catalog. atlas's binary
+  parser at `src/utils/hygBinary.ts` may have dropped this field.
+  If we re-include it, can we skip `temperatureFromBV` entirely
+  and parse class directly?
+
+#### C. Atlas-architectural risks (T6.3)
+
+The design proposes a camera-distance-gated mesh swap:
+- When dist < `STELLAR_MESH_THRESHOLD_PARSECS`, spawn a procedural
+  mesh; suppress the sprite for that one star.
+- On zoom-out, dispose mesh + resume sprite.
+
+Questions:
+- atlas's `Starfield.tsx` renders the entire HYG catalog as a
+  SINGLE instanced billboard mesh (~10k-110k stars in one draw
+  call). Suppressing one star means writing a "skip" flag into
+  one instance's attribute and re-uploading the buffer. Is this
+  a perf concern at the focused-star transition? Or trivially
+  cheap (1 float write + bufferAttribute.needsUpdate = true)?
+- atlas's R3F lifecycle: spawning a procedural `<group>` with
+  multiple internal meshes/materials inside a useEffect creates
+  GPU resources that must be disposed on zoom-out. Per
+  `lessons.md` M4 hot-path hygiene + L26 leak risk, what's the
+  cleanest pattern? `useMemo + useEffect dispose return`, or
+  a global cache keyed by star ID?
+- atlas's focus system: does it currently support focusing on
+  a HYG star? If yes, where (look for HYG-id → focus dispatcher).
+  If no, does T6.3 need to add a focus-system extension as a
+  pre-req?
+- The Sonnet research treats `ProceduralSun3D` as an R3F
+  component you mount per-star at the star's world position.
+  But ProceduralSun3D was designed for ONE Sun at the scene
+  origin. Multi-instance rendering (N stars each with their own
+  ProceduralSun3D) — does it scale? Memory, draw calls,
+  per-frame uniform writes? Or does atlas need a shared
+  geometry + per-instance attributes pattern?
+- Threshold value (`STELLAR_MESH_THRESHOLD_PARSECS`): the design
+  hand-waves "~10 pc?". For a 0.001 R_sun white dwarf vs a 1000
+  R_sun supergiant, the apparent angular size at 10 pc differs
+  by 6 orders of magnitude. Should the threshold be solid-angle-
+  based (matching Gaia's pattern) instead of distance-based?
+
+#### D. Gaia-fidelity check
+
+atlas's prior T4.9 audit (preserved in ROADMAP §T4.9) traced Gaia's
+actual Sun-render path:
+- `BillboardRenderer` (star-tex-04 sprite at stellar distances)
+- `SingleStarQuadRenderer` (close-range Sun mesh from `default-data`)
+- `StarSetInstancedRenderer` (catalog stars as instanced sprites)
+- `VariableSetInstancedRenderer` (variable-star sub-pipeline)
+
+Questions:
+- Does Gaia have a "close-range procedural mesh for ANY HYG star"
+  path, or only for hand-curated bodies in `default-data`
+  (Sun, Proxima, etc.)? Search `core/src/gaiasky/` for evidence.
+- If Gaia only has procedural close-range for hand-curated bodies,
+  then atlas's T6 generalizes BEYOND Gaia. Is this scope creep
+  (should we instead curate a small list of close-stars and ship
+  that)? Or is generalization the right call given atlas's HYG
+  catalog is the primary star data source (no per-star curation
+  exists today)?
+- Gaia's `SingleStarQuadRenderer.java` does what atlas plans for
+  ProceduralSun3D adaptation — read it. What does it parameterize?
+  What does it hardcode? Are there constants atlas's T6.1 misses?
+
+#### E. Test strategy
+
+The design implies tests for T6.1 (Sun-default-profile regression
+guard), T6.2 (pinned values for known stars), T6.3 (threshold
+logic). Questions:
+- What's the smallest set of "known stars" atlas should pin in
+  T6.2 tests? Suggested: Sirius A, Vega, Sun, Proxima Cen,
+  Betelgeuse — covers G2V, A0V, A1V, M5.5V, M2I (giant). Good
+  enough?
+- For T6.3 mesh-spawn lifecycle, can the test harness exercise
+  the spawn/dispose chain in jsdom, or does it require a real
+  WebGL context? (atlas's vitest config uses jsdom for most
+  shader tests via mocked Three.js).
+- Should there be a runtime smoke step beyond compile/render —
+  e.g. zoom-in/zoom-out cycle to verify dispose actually runs?
+
+### Files of interest
+
+atlas-orbital:
+
+- `src/components/canvas/ProceduralSun3D.tsx` — the component to be generalized
+- `src/components/canvas/Starfield.tsx` — sprite renderer, source of suppress-one-instance question
+- `src/components/canvas/SunBillboard.tsx` — precedent for distance-gated mesh-vs-sprite swap (T4.9a' pattern)
+- `src/lib/sunRenderRange.ts` — precedent for AU-distance threshold gate
+- `src/lib/starPhysics.ts` — existing star helpers (pseudo-size, NOT physical radius)
+- `src/lib/starfieldShaderMath.ts` — Ballesteros formula present in GLSL at line 74
+- `src/utils/hygBinary.ts` — HYG binary catalog parser (check if `spect` is dropped)
+- `src/lib/starfield.ts` — HYG catalog loader
+- `src/components/canvas/CameraController.tsx` — focus system for the focus-extension question
+- `src/store.ts` — focus state slice
+- `tasks/ROADMAP.md` — §Tier 6 design (the document under review)
+- `tasks/STATUS.md` — §Next up + session-summary bullet for context
+- `tasks/lessons.md` — M1-M6 meta-rules; especially M1 (ground-truth-vs-prose), M4 (hot-path hygiene), M5 (gates and their blind spots)
+
+Gaia Sky reference:
+
+- `/tmp/gaiasky/assets/shader/star.group.quad.vertex.glsl` — instanced sprite path
+- `/tmp/gaiasky/assets/shader/starsurface.vertex.glsl` — close-range stellar surface (if it exists)
+- `/tmp/gaiasky/core/src/gaiasky/scene/system/render/draw/StarSetInstancedRenderer.java`
+- `/tmp/gaiasky/core/src/gaiasky/scene/system/render/draw/SingleStarQuadRenderer.java` (if exists)
+- `/tmp/gaiasky/core/src/gaiasky/scene/component/StarSet.java`
+- `/tmp/gaiasky/core/src/gaiasky/scene/component/ParticleSet.java`
+- Search for any "procedural close-range stellar surface" path that's NOT the Sun's `default-data` mesh
+
+### Required output format
+
+For each section A-E, return:
+
+1. **Verdict**: PASS (Sonnet's design holds) / PARTIAL (holds with caveats) / FAIL (concrete hole identified)
+2. **Evidence**: file:line citations + verbatim quotes from atlas + Gaia source
+3. **Holes**: if any — name them concretely (file, line, what breaks, severity P0/P1/P2/P3)
+4. **Recommendations**: if any — concrete refactor / test / scope changes you'd make
+
+End with:
+
+- **Bottom-line verdict**: SHIP T6 MVP AS DESIGNED / SHIP WITH MODIFICATIONS / DO NOT SHIP — explain in <80 words.
+- **Severity-ranked list of must-fix items** before T6.1 starts (P0/P1/P2).
+- **Severity-ranked list of nice-to-have improvements** (P3+).
+
+Constraints:
+- Cite file:line for every claim. Speculation flagged as such.
+- If a Sonnet finding is wrong, name it explicitly and quote the
+  source it should have read.
+- Per atlas's `feedback_codex_findings_toward_1to1.md`: Codex
+  findings can be wrong about direction. Verify each suggestion
+  against actual source before recommending.
+- Per atlas's `feedback_default_gaia_fidelity.md`: when Gaia has
+  a clear "this is what Gaia does" pattern and atlas could match
+  it, recommend matching unless there's a strong reason not to.
+- Per atlas's `lessons.md` M5: "Subagent file:line citations need
+  spot-check verification before you build on them" — apply this
+  rule to your OWN findings before reporting them.
+
+Under 1500 words total. Be direct and concrete.
