@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 34 incidents (sessions 2026-04-17 → 2026-04-24).
+Meta-rules distilled from 35 incidents (sessions 2026-04-17 → 2026-05-04).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -51,10 +51,32 @@ the executed artefact. Four gates:
   `file:line` standard to external reviews. Provenance strings describe
   the operation the user-facing code performed, not the literature it
   loosely resembles.
+- **MVP / wave-closure claim ≠ user-facing trigger functional.** Before
+  marking a wave or MVP as "closed", walk the user-facing trigger path
+  end-to-end at runtime, not just verify that the integration of
+  subsystems is type-correct + linted + tested in isolation. T6.3-β
+  (`f16ca78`) shipped HygStellarMesh wired to T6.0/T6.1/T6.2 and
+  declared "T6 MVP CLOSED" in its commit message — but the
+  `CameraController.tsx:127-128` focus-setup useEffect still
+  early-returned for `hyg:K` IDs (no fly-to wire), so the user could
+  click a HYG star, the focusId changed, but the camera stayed put and
+  the procedural mesh never spawned because solidAngle ≈ 1e-8 ≪ ENTER.
+  T6.3-γ (`f02aec8`) had to follow the same day to wire the missing
+  fly-to. Subsystem integration verified in isolation ≠ user-driveable
+  end-to-end. The runtime smoke check for an MVP/wave-closure ship
+  must include the user's actual click/zoom/key-press path, with the
+  visible behavior reproduced; "scene boots, no errors, gates green"
+  is necessary but not sufficient. When the preview-MCP can't easily
+  drive the user-facing trigger (R3F store inaccessible, pointer-lock,
+  etc.), say "deferred to user-local interactive verification" in the
+  ship row — DO NOT silently claim MVP-closed and let the user
+  discover the gap by trying to use the feature.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes
-work; two gates disagree about the same code.
+work; two gates disagree about the same code; about to declare
+"MVP closed" / "wave closed" / similar completeness marker in a commit
+message or §Next up update.
 
 **Canonical code markers:** `sanitizeVsopSeries()` in
 `src/lib/orbital/analytical/vsop87Planets.ts`; `provenanceFor()` in
@@ -67,7 +89,7 @@ work; two gates disagree about the same code.
 "NOT PORTING — Gaia dead code" header; baseline-PNG human gate in
 STATUS.md §Ship-protocol step 10.
 
-**Folds:** L1 L3 L4 L7 L22 L23 L24 L25 L27 L30 L31 L32.
+**Folds:** L1 L3 L4 L7 L22 L23 L24 L25 L27 L30 L31 L32 L33 (T6.3-β/γ MVP-claim-vs-user-wire incident, 2026-05-04).
 
 ---
 
