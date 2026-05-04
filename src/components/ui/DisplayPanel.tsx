@@ -379,7 +379,7 @@ export const DisplayPanel = () => {
           label="Lens Flare ×"
           value={graphicsOverrides.lensFlareIntensityMul ?? 1}
           min={0}
-          max={2}
+          max={1}
           step={0.05}
           onChange={(v) => setGraphicsOverride("lensFlareIntensityMul", v)}
           onReset={
