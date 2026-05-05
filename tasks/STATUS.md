@@ -6,9 +6,9 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 in-progress
-— S1 + S2 shipped, S3-S7 queued. HYG fly-to navigation upgrade
-after live diagnostic of jarring arrival UX vs Gaia Sky's
-two-channel transition contract)._
+— S1 + S2 + S3 shipped, S4-S7 queued. HYG fly-to navigation
+upgrade after live diagnostic of jarring arrival UX vs Gaia
+Sky's two-channel transition contract)._
 
 ---
 
@@ -30,14 +30,18 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4-M2.5 sub-step **S3** —
-two-channel `StellarFlightTransition` class (position +
-orientation channels with separate durations and easings;
-quaternion handling via `controls.target` per-frame animation
-to avoid OrbitControls fight). S1 (`c44cebe` + `e580288` Codex
-hotfix) + S2 (`e6d35de` logistic-sigmoid easing) already
-shipped. See wave file §M2.5 for the spec, source citations,
-and remaining S3-S7.
+**Default fresh-loop fire**: T6.4-M2.5 sub-step **S4** —
+`CameraController.setupCameraHyg()` rewrite to consume the
+new `StellarFlightTransition` (S3, `ccd7d2f`). Drops the
+`controls.target.copy()` snap and the Bézier sun-avoid path;
+animates `controls.target` per frame so OrbitControls derives
+the camera's quaternion from the lerped target without a
+fight. Adds scale-aware durations + landing distance from S1's
+`computeAtlasFlightLanding` + real `near`/`minDistance` from
+the per-star radius. Shipped so far: S1 (`c44cebe` + `e580288`
+Codex hotfix) + S2 (`e6d35de` logistic-sigmoid easing) + S3
+(`ccd7d2f` two-channel transition class). See wave file §M2.5
+for the spec.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
