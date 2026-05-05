@@ -322,7 +322,16 @@ export const proceduralSunGlowVertexShader = `
     vec3 toCenterView = normalize(centerView);
     vec3 upView = vec3(0.0, 1.0, 0.0);
     vec3 sideView = normalize(cross(toCenterView, upView));
-    vec3 pView = aPos.x * sideView + aPos.y * upView;
+    // T6.4-M2 Codex P1 fix: scale pView by the model's uniform
+    // worldScale so the glow billboard tracks the sphere radius
+    // (the procedural-sun group is uniformly scaled by
+    // sunVisualRadiusWorld / SPHERE_RADIUS in ProceduralSun3D).
+    // The pre-M2 form applied modelMatrix to a world-frame p,
+    // which implicitly scaled it; the M2 view-space form computes
+    // p in unscaled view units, so we now multiply explicitly.
+    // Same worldScale derivation rays/flares use.
+    float worldScale = length(vec3(modelMatrix[0][0], modelMatrix[1][0], modelMatrix[2][0]));
+    vec3 pView = (aPos.x * sideView + aPos.y * upView) * worldScale;
     pView *= 1.0 + aPos.z * uRadius;
     vec3 finalView = centerView + pView;
     vViewPos = finalView;
