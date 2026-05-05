@@ -5,9 +5,9 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-05 (T6.4 active recovery wave; doc
-restructure per L38 lesson — STATUS hot-path ~250 lines vs
-prior 631-line ata; wave detail moved to per-wave files)._
+_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 inserted —
+HYG fly-to navigation upgrade after live diagnostic of jarring
+arrival UX vs Gaia Sky's two-channel transition contract)._
 
 ---
 
@@ -21,13 +21,19 @@ First user-driven manual smoke (2026-05-04) revealed the
 procedural mesh **never renders visually** at HYG positions.
 Four silent root causes (precision collapse, hard transition,
 partial class variation, missing supergiant spect). T6.4 wave
-fixes all four. Estimate: M1-M5+M7 core ~8-13 h; M6 optional
+fixes those four. **2026-05-05 user smoke after M1+M2** added
+a fifth concern: HYG fly-to navigation feels jarring vs Gaia
+Sky's two-channel transition (M2.5 inserted to address). M4
+spec also expanded to put spectral color first (was 3 of 28
+fields varying; raised to descriptor-driven). Estimate now
+M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4-M1 (sphere shader →
-modelViewMatrix). Smallest validation of the precision
-hypothesis; either mesh appears for Sirius (validates approach
-and unblocks M2-M7) or doesn't (re-diagnose before continuing).
+**Default fresh-loop fire**: T6.4-M2.5 (HYG fly-to navigation
+upgrade — two-channel position+orientation, solid-angle-driven
+distance, Gaia-fidelity contract). Blocks M3 because the
+sprite↔mesh fade is meaningless if the camera is still
+mid-snap on arrival. See wave file §M2.5 for source citations.
 
 **Codex audit per milestone before commit** (per user request
 2026-05-05). Run audit on uncommitted diff, address findings,
