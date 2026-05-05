@@ -151,6 +151,25 @@ export const CameraController = () => {
     // frame; a curated-body or null focus leaves the signal cleared
     // so `HygStellarMesh` falls through to its natural gate.
     setHygFlightPosProgress(null);
+    // T6.4-M2.5 round-4 C-5 — focus-cleared paths must cancel any
+    // in-flight transition. The setupCamera/setupCameraHyg branches
+    // already handle focus-to-NEW-target cases (HYG→HYG cancels via
+    // `stellarFlightRef.current.start()` overwrite; HYG→curated
+    // cancels via the explicit `stellarFlightRef.current.cancel()`
+    // at the top of `setupCamera`). The gap is `focus → null`:
+    // neither branch is invoked (the setup useEffect early-returns
+    // on `!focusId`), so the transition stayed armed. A later
+    // OrbitControls "start" event would then call `cancel()` whose
+    // `computeFrame()` (using `performance.now() - startTimeMs`)
+    // saturates both alphas to 1, returning `endTarget = previous
+    // star world position`. The handler then `controls.target.copy`s
+    // that stale endpoint, snapping the user's view back. Cancelling
+    // here closes the gap. Codex round-4 P1, 2026-05-05.
+    if (!focusId) {
+      stellarFlightRef.current.cancel();
+      transitionRef.current.stop();
+      flyingRef.current.isFlying = false;
+    }
   }, [focusId]);
 
   const getBodyRadius = useCallback(
@@ -305,7 +324,8 @@ export const CameraController = () => {
       // The `target.angularRadiusRad` ≥ `STELLAR_MESH_ENTER_RAD × 5`
       // invariant guarantees HygStellarMesh spawns on arrival even
       // for ultra-distant stars beyond the Gaia/Atlas crossover
-      // (~1200 pc).
+      // (~2003 pc post Codex round-3 angular-radius fix; was
+      // ~1200 pc pre-fix when the lib halved the Gaia curve).
       const landing = computeAtlasFlightLanding(radiusWu, distancePc);
       const idealDist = landing.distanceWu;
 
@@ -323,18 +343,40 @@ export const CameraController = () => {
         .clone()
         .add(direction.multiplyScalar(idealDist));
 
-      // T6.4-M2.5 S4 — scale-aware durations. Position channel
-      // scales log10 with linear distance so a tiny solar-system
-      // hop and a parsec-scale interstellar fly-to don't share a
-      // 4 s budget. Orientation channel scales linearly with the
-      // angular sweep between current and final view directions
-      // (computed AT the start position; close enough for the
-      // duration heuristic). Both clamped so quick HYG flips
-      // don't drag past 8 s and tiny rotations stay above 1 s.
+      // T6.4-M2.5 round-4 C-6 — scale-aware position duration. The
+      // pre-round-4 formula `log10(linearDist + 1) * 1500` clamped
+      // to [2000, 8000] saturated the 8000 ms cap above ~215_442 wu
+      // of linear travel. Sirius from solar-system view is ~5.3e8 wu;
+      // boot-state-to-far-HYG is ~1e12 wu — every real HYG fly-to
+      // saturated the cap, defeating Acceptance §3 which specifies
+      // close-star ~4-6 s and ultra-distant ~7-8 s. Codex round-4
+      // P2 audit, 2026-05-05.
+      //
+      // Replacement: parsec-scale axis. We have `distancePc` (star
+      // distance from Sun) already. We also derive `linearDistPc`
+      // (camera-to-target linear distance, expressed in parsec
+      // equivalents using the project's 1 pc = 206_265_000 wu scale,
+      // mirroring `Starfield.tsx:74`, `StarHoverPicker.tsx:52`,
+      // `hygFocusResolver.ts:74`, `lightRegistry.ts:54`). The
+      // effective scale uses the smaller of the two so a
+      // close-camera rebound to a distant star doesn't drag for
+      // 8 s. log10 over [0.001, 2805] pc maps to [-3, 3.45], so the
+      // formula `3500 + log10(eff) * 1500` ranges [-1000, 8675]
+      // before clamping to [2500, 8000]. Pinned at named anchors:
+      //   Sirius (2.6 pc, solar start)        → ~4123 ms
+      //   Proxima (1.3 pc, solar start)       → ~3671 ms (clamps
+      //                                         to 2500 ms only
+      //                                         for camera-rebound
+      //                                         flips)
+      //   Betelgeuse (197.8 pc, solar start)  → ~6945 ms
+      //   far-edge (2805 pc, solar start)     → 8000 ms (cap)
+      //   any close camera-rebound (eff≪1)    → 2500 ms (floor)
       const linearDist = cameraInstance.position.distanceTo(newCamPos);
+      const linearDistPc = linearDist / 206_265_000;
+      const effectivePc = Math.max(0.001, Math.min(distancePc, linearDistPc));
       const posDurationMs = Math.min(
         8000,
-        Math.max(2000, Math.log10(linearDist + 1) * 1500)
+        Math.max(2500, 3500 + Math.log10(effectivePc) * 1500)
       );
       const camToStart = controlsInstance.target
         .clone()

@@ -6,18 +6,26 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 S1-S7 +
-**Codex round-3 hotfix shipped** — 4 findings landed in a single
-commit: C-1 angular-radius math fix (dropped a 2× landing-distance
-regression, Sirius now lands at ~456 wu vs the buggy ~913 wu);
-C-2 reverted S6's force-activate (was hiding the sprite without
-M3 cross-fade); C-3 downgraded "Gaia-faithful" → "Gaia-informed"
-where the contract diverges from Gaia (fovFactor + pseudo-size +
-quaternion-slerp orientation); C-4 strengthened the e2e via two
-new test-only window hooks (`__ATLAS_TEST_CAMERA__`,
-`__ATLAS_TEST_MESH_STATE__`) asserting target-lerp, landing
-bracket, mesh state, skipMask timing. M2.5 is agent-complete
-pending the user-driven smoke (4 named stars × 2 zoom cycles per
-Acceptance §8). M3 stays blocked behind that user smoke.)_
+Codex round-3 hotfix shipped + **Codex round-4 hotfix shipped** —
+round-3 fixed angular-radius math (Sirius ~456 wu, was 913 wu),
+HygStellarMesh pre-warm revert, honest comments, stronger e2e.
+Round-4 (this commit) fixes 5 audit findings the user surfaced
+running an independent Codex pass on the round-3 diff: C-5
+focus-clear cancels in-flight transition (P1; otherwise the next
+OrbitControls "start" snaps target to old endpoint); C-6 parsec-
+scale duration formula replacing the log10 linear-distance one
+that saturated 8 s for every real HYG fly-to (P2); C-7 fovFactor
+header corrected (Gaia ref fov is 40°, default 45°, fovFactor at
+default ≈ 1.138 — the round-3 header had ≈ 1 with default 60°,
+both factually wrong; recursive L40 trap); C-8 propagated post-
+round-3 numbers (913→456 wu, 509k→254k wu, 1200pc→2003pc) into
+wave Acceptance §2 + §7 + §Codex-round-3 hotfix-spec (which had
+"~600 pc" with a sign error) + CameraController comment; C-9
+clarified the 10 wu landing-floor scope as landing-only (it does
+NOT enforce minDistance — round-3 comment overstated runtime
+near-plane protection). M2.5 is agent-complete pending the user-
+driven smoke (4 named stars × 2 zoom cycles per Acceptance §8).
+M3 stays blocked behind that user smoke.)_
 
 ---
 
@@ -68,8 +76,20 @@ message; user runs it manually if they want external review.
 ## Carryover findings
 
 None active. Codex round-3 review of M2.5 (C-1..C-4) shipped in
-the hotfix commit (see Active wave §Status block above for the
-4-finding bundle summary).
+the round-3 hotfix; Codex round-4 review (5 findings — C-5 P1,
+C-6..C-9 P2) shipped in the round-4 hotfix. Two P3 forward-
+looking notes parked OUTSIDE the milestone (do not block M2.5):
+
+- **Singleton progress channel is unkeyed** —
+  `lib/camera/hygFlightPosProgress.ts`. Today's React effect
+  ordering protects against star-A→B leak, but if M3 fade adds
+  a second consumer, key the signal as
+  `{ focusId, progress }` to make the contract grep-able.
+- **Test hooks are runtime-gated, not DCE-eliminated** —
+  `src/store.ts:707`, `Scene.tsx`, `HygStellarMesh.tsx`. The
+  `__ATLAS_TEST_FREEZE__` if-blocks ship in prod bundles
+  (~30 lines, dead). Replace with a Vite `import.meta.env.MODE`
+  guard if production-bundle absence ever matters.
 
 Prior Codex audits (round-1, round-2, round-3 of T6.3-x, and
 final-pass of the L38 restructure) all addressed; corrections

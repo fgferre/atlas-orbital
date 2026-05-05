@@ -43,13 +43,32 @@
  * renames every symbol to make the angular-radius semantics
  * unambiguous.
  *
- * **fovFactor divergence** (Codex round-3 header note). Gaia
- * normalises `getSolidAngle()` by `camera.getFovFactor()`. For Gaia's
- * default 60° fov, fovFactor ≈ 1, so the divergence is small at
- * typical fov. Atlas does NOT replicate this normalisation — the
- * Gaia anchor values are baked in directly. If Atlas ever moves the
- * default fov off 45°, or exposes a runtime fov slider, revisit
- * this lib so the math doesn't silently drift.
+ * **fovFactor divergence** (Codex round-4 P2, 2026-05-05 — corrects
+ * the round-3 header which had the wrong reference numbers). Gaia
+ * normalises `getSolidAngle()` by `camera.getFovFactor()`, defined
+ * in `AbstractCamera.java:42, 148` (clone at `/tmp/gaiasky/`,
+ * verified) as
+ *   fovFactor = tan(camera.fieldOfView * 0.5) / TAN_REF_FOV
+ * with `TAN_REF_FOV = tan(40°/2) = tan(20°)` — i.e. the reference
+ * fov is 40°, NOT 60° as the round-3 header incorrectly stated.
+ * Gaia's config default is `fov: 45.0` (`assets/conf/config.yaml:125`),
+ * giving `fovFactor = tan(22.5°) / tan(20°) ≈ 1.138`. Atlas's default
+ * fov is also 45° (search `fov: 45` in this repo), so at the
+ * SHARED default fov, the Atlas landing distance (without the
+ * fovFactor multiplier) is silently inflated by ~14% relative to
+ * a pixel-equivalent Gaia port. Decision: accept the divergence as
+ * landing-only scope for the "Gaia-informed" label — adopting
+ * fovFactor would also require rebaking every named-star pin and
+ * makes the lib's behavior fov-coupled (e.g. `fovFactor ≈ 1.586` at
+ * 60°, `≈ 0.736` at 30°), which surprises callers that don't read
+ * the camera fov before landing. If Atlas exposes a runtime fov
+ * slider, revisit so the divergence doesn't grow non-linearly.
+ *
+ * The L40 lesson (`tasks/lessons.md`) — "verified against source
+ * needs name + semantics check" — applies recursively here: the
+ * round-3 header pinned a divergence note without checking the
+ * actual Gaia constants against source. Round-4 reads
+ * `AbstractCamera.java:42` directly to fix the pin.
  *
  * **Pseudo-size vs physical radius divergence**. Gaia's `getRadius()`
  * for stars returns `size × STAR_SIZE_FACTOR` (`ParticleSet.java:785`,
@@ -91,17 +110,36 @@ const ATLAS_MIN_ANGULAR_RADIUS_RAD = STELLAR_MESH_ENTER_RAD * 5;
  * Absolute landing-distance floor in atlas world units. Mirrors
  * the pre-M2.5 `Math.max(10, ...)` guard in
  * `CameraController.tsx:277` (the original three-way max:
- * absolute floor, 5× radius, gate-driven). Without this, ultra-
- * compact stars (white dwarfs at ~0.0465 wu radius, neutron-
- * star-class hypotheticals) could land at single-digit world
- * units even though the angular-radius gate is satisfied — that
- * collapses `OrbitControls.minDistance` (set to `radius * 1.1`)
- * to sub-wu scale and pushes the perspective `near` plane into
- * the territory where z-buffer precision starts to matter.
+ * absolute floor, 5× radius, gate-driven).
  *
- * Codex 2026-05-05 P2 caught the silent drop. Re-introduced as
- * a named constant so the contract is visible in the lib and
- * any future scope change is explicit.
+ * Two motivations, in order:
+ *
+ *   1. **Cinematic landing** (the dominant motivation): without
+ *      this floor, ultra-compact stars (white dwarfs at ~0.0465 wu
+ *      radius, neutron-star-class hypotheticals) would land at
+ *      single-digit world units — the angle-driven term gives e.g.
+ *      ~0.05 wu for a white dwarf, which puts the camera ~1 radius
+ *      from the surface. The star fills more than half the sky
+ *      and the next user input feels like a teleport. 10 wu keeps
+ *      the disc visible (~0.27° apparent angular radius for a
+ *      white dwarf) while staying clear of "I'm inside the star"
+ *      framing.
+ *
+ *   2. **Landing-time near-plane precision** (secondary, NOT a
+ *      runtime invariant): at 10 wu landing, `camera.near = 0.05 *
+ *      0.01 = 5e-4 wu` is comfortable for the perspective
+ *      transform's depth buffer. **Important: this protection is
+ *      LANDING-ONLY.** `OrbitControls.minDistance = targetRadius
+ *      * 1.1` (set in the camera-state useEffect) does NOT enforce
+ *      the 10 wu floor — once the user dolly's in, the controls
+ *      let the camera approach `radius * 1.1` (e.g. ~0.05 wu for
+ *      a white dwarf). If runtime near-plane precision matters
+ *      more than user dolly freedom, change the minDistance
+ *      assignment to `Math.max(targetRadius * 1.1,
+ *      ATLAS_MIN_LANDING_DISTANCE_WU)`. Codex round-3 first
+ *      restored the constant; round-4 (2026-05-05) clarified the
+ *      landing-only scope after the round-3 comment overstated
+ *      runtime protection.
  */
 export const ATLAS_MIN_LANDING_DISTANCE_WU = 10;
 
