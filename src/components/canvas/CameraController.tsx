@@ -9,6 +9,8 @@ import { simulationClock } from "../../lib/simulationClock";
 import {
   PrivilegedPosition,
   CameraTransition,
+  StellarFlightTransition,
+  computeAtlasFlightLanding,
   createFocusTrackingState,
   resetFocusTrackingState,
   resolveFocusTrackingFrame,
@@ -19,7 +21,6 @@ import {
 } from "../../lib/camera/proximityDamping";
 import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
 import {
-  HYG_FOCUS_DEFAULT_RADIUS_WORLD,
   parseHygFocusId,
   resolveHygWorldPosition,
 } from "../../lib/focus/hygFocusResolver";
@@ -29,10 +30,7 @@ import {
   hygTierForQuality,
   loadHygCatalog,
 } from "../../lib/starfield";
-import {
-  SUN_RADIUS_WORLD_UNITS,
-  STELLAR_MESH_ENTER_RAD,
-} from "../../lib/stellarMeshGate";
+import { SUN_RADIUS_WORLD_UNITS } from "../../lib/stellarMeshGate";
 import { radiusFromSpect } from "../../lib/stellarPhysics";
 import type { HygCatalogData } from "../../utils/hygBinary";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
@@ -44,6 +42,31 @@ import { useStarfieldCatalog } from "./useStarfieldCatalog";
 // so passing these refs never leaks mutation back into the caller.
 const TMP_WORLD_POS = new THREE.Vector3();
 const TMP_PREV_TARGET = new THREE.Vector3();
+
+/**
+ * T6.4-M2.5 S4 — per-star physical radius in atlas world units.
+ * Mirrors HygStellarMesh's resolution path so the camera math
+ * (landing distance, OrbitControls minDistance, perspective near)
+ * matches what the procedural mesh actually renders. Pre-M2.5
+ * fell back to `HYG_FOCUS_DEFAULT_RADIUS_WORLD = 1.0 wu`, which
+ * collapsed near-plane precision for white-dwarf-class stars and
+ * inflated minDistance for supergiants.
+ */
+const resolveHygRadiusWu = (
+  hygIndex: number,
+  catalog: HygCatalogData
+): number => {
+  const spectIdx = catalog.spectIndices[hygIndex] ?? 0;
+  const spectRaw = catalog.spectStrings[spectIdx] ?? "";
+  const spect = spectRaw.length > 0 ? spectRaw : null;
+  const absmagRaw = catalog.absmag[hygIndex];
+  const absmag = Number.isFinite(absmagRaw) ? absmagRaw : null;
+  const radiusSolar = radiusFromSpect(
+    spect,
+    absmag !== null ? absmag : undefined
+  );
+  return radiusSolar * SUN_RADIUS_WORLD_UNITS;
+};
 
 export const CameraController = () => {
   const { camera, scene, size } = useThree();
@@ -81,6 +104,14 @@ export const CameraController = () => {
   });
 
   const transitionRef = useRef<CameraTransition>(new CameraTransition());
+  // T6.4-M2.5 S3+S4 — two-channel HYG fly-to. Independent durations
+  // for position vs orientation channels; OrbitControls derives the
+  // camera quaternion each frame from the lerped `controls.target`.
+  // Mutually exclusive with `transitionRef`: starting one cancels
+  // the other so the useFrame branch reads exactly one source.
+  const stellarFlightRef = useRef<StellarFlightTransition>(
+    new StellarFlightTransition()
+  );
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(
     camera as THREE.PerspectiveCamera
   );
@@ -228,53 +259,47 @@ export const CameraController = () => {
     }
 
     const setupCameraHyg = () => {
-      // T6.3-γ — HYG fly-to path. No scene mesh exists for HYG stars
-      // (the entire catalog is one instanced billboard mesh in
-      // Starfield.tsx). We resolve target position via T6.0's helper
-      // and pick a close-distance that puts the per-frame solidAngle
-      // (T6.3-α) clearly above STELLAR_MESH_ENTER_RAD so HygStellarMesh
-      // spawns the procedural mesh on arrival. Skips occlusion +
-      // viewport composition (those are tuned for solar-system
-      // geometry; not meaningful for parsec-distance point sources).
+      // T6.4-M2.5 S4 — HYG fly-to via the two-channel
+      // `StellarFlightTransition`. Position lerps along a straight
+      // line; orientation lerps `controls.target` from its current
+      // value to the star's world position so OrbitControls derives
+      // the camera quaternion smoothly throughout the flight. Replaces
+      // the pre-M2.5 path (single-channel Bézier + pre-animation
+      // `controls.target.copy(targetPos)` snap, which produced the
+      // spin-then-glide feel the user reported 2026-05-05).
       if (!hygCatalog || hygIndex === null) return;
       const resolvedPos = resolveHygWorldPosition(hygIndex, hygCatalog);
       if (!resolvedPos) return;
       const targetPos = resolvedPos;
 
-      // Per-star physical radius in world units, same path as
-      // HygStellarMesh (T6.3-β). For long-tail stars where the
-      // canonicalized spect was capped to "" sentinel (T6.2-β-β),
+      // Per-star physical radius in world units (same path as
+      // HygStellarMesh, T6.3-β / T6.3-δ). For long-tail stars where
+      // the canonicalized spect was capped to "" sentinel (T6.2-β-β),
       // radiusFromSpect returns 1.0 R_sun → ~4.654 wu fallback.
-      const spectIdx = hygCatalog.spectIndices[hygIndex] ?? 0;
-      const spectRaw = hygCatalog.spectStrings[spectIdx] ?? "";
-      const spect = spectRaw.length > 0 ? spectRaw : null;
-      const absmagRaw = hygCatalog.absmag[hygIndex];
-      const absmag = Number.isFinite(absmagRaw) ? absmagRaw : null;
-      const radiusSolar = radiusFromSpect(
-        spect,
-        absmag !== null ? absmag : undefined
-      );
-      // T6.3-δ — use the REAL physical radius for fly-to distance
-      // computation. Must match what `HygStellarMesh` uses in its
-      // per-frame gate (it has no `Math.max(1.0, ...)` clamp). The
-      // earlier clamp pushed white-dwarf-class stars (~0.0465 wu)
-      // to a 200-wu landing distance where solidAngle ≈ 2.3e-4
-      // sat below `STELLAR_MESH_ENTER_RAD` (1e-3), so the procedural
-      // mesh never spawned on arrival. (Codex P2 audit, 2026-05-04.)
-      const radiusWu = radiusSolar * SUN_RADIUS_WORLD_UNITS;
+      const radiusWu = resolveHygRadiusWu(hygIndex, hygCatalog);
 
-      // Target solid angle 5× ENTER → distance such that
-      // solidAngle = radius / distance comfortably exceeds the
-      // hysteresis spawn threshold. Three-way max guarantees the
-      // landing distance is at least:
-      //   - 10 wu (absolute floor, avoids degenerate camera-at-origin)
-      //   - 5 × physical radius (clearance from the star body itself)
-      //   - radius / targetSolidAngle (mesh-spawn gate guarantee)
-      // For Sun-equivalent (4.654 wu) the gate dominates (~931 wu);
-      // for white dwarfs (~0.0465 wu) the 10-wu floor dominates and
-      // still yields solidAngle ≈ 4.6e-3 (~4.6× ENTER margin).
-      const targetSolidAngle = STELLAR_MESH_ENTER_RAD * 5;
-      const idealDist = Math.max(10, radiusWu * 5, radiusWu / targetSolidAngle);
+      // Distance from Sun in parsec — catalog `positions[3K..3K+3]`
+      // are stored in parsec already (`hygBinary.ts:21`). The
+      // OBLIQUITY rotation in `resolveHygWorldPosition` is a
+      // length-preserving rotation, so deriving distancePc directly
+      // from the un-rotated parsec triplet matches `worldPos.length()
+      // / DISTANCE_SCALE` exactly without re-introducing the private
+      // DISTANCE_SCALE constant.
+      const px = hygCatalog.positions[hygIndex * 3];
+      const py = hygCatalog.positions[hygIndex * 3 + 1];
+      const pz = hygCatalog.positions[hygIndex * 3 + 2];
+      const distancePc = Math.sqrt(px * px + py * py + pz * pz);
+
+      // T6.4-M2.5 S1 — Atlas flight landing. `computeAtlasFlightLanding`
+      // applies the three-way `Math.max(bodyClearance × 1.1,
+      // ATLAS_MIN_LANDING_DISTANCE_WU = 10, angleDriven)` internally,
+      // so the result already respects the body-clearance floor.
+      // The `target.angularRadiusRad` ≥ `STELLAR_MESH_ENTER_RAD × 5`
+      // invariant guarantees HygStellarMesh spawns on arrival even
+      // for ultra-distant stars beyond the Gaia/Atlas crossover
+      // (~1200 pc).
+      const landing = computeAtlasFlightLanding(radiusWu, distancePc);
+      const idealDist = landing.distanceWu;
 
       // Direction: from star back along the line to current camera
       // position, preserving the user's viewing orientation. Falls
@@ -290,29 +315,58 @@ export const CameraController = () => {
         .clone()
         .add(direction.multiplyScalar(idealDist));
 
-      // Duration scales with total fly distance (capped at 4s) —
-      // identical curve to the curated-body path so the UX feels
-      // consistent across body / HYG transitions.
-      const duration = Math.min(
-        1500 +
-          Math.min(cameraInstance.position.distanceTo(newCamPos) / 1000, 2.5) *
-            1000,
-        4000
+      // T6.4-M2.5 S4 — scale-aware durations. Position channel
+      // scales log10 with linear distance so a tiny solar-system
+      // hop and a parsec-scale interstellar fly-to don't share a
+      // 4 s budget. Orientation channel scales linearly with the
+      // angular sweep between current and final view directions
+      // (computed AT the start position; close enough for the
+      // duration heuristic). Both clamped so quick HYG flips
+      // don't drag past 8 s and tiny rotations stay above 1 s.
+      const linearDist = cameraInstance.position.distanceTo(newCamPos);
+      const posDurationMs = Math.min(
+        8000,
+        Math.max(2000, Math.log10(linearDist + 1) * 1500)
       );
+      const camToStart = controlsInstance.target
+        .clone()
+        .sub(cameraInstance.position);
+      const camToEnd = targetPos.clone().sub(cameraInstance.position);
+      const angularSweep =
+        camToStart.lengthSq() > 1e-12 && camToEnd.lengthSq() > 1e-12
+          ? camToStart.angleTo(camToEnd)
+          : 0;
+      const oriDurationMs = Math.min(4000, Math.max(1000, angularSweep * 2000));
 
-      const sunPosition = new THREE.Vector3(0, 0, 0);
-      transitionRef.current.start(
-        cameraInstance.position.clone(),
-        newCamPos,
-        sunPosition,
-        duration,
-        () => {
+      // Mutual exclusion with curated-body fly-to: stop any in-flight
+      // `CameraTransition` so useFrame's HYG branch drives a single
+      // source per frame. `stop()` is a no-op when not active.
+      transitionRef.current.stop();
+
+      stellarFlightRef.current.start({
+        startPos: cameraInstance.position.clone(),
+        endPos: newCamPos,
+        startTarget: controlsInstance.target.clone(),
+        endTarget: targetPos.clone(),
+        posDurationMs,
+        oriDurationMs,
+        onComplete: () => {
           flyingRef.current.isFlying = false;
-        }
-      );
+        },
+      });
+
       flyingRef.current.cameraTargetPos.copy(newCamPos);
       flyingRef.current.isFlying = true;
-      controlsInstance.target.copy(targetPos);
+      // Drop the pre-M2.5 `controls.target.copy(targetPos)` snap.
+      // Orientation now lerps via `stellarFlightRef`'s target channel;
+      // OrbitControls derives the camera's quaternion each frame from
+      // `(camera.position, controls.target)`, so animating `target`
+      // is the OrbitControls-friendly way to animate orientation
+      // (option 2 from the wave file's M2.5 §S4 coordination
+      // strategy). Resetting focus-tracking state to `targetPos`
+      // matches the existing curated-body contract: post-fly,
+      // focus-tracking glues `controls.target` to the star world
+      // position (which is static for HYG stars, so no further drift).
       resetFocusTrackingState(focusTrackingRef.current, targetPos);
     };
 
@@ -325,6 +379,12 @@ export const CameraController = () => {
         return;
       }
       if (!bodyData) return;
+
+      // T6.4-M2.5 S4 — mutual exclusion with HYG fly-to. Cancel any
+      // in-flight `StellarFlightTransition` so useFrame's flight
+      // branch reads a single source. `cancel()` deliberately does
+      // NOT fire `onComplete`, so isFlying stays as we set it below.
+      stellarFlightRef.current.cancel();
 
       const targetMesh = scene.getObjectByName(focusId);
       if (!targetMesh) return;
@@ -474,16 +534,34 @@ export const CameraController = () => {
     if (!focusId || !cameraInstance || !controlsInstance) return;
 
     const bodyData = BODIES_BY_ID.get(focusId);
-    // T6.0 — HYG fallback. When focusId carries the `hyg:<index>`
-    // prefix, the curated `BODIES_BY_ID` lookup misses; resolve a
-    // placeholder radius so OrbitControls' minDistance + the
-    // perspective `near` plane still get sane values. Real per-star
-    // radius lands in T6.2 (`radiusFromSpect`) and T6.3 wires it.
+    // T6.4-M2.5 S4 — wire the REAL per-star physical radius for
+    // HYG focus. Pre-M2.5 used `HYG_FOCUS_DEFAULT_RADIUS_WORLD = 1.0`
+    // wu placeholder, which collapsed `near`-plane precision for
+    // white-dwarf-class stars (real radius ≈ 0.0465 wu) and
+    // inflated `minDistance` for supergiants (real radius ≈ 4128 wu
+    // for Betelgeuse). Now resolves via `radiusFromSpect` matching
+    // the path setupCameraHyg + HygStellarMesh use.
+    //
+    // Catalog dependency: HYG focus paths early-return when
+    // `hygCatalog` is null; the effect re-fires on `hygCatalog`
+    // load thanks to the dep array.
     let targetRadius: number | null = null;
     if (bodyData) {
       targetRadius = getBodyRadius(bodyData);
-    } else if (parseHygFocusId(focusId) !== null) {
-      targetRadius = HYG_FOCUS_DEFAULT_RADIUS_WORLD;
+    } else {
+      const hygIndex = parseHygFocusId(focusId);
+      if (
+        hygIndex !== null &&
+        hygCatalog &&
+        hygIndex < hygCatalog.header.count
+      ) {
+        targetRadius = resolveHygRadiusWu(hygIndex, hygCatalog);
+      } else if (hygIndex !== null) {
+        // Catalog not loaded yet (or out-of-range post quality
+        // downgrade — sister branch in setupCamera handles defocus).
+        // Wait for hygCatalog to flip; this effect re-runs.
+        return;
+      }
     }
     if (targetRadius == null) return;
 
@@ -494,7 +572,7 @@ export const CameraController = () => {
       cameraInstance.near = newNear;
       cameraInstance.updateProjectionMatrix();
     }
-  }, [focusId, getBodyRadius]);
+  }, [focusId, getBodyRadius, hygCatalog]);
 
   // Re-resolve the scene graph node whenever the focus changes. The
   // mesh reference is then cached and reused in the useFrame below
@@ -623,13 +701,34 @@ export const CameraController = () => {
     controlsInstance.target.copy(nextTarget);
 
     if (flyingRef.current.isFlying) {
-      const newPos = transitionRef.current.update();
-      if (newPos) {
-        cameraInstance.position.copy(newPos);
-      }
-
-      if (!transitionRef.current.active) {
-        flyingRef.current.isFlying = false;
+      // T6.4-M2.5 S4 — branch on which transition is active.
+      // `stellarFlightRef` (HYG) wins when active; the curated-body
+      // `transitionRef` falls through. Mutual-exclusion at start
+      // sites guarantees at most one is active per frame.
+      if (stellarFlightRef.current.isActive) {
+        const frame = stellarFlightRef.current.update();
+        if (frame) {
+          cameraInstance.position.copy(frame.position);
+          // Override the focus-tracking write above with the lerped
+          // target. OrbitControls.update() then derives the camera
+          // quaternion from `(camera.position, controls.target)`,
+          // which is the option-2 coordination strategy from the
+          // wave file (no quaternion fight). On the final frame
+          // this equals the star world position; focus-tracking
+          // takes over post-completion.
+          controlsInstance.target.copy(frame.target);
+        }
+        // `update()` flips `active = false` and fires `onComplete`
+        // (which sets `flyingRef.current.isFlying = false`) on the
+        // last frame; no manual flag flip needed here.
+      } else {
+        const newPos = transitionRef.current.update();
+        if (newPos) {
+          cameraInstance.position.copy(newPos);
+        }
+        if (!transitionRef.current.active) {
+          flyingRef.current.isFlying = false;
+        }
       }
       return;
     }
