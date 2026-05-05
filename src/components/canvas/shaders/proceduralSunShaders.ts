@@ -291,22 +291,49 @@ export const proceduralSunGlowVertexShader = `
   #endif
   attribute vec3 aPos;
 
+  // T6.4-M2 view-space billboard. Coordinate-space contract:
+  // geometry is computed entirely in view space (camera at origin;
+  // modelMatrix-pos - camera-pos collapses CPU-side in float64
+  // through Three.js modelViewMatrix; small float32 view-space
+  // values reach the GPU). The lighting dot-product stays in
+  // WORLD space (option 2 of the wave plan): the vertex computes
+  // a world-space outward radial direction (vNormalWorld) by
+  // multiplying the view-space outward by mat3(viewMatrix) FROM
+  // THE RIGHT, which is identical to transpose(mat3(viewMatrix))
+  // applied from the left (camera rotation is orthonormal so
+  // transpose = inverse). The right-multiply form is used because
+  // GLSL ES 1.00 (the WebGL1 baseline still active in atlas's
+  // ShaderMaterial path) lacks the transpose() builtin (Codex
+  // T6.4-M2 P1 catch). The fragment dots vNormalWorld against
+  // world-space uLightView. Replaces the prior world-space
+  // billboard math which suffered float32 catastrophic
+  // cancellation in center - cameraPosition at parsec-scale HYG
+  // positions, and the getAlpha(normalize(vWorld)) hack which
+  // only resembled an outward radial for the Sun-at-origin.
   varying float vRadial;
-  varying vec3 vWorld;
+  varying vec3 vViewPos;
+  varying vec3 vNormalWorld;
 
   uniform float uRadius;
-  uniform vec3 uCamUp;
 
   void main() {
     vRadial = aPos.z;
-    vec3 center = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-    vec3 toCamera = normalize(center - cameraPosition);
-    vec3 side = normalize(cross(toCamera, uCamUp));
-    vec3 p = aPos.x * side + aPos.y * uCamUp;
-    p *= 1.0 + aPos.z * uRadius;
-    vec4 world = modelMatrix * vec4(p, 1.0);
-    vWorld = world.xyz;
-    gl_Position = projectionMatrix * viewMatrix * world;
+    vec3 centerView = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec3 toCenterView = normalize(centerView);
+    vec3 upView = vec3(0.0, 1.0, 0.0);
+    vec3 sideView = normalize(cross(toCenterView, upView));
+    vec3 pView = aPos.x * sideView + aPos.y * upView;
+    pView *= 1.0 + aPos.z * uRadius;
+    vec3 finalView = centerView + pView;
+    vViewPos = finalView;
+
+    vec3 outwardView = length(pView) > 0.0 ? normalize(pView) : upView;
+    // Right-multiply by mat3(viewMatrix) is identical to
+    // transpose(mat3(viewMatrix)) from the left, but transpose() is
+    // GLSL ES 3.00+. Atlas runs on GLSL ES 1.00.
+    vNormalWorld = normalize(outwardView * mat3(viewMatrix));
+
+    gl_Position = projectionMatrix * vec4(finalView, 1.0);
     #include <logdepthbuf_vertex>
   }
 `;
@@ -326,8 +353,16 @@ export const proceduralSunGlowFragmentShader = `
   uniform float uBrightness;
   uniform float uFalloffColor;
 
+  // T6.4-M2 coordinate-space contract (mirrors vertex header):
+  // vNormalWorld is the per-fragment outward radial direction in
+  // WORLD frame; uLightView is the world-space light direction.
+  // The dot-product dot(vNormalWorld, uLightView) therefore stays
+  // in a single frame as required by option 2 of the wave plan.
+  // vViewPos is the camera-relative position varying, kept in
+  // case future glow effects (e.g. distance-aware falloff) need it.
   varying float vRadial;
-  varying vec3 vWorld;
+  varying vec3 vViewPos;
+  varying vec3 vNormalWorld;
 
 
   float getAlpha(vec3 n) {
@@ -345,7 +380,7 @@ export const proceduralSunGlowFragmentShader = `
     float alpha = 1.0 - vRadial;
     alpha *= alpha;
     float brightness = 1.0 + alpha * uFalloffColor;
-    alpha *= getAlpha(normalize(vWorld));
+    alpha *= getAlpha(normalize(vNormalWorld));
     gl_FragColor = vec4(brightnessToColor(brightness) * alpha, alpha);
   }
 `;
@@ -411,34 +446,48 @@ export const proceduralSunRaysVertexShader = `
   }
 
   void main() {
-    vec3 center = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    // T6.4-M2 coordinate-space contract: geometry computed in view
+    // space (modelViewMatrix is built CPU-side as
+    // viewMatrix*modelMatrix in float64; translation column =
+    // (objectPos - cameraPos) collapses precisely before float32
+    // GPU upload). Replaces the prior p0w - cameraPosition
+    // subtraction which catastrophically cancelled at parsec-scale
+    // HYG positions. The lighting normal (vNormal) stays in WORLD
+    // frame (option 2 of the wave plan) by right-multiplying the
+    // view-space outward by mat3(viewMatrix) (identical to
+    // transpose(mat3(viewMatrix)) from the left, but GLSL ES 1.00
+    // compatible — see glow-vertex header for full rationale).
+    vec3 centerView = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     vUVY = aPos.z;
     float animPhase = fract(uTime * 0.3 * (aWireRandom.y * 0.5) + aWireRandom.x);
 
     vec3 p = getPos(aPos.x, animPhase);
     vec3 p1 = getPos(aPos.x + 0.01, animPhase);
 
-    vec3 p0w = (modelMatrix * vec4(p, 1.0)).xyz;
-    vec3 p1w = (modelMatrix * vec4(p1, 1.0)).xyz;
+    vec3 p0v = (modelViewMatrix * vec4(p, 1.0)).xyz;
+    vec3 p1v = (modelViewMatrix * vec4(p1, 1.0)).xyz;
 
-    vec3 dirW = normalize(p1w - p0w);
-    vec3 vW = normalize(p0w - cameraPosition);
-    vec3 sideW = normalize(cross(vW, dirW));
+    vec3 dirView = normalize(p1v - p0v);
+    vec3 vView = normalize(p0v);
+    vec3 sideView = normalize(cross(vView, dirView));
 
-    if (length(sideW) < 1e-6) {
-      vec3 up = abs(dirW.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-      sideW = normalize(cross(up, dirW));
+    if (length(sideView) < 1e-6) {
+      vec3 up = abs(dirView.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+      sideView = normalize(cross(up, dirView));
     }
 
     float worldScale = length(vec3(modelMatrix[0][0], modelMatrix[1][0], modelMatrix[2][0]));
     float width = uWidth * aPos.z * (1.0 - aPos.x) * worldScale;
-    vec3 pWorld = p0w + sideW * width;
+    vec3 finalView = p0v + sideView * width;
 
-    vNormal = normalize(pWorld - center);
+    vec3 outwardView = finalView - centerView;
+    vNormal = length(outwardView) > 0.0
+      ? normalize(outwardView * mat3(viewMatrix))
+      : vec3(0.0, 1.0, 0.0);
     vOpacity = uOpacity * (0.5 + aWireRandom.w);
     vColor = spectrum(aWireRandom.w * uHueSpread + uHue);
 
-    gl_Position = projectionMatrix * viewMatrix * vec4(pWorld, 1.0);
+    gl_Position = projectionMatrix * vec4(finalView, 1.0);
     #include <logdepthbuf_vertex>
   }
 `;
@@ -545,34 +594,46 @@ export const proceduralSunFlaresVertexShader = `
   #define hue(v) (0.6 + 0.6 * cos(6.3 * (v) + vec3(0.0, 23.0, 21.0)))
 
   void main() {
-    vec3 center = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    // T6.4-M2 — same coordinate-space contract as glow / rays: view-
+    // space geometry via modelViewMatrix (precision-safe collapse of
+    // objectPos - cameraPos at parsec scale), world-space lighting
+    // normal via outward * mat3(viewMatrix) on the view-space outward
+    // radial (option 2 of the wave plan; right-multiply form is GLSL
+    // ES 1.00 compatible — see glow-vertex header).
+    vec3 centerView = (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     vUVY = aPos.z;
 
     float animPhase = fract(uTime * 0.3 * (aWireRandom.y * 0.5) + aWireRandom.x);
     vec3 pOBJ = getPosOBJ(aPos.x, animPhase);
     vec3 p1OBJ = getPosOBJ(aPos.x + 0.01, animPhase);
 
-    vec3 pW = (modelMatrix * vec4(pOBJ, 1.0)).xyz;
-    vec3 p1W = (modelMatrix * vec4(p1OBJ, 1.0)).xyz;
+    vec3 pV = (modelViewMatrix * vec4(pOBJ, 1.0)).xyz;
+    vec3 p1V = (modelViewMatrix * vec4(p1OBJ, 1.0)).xyz;
 
-    vec3 dirW = normalize(p1W - pW);
-    vec3 vW = normalize(pW - cameraPosition);
-    vec3 sideW = normalize(cross(vW, dirW));
+    vec3 dirView = normalize(p1V - pV);
+    vec3 vView = normalize(pV);
+    vec3 sideView = normalize(cross(vView, dirView));
 
     float worldScale = length(vec3(modelMatrix[0][0], modelMatrix[1][0], modelMatrix[2][0]));
     float radius = length(aPos0);
     float width = uWidth * aPos.z * (1.0 + animPhase) * radius * worldScale;
-    pW += sideW * width;
+    vec3 finalView = pV + sideView * width;
 
-    vNormal = normalize(pW - center);
+    vec3 outwardView = finalView - centerView;
+    vNormal = length(outwardView) > 0.0
+      ? normalize(outwardView * mat3(viewMatrix))
+      : vec3(0.0, 1.0, 0.0);
 
-    float lenW = length(pW - center);
+    // length is frame-invariant — view-space and world-space radial
+    // distances match identically, so the original opacity falloff
+    // is byte-equivalent here.
+    float lenW = length(outwardView);
     vOpacity = smoothstep(radius, radius * 1.03, lenW);
     vOpacity *= (1.0 - animPhase);
     vOpacity *= uOpacity;
 
     vColor = hue(aWireRandom.w * uHueSpread + uHue);
-    gl_Position = projectionMatrix * viewMatrix * vec4(pW, 1.0);
+    gl_Position = projectionMatrix * vec4(finalView, 1.0);
     #include <logdepthbuf_vertex>
   }
 `;

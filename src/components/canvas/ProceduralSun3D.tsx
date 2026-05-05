@@ -354,7 +354,6 @@ export const ProceduralSun3D = ({
     [visualProfile.lightDirection]
   );
 
-  const cameraUpRef = useRef(new THREE.Vector3());
   const frameCountRef = useRef(0);
 
   const sphereGeometry = useMemo(
@@ -477,7 +476,6 @@ export const ProceduralSun3D = ({
           uTint: { value: visualProfile.glowTint },
           uBrightness: { value: visualProfile.glowBrightness },
           uFalloffColor: { value: visualProfile.glowFalloffColor },
-          uCamUp: { value: new THREE.Vector3(0, 1, 0) },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -663,11 +661,10 @@ export const ProceduralSun3D = ({
       perlinResources.cubeCamera.update(gl, perlinResources.scene);
     }
 
-    // Camera up vector for billboard shaders
-    cameraUpRef.current
-      .set(0, 1, 0)
-      .applyQuaternion(state.camera.quaternion)
-      .normalize();
+    // T6.4-M2 — `cameraUpRef` and `glowMaterial.uniforms.uCamUp.copy(...)`
+    // removed. The glow billboard now derives its quad axes in view space
+    // (camera at origin, canonical up = (0,1,0)), so the world-space
+    // camera-up vector is no longer needed shader-side.
 
     // Shared values
     const visibility = sunMaterial.uniforms.uVisibility.value;
@@ -678,7 +675,6 @@ export const ProceduralSun3D = ({
     sunMaterial.uniforms.uLightView.value.copy(lightDirWorld);
 
     // Glow uniforms
-    glowMaterial.uniforms.uCamUp.value.copy(cameraUpRef.current);
     glowMaterial.uniforms.uLightView.value.copy(lightDirWorld);
     glowMaterial.uniforms.uVisibility.value = visibility;
     glowMaterial.uniforms.uDirection.value = direction;

@@ -62,6 +62,12 @@ scripts/.cache/
 # 2026-05-05; *.log already covers .codex/preview-test.*.log.)
 .codex/config.toml
 
+# Claude Code scheduled-task lock — written by `/loop` while a
+# scheduled wakeup is queued; contains the local sessionId, pid, and
+# acquisition timestamp. Machine-local, not reproducible source.
+# (Codex audit P3, T6.4-M2 2026-05-05.)
+.claude/scheduled_tasks.lock
+
 # External harness/tooling workspaces kept outside Atlas scope
 oh-my-openagent-dual-oracle/
 .sisyphus/
