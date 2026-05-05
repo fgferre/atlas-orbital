@@ -520,6 +520,24 @@ export const CameraController = () => {
 
     const stopFlying = () => {
       flyingRef.current.isFlying = false;
+      // T6.4-M2.5 S5 — real interrupt for HYG fly-to. `cancel()`
+      // freezes both transition channels at their current alpha and
+      // returns the intermediate `{ position, target }` (no
+      // `onComplete` fire — interrupt is semantically distinct from
+      // natural completion, see `StellarFlightTransition.ts:185-200`).
+      // We sync `controls.target` to the frozen target so the
+      // orientation visibly halts at the lerped value instead of
+      // letting focus-tracking next frame snap it back to the star
+      // world position. The position channel naturally stops driving
+      // `camera.position` because the next useFrame branch reads
+      // `!isActive` and falls through to the user-drag path.
+      // No-op when `cancel()` returns null (no HYG transition active —
+      // either we're interrupting a curated-body fly-to or just
+      // post-completion).
+      const frozen = stellarFlightRef.current.cancel();
+      if (frozen) {
+        controls.target.copy(frozen.target);
+      }
     };
 
     controls.addEventListener("start", stopFlying);

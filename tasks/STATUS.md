@@ -6,15 +6,14 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 in-progress
-— S1 + S2 + S3 + S4 shipped, S5-S7 queued. S4 rewrites
-`CameraController.setupCameraHyg()` to consume the two-channel
-`StellarFlightTransition`: drops the `controls.target.copy()`
-orientation snap + Bézier sun-avoid Bézier curve, animates
-`controls.target` per frame so OrbitControls derives the camera
-quaternion from the lerped target without a fight. Adds
-scale-aware durations (log10 position, angular orientation),
-real per-star `near`/`minDistance` from `radiusFromSpect`, and
-mutual-exclusion cancel between curated-body and HYG transitions)._
+— S1 + S2 + S3 + S4 + S5 shipped, S6-S7 queued. S5 makes the
+`OrbitControls "start"` handler call `stellarFlightRef.cancel()`
+and sync `controls.target` to the frozen intermediate state, so a
+user mouse-drag mid-fly halts the orientation lerp at its current
+alpha (no snap-back to start, no jump-forward to the destination
+star) and the position channel naturally stops driving
+`camera.position` because the next useFrame branch reads
+`!isActive` and falls through to the user-drag path)._
 
 ---
 
@@ -36,21 +35,20 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4-M2.5 sub-step **S5** — real
-mid-flight interrupt with state preservation. `OrbitControls
-"start"` event currently only flips `isFlying = false`
-([`CameraController.tsx:565-570`](../src/components/canvas/CameraController.tsx))
-— it does NOT cancel the active `StellarFlightTransition` or
-preserve intermediate state, so a user mouse-drag mid-fly
-leaves the position channel running while target stops. S5
-adds `cancel()` consumption: read `{ position, target }` from
-the cancel return, sync `controls.target`, freeze the position
-channel. Shipped so far: S1 (`c44cebe` + `e580288` Codex hotfix
-
-- `f54425d` round-2 hotfix) + S2 (`e6d35de` logistic-sigmoid
-  easing) + S3 (`ccd7d2f` two-channel transition class) + S4
-  (this commit, controller rewrite consuming the two-channel
-  contract). See wave file §M2.5 §S5 for the spec.
+**Default fresh-loop fire**: T6.4-M2.5 sub-step **S6** — mesh
+pre-warm sync. `HygStellarMesh` already mounts `<ProceduralSun3D>`
+when `meshActive` flips, but the gate currently only fires AT
+arrival; the cross-fade in M3 needs the mesh rendering during the
+last ~25-30% of the position transition so the sprite-to-mesh
+swap has overlap. S6 wires an estimated arrival distance into the
+gate so the mesh begins rendering before the camera fully arrives
+(may also reveal a coupling fix in `HygStellarMesh.tsx`). Shipped
+so far: S1 (`c44cebe` + `e580288` Codex hotfix + `f54425d`
+round-2 hotfix) + S2 (`e6d35de` logistic-sigmoid easing) + S3
+(`ccd7d2f` two-channel transition class) + S4 (`cf24711`
+controller rewrite consuming the two-channel contract) + S5
+(this commit, real interrupt with state preservation). See wave
+file §M2.5 §S6 for the spec.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
