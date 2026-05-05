@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 37 incidents (sessions 2026-04-17 → 2026-05-04).
+Meta-rules distilled from 38 incidents (sessions 2026-04-17 → 2026-05-05).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -103,6 +103,55 @@ the executed artefact. Four gates:
   budget for. Pay the second-round cost on atlas-native waves where
   no Gaia 1:1 reference exists; skip on Gaia-borrowed sub-ondas where
   source-diff already constrains the surface.
+- **Audits (internal AND external) miss visual rendering bugs whose
+  symptoms only appear on GPU.** T6 wave (T6.0 → T6.3-ε, 17 commits)
+  passed: 1427/1427 vitest tests, lint clean, build clean, 8
+  SUBAGENT VERIFY passes (cold-read fresh Explore each fire), 2
+  rounds of Codex `gpt-5.2` audit (each catching 3-4 verified
+  surface bugs), and shipped declaring "MVP closed" twice.
+  First user-driven manual smoke (2026-05-04) revealed the
+  procedural mesh **never renders visually** at HYG positions —
+  mesh is mounted, uniforms set, render call dispatched, but
+  the GPU output is empty. Four silent root causes (float32
+  precision collapse at parsec scale; hard sprite-mesh transition
+  with mis-coordinated thresholds; only 3 of 28 visual profile
+  fields varying by class; missing supergiant spect data) all
+  invisible to: unit tests (don't render GPU), lint (syntax-only),
+  build (compile-only), SUBAGENT VERIFY (reads TS code), Codex
+  cold-read (reads source, doesn't run app). The class of bugs
+  that ALL of these miss: anything where the failure mode is
+  GPU-side at runtime under specific scale conditions. **Rule**:
+  for ANY wave that touches rendering — shaders, materials,
+  uniforms, scene-tree mounts at non-origin world positions —
+  user-driven interactive smoke is mandatory before declaring
+  MVP / wave-closed. The "deferred to user-local interactive
+  verification" pattern from T4.2-β-handler-Silver / T6.3-β /
+  T6.3-γ was the wrong escape hatch — it shifted the validation
+  from "the only path that catches this class of bug" to
+  "optional homework the user might never do." If preview-MCP
+  can't drive the trigger directly, expose dev diagnostics on
+  `window` for that session, drive it programmatically, then
+  remove diagnostics before commit (M7-style cleanup). No more
+  "deferred to user" for visual rendering claims.
+- **Adapt Gaia's solved patterns; don't reinvent.** When atlas
+  hits a precision/scale problem Gaia has already solved (large
+  world coordinates is the obvious one — Gaia renders at
+  gigaparsec scales fine), use Gaia's strategy. For camera-
+  relative rendering: Gaia subtracts `cameraPos` from object
+  position in CPU using high-precision math (Vector3Q quad-double,
+  ~106 bits) BEFORE casting to float32 for GPU upload (see
+  `gaiasky/scene/component/ParticleSet.java:1112-1114` and
+  `ModelEntityRenderSystem.java:441-442`). Three.js's
+  `Matrix4.multiplyMatrices` already does this in float64 when
+  computing `modelViewMatrix`. Atlas already shipped Vector3Q
+  (T4.1-α `6105bed`) and the bridge helper (T4.1-β-bridge
+  `7b1d093`) months before T6 needed it; they sat dormant
+  because nobody mapped the T6 precision problem to the existing
+  toolkit. Pattern: when a wave deals with non-origin world
+  positions, audit BEFORE implementing whether camera-relative
+  math is needed; if yes, prefer Three.js's `modelViewMatrix`
+  idiom (free in shader) OR the existing Vector3Q helpers (T4.1
+  bridge); only invent new infrastructure if neither fits.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes
