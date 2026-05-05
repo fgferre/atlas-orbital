@@ -897,38 +897,39 @@ object.matrixWorld)` per-render in plain JS float64; only
     the property T6.4-M1 leverages to fix the precision bomb at
     parsec scale.
 
-    The "both paths end with float32 GPU arithmetic" claim is true
-    for the FINAL upload step but obscures the fact that atlas's
-    `modelViewMatrix * pos` shader (single-step) gets a precise
-    camera-relative translation column from Three.js's CPU float64
-    multiply — whereas a shader that does `viewMatrix \* (modelMatrix
-    - pos)` (split, like ProceduralSun3D currently) re-introduces
-      parsec-scale numbers in the intermediate world-space step before
-      the GPU subtracts the camera position in float32. Same final
-      cast, different precision survival.
+        The "both paths end with float32 GPU arithmetic" claim is true
+        for the FINAL upload step but obscures the fact that atlas's
+        `modelViewMatrix * pos` shader (single-step) gets a precise
+        camera-relative translation column from Three.js's CPU float64
+        multiply — whereas a shader that does `viewMatrix \* (modelMatrix
+        - pos)` (split, like ProceduralSun3D currently) re-introduces
+          parsec-scale numbers in the intermediate world-space step before
+          the GPU subtracts the camera position in float32. Same final
+          cast, different precision survival.
 
-    **Net for T4.1-β-wire-α**: Starfield's `modelViewMatrix * pos`
-    pattern at `Starfield.tsx:148` IS correct and at parity with
-    Gaia's renderer (Gaia's `setUniformf("u_camPos", ...)` truncates
-    its quad-precision `posInv` to float32 at upload — but the
-    starfield uses billboards where vertex offsets are quad corners
-    relative to the camera-projected center, so post-truncation
-    parsec-scale numbers don't kill precision the way they kill
-    procedural-mesh vertex math). The wider claim "atlas's matrix-
-    multiply pipeline = Gaia's explicit subtract pipeline" is true
-    only for billboards. For SOLID MESHES at non-origin positions
-    (T6's procedural sun), Three.js's modelViewMatrix path is
-    REQUIRED but is NOT used by the current ProceduralSun3D shaders
-    (they split into `modelMatrix * pos` then `viewMatrix * world`,
-    which is what kills precision at parsec scale). T6.4-M1 fixes
-    that. — Original 2026-05-04 closure text follows for traceability:
+        **Net for T4.1-β-wire-α**: Starfield's `modelViewMatrix * pos`
+        pattern at `Starfield.tsx:148` IS correct and at parity with
+        Gaia's renderer (Gaia's `setUniformf("u_camPos", ...)` truncates
+        its quad-precision `posInv` to float32 at upload — but the
+        starfield uses billboards where vertex offsets are quad corners
+        relative to the camera-projected center, so post-truncation
+        parsec-scale numbers don't kill precision the way they kill
+        procedural-mesh vertex math). The wider claim "atlas's matrix-
+        multiply pipeline = Gaia's explicit subtract pipeline" is true
+        only for billboards. For SOLID MESHES at non-origin positions
+        (T6's procedural sun), Three.js's modelViewMatrix path is
+        REQUIRED but is NOT used by the current ProceduralSun3D shaders
+        (they split into `modelMatrix * pos` then `viewMatrix * world`,
+        which is what kills precision at parsec scale). T6.4-M1 fixes
+        that. — Original 2026-05-04 closure text follows for traceability:
 
-    R1 source-read of Gaia's actual star renderer showed atlas is
-    already at float32-equivalent parity FOR BILLBOARDS:
-    - Gaia: `vec3 pos = particlePos - u_camPos;`
-      (`assets/shader/star.group.quad.vertex.glsl:72`).
-    - Atlas: `vec4 viewPosition = modelViewMatrix * vec4(animatedPos,
-1.0)` (`Starfield.tsx:148`).
+        R1 source-read of Gaia's actual star renderer showed atlas is
+        already at float32-equivalent parity FOR BILLBOARDS:
+        - Gaia: `vec3 pos = particlePos - u_camPos;`
+          (`assets/shader/star.group.quad.vertex.glsl:72`).
+        - Atlas: `vec4 viewPosition = modelViewMatrix * vec4(animatedPos,
+
+    1.0)` (`Starfield.tsx:148`).
     - Both billboard paths end with float32 GPU arithmetic. Different
       structure (atlas: matrix-multiply; Gaia: explicit subtract);
       same end-precision FOR BILLBOARD VERTEX OFFSETS, where vertex
@@ -936,13 +937,13 @@ object.matrixWorld)` per-render in plain JS float64; only
       magnitude, so parsec-scale precision loss cancels out in the
       visible quad geometry. - **Predecessor sweep correction**: the original ROADMAP framing
       "replace ad-hoc `THREE.Vector3.sub`" was inaccurate for the
-      star site — grep confirms `Starfield.tsx` has zero `.sub()` /
-      `subVectors()` calls; nothing to replace. - **Existing `degrees12/radians12` workaround** at
-      `Starfield.tsx:142-143,162-166` handles `solidAngle` precision
-      (the actual jitter source the ROADMAP attributed to position
-      uploads) — independent fix, stays in place. - SUBAGENT VERIFY (fresh Explore, no parent context) confirmed
-      bottom line: "no port is needed on the grounds of mathematical
-      equivalence". DIFF GATE PASS (no code change to diff).
+      star site — grep confirms `Starfield.tsx`has zero`.sub()`/
+     `subVectors()`calls; nothing to replace. - **Existing`degrees12/radians12`workaround** at
+     `Starfield.tsx:142-143,162-166`handles`solidAngle` precision
+    (the actual jitter source the ROADMAP attributed to position
+    uploads) — independent fix, stays in place. - SUBAGENT VERIFY (fresh Explore, no parent context) confirmed
+    bottom line: "no port is needed on the grounds of mathematical
+    equivalence". DIFF GATE PASS (no code change to diff).
 
   - **T4.1-β-wire-β ✅ CLOSED-AS-MOOT (2026-05-04, doc-only)** for
     Planet meshes. R1 source-read of `assets/shader/pbr.vertex.glsl`
@@ -1127,65 +1128,65 @@ fovFactor × movementMultiplier` chain (constant works at 60+
     signatures from this ship in console. **T4.2 wave closed at
     full Gaia parity.**
 
-                                                                                                                                                                                        **UX refinement candidates** (AAA proposal per
-                                                                                                                                                                                        `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
-                                                                                                                                                                                        divergences are user-perceivable in normal use; listing three
-                                                                                                                                                                                        tiers so the user can pick the depth of the follow-up:
+                                                                                                                                                                                            **UX refinement candidates** (AAA proposal per
+                                                                                                                                                                                            `feedback_divergence_aaa_ux.md`, 2026-04-23). All 4 documented
+                                                                                                                                                                                            divergences are user-perceivable in normal use; listing three
+                                                                                                                                                                                            tiers so the user can pick the depth of the follow-up:
 
-                                                                                                                                                                                        - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
-                                                                                                                                                                                          Solves #2 (mode-boundary target snap) + #3 (polar clamp in
-                                                                                                                                                                                          surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
-                                                                                                                                                                                          Implementation: (a) lerp `controls.target` over ~200 ms
-                                                                                                                                                                                          (cubic-out easing) between the focus worldpos and the
-                                                                                                                                                                                          `camera.position + forward × 1.0` endpoint when
-                                                                                                                                                                                          `surfaceModeActive` flips; add a `targetLerpRef` in
-                                                                                                                                                                                          `CameraController` + a tiny `lerpTarget.ts` helper so the
-                                                                                                                                                                                          behavior is unit-testable. (b) In the same useFrame branch,
-                                                                                                                                                                                          temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
-                                                                                                                                                                                          to 0 / π (full sphere) when `surfaceModeActive`, restoring
-                                                                                                                                                                                          atlas defaults on exit. No architectural churn; ships in
-                                                                                                                                                                                          one commit. Bronze is a band-aid — the wobble remains
-                                                                                                                                                                                          because OrbitControls is still the rotation authority.
+                                                                                                                                                                                            - **Bronze — snap smoothing + clamp lift** (~0.5 d, cosmetic).
+                                                                                                                                                                                              Solves #2 (mode-boundary target snap) + #3 (polar clamp in
+                                                                                                                                                                                              surface mode). Leaves #1 (wobble) + #4 (no roll) untouched.
+                                                                                                                                                                                              Implementation: (a) lerp `controls.target` over ~200 ms
+                                                                                                                                                                                              (cubic-out easing) between the focus worldpos and the
+                                                                                                                                                                                              `camera.position + forward × 1.0` endpoint when
+                                                                                                                                                                                              `surfaceModeActive` flips; add a `targetLerpRef` in
+                                                                                                                                                                                              `CameraController` + a tiny `lerpTarget.ts` helper so the
+                                                                                                                                                                                              behavior is unit-testable. (b) In the same useFrame branch,
+                                                                                                                                                                                              temporarily relax `controls.minPolarAngle` / `maxPolarAngle`
+                                                                                                                                                                                              to 0 / π (full sphere) when `surfaceModeActive`, restoring
+                                                                                                                                                                                              atlas defaults on exit. No architectural churn; ships in
+                                                                                                                                                                                              one commit. Bronze is a band-aid — the wobble remains
+                                                                                                                                                                                              because OrbitControls is still the rotation authority.
 
-                                                                                                                                                                                        - **Silver — pointer-lock first-person look** (~1-2 d,
-                                                                                                                                                                                          recommended default). Solves #1 + #2 + #3 + #4 completely.
-                                                                                                                                                                                          Replaces the near-target approximation with a genuine
-                                                                                                                                                                                          first-person control path that takes over from OrbitControls
-                                                                                                                                                                                          while `surfaceModeActive` is true. Architecture: new
-                                                                                                                                                                                          `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
-                                                                                                                                                                                          `useSurfaceModePointerLock.ts`. On entry, call
-                                                                                                                                                                                          `canvas.requestPointerLock()`; subscribe `mousemove`; apply
-                                                                                                                                                                                          yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
-                                                                                                                                                                                          (`camera.rotateX(-dy × sensitivity)`) directly, no target.
-                                                                                                                                                                                          Add Q/E keybind for roll (`camera.rotateZ`), matches the
-                                                                                                                                                                                          Gaia-equivalent `updateRoll` path at
-                                                                                                                                                                                          `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
-                                                                                                                                                                                          flips false OR user hits Esc), `document.exitPointerLock()`
-                                                                                                                                                                                          + restore `controls.enabled = true`. Full AAA surface-walk
-                                                                                                                                                                                          feel (Half-Life / No Man's Sky parity). Closes the T4.2
-                                                                                                                                                                                          wave at real Gaia parity instead of approximation.
+                                                                                                                                                                                            - **Silver — pointer-lock first-person look** (~1-2 d,
+                                                                                                                                                                                              recommended default). Solves #1 + #2 + #3 + #4 completely.
+                                                                                                                                                                                              Replaces the near-target approximation with a genuine
+                                                                                                                                                                                              first-person control path that takes over from OrbitControls
+                                                                                                                                                                                              while `surfaceModeActive` is true. Architecture: new
+                                                                                                                                                                                              `src/components/canvas/SurfaceModeFirstPerson.tsx` + hook
+                                                                                                                                                                                              `useSurfaceModePointerLock.ts`. On entry, call
+                                                                                                                                                                                              `canvas.requestPointerLock()`; subscribe `mousemove`; apply
+                                                                                                                                                                                              yaw (`camera.rotateY(-dx × sensitivity)`) + pitch
+                                                                                                                                                                                              (`camera.rotateX(-dy × sensitivity)`) directly, no target.
+                                                                                                                                                                                              Add Q/E keybind for roll (`camera.rotateZ`), matches the
+                                                                                                                                                                                              Gaia-equivalent `updateRoll` path at
+                                                                                                                                                                                              `NaturalCamera.java:1131-1137`. On exit (`surfaceModeActive`
+                                                                                                                                                                                              flips false OR user hits Esc), `document.exitPointerLock()`
+                                                                                                                                                                                              + restore `controls.enabled = true`. Full AAA surface-walk
+                                                                                                                                                                                              feel (Half-Life / No Man's Sky parity). Closes the T4.2
+                                                                                                                                                                                              wave at real Gaia parity instead of approximation.
 
-                                                                                                                                                                                        - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
-                                                                                                                                                                                          atlas polish). Adds on top of Silver: (a) a minimal HUD
-                                                                                                                                                                                          that appears during surface mode — crosshair, altitude
-                                                                                                                                                                                          readout (camera → focus surface in km), roll-angle
-                                                                                                                                                                                          indicator (subtle horizon line), body-relative compass.
-                                                                                                                                                                                          (b) Haptic-style rumble via the GamepadAPI when a gamepad
-                                                                                                                                                                                          is attached (noop for mouse-only users). (c) An A11y
-                                                                                                                                                                                          reduced-motion alternative: disable pointer-lock, fall
-                                                                                                                                                                                          back to Bronze's lerp+clamp-lift when `prefers-reduced-
-                                                                                                                                                                                          motion` is set OR the user has enabled the reduced-motion
-                                                                                                                                                                                          accessibility toggle. Reserve for when surface mode is
-                                                                                                                                                                                          promoted to a core feature (probably alongside T4.3
-                                                                                                                                                                                          particle system or a planetary-surface texture wave).
+                                                                                                                                                                                            - **Gold — Silver + bespoke surface-mode HUD** (~3-5 d,
+                                                                                                                                                                                              atlas polish). Adds on top of Silver: (a) a minimal HUD
+                                                                                                                                                                                              that appears during surface mode — crosshair, altitude
+                                                                                                                                                                                              readout (camera → focus surface in km), roll-angle
+                                                                                                                                                                                              indicator (subtle horizon line), body-relative compass.
+                                                                                                                                                                                              (b) Haptic-style rumble via the GamepadAPI when a gamepad
+                                                                                                                                                                                              is attached (noop for mouse-only users). (c) An A11y
+                                                                                                                                                                                              reduced-motion alternative: disable pointer-lock, fall
+                                                                                                                                                                                              back to Bronze's lerp+clamp-lift when `prefers-reduced-
+                                                                                                                                                                                              motion` is set OR the user has enabled the reduced-motion
+                                                                                                                                                                                              accessibility toggle. Reserve for when surface mode is
+                                                                                                                                                                                              promoted to a core feature (probably alongside T4.3
+                                                                                                                                                                                              particle system or a planetary-surface texture wave).
 
-                                                                                                                                                                                        **Recommended default**: Silver. Bronze is a band-aid that
-                                                                                                                                                                                        leaves the user-perceivable wobble intact; Gold is over-scope
-                                                                                                                                                                                        without a concrete user need yet. Silver closes the
-                                                                                                                                                                                        Gaia-parity gap cleanly and fits atlas's current architecture
-                                                                                                                                                                                        without a large refactor. User can pick Bronze if they want
-                                                                                                                                                                                        the quickest path to closing the known issues, or Gold if
-                                                                                                                                                                                        surface mode becomes central to the atlas product.
+                                                                                                                                                                                            **Recommended default**: Silver. Bronze is a band-aid that
+                                                                                                                                                                                            leaves the user-perceivable wobble intact; Gold is over-scope
+                                                                                                                                                                                            without a concrete user need yet. Silver closes the
+                                                                                                                                                                                            Gaia-parity gap cleanly and fits atlas's current architecture
+                                                                                                                                                                                            without a large refactor. User can pick Bronze if they want
+                                                                                                                                                                                            the quickest path to closing the known issues, or Gold if
+                                                                                                                                                                                            surface mode becomes central to the atlas product.
 
   - **T4.2-γ ✅ SHIPPED (2026-04-23, `032cba9`)** —
     inertial zoom physics. `src/lib/camera/zoomPhysics.ts`
@@ -2454,7 +2455,7 @@ false` throughout.
      Re-read between cycles to detect leak signatures.
 - **Dependencies**: T6.0 + T6.1 + T6.2.
 
-### T6.4 — Visual recovery wave (M1-M7, ~11-17 h, **PRIORITY 0** post 2026-05-04 user smoke)
+### T6.4 — Visual recovery wave (M1-M5+M7 core ~8-13 h; M6 optional ~2-3 h post-recovery, **PRIORITY 0** post 2026-05-04 user smoke)
 
 User-driven manual smoke (2026-05-04) revealed T6.0→T6.3-ε wired
 the FULL pipeline correctly (focus path, fly-to, mesh mount,
@@ -2520,7 +2521,7 @@ free world frame for those specific dots. Concretely:
    so the shader compares view-space normals against view-space light.
 2. Keep the lighting dot-product (`dot(vNormal, uLightView)`) in
    world space using `vNormalWorld` (`normalize((modelMatrix *
-   vec4(normal, 0.0)).xyz)`) — modelMatrix's rotation column has no
+vec4(normal, 0.0)).xyz)`) — modelMatrix's rotation column has no
    precision issue because directions ignore the parsec-scale
    translation column.
    Pick (2) for minimal churn (atlas already computes vNormalWorld in
@@ -2711,10 +2712,15 @@ takes over).
 - User does a final cycle smoke (4 named stars × 2 zoom cycles +
   quality-flip while focused on HYG)
 
-**Wave acceptance**: T6.4 ships ONLY when all 7 milestones land
-
-- user explicitly confirms visual delivery matches expectation.
-  No "MVP closed" claim until user-driven smoke passes.
+**Wave acceptance**: T6.4 visual-recovery core ships ONLY when
+M1-M5 + M7 land + user explicitly confirms visual delivery
+matches expectation (fly-to + procedural mesh visible + smooth
+transition + class distinction + supergiants properly sized).
+M6 (HygStarPanel) is OPTIONAL post-recovery polish per Codex
+round-3 reframe — may land in a separate commit after user
+confirms the core recovery, OR be deferred indefinitely if
+user judges the panel low-value. No "MVP closed" claim until
+user-driven smoke passes the core (M1-M5 + M7).
 
 **Dependencies**: T6.0 + T6.1 + T6.2 + T6.3 (all shipped). T-Closeout +
 T4.3 + T5.x re-bakes all blocked behind T6.4 visual delivery.

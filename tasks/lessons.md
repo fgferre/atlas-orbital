@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 38 incidents (sessions 2026-04-17 → 2026-05-05).
+Meta-rules distilled from 39 incidents (sessions 2026-04-17 → 2026-05-05).
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -133,6 +133,26 @@ the executed artefact. Four gates:
   `window` for that session, drive it programmatically, then
   remove diagnostics before commit (M7-style cleanup). No more
   "deferred to user" for visual rendering claims.
+- **Cross-document consistency is a separate verification step.**
+  When applying corrections from an audit (Codex/SUBAGENT/etc.)
+  across multiple docs, the detail (ROADMAP §sub-section) and the
+  summary (STATUS §Next up + §Pipeline rows + lessons.md folds)
+  must move in lockstep. T6.4 plan went through THREE rounds of
+  doc fixes (commits 68b1d9f → 1f20e36 → 0b4c648 → and one more
+  catching residual contradictions Codex flagged as P2/P3). Each
+  pass corrected SOME locations but missed others — STATUS summary
+  lagged behind ROADMAP detail for one pass; ROADMAP heading +
+  acceptance lagged for the next; STATUS §Pipeline T4.1 row had a
+  superseded "float32-comfortable" claim for two passes. **Rule**:
+  after editing a roadmap detail block, grep cross-doc for
+  references that summarize/quote/depend-on that block. After
+  each Codex audit pass on docs, before declaring "ready for
+  fresh /loop": run a cross-doc consistency sweep checking
+  STATUS §Last-updated header + §Next up + §Pipeline rows + any
+  ROADMAP §sub-section + lessons.md citations all tell the same
+  story. The T6 doc alignment burned ~4 commits because this sweep
+  wasn't formalized; one final cross-doc pass before declaring
+  ready would've collapsed it to 1.
 - **Adapt Gaia's solved patterns; don't reinvent.** When atlas
   hits a precision/scale problem Gaia has already solved (large
   world coordinates is the obvious one — Gaia renders at
