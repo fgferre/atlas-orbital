@@ -2,9 +2,11 @@ export { PrivilegedPosition } from "./PrivilegedPosition";
 export { CameraTransition } from "./CameraTransition";
 export {
   STELLAR_FLIGHT_ANCHORS,
+  computeAtlasFlightLanding,
+  computeAtlasFlightTarget,
   computeFlightTargetDistance,
-  computeStellarLandingDistance,
-  computeTargetSolidAngleRad,
+  computeGaiaTargetFullAngleRad,
+  type AtlasFlightTarget,
 } from "./stellarFlightSolidAngle";
 export {
   createDefaultViewportFramingState,
