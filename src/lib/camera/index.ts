@@ -1,6 +1,11 @@
 export { PrivilegedPosition } from "./PrivilegedPosition";
 export { CameraTransition } from "./CameraTransition";
 export {
+  StellarFlightTransition,
+  type StellarFlightFrame,
+  type StellarFlightSpec,
+} from "./StellarFlightTransition";
+export {
   STELLAR_FLIGHT_ANCHORS,
   computeAtlasFlightLanding,
   computeAtlasFlightTarget,
