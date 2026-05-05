@@ -696,6 +696,14 @@ simulationClock.syncFromState({
 // depends on the simulation clock being stationary across runs;
 // without this, wall-clock drift alone guarantees pixel diff > 0.1%.
 // Production code never sets the flag.
+//
+// T6.4-M2.5 S7 — under the same flag, expose the store on
+// `window.__ATLAS_TEST_STORE__` so the HYG focus e2e spec can call
+// `setFocusId("hyg:K")` directly. The catalog-click path requires
+// raycasting against star projections that depend on the live
+// camera state (flaky at test cadence); imperative store access is
+// the deterministic alternative. Production code never reads the
+// flag, so no surface change for end users.
 if (
   typeof window !== "undefined" &&
   (window as unknown as { __ATLAS_TEST_FREEZE__?: boolean })
@@ -710,6 +718,9 @@ if (
   simulationClock.setIsPlaying(false);
   simulationClock.setIsLiveMode(false);
   simulationClock.seek(frozenEpoch);
+  (
+    window as unknown as { __ATLAS_TEST_STORE__?: typeof useStore }
+  ).__ATLAS_TEST_STORE__ = useStore;
 }
 
 // (4) Vite HMR: drop both bridges when the store module is torn down so

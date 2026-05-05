@@ -5,15 +5,17 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 in-progress
-— S1 + S2 + S3 + S4 + S5 + S6 shipped, S7 queued. S6 wires
-mesh pre-warm sync: new `posProgressRaw` getter on
-`StellarFlightTransition` + `hygFlightPosProgress` singleton
-channel; `CameraController` publishes raw alpha each frame
-during HYG fly-to, `HygStellarMesh` consumes and force-activates
-the procedural mesh once raw alpha ≥ 0.70 — gives the M3
-cross-fade an arrival window before the camera reaches the
-landing pose)._
+_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 agent-complete
+pending user smoke — S1-S7 all shipped. S7 adds a test-only
+`__ATLAS_TEST_STORE__` hook on `window` (gated on the existing
+`__ATLAS_TEST_FREEZE__` flag, production-inert) and the
+`e2e/hyg-focus.spec.ts` regression spec: triggers a Sirius
+fly-to via the imperative store path, waits the 8 s
+position-channel cap + 2 s safety, asserts focus stays on
+`hyg:0` and the console emitted no errors during the fly-to.
+This catches the strand-and-defocus regression class that the
+new useFrame branch + cancel handler + pre-warm singleton are
+exposed to)._
 
 ---
 
@@ -35,21 +37,17 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4-M2.5 sub-step **S7** — tests
-
-- smoke. Most of S7 already shipped with S1-S6 (math units, S3
-  lifecycle, S6 singleton). Remaining: a small Playwright e2e
-  spec at `e2e/hyg-focus.spec.ts` covering Sirius from boot
-  solar-system view (pixel-diff arrival pose), and a 4-named-star
-  × 2-zoom-cycle user-driven smoke before declaring M2.5 closed.
-  The Playwright e2e is the gate-able piece; the user smoke is
-  hand-off. Shipped so far: S1 (`c44cebe` + `e580288` Codex
-  hotfix + `f54425d` round-2 hotfix) + S2 (`e6d35de`
-  logistic-sigmoid easing) + S3 (`ccd7d2f` two-channel transition
-  class) + S4 (`cf24711` controller rewrite consuming the
-  two-channel contract) + S5 (`8cd6f2e` real interrupt with state
-  preservation) + S6 (this commit, mesh pre-warm singleton). See
-  wave file §M2.5 §S7 for the spec.
+**Default fresh-loop fire**: T6.4 **M3** — smooth sprite ↔ mesh
+cross-fade. M2.5 is agent-complete (S1-S7 all shipped); the
+final user-driven smoke (4 named stars × 2 zoom cycles per the
+wave file's Acceptance §8) is a hand-off — agent should NOT
+attempt to gate M2.5 close on its own. M3 unblocks once the user
+runs that smoke and confirms the fly-to feels seamless. M3 spec
+in `tasks/waves/T6.4-visual-recovery.md` §M3 — replaces
+`a_skipMask` Float32 0/1 binary with `a_fadeAlpha` Float32 [0..1]
+continuous, sprite multiplies its alpha by `(1 - a_fadeAlpha)`,
+mesh's `uVisibility` ramps 0→1 in parallel; HYG-focus-specific
+fade window (NOT global) per Codex round-3 P2.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
