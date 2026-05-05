@@ -58,6 +58,10 @@ import * as THREE from "three";
 
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import {
+  HYG_FLIGHT_PREWARM_THRESHOLD,
+  getHygFlightPosProgress,
+} from "../../lib/camera";
+import {
   parseHygFocusId,
   resolveHygWorldPosition,
 } from "../../lib/focus/hygFocusResolver";
@@ -245,7 +249,27 @@ export const HygStellarMesh = () => {
       starData.radiusWorldUnits,
       distToCamera
     );
-    const next = shouldStellarMeshBeActive(meshActiveRef.current, sa);
+    let next = shouldStellarMeshBeActive(meshActiveRef.current, sa);
+
+    // T6.4-M2.5 S6 — pre-warm during the deceleration tail of a HYG
+    // fly-to. Without this, the natural gate flips ON only when the
+    // live camera distance crosses `radius / ENTER_RAD` — for typical
+    // HYG geometry that happens in the last 1-2 % of the position
+    // channel's raw alpha (the camera spends most of its travel far
+    // beyond the gate threshold). The pre-warm forces the mesh ON
+    // once raw alpha clears 0.70 (≈ 92 % of the straight-line travel
+    // under the default `logisticSigmoid` easing), giving the M3
+    // cross-fade a workable arrival window. Singleton write-side at
+    // `CameraController` useFrame; this read-side falls through to
+    // `next` unchanged when no fly-to is active (signal === null).
+    const flightProgress = getHygFlightPosProgress();
+    if (
+      flightProgress !== null &&
+      flightProgress >= HYG_FLIGHT_PREWARM_THRESHOLD
+    ) {
+      next = true;
+    }
+
     if (next !== meshActiveRef.current) {
       meshActiveRef.current = next;
       setMeshActive(next);

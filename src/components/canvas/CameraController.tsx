@@ -14,6 +14,7 @@ import {
   createFocusTrackingState,
   resetFocusTrackingState,
   resolveFocusTrackingFrame,
+  setHygFlightPosProgress,
 } from "../../lib/camera";
 import {
   computeProximityDamping,
@@ -144,6 +145,11 @@ export const CameraController = () => {
 
   useEffect(() => {
     resetFocusTrackingState(focusTrackingRef.current);
+    // T6.4-M2.5 S6 — clear the pre-warm signal on focus change. A
+    // new HYG fly-to (setupCameraHyg) will write the fresh value next
+    // frame; a curated-body or null focus leaves the signal cleared
+    // so `HygStellarMesh` falls through to its natural gate.
+    setHygFlightPosProgress(null);
   }, [focusId]);
 
   const getBodyRadius = useCallback(
@@ -385,6 +391,10 @@ export const CameraController = () => {
       // branch reads a single source. `cancel()` deliberately does
       // NOT fire `onComplete`, so isFlying stays as we set it below.
       stellarFlightRef.current.cancel();
+      // T6.4-M2.5 S6 — clear the pre-warm signal too; switching to
+      // a curated-body fly-to mid-HYG-flight should leave no stale
+      // progress visible to `HygStellarMesh`.
+      setHygFlightPosProgress(null);
 
       const targetMesh = scene.getObjectByName(focusId);
       if (!targetMesh) return;
@@ -538,6 +548,11 @@ export const CameraController = () => {
       if (frozen) {
         controls.target.copy(frozen.target);
       }
+      // T6.4-M2.5 S6 — clear the pre-warm signal. If the user
+      // interrupted at progress ≥ 0.70 the mesh was force-active
+      // last frame; `HygStellarMesh`'s hysteresis state stays true
+      // and the natural `EXIT_RAD` threshold takes over from here.
+      setHygFlightPosProgress(null);
     };
 
     controls.addEventListener("start", stopFlying);
@@ -735,6 +750,18 @@ export const CameraController = () => {
           // this equals the star world position; focus-tracking
           // takes over post-completion.
           controlsInstance.target.copy(frame.target);
+        }
+        // T6.4-M2.5 S6 — publish the position-channel raw alpha so
+        // `HygStellarMesh` can pre-warm the procedural mesh during
+        // the deceleration tail. `update()` may have just flipped
+        // `isActive` to false on the completion frame — branch so
+        // a just-completed transition clears the signal in the same
+        // tick (no stale 1.0 hanging around when the mesh's natural
+        // gate has already taken over).
+        if (stellarFlightRef.current.isActive) {
+          setHygFlightPosProgress(stellarFlightRef.current.posProgressRaw);
+        } else {
+          setHygFlightPosProgress(null);
         }
         // `update()` flips `active = false` and fires `onComplete`
         // (which sets `flyingRef.current.isFlying = false`) on the

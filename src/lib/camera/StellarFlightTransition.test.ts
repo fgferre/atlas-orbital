@@ -309,6 +309,82 @@ describe("StellarFlightTransition — easing channels", () => {
   });
 });
 
+describe("StellarFlightTransition — posProgressRaw (S6 pre-warm signal)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns 0 when transition is inactive (pre-start)", () => {
+    const t = new StellarFlightTransition();
+    expect(t.posProgressRaw).toBe(0);
+  });
+
+  it("returns 0 immediately after start (elapsed=0)", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 1000 }));
+    expect(t.posProgressRaw).toBe(0);
+  });
+
+  it("scales linearly with elapsed time (raw, NOT eased)", () => {
+    const t = new StellarFlightTransition();
+    t.start(
+      makeSpec({
+        posDurationMs: 1000,
+        posEasing: CameraTransition.logisticSigmoid,
+      })
+    );
+    vi.advanceTimersByTime(700);
+    // Raw alpha = 700/1000 = 0.7 regardless of easing.
+    expect(t.posProgressRaw).toBeCloseTo(0.7, 6);
+  });
+
+  it("clamps to 1 once elapsed exceeds duration", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 100 }));
+    vi.advanceTimersByTime(5000);
+    expect(t.posProgressRaw).toBe(1);
+  });
+
+  it("returns 1 when posDurationMs is 0 (degenerate spec)", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 0 }));
+    expect(t.posProgressRaw).toBe(1);
+  });
+
+  it("returns 0 after natural completion (active flag flipped)", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 100, oriDurationMs: 100 }));
+    vi.advanceTimersByTime(200);
+    t.update();
+    expect(t.isActive).toBe(false);
+    // Post-completion: getter returns 0 (no active fly-to).
+    expect(t.posProgressRaw).toBe(0);
+  });
+
+  it("returns 0 after cancel (active flag flipped)", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 1000 }));
+    vi.advanceTimersByTime(400);
+    t.cancel();
+    expect(t.posProgressRaw).toBe(0);
+  });
+
+  it("crosses HYG_FLIGHT_PREWARM_THRESHOLD (0.70) at 70 % of posDurationMs", () => {
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 1000 }));
+    vi.advanceTimersByTime(699);
+    expect(t.posProgressRaw < 0.7).toBe(true);
+    vi.advanceTimersByTime(2);
+    // 701 ms elapsed → 0.701 raw.
+    expect(t.posProgressRaw >= 0.7).toBe(true);
+  });
+});
+
 describe("StellarFlightTransition — vector reuse (no per-frame allocation)", () => {
   beforeEach(() => {
     vi.useFakeTimers();

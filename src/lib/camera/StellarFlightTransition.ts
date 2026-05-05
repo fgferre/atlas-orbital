@@ -203,4 +203,25 @@ export class StellarFlightTransition {
   get isActive(): boolean {
     return this.active;
   }
+
+  /**
+   * Position-channel raw alpha (0..1, pre-easing). Returns 0 when
+   * the transition is inactive. Drives the M2.5 S6 mesh-pre-warm
+   * signal: HygStellarMesh treats progress ≥ 0.70 as the cue to
+   * force-activate the procedural mesh during the position
+   * channel's deceleration tail (the last ~25-30% of the transition,
+   * where the camera has covered ≥ 92% of its straight-line path
+   * under the default `logisticSigmoid` easing).
+   *
+   * Intentionally raw (not eased): the threshold is a TIME-based
+   * UX cue, not a SPACE-based one. Easing the value would couple
+   * the threshold to the easing factor, which would break if the
+   * easing changes.
+   */
+  get posProgressRaw(): number {
+    if (!this.active) return 0;
+    if (this.spec.posDurationMs <= 0) return 1;
+    const elapsed = performance.now() - this.startTimeMs;
+    return clamp01(elapsed / this.spec.posDurationMs);
+  }
 }

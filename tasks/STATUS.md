@@ -6,14 +6,14 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 in-progress
-— S1 + S2 + S3 + S4 + S5 shipped, S6-S7 queued. S5 makes the
-`OrbitControls "start"` handler call `stellarFlightRef.cancel()`
-and sync `controls.target` to the frozen intermediate state, so a
-user mouse-drag mid-fly halts the orientation lerp at its current
-alpha (no snap-back to start, no jump-forward to the destination
-star) and the position channel naturally stops driving
-`camera.position` because the next useFrame branch reads
-`!isActive` and falls through to the user-drag path)._
+— S1 + S2 + S3 + S4 + S5 + S6 shipped, S7 queued. S6 wires
+mesh pre-warm sync: new `posProgressRaw` getter on
+`StellarFlightTransition` + `hygFlightPosProgress` singleton
+channel; `CameraController` publishes raw alpha each frame
+during HYG fly-to, `HygStellarMesh` consumes and force-activates
+the procedural mesh once raw alpha ≥ 0.70 — gives the M3
+cross-fade an arrival window before the camera reaches the
+landing pose)._
 
 ---
 
@@ -35,20 +35,21 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4-M2.5 sub-step **S6** — mesh
-pre-warm sync. `HygStellarMesh` already mounts `<ProceduralSun3D>`
-when `meshActive` flips, but the gate currently only fires AT
-arrival; the cross-fade in M3 needs the mesh rendering during the
-last ~25-30% of the position transition so the sprite-to-mesh
-swap has overlap. S6 wires an estimated arrival distance into the
-gate so the mesh begins rendering before the camera fully arrives
-(may also reveal a coupling fix in `HygStellarMesh.tsx`). Shipped
-so far: S1 (`c44cebe` + `e580288` Codex hotfix + `f54425d`
-round-2 hotfix) + S2 (`e6d35de` logistic-sigmoid easing) + S3
-(`ccd7d2f` two-channel transition class) + S4 (`cf24711`
-controller rewrite consuming the two-channel contract) + S5
-(this commit, real interrupt with state preservation). See wave
-file §M2.5 §S6 for the spec.
+**Default fresh-loop fire**: T6.4-M2.5 sub-step **S7** — tests
+
+- smoke. Most of S7 already shipped with S1-S6 (math units, S3
+  lifecycle, S6 singleton). Remaining: a small Playwright e2e
+  spec at `e2e/hyg-focus.spec.ts` covering Sirius from boot
+  solar-system view (pixel-diff arrival pose), and a 4-named-star
+  × 2-zoom-cycle user-driven smoke before declaring M2.5 closed.
+  The Playwright e2e is the gate-able piece; the user smoke is
+  hand-off. Shipped so far: S1 (`c44cebe` + `e580288` Codex
+  hotfix + `f54425d` round-2 hotfix) + S2 (`e6d35de`
+  logistic-sigmoid easing) + S3 (`ccd7d2f` two-channel transition
+  class) + S4 (`cf24711` controller rewrite consuming the
+  two-channel contract) + S5 (`8cd6f2e` real interrupt with state
+  preservation) + S6 (this commit, mesh pre-warm singleton). See
+  wave file §M2.5 §S7 for the spec.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to

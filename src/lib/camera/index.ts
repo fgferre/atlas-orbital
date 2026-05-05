@@ -6,6 +6,11 @@ export {
   type StellarFlightSpec,
 } from "./StellarFlightTransition";
 export {
+  HYG_FLIGHT_PREWARM_THRESHOLD,
+  getHygFlightPosProgress,
+  setHygFlightPosProgress,
+} from "./hygFlightPosProgress";
+export {
   ATLAS_MIN_LANDING_DISTANCE_WU,
   STELLAR_FLIGHT_ANCHORS,
   computeAtlasFlightLanding,
