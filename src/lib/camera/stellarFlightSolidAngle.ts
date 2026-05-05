@@ -72,6 +72,24 @@ const FAR_TARGET_FULL_RAD = FAR_TARGET_FULL_DEG * DEG_TO_RAD;
  */
 const ATLAS_MIN_ANGULAR_RADIUS_RAD = STELLAR_MESH_ENTER_RAD * 5;
 
+/**
+ * Absolute landing-distance floor in atlas world units. Mirrors
+ * the pre-M2.5 `Math.max(10, ...)` guard in
+ * `CameraController.tsx:277` (the original three-way max:
+ * absolute floor, 5× radius, gate-driven). Without this, ultra-
+ * compact stars (white dwarfs at ~0.0465 wu radius, neutron-
+ * star-class hypotheticals) could land at single-digit world
+ * units even though the angular-radius gate is satisfied — that
+ * collapses `OrbitControls.minDistance` (set to `radius * 1.1`)
+ * to sub-wu scale and pushes the perspective `near` plane into
+ * the territory where z-buffer precision starts to matter.
+ *
+ * Codex 2026-05-05 P2 caught the silent drop. Re-introduced as
+ * a named constant so the contract is visible in the lib and
+ * any future scope change is explicit.
+ */
+export const ATLAS_MIN_LANDING_DISTANCE_WU = 10;
+
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 /**
@@ -80,11 +98,29 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
  * Linear lerp clamped at both ends. NO Atlas-specific clamp
  * applied — use `computeAtlasFlightTarget` for the Atlas-safe
  * version.
+ *
+ * Edge cases (Codex 2026-05-05 P3 catch):
+ *  - `+Infinity` → clamps to FAR target (not near). A star at
+ *    "infinitely far" semantically belongs at the far anchor,
+ *    not the near one. The pre-Codex draft mapped all non-finite
+ *    inputs (including `+Infinity`) to NEAR via the
+ *    `!Number.isFinite()` branch, which was backwards.
+ *  - `-Infinity` and `NaN` → conservative default to NEAR. NaN
+ *    represents "unknown" so falling back to the close-star
+ *    target keeps the visual reasonable; `-Infinity` is
+ *    nonsensical for a physical distance and gets the same
+ *    defensive default.
  */
 export const computeGaiaTargetFullAngleRad = (
   starDistanceFromSunPc: number
 ): number => {
-  if (!Number.isFinite(starDistanceFromSunPc)) {
+  if (Number.isNaN(starDistanceFromSunPc)) {
+    return NEAR_TARGET_FULL_RAD;
+  }
+  if (starDistanceFromSunPc === Number.POSITIVE_INFINITY) {
+    return FAR_TARGET_FULL_RAD;
+  }
+  if (starDistanceFromSunPc === Number.NEGATIVE_INFINITY) {
     return NEAR_TARGET_FULL_RAD;
   }
   const t = clamp01(
@@ -169,6 +205,22 @@ export const computeFlightTargetDistance = (
  * Gaia-adaptive target, applies the Atlas mesh-spawn floor, and
  * returns the camera landing distance plus diagnostic info.
  *
+ * Three-way `Math.max` over:
+ *   - `radiusWorldUnits * 1.1` (body-clearance: never inside the
+ *     star's surface, with 10% margin for the OrbitControls
+ *     `minDistance` floor)
+ *   - `ATLAS_MIN_LANDING_DISTANCE_WU` (absolute floor, mirrors
+ *     pre-M2.5 `CameraController.tsx`'s `Math.max(10, ...)`
+ *     guard — protects ultra-compact stars from collapsing
+ *     `near`-plane precision)
+ *   - `computeFlightTargetDistance(radius, target.fullAngleRad)`
+ *     (the angle-driven landing — the actual cinematic distance
+ *     for typical stars)
+ *
+ * For most catalog stars the angle-driven term dominates. For
+ * white-dwarf-class radii (~0.0465 wu) the absolute 10 wu floor
+ * kicks in — same behavior as pre-M2.5.
+ *
  * The camera controller (M2.5 S4) consumes this directly.
  */
 export const computeAtlasFlightLanding = (
@@ -179,13 +231,20 @@ export const computeAtlasFlightLanding = (
   target: AtlasFlightTarget;
 } => {
   const target = computeAtlasFlightTarget(starDistanceFromSunPc);
-  return {
-    distanceWu: computeFlightTargetDistance(
-      radiusWorldUnits,
-      target.fullAngleRad
-    ),
-    target,
-  };
+  const angleDriven = computeFlightTargetDistance(
+    radiusWorldUnits,
+    target.fullAngleRad
+  );
+  const bodyClearance =
+    Number.isFinite(radiusWorldUnits) && radiusWorldUnits > 0
+      ? radiusWorldUnits * 1.1
+      : 0;
+  const distanceWu = Math.max(
+    bodyClearance,
+    ATLAS_MIN_LANDING_DISTANCE_WU,
+    angleDriven
+  );
+  return { distanceWu, target };
 };
 
 /**

@@ -6,6 +6,7 @@ export {
   type StellarFlightSpec,
 } from "./StellarFlightTransition";
 export {
+  ATLAS_MIN_LANDING_DISTANCE_WU,
   STELLAR_FLIGHT_ANCHORS,
   computeAtlasFlightLanding,
   computeAtlasFlightTarget,

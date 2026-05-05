@@ -163,6 +163,30 @@ describe("StellarFlightTransition — onComplete callback", () => {
     t.cancel();
     expect(onComplete).not.toHaveBeenCalled();
   });
+
+  it("does NOT fire when cancelled AFTER both durations have elapsed (Codex 2026-05-05 P2)", () => {
+    // Regression pin: prior cancel() delegated to update() which
+    // fired onComplete whenever both alphas were ≥ 1. If the user
+    // interrupted in the gap between durations elapsing and the
+    // next animation frame consuming completion, the interrupt
+    // path would execute completion side-effects despite
+    // semantically NOT being a natural completion.
+    const onComplete = vi.fn();
+    const t = new StellarFlightTransition();
+    t.start(makeSpec({ posDurationMs: 100, oriDurationMs: 100, onComplete }));
+    // Advance well past both durations WITHOUT calling update() —
+    // simulates the user clicking faster than the next RAF tick.
+    vi.advanceTimersByTime(500);
+    expect(onComplete).not.toHaveBeenCalled();
+    const frozen = t.cancel();
+    // cancel() must return the at-end state (alphas clamped) but
+    // NOT fire onComplete.
+    expect(frozen).not.toBeNull();
+    expect(frozen!.position.x).toBeCloseTo(100, 6);
+    expect(frozen!.target.x).toBeCloseTo(50, 6);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(t.isActive).toBe(false);
+  });
 });
 
 describe("StellarFlightTransition — cancel() interrupt path", () => {

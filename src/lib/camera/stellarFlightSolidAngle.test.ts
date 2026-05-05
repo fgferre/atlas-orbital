@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { STELLAR_MESH_ENTER_RAD } from "../stellarMeshGate";
 import {
+  ATLAS_MIN_LANDING_DISTANCE_WU,
   STELLAR_FLIGHT_ANCHORS,
   computeAtlasFlightLanding,
   computeAtlasFlightTarget,
@@ -118,11 +119,21 @@ describe("computeGaiaTargetFullAngleRad", () => {
     );
   });
 
-  it("returns near-target for non-finite input (defensive)", () => {
+  it("returns near-target for NaN (defensive — unknown distance)", () => {
     expect(computeGaiaTargetFullAngleRad(Number.NaN)).toBe(DEG_TO_RAD);
+  });
+
+  it("returns FAR-target for +Infinity (Codex 2026-05-05 P3)", () => {
+    // Pre-Codex draft mapped all non-finite to NEAR via a single
+    // !Number.isFinite() branch. +Infinity belongs at the far
+    // anchor: an "infinitely far" star semantically sits at the
+    // smallest target, not the largest.
     expect(computeGaiaTargetFullAngleRad(Number.POSITIVE_INFINITY)).toBe(
-      DEG_TO_RAD
+      0.001 * DEG_TO_RAD
     );
+  });
+
+  it("returns near-target for -Infinity (defensive — nonsensical distance)", () => {
     expect(computeGaiaTargetFullAngleRad(Number.NEGATIVE_INFINITY)).toBe(
       DEG_TO_RAD
     );
@@ -302,8 +313,25 @@ describe("computeAtlasFlightLanding — named-star pins", () => {
     const radiusWu = 0.15 * SUN_RADIUS_WORLD_UNITS; // ~0.698 wu
     const result = computeAtlasFlightLanding(radiusWu, 1.3);
     expect(result.target.clampedByAtlasFloor).toBe(false);
+    // 80 wu lands above the 10 wu absolute floor, so the angle-
+    // driven term dominates here.
     expect(result.distanceWu).toBeGreaterThan(79);
     expect(result.distanceWu).toBeLessThan(81);
+  });
+
+  it("white-dwarf-class star (R≈0.0465 wu, d=100 pc) → 10 wu absolute floor (Codex 2026-05-05 P2)", () => {
+    // Without the absolute floor restored from pre-M2.5, the
+    // angle-driven term puts this star at ~5.5 wu — below the
+    // 10 wu safety guard the original CameraController used.
+    // Pin the restored floor.
+    const whiteDwarfWu = 0.01 * SUN_RADIUS_WORLD_UNITS; // ~0.0465 wu
+    const result = computeAtlasFlightLanding(whiteDwarfWu, 100);
+    expect(result.distanceWu).toBe(ATLAS_MIN_LANDING_DISTANCE_WU);
+    expect(result.distanceWu).toBe(10);
+  });
+
+  it("ATLAS_MIN_LANDING_DISTANCE_WU is 10 wu (mirrors pre-M2.5 absolute floor)", () => {
+    expect(ATLAS_MIN_LANDING_DISTANCE_WU).toBe(10);
   });
 
   it("Sun-like dwarf at far anchor (d=2805 pc) lands per Atlas floor", () => {

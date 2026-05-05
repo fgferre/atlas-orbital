@@ -118,12 +118,19 @@ export class StellarFlightTransition {
     this.active = true;
   }
 
-  /** Per-frame consumer. Returns `null` when the transition is
-   *  inactive (i.e. between `cancel()` / completion and the next
-   *  `start()`). */
-  update(): StellarFlightFrame | null {
-    if (!this.active) return null;
-
+  /** Compute the current frame WITHOUT side effects (no
+   *  `onComplete` fire, no active-flag flip). Shared by
+   *  `update()` (which then optionally fires the callback) and
+   *  `cancel()` (which must NOT fire it).
+   *
+   *  Codex 2026-05-05 P2 caught the original `cancel() →
+   *  update()` delegation: when the user interrupts AFTER both
+   *  durations have elapsed but BEFORE the next animation frame
+   *  consumed completion, the interrupt path would run
+   *  `onComplete` side-effects despite semantically NOT being a
+   *  natural completion. Splitting frame sampling from the
+   *  callback fixes that. */
+  private computeFrame(): StellarFlightFrame {
     const elapsed = performance.now() - this.startTimeMs;
 
     const alphaPosRaw =
@@ -148,11 +155,6 @@ export class StellarFlightTransition {
 
     const done = alphaPosRaw >= 1 && alphaOriRaw >= 1;
 
-    if (done) {
-      this.active = false;
-      this.spec.onComplete?.();
-    }
-
     return {
       position: this.outPosition,
       target: this.outTarget,
@@ -160,22 +162,41 @@ export class StellarFlightTransition {
     };
   }
 
+  /** Per-frame consumer. Returns `null` when the transition is
+   *  inactive (i.e. between `cancel()` / completion and the next
+   *  `start()`). */
+  update(): StellarFlightFrame | null {
+    if (!this.active) return null;
+
+    const frame = this.computeFrame();
+
+    if (frame.done) {
+      this.active = false;
+      this.spec.onComplete?.();
+    }
+
+    return frame;
+  }
+
   /** Freeze both channels at the current alpha and return the
    *  intermediate state. The transition becomes inactive. The
    *  controller reads the returned values to update OrbitControls
    *  cleanly without snap-back. Returns `null` if there's nothing
-   *  to cancel (transition not active). */
+   *  to cancel (transition not active).
+   *
+   *  Does NOT fire `onComplete` even when the durations have
+   *  already elapsed at the moment of cancel — by design,
+   *  cancellation is semantically distinct from natural
+   *  completion. The S5 interrupt handoff in `CameraController`
+   *  expects no side-effects from this method beyond the
+   *  returned state and the active-flag flip. */
   cancel(): {
     position: THREE.Vector3;
     target: THREE.Vector3;
   } | null {
     if (!this.active) return null;
-
-    // Run one final update tick so the output reflects "right
-    // now"; reuse the per-frame logic.
-    const frame = this.update();
+    const frame = this.computeFrame();
     this.active = false;
-    if (!frame) return null;
     return { position: frame.position, target: frame.target };
   }
 
