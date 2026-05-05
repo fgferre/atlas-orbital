@@ -5,17 +5,15 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 agent-complete
-pending user smoke — S1-S7 all shipped. S7 adds a test-only
-`__ATLAS_TEST_STORE__` hook on `window` (gated on the existing
-`__ATLAS_TEST_FREEZE__` flag, production-inert) and the
-`e2e/hyg-focus.spec.ts` regression spec: triggers a Sirius
-fly-to via the imperative store path, waits the 8 s
-position-channel cap + 2 s safety, asserts focus stays on
-`hyg:0` and the console emitted no errors during the fly-to.
-This catches the strand-and-defocus regression class that the
-new useFrame branch + cancel handler + pre-warm singleton are
-exposed to)._
+_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 S1-S7 shipped
+but **Codex round-3 review (2026-05-05) surfaced 4 findings that
+block M2.5 close** — 2 P1 (angle-math mis-port, pre-warm hides
+sprite without M3 cross-fade) + 2 P2 (target-lerp comments
+overstate Gaia parity, e2e too weak to catch flight-contract
+regressions). All 4 verified against `/tmp/gaiasky` source.
+Hotfix plan in wave file §M2.5 §Codex-round-3. Next agent action:
+apply the hotfix, NOT M3 — Codex findings of P1/P2 touching
+active scope take precedence per the loop-protocol step 2)._
 
 ---
 
@@ -37,17 +35,64 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: T6.4 **M3** — smooth sprite ↔ mesh
-cross-fade. M2.5 is agent-complete (S1-S7 all shipped); the
-final user-driven smoke (4 named stars × 2 zoom cycles per the
-wave file's Acceptance §8) is a hand-off — agent should NOT
-attempt to gate M2.5 close on its own. M3 unblocks once the user
-runs that smoke and confirms the fly-to feels seamless. M3 spec
-in `tasks/waves/T6.4-visual-recovery.md` §M3 — replaces
-`a_skipMask` Float32 0/1 binary with `a_fadeAlpha` Float32 [0..1]
-continuous, sprite multiplies its alpha by `(1 - a_fadeAlpha)`,
-mesh's `uVisibility` ramps 0→1 in parallel; HYG-focus-specific
-fade window (NOT global) per Codex round-3 P2.
+**Default fresh-loop fire**: T6.4 **M2.5 Codex round-3 hotfix**
+— apply the 4-finding hotfix in a single commit
+`fix(t6.4): M2.5 — Codex round-3 review (4 findings)`. Spec in
+`tasks/waves/T6.4-visual-recovery.md` §M2.5 §Codex-round-3. Six
+items in scope:
+
+1. **stellarFlightSolidAngle.ts angle-math fix (P1)** — rename
+   `computeGaiaTargetFullAngleRad` → `computeGaiaTargetAngularRadiusRad`,
+   field `fullAngleRad` → `angularRadiusRad` in `AtlasFlightTarget`,
+   stop dividing the Gaia curve by 2 (it's already angular radius
+   per `InteractiveCameraModule.java:172` + `ParticleSet.java:1220`),
+   change `computeFlightTargetDistance` from
+   `radius / tan(fullAngle * 0.5)` to `radius / tan(angularRadius)`.
+   Sirius lands at ~458 wu (was ~916 wu, a 2× regression vs the
+   adaptive contract). Also add a header note about the
+   `fovFactor` divergence — Gaia normalises by `getFovFactor()`,
+   Atlas does not (small impact at default fov, worth pinning).
+2. **HygStellarMesh.tsx pre-warm revert (P1)** — remove the
+   `progress >= 0.70 → next = true` force-activate. Keep the
+   singleton + `posProgressRaw` infra in place (M3 will consume).
+   Without M3 cross-fade, the force-activate writes
+   `skipMask = 1` while the mesh is still angularly small,
+   hiding the sprite into the gap M2.5 was meant to avoid.
+3. **Honest comments (P2)** — `StellarFlightTransition.ts` +
+   `CameraController.tsx` — replace "two-channel transition
+   matching Gaia" wording with "OrbitControls-native
+   approximation; Gaia uses quaternion slerp on dir+up
+   (CameraModule.java:1419-1424), Atlas lerps controls.target
+   and lets OrbitControls.lookAt derive orientation. Drops the
+   Gaia explicit up/roll channel."
+4. **Stronger e2e via test-only window hooks (P2)** — add
+   `__ATLAS_TEST_CAMERA__` (returns `{position, target,
+quaternion}` from R3F root state) and
+   `__ATLAS_TEST_MESH_STATE__` (returns
+   `{meshActive, skipMaskAtIndex(K)}` from `<HygStellarMesh>`).
+   Both gated on `__ATLAS_TEST_FREEZE__`, production-inert.
+   Update `e2e/hyg-focus.spec.ts` to assert: target lerped (not
+   snapped — sample mid-fly), landing distance bracket
+   `[400, 1000] wu` post-fix, mesh active state at known points,
+   skipMask timing.
+5. **Wave file: tighten the "Gaia-faithful" claims** — the
+   M2.5 narrative around "Gaia-faithful" should be downgraded
+   to "Gaia-informed" everywhere the contract diverges (the
+   target-lerp + the angle math even after the fix still uses
+   Gaia's curve but Atlas's physical-radius convention vs Gaia's
+   pseudo-size).
+6. **Lessons.md L39 (new)** — short rule capturing the lesson:
+   "Codex 'verified against source' claims must distinguish
+   'name from source text' from 'semantics matched against
+   actual consumer in source'. Gaia's `getSolidAngle()` returns
+   `(size/distance)/fovFactor` despite the name suggesting
+   steradians; mis-porting the semantic cost a 2× landing
+   distance bug that no gate caught for 4 sub-step commits."
+
+After the hotfix lands and gates pass, M2.5 is agent-complete
+again pending the user-driven smoke (4 named stars × 2 zoom
+cycles per Acceptance §8). M3 stays blocked behind that user
+smoke.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
@@ -62,10 +107,36 @@ message; user runs it manually if they want external review.
 
 ## Carryover findings
 
-None outstanding. Codex audits round-1, round-2, round-3, and
-final-pass all addressed; corrections landed in commits
-`4d38251` (T6.3-δ) → `00e9a5a` (T6.3-ε) → `68b1d9f` →
-`1f20e36` → `0b4c648` → `3b011d5` (cross-doc sweep + L38).
+**Codex round-3 review of M2.5 (S1-S7 diff)**, surfaced
+2026-05-05 after S7 shipped. All 4 findings verified against
+`/tmp/gaiasky` source by the agent (per
+`feedback_codex_findings_toward_1to1.md`'s rule that Codex
+direction must be confirmed against source before applying).
+Hotfix specced in wave file §M2.5 §Codex-round-3. Block M3.
+
+| ID  | Pri | File                                                                                       | Summary                                                                                                                                                  |
+| --- | --- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C-1 | P1  | `src/lib/camera/stellarFlightSolidAngle.ts`                                                | Angle-math mis-port: Gaia curve is angular radius, Atlas treats as full angle → 2× landing distance                                                      |
+| C-2 | P1  | `src/components/canvas/HygStellarMesh.tsx`                                                 | Pre-warm at progress 0.70 force-activates mesh AND writes skipMask=1, hiding sprite without M3 cross-fade                                                |
+| C-3 | P2  | `src/lib/camera/StellarFlightTransition.ts` + `src/components/canvas/CameraController.tsx` | Comments overstate Gaia parity; target-lerp is OrbitControls-native, not equivalent to Gaia quaternion slerp                                             |
+| C-4 | P2  | `e2e/hyg-focus.spec.ts`                                                                    | Spec only verifies focus-survives + console-clean; cannot catch flight-contract regressions (orientation snap, landing distance, mesh timing, interrupt) |
+
+Source verification done in this session:
+
+- C-1 confirmed via `/tmp/gaiasky/core/src/gaiasky/script/v2/impl/InteractiveCameraModule.java:158-172`
+  (lerp target compared against `focusView.getSolidAngle()`) and
+  `/tmp/gaiasky/core/src/gaiasky/scene/component/ParticleSet.java:1220`
+  (`getSolidAngle = (size/distance)/fovFactor` — angular-radius semantics).
+- C-3 confirmed via `/tmp/gaiasky/core/src/gaiasky/script/v2/impl/CameraModule.java:1419-1424`
+  (`qd.set(startOrientation).slerp(endOrientation, ...)` then
+  `cam.setUp` + `cam.setDirection` — full quaternion slerp on
+  dir+up, which Atlas does not replicate).
+
+Prior Codex audits (round-1, round-2, round-3 of T6.3-x, and
+final-pass of the L38 restructure) all addressed; corrections
+landed in commits `4d38251` (T6.3-δ) → `00e9a5a` (T6.3-ε) →
+`68b1d9f` → `1f20e36` → `0b4c648` → `3b011d5`. The current C-1
+to C-4 are a fresh review of M2.5 specifically.
 
 ---
 
