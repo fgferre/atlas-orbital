@@ -159,7 +159,14 @@ export const proceduralSunSphereVertexShader = `
     varying float vFragDepth;
     varying float vIsPerspective;
   #endif
-  varying vec3 vWorld;
+  // T6.4-M1 precision fix: vViewPos is camera-relative (view-space)
+  // because modelViewMatrix is built CPU-side as
+  // viewMatrix*modelMatrix in float64 (Three.js Matrix4.multiplyMatrices),
+  // so the translation column = (modelPos - cameraPos) is computed
+  // precisely before float32 GPU upload. Replaces the prior
+  // viewMatrix*(modelMatrix*pos) GPU cascade which catastrophically
+  // cancelled at parsec-scale HYG positions.
+  varying vec3 vViewPos;
   varying vec3 vNormalView;
   varying vec3 vNormalWorld;
   varying vec3 vLayer0;
@@ -190,12 +197,14 @@ export const proceduralSunSphereVertexShader = `
   }
 
   void main() {
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vWorld = world.xyz;
+    vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+    vViewPos = viewPos.xyz;
     vNormalView = normalize(normalMatrix * normal);
+    // vNormalWorld stays world-space; w=0 zeroes the modelMatrix
+    // translation column so direction is precision-safe.
     vNormalWorld = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
     setLayers(normalize(normal));
-    gl_Position = projectionMatrix * viewMatrix * world;
+    gl_Position = projectionMatrix * viewPos;
     #include <logdepthbuf_vertex>
   }
 `;
@@ -219,7 +228,8 @@ export const proceduralSunSphereFragmentShader = `
   uniform float uBrightnessOffset;
   uniform float uBrightness;
 
-  varying vec3 vWorld;
+  // T6.4-M1: view-space camera-relative position (see vertex header).
+  varying vec3 vViewPos;
   varying vec3 vNormalView;
   varying vec3 vNormalWorld;
   varying vec3 vLayer0;
@@ -247,7 +257,13 @@ export const proceduralSunSphereFragmentShader = `
 
   void main() {
     #include <logdepthbuf_fragment>
-    vec3 Vview = normalize((viewMatrix * vec4(vWorld - cameraPosition, 0.0)).xyz);
+    // In view space, the camera is at the origin, so vViewPos already
+    // points from camera to fragment in view-space coordinates — the
+    // normalize is the unit view-direction. The prior
+    // (viewMatrix * (vWorld - cameraPosition)) computed the same
+    // quantity but in world space first, where parsec-scale magnitudes
+    // collapsed in float32.
+    vec3 Vview = normalize(vViewPos);
     float nDotV = dot(vNormalView, -Vview);
     float fresnel = pow(1.0 - nDotV, uFresnelPower) * uFresnelInfluence;
 
