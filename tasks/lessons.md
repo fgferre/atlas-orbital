@@ -1,6 +1,6 @@
 # Lessons — Atlas Orbital
 
-Meta-rules distilled from 39 incidents (sessions 2026-04-17 → 2026-05-05).
+Meta-rules distilled from 40 incidents (sessions 2026-04-17 → 2026-05-05).
 
 **Format note (post-L38 restructure 2026-05-05)**: lessons live as
 short rules — `Trigger / Rule / Action / Source`, max ~12 lines
@@ -164,6 +164,29 @@ isn't enough.
 **Source**: `tasks/archive/postmortems/T6-visual-failure.md` —
 T6 wave shipped Vector3Q dormant for months while ProceduralSun3D
 silently failed at parsec scale.
+
+### L40 — "Verified against source" needs name + semantics check
+
+**Trigger**: a Codex/audit finding claims a constant or function
+matches Gaia source, applied to a port site.
+
+**Rule**: split every "verified" into (a) name appears in source
+text, and (b) semantics matched against the actual consumer in
+source. A misleading name (Gaia's `getSolidAngle()` returns
+`(radius/distance)/fovFactor` — angular-radius semantics, not
+steradians) hides bugs that pass code review and unit tests but
+fail at runtime.
+
+**Action**: for every numeric port, trace the value from its
+declaration site → its consumer comparison or formula → the
+units/dimensions of both sides. Don't trust the name; trust the
+math the value participates in.
+
+**Source**: `tasks/archive/postmortems/T6-visual-failure.md` —
+M2.5 first-draft confused Gaia's angular-radius lerp anchors
+with full-angle apparent-diameter values, halved them, and
+shipped a 2× landing-distance regression for every HYG fly-to
+across 4 sub-step commits before Codex round-3 caught it.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes

@@ -270,10 +270,15 @@ export const CameraController = () => {
       // `StellarFlightTransition`. Position lerps along a straight
       // line; orientation lerps `controls.target` from its current
       // value to the star's world position so OrbitControls derives
-      // the camera quaternion smoothly throughout the flight. Replaces
-      // the pre-M2.5 path (single-channel Bézier + pre-animation
-      // `controls.target.copy(targetPos)` snap, which produced the
-      // spin-then-glide feel the user reported 2026-05-05).
+      // the camera quaternion smoothly throughout the flight. This
+      // is an OrbitControls-native approximation of Gaia's
+      // (dir, up) quaternion slerp (`CameraModule.java:1419-1424`),
+      // not a 1:1 port — see `StellarFlightTransition.ts` header
+      // for the divergence note (Codex round-3 P2, 2026-05-05).
+      // Replaces the pre-M2.5 path (single-channel Bézier +
+      // pre-animation `controls.target.copy(targetPos)` snap, which
+      // produced the spin-then-glide feel the user reported
+      // 2026-05-05).
       if (!hygCatalog || hygIndex === null) return;
       const resolvedPos = resolveHygWorldPosition(hygIndex, hygCatalog);
       if (!resolvedPos) return;
@@ -364,12 +369,16 @@ export const CameraController = () => {
       // Orientation now lerps via `stellarFlightRef`'s target channel;
       // OrbitControls derives the camera's quaternion each frame from
       // `(camera.position, controls.target)`, so animating `target`
-      // is the OrbitControls-friendly way to animate orientation
+      // is the OrbitControls-native way to animate orientation
       // (option 2 from the wave file's M2.5 §S4 coordination
-      // strategy). Resetting focus-tracking state to `targetPos`
-      // matches the existing curated-body contract: post-fly,
-      // focus-tracking glues `controls.target` to the star world
-      // position (which is static for HYG stars, so no further drift).
+      // strategy). The derived orientation is constrained to "look
+      // at controls.target", which approximates but does not match
+      // Gaia's free quaternion slerp — see
+      // `StellarFlightTransition.ts` header for the divergence note.
+      // Resetting focus-tracking state to `targetPos` matches the
+      // existing curated-body contract: post-fly, focus-tracking
+      // glues `controls.target` to the star world position (which
+      // is static for HYG stars, so no further drift).
       resetFocusTrackingState(focusTrackingRef.current, targetPos);
     };
 

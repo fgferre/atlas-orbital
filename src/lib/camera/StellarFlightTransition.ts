@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { CameraTransition } from "./CameraTransition";
 
 /**
- * T6.4-M2.5 S3 — two-channel HYG fly-to transition.
+ * T6.4-M2.5 S3 — two-channel HYG fly-to transition (Gaia-informed,
+ * OrbitControls-native approximation).
  *
  * Animates two state vectors with independent durations and
  * easings:
@@ -22,8 +23,25 @@ import { CameraTransition } from "./CameraTransition";
  *     `(camera.position, controls.target)`. We never touch the
  *     camera's quaternion directly — that would fight the
  *     controls, which re-derive orientation from `target` every
- *     frame. See `tasks/waves/T6.4-visual-recovery.md §M2.5 S4`
- *     for the OrbitControls coordination rationale (option 2).
+ *     frame.
+ *
+ * **Divergence from Gaia** (Codex round-3 P2 honest-comments,
+ * 2026-05-05). Gaia Sky's free-camera transition slerps a full
+ * orientation quaternion on the (dir, up) channel:
+ *   `qd.set(startOrientation).slerp(endOrientation, ...)`
+ *   `cam.setUp(qd.getUp(...)); cam.setDirection(qd.getDirection(...))`
+ *  — see `gaiasky/script/v2/impl/CameraModule.java:1419-1424`. That
+ * gives Gaia explicit control over both the look direction AND the
+ * roll axis throughout the transition. Atlas does NOT replicate
+ * that. We lerp `controls.target` and let `OrbitControls.update()`
+ * derive the camera quaternion each frame. The derived orientation
+ * is constrained to "look at controls.target" with `up ≈ camera.up`,
+ * which is exactly what we want for HYG focus-click but is NOT the
+ * same as Gaia's free quaternion slerp. The divergence is
+ * deliberate (option 2 from `tasks/waves/T6.4-visual-recovery.md
+ * §M2.5 S4`'s coordination strategy) — touching the camera's
+ * quaternion directly would fight OrbitControls, which re-derives
+ * orientation every frame from `(position, target)`.
  *
  * Each channel has its own duration; both start at `start()`,
  * each completes when its alpha reaches 1, and `update()`

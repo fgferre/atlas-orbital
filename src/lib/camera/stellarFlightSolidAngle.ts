@@ -1,51 +1,66 @@
 /**
- * T6.4-M2.5 — angle math for HYG fly-to.
+ * T6.4-M2.5 — angle math for HYG fly-to (post Codex round-3 hotfix,
+ * 2026-05-05).
  *
  * Two-layer contract:
  *
- *   1. **Gaia-faithful layer** (`computeGaiaTargetFullAngleRad`):
- *      pure port of Gaia Sky's adaptive landing target. Linear lerp
- *      from `1.0° at 1.31 pc` to `0.001° at 2805 pc`. Returns the
- *      target FULL angle (apparent diameter) in radians. Source:
- *      `gaiasky/script/v2/impl/InteractiveCameraModule.java:158-168`
- *      (clone at `/tmp/gaiasky/`, verified 2026-05-05).
+ *   1. **Gaia-informed layer** (`computeGaiaTargetAngularRadiusRad`):
+ *      ports Gaia Sky's adaptive landing target verbatim — linear
+ *      lerp from `1.0° at 1.31 pc` to `0.001° at 2805 pc`. Source:
+ *      `gaiasky/script/v2/impl/InteractiveCameraModule.java:158-172`
+ *      (clone at `/tmp/gaiasky/`, verified 2026-05-05). Returns the
+ *      target ANGULAR RADIUS in radians — see "Why angular radius,
+ *      not full angle" below.
  *
  *   2. **Atlas-clamped layer** (`computeAtlasFlightTarget`): wraps
  *      the Gaia target with a floor at the procedural-mesh spawn
  *      gate. Atlas's `<HygStellarMesh>` only spawns when the focused
  *      star's apparent ANGULAR RADIUS exceeds `STELLAR_MESH_ENTER_RAD`
- *      (1e-3 rad ≈ 0.057° angular radius, see `stellarMeshGate.ts`).
- *      Without the clamp, far stars would land at the Gaia target
- *      (e.g. 0.001° full angle = 8.7e-6 rad angular radius at the
- *      far anchor), which falls FAR below the spawn gate — the
- *      camera would arrive correctly per Gaia but the procedural
- *      mesh would never render. The clamp ensures `angularRadiusRad
- *      ≥ STELLAR_MESH_ENTER_RAD × 5` (5× hysteresis margin matching
- *      `CameraController.tsx`'s pre-M2.5 contract).
+ *      (1e-3 rad ≈ 0.057°, see `stellarMeshGate.ts`). Without the
+ *      clamp, far stars would land at the Gaia target (e.g. 0.001°
+ *      = 1.7e-5 rad at the far anchor), which falls FAR below the
+ *      spawn gate — the camera would arrive correctly per Gaia but
+ *      the procedural mesh would never render. The clamp ensures
+ *      `angularRadiusRad ≥ STELLAR_MESH_ENTER_RAD × 5` (5×
+ *      hysteresis margin matching `CameraController.tsx`'s pre-M2.5
+ *      contract).
  *
- * **Angle semantics — read this once before touching the lib**.
- * Three different angle conventions are in play and conflating them
- * is exactly how the M2.5 first-draft spec went wrong (Codex review,
- * 2026-05-05):
+ * **Why angular radius, not full angle** (Codex round-3 P1, 2026-05-05).
+ * Gaia's `focusView.getSolidAngle()` returns `(radius / distance) /
+ * fovFactor` (`ParticleSet.java:809`). Despite the misleading
+ * "solidAngle" name (steradians is what the term technically means),
+ * the formula is the small-angle approximation of an ANGULAR RADIUS,
+ * normalised by `camera.getFovFactor()`. The y0/y1 anchors (1.0°,
+ * 0.001°) are compared directly against this return value at
+ * `InteractiveCameraModule.java:172` (`focusView.getSolidAngle() <
+ * target`), so they ALSO live in angular-radius units — not full
+ * angle (apparent diameter).
  *
- *   - **Full angle** (apparent diameter) — what Gaia's API takes.
- *     Used in the formula `distance = radius / tan(fullAngle * 0.5)`.
- *     `1.0°` at the near anchor means the star fills 1° of screen.
+ * The first-draft of this lib (M2.5 S1) treated the y0/y1 anchors as
+ * full angle and halved them to derive angular radius. That was a
+ * 2× regression: Sirius landed at ~913 wu instead of ~458 wu.
+ * Codex round-3 caught it; this revision drops the halving step and
+ * renames every symbol to make the angular-radius semantics
+ * unambiguous.
  *
- *   - **Angular radius** (apparent radius) — what Atlas's mesh-spawn
- *     gate uses (`STELLAR_MESH_ENTER_RAD = 1e-3 rad`). Equals
- *     half the full angle. The gate's per-frame value is computed
- *     as `sa = radiusWu / distanceWu` (small-angle approx; see
- *     `stellarMeshGate.ts:88-100`).
+ * **fovFactor divergence** (Codex round-3 header note). Gaia
+ * normalises `getSolidAngle()` by `camera.getFovFactor()`. For Gaia's
+ * default 60° fov, fovFactor ≈ 1, so the divergence is small at
+ * typical fov. Atlas does NOT replicate this normalisation — the
+ * Gaia anchor values are baked in directly. If Atlas ever moves the
+ * default fov off 45°, or exposes a runtime fov slider, revisit
+ * this lib so the math doesn't silently drift.
  *
- *   - **Solid angle** (sr) — area on the unit sphere. NOT used here
- *     despite the unfortunate `solidAngle` name in Gaia's source
- *     and in early Atlas drafts. Renamed away in this revision to
- *     prevent re-confusion.
- *
- * Function names use `FullAngle` and `AngularRadius` exclusively.
- * `solidAngle` is reserved for diagnostic comments referencing the
- * Gaia source (which uses the misnomer historically).
+ * **Pseudo-size vs physical radius divergence**. Gaia's `getRadius()`
+ * for stars returns `size × STAR_SIZE_FACTOR` (`ParticleSet.java:785`,
+ * `Constants.java:51`), where `size` is a pseudo-size with no
+ * physical meaning (see `feedback_pseudo_size_not_physical_radius.md`).
+ * Atlas uses the actual physical radius from `radiusFromSpect`. So
+ * Atlas reuses Gaia's NUMERIC anchor curve (1.0° → 0.001° lerp) but
+ * applies it to a different radius convention. This is why the lib
+ * is labeled "Gaia-informed" rather than "Gaia-faithful" or "Gaia
+ * port" — the visual outcome is qualitatively Gaia-like but not
+ * pixel-equivalent.
  */
 
 import { STELLAR_MESH_ENTER_RAD } from "../stellarMeshGate";
@@ -54,21 +69,21 @@ import { STELLAR_MESH_ENTER_RAD } from "../stellarMeshGate";
 const NEAR_ANCHOR_PC = 1.31;
 /** Farthest-anchor distance in parsec for the Gaia adaptive lerp. */
 const FAR_ANCHOR_PC = 2805.0;
-/** Apparent FULL angle (diameter) at NEAR_ANCHOR_PC, in degrees. */
-const NEAR_TARGET_FULL_DEG = 1.0;
-/** Apparent FULL angle (diameter) at FAR_ANCHOR_PC, in degrees. */
-const FAR_TARGET_FULL_DEG = 0.001;
+/** Apparent ANGULAR RADIUS at NEAR_ANCHOR_PC, in degrees. */
+const NEAR_TARGET_RADIUS_DEG = 1.0;
+/** Apparent ANGULAR RADIUS at FAR_ANCHOR_PC, in degrees. */
+const FAR_TARGET_RADIUS_DEG = 0.001;
 
 const DEG_TO_RAD = Math.PI / 180;
 
-const NEAR_TARGET_FULL_RAD = NEAR_TARGET_FULL_DEG * DEG_TO_RAD;
-const FAR_TARGET_FULL_RAD = FAR_TARGET_FULL_DEG * DEG_TO_RAD;
+const NEAR_TARGET_RADIUS_RAD = NEAR_TARGET_RADIUS_DEG * DEG_TO_RAD;
+const FAR_TARGET_RADIUS_RAD = FAR_TARGET_RADIUS_DEG * DEG_TO_RAD;
 
 /**
- * Atlas mesh-spawn floor for the angular RADIUS (not full angle).
- * Set to 5× the spawn gate so the camera lands clear of the
- * hysteresis cushion (matches `CameraController.tsx`'s pre-M2.5
- * `STELLAR_MESH_ENTER_RAD * 5` contract).
+ * Atlas mesh-spawn floor for the angular RADIUS. Set to 5× the
+ * spawn gate so the camera lands clear of the hysteresis cushion
+ * (matches `CameraController.tsx`'s pre-M2.5 `STELLAR_MESH_ENTER_RAD
+ * * 5` contract).
  */
 const ATLAS_MIN_ANGULAR_RADIUS_RAD = STELLAR_MESH_ENTER_RAD * 5;
 
@@ -93,11 +108,10 @@ export const ATLAS_MIN_LANDING_DISTANCE_WU = 10;
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 /**
- * Gaia's adaptive target FULL angle (apparent diameter, radians)
- * for a HYG-catalog star at the given distance from the Sun.
- * Linear lerp clamped at both ends. NO Atlas-specific clamp
- * applied — use `computeAtlasFlightTarget` for the Atlas-safe
- * version.
+ * Gaia's adaptive target ANGULAR RADIUS (radians) for a HYG-catalog
+ * star at the given distance from the Sun. Linear lerp clamped at
+ * both ends. NO Atlas-specific clamp applied — use
+ * `computeAtlasFlightTarget` for the Atlas-safe version.
  *
  * Edge cases (Codex 2026-05-05 P3 catch):
  *  - `+Infinity` → clamps to FAR target (not near). A star at
@@ -111,23 +125,24 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
  *    nonsensical for a physical distance and gets the same
  *    defensive default.
  */
-export const computeGaiaTargetFullAngleRad = (
+export const computeGaiaTargetAngularRadiusRad = (
   starDistanceFromSunPc: number
 ): number => {
   if (Number.isNaN(starDistanceFromSunPc)) {
-    return NEAR_TARGET_FULL_RAD;
+    return NEAR_TARGET_RADIUS_RAD;
   }
   if (starDistanceFromSunPc === Number.POSITIVE_INFINITY) {
-    return FAR_TARGET_FULL_RAD;
+    return FAR_TARGET_RADIUS_RAD;
   }
   if (starDistanceFromSunPc === Number.NEGATIVE_INFINITY) {
-    return NEAR_TARGET_FULL_RAD;
+    return NEAR_TARGET_RADIUS_RAD;
   }
   const t = clamp01(
     (starDistanceFromSunPc - NEAR_ANCHOR_PC) / (FAR_ANCHOR_PC - NEAR_ANCHOR_PC)
   );
   return (
-    NEAR_TARGET_FULL_RAD + (FAR_TARGET_FULL_RAD - NEAR_TARGET_FULL_RAD) * t
+    NEAR_TARGET_RADIUS_RAD +
+    (FAR_TARGET_RADIUS_RAD - NEAR_TARGET_RADIUS_RAD) * t
   );
 };
 
@@ -136,10 +151,9 @@ export const computeGaiaTargetFullAngleRad = (
  * fields so callers can log which clamp dominated.
  */
 export interface AtlasFlightTarget {
-  /** FULL angle (apparent diameter) used for the distance formula. */
-  fullAngleRad: number;
-  /** Angular RADIUS (= fullAngleRad / 2). Cached for callers that
-   *  need to compare against the mesh-spawn gate directly. */
+  /** Angular RADIUS used for the distance formula. Equals
+   *  `radius / tan(angularRadiusRad)` invariant — see
+   *  `computeFlightTargetDistance`. */
   angularRadiusRad: number;
   /** True when the Atlas mesh-spawn floor dominated (i.e. Gaia's
    *  target alone would have fallen below the spawn gate). */
@@ -152,24 +166,23 @@ export interface AtlasFlightTarget {
  * the procedural-mesh spawn gate (`STELLAR_MESH_ENTER_RAD × 5`
  * in angular RADIUS terms).
  *
- * Crossover point is around 1200 pc: at that distance Gaia's
- * adaptive target equals the Atlas floor. Closer than 1200 pc,
- * the camera lands per Gaia (smaller target, closer landing).
- * Beyond 1200 pc, the camera lands per the Atlas floor (so the
+ * Crossover point is around 2003 pc: below it, Gaia's adaptive
+ * angular radius dominates (camera lands per Gaia, closer for
+ * close stars); beyond it, the Atlas floor takes over (so the
  * procedural mesh always spawns on arrival).
  */
 export const computeAtlasFlightTarget = (
   starDistanceFromSunPc: number
 ): AtlasFlightTarget => {
-  const gaiaFullRad = computeGaiaTargetFullAngleRad(starDistanceFromSunPc);
-  const gaiaAngularRadiusRad = gaiaFullRad * 0.5;
+  const gaiaAngularRadiusRad = computeGaiaTargetAngularRadiusRad(
+    starDistanceFromSunPc
+  );
   const clampedByAtlasFloor =
     gaiaAngularRadiusRad < ATLAS_MIN_ANGULAR_RADIUS_RAD;
   const angularRadiusRad = clampedByAtlasFloor
     ? ATLAS_MIN_ANGULAR_RADIUS_RAD
     : gaiaAngularRadiusRad;
   return {
-    fullAngleRad: angularRadiusRad * 2,
     angularRadiusRad,
     clampedByAtlasFloor,
   };
@@ -177,9 +190,13 @@ export const computeAtlasFlightTarget = (
 
 /**
  * Camera-to-star distance (atlas world units) such that a sphere
- * of `radiusWorldUnits` subtends the given FULL angle at the
- * camera. Standard small-angle pinhole math; matches Gaia's
- * formula at `CameraModule.java:665`.
+ * of `radiusWorldUnits` subtends the given ANGULAR RADIUS at the
+ * camera. From the geometric definition of angular radius:
+ *   tan(angularRadius) = radius / distance  →  distance = radius / tan(angularRadius)
+ * Matches Gaia's effective distance formula at
+ * `InteractiveCameraModule.java:172` (target compared to
+ * `radius / distance / fovFactor`) — see lib header for the
+ * fovFactor divergence note.
  *
  * Returns `Infinity` for degenerate inputs (zero radius or zero
  * angle); callers should clamp via the body-clearance floor
@@ -187,17 +204,17 @@ export const computeAtlasFlightTarget = (
  */
 export const computeFlightTargetDistance = (
   radiusWorldUnits: number,
-  fullAngleRad: number
+  angularRadiusRad: number
 ): number => {
   if (
     !Number.isFinite(radiusWorldUnits) ||
-    !Number.isFinite(fullAngleRad) ||
+    !Number.isFinite(angularRadiusRad) ||
     radiusWorldUnits <= 0 ||
-    fullAngleRad <= 0
+    angularRadiusRad <= 0
   ) {
     return Number.POSITIVE_INFINITY;
   }
-  return radiusWorldUnits / Math.tan(fullAngleRad * 0.5);
+  return radiusWorldUnits / Math.tan(angularRadiusRad);
 };
 
 /**
@@ -213,7 +230,7 @@ export const computeFlightTargetDistance = (
  *     pre-M2.5 `CameraController.tsx`'s `Math.max(10, ...)`
  *     guard — protects ultra-compact stars from collapsing
  *     `near`-plane precision)
- *   - `computeFlightTargetDistance(radius, target.fullAngleRad)`
+ *   - `computeFlightTargetDistance(radius, target.angularRadiusRad)`
  *     (the angle-driven landing — the actual cinematic distance
  *     for typical stars)
  *
@@ -233,7 +250,7 @@ export const computeAtlasFlightLanding = (
   const target = computeAtlasFlightTarget(starDistanceFromSunPc);
   const angleDriven = computeFlightTargetDistance(
     radiusWorldUnits,
-    target.fullAngleRad
+    target.angularRadiusRad
   );
   const bodyClearance =
     Number.isFinite(radiusWorldUnits) && radiusWorldUnits > 0
@@ -255,9 +272,9 @@ export const computeAtlasFlightLanding = (
 export const STELLAR_FLIGHT_ANCHORS = {
   NEAR_ANCHOR_PC,
   FAR_ANCHOR_PC,
-  NEAR_TARGET_FULL_DEG,
-  FAR_TARGET_FULL_DEG,
-  NEAR_TARGET_FULL_RAD,
-  FAR_TARGET_FULL_RAD,
+  NEAR_TARGET_RADIUS_DEG,
+  FAR_TARGET_RADIUS_DEG,
+  NEAR_TARGET_RADIUS_RAD,
+  FAR_TARGET_RADIUS_RAD,
   ATLAS_MIN_ANGULAR_RADIUS_RAD,
 } as const;

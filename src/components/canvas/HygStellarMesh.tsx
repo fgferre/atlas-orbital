@@ -58,10 +58,6 @@ import * as THREE from "three";
 
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import {
-  HYG_FLIGHT_PREWARM_THRESHOLD,
-  getHygFlightPosProgress,
-} from "../../lib/camera";
-import {
   parseHygFocusId,
   resolveHygWorldPosition,
 } from "../../lib/focus/hygFocusResolver";
@@ -249,26 +245,23 @@ export const HygStellarMesh = () => {
       starData.radiusWorldUnits,
       distToCamera
     );
-    let next = shouldStellarMeshBeActive(meshActiveRef.current, sa);
+    const next = shouldStellarMeshBeActive(meshActiveRef.current, sa);
 
-    // T6.4-M2.5 S6 — pre-warm during the deceleration tail of a HYG
-    // fly-to. Without this, the natural gate flips ON only when the
-    // live camera distance crosses `radius / ENTER_RAD` — for typical
-    // HYG geometry that happens in the last 1-2 % of the position
-    // channel's raw alpha (the camera spends most of its travel far
-    // beyond the gate threshold). The pre-warm forces the mesh ON
-    // once raw alpha clears 0.70 (≈ 92 % of the straight-line travel
-    // under the default `logisticSigmoid` easing), giving the M3
-    // cross-fade a workable arrival window. Singleton write-side at
-    // `CameraController` useFrame; this read-side falls through to
-    // `next` unchanged when no fly-to is active (signal === null).
-    const flightProgress = getHygFlightPosProgress();
-    if (
-      flightProgress !== null &&
-      flightProgress >= HYG_FLIGHT_PREWARM_THRESHOLD
-    ) {
-      next = true;
-    }
+    // T6.4-M2.5 S6 + Codex round-3 hotfix (2026-05-05) — mesh
+    // activation is purely sa-driven again. The S6 pre-warm
+    // (force-activate at `getHygFlightPosProgress() ≥
+    // HYG_FLIGHT_PREWARM_THRESHOLD`) was reverted because under
+    // the M2.5 contract there is no cross-fade between sprite
+    // and mesh (M3 will ship that). Force-activating in the
+    // deceleration tail also wrote `skipMask = 1` via the
+    // useEffect below, suppressing the sprite while the mesh
+    // was still angularly small — exactly the visual gap M2.5
+    // was meant to avoid. The pre-warm signal publisher in
+    // `CameraController.useFrame` (`setHygFlightPosProgress`)
+    // and the underlying singleton + `posProgressRaw` getter
+    // on `StellarFlightTransition` remain in place so M3 can
+    // consume the channel as a continuous fade ramp instead
+    // of a binary flip.
 
     if (next !== meshActiveRef.current) {
       meshActiveRef.current = next;
@@ -305,6 +298,42 @@ export const HygStellarMesh = () => {
       writeSkipMask(scene, starIndex, 0);
     };
   }, [scene, starIndex, meshActive]);
+
+  // T6.4-M2.5 Codex round-3 P2 — test-only mesh-state probe. Exposes
+  // `window.__ATLAS_TEST_MESH_STATE__()` returning the live
+  // `meshActiveRef.current` plus a closure that reads any star
+  // index's `a_skipMask` slot from the Starfield instanced
+  // attribute. Production-inert: gated on `__ATLAS_TEST_FREEZE__`
+  // (the same flag `store.ts` reads to pin the simulation clock).
+  // Used by `e2e/hyg-focus.spec.ts` to assert (a) skipMask is 0
+  // pre-fly, (b) mid-fly skipMask stays 0 (C-2 force-activate
+  // revert), and (c) skipMask flips to 1 only after the natural
+  // ENTER_RAD gate fires post-landing.
+  useEffect(() => {
+    const w = window as unknown as { __ATLAS_TEST_FREEZE__?: boolean };
+    if (!w.__ATLAS_TEST_FREEZE__) return;
+    type MeshStateSnapshot = {
+      meshActive: boolean;
+      skipMaskAtIndex: (k: number) => number;
+    };
+    const probeWindow = window as unknown as {
+      __ATLAS_TEST_MESH_STATE__?: () => MeshStateSnapshot;
+    };
+    probeWindow.__ATLAS_TEST_MESH_STATE__ = () => ({
+      meshActive: meshActiveRef.current,
+      skipMaskAtIndex: (k: number): number => {
+        const attr = findStarfieldSkipMask(scene);
+        if (!attr) return 0;
+        if (k < 0 || k >= attr.count) return 0;
+        const arr = attr.array as Float32Array;
+        return arr[k];
+      },
+    });
+    return () => {
+      delete (window as unknown as { __ATLAS_TEST_MESH_STATE__?: unknown })
+        .__ATLAS_TEST_MESH_STATE__;
+    };
+  }, [scene]);
 
   if (!meshActive || !starData) return null;
 

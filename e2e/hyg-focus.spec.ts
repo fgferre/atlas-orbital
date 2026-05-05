@@ -7,47 +7,42 @@ import {
 } from "./helpers";
 
 /**
- * T6.4-M2.5 S7 — HYG focus arrival regression spec.
+ * T6.4-M2.5 S7 + Codex round-3 hotfix (2026-05-05) — HYG focus
+ * arrival regression spec.
  *
  * Triggers a fly-to to Sirius (`hyg:0`) via the test-only store
  * exposure (`window.__ATLAS_TEST_STORE__`, gated on
- * `__ATLAS_TEST_FREEZE__` in `src/store.ts`), waits the maximum
- * fly-to budget (8 s position-channel cap from S4's
- * `posDurationMs` clamp + 2 s headroom), then asserts:
+ * `__ATLAS_TEST_FREEZE__` in `src/store.ts`), then asserts the
+ * full M2.5 flight contract:
  *
- *   - The focus id stayed on `hyg:0` after the wait. This catches
- *     the strand-and-defocus regression class: the Codex round-2
- *     P2 path in `HygStellarMesh.tsx` and the sister branch in
- *     `CameraController.tsx` defocus to null when the catalog
- *     index is out of range (e.g., quality downgrade past Proxima).
- *     If S4's setupCameraHyg early-returned, or if S5's interrupt
- *     handler nuked the wrong piece of state, focus would flip
- *     back to null long before the 10 s wait elapsed.
- *   - Console stayed clean throughout the fly-to (no GLSL compile
- *     errors, no R3F frame-loop throws from the new useFrame
- *     branch, no NaN spam from a mis-wired transition lerp, no
- *     unhandled promise rejections from the catalog-load path
- *     interleaving with focus dispatch).
+ *   - Focus survives the fly-to (no silent defocus).
+ *   - Console clean (no GLSL compile errors, no R3F frame-loop
+ *     throws, no NaN spam from a mis-wired transition lerp, no
+ *     unhandled promise rejections).
+ *   - Target is LERPED, not snapped at setup (catches a regression
+ *     where a future change accidentally re-introduces the pre-M2.5
+ *     `controls.target.copy(targetPos)` snap).
+ *   - Landing distance lands in the post-C-1 angular-radius
+ *     bracket `[400, 1000] wu` for Sirius (the angular-radius math
+ *     gives ~456 wu; bracket gives slack for clock jitter and
+ *     Math.tan precision).
+ *   - Mesh active state at landing matches the natural sa-driven
+ *     gate (no S6-style force-activate writing skipMask too early).
+ *   - skipMask timing tracks meshActive (0 pre-fly, 0 mid-fly,
+ *     1 post-landing).
  *
- * Pixel-diff arrival pose is intentionally OUT OF SCOPE here:
- * the screenshot would need a baseline that's per-DPR /
- * per-machine-GPU, and atlas-orbital's existing visual-diff
- * specs (`boot.spec.ts`, `postprocessing.spec.ts`) document why
- * the pixel-diff approach is brittle at frame-loop="always"
- * cadence. The structural assertions above catch the regression
- * surface area that matters for M2.5: the new code path runs to
- * completion without crashing or stranding focus.
+ * Test-only window hooks used:
+ *   - `__ATLAS_TEST_STORE__` (existing, S7) — store access for
+ *     focus dispatch.
+ *   - `__ATLAS_TEST_CAMERA__` (Codex round-3 P2) — camera position,
+ *     OrbitControls target, camera quaternion as plain objects.
+ *     Wired in `Scene.tsx`'s `<TestCameraProbe>`.
+ *   - `__ATLAS_TEST_MESH_STATE__` (Codex round-3 P2) — mesh active
+ *     boolean + skipMask reader. Wired in `<HygStellarMesh>`.
  *
- * Procedural-mesh skipMask verification was attempted but
- * dropped: reading `scene.getObjectByName("atlas-starfield")
- * .geometry.getAttribute("a_skipMask")` from outside React
- * requires walking R3F's private `canvas.__r3f.root` handle,
- * which isn't covered by R3F's public types and turned out to
- * be unreliable across the Playwright headless boot path. The
- * vitest unit tests on `stellarMeshGate.ts` plus the runtime
- * smoke (preview MCP) covered in S6 already pin the gate
- * behavior; this spec's job is regression coverage on the
- * controller integration, not the gate itself.
+ * Pixel-diff arrival pose is intentionally OUT OF SCOPE: the
+ * screenshot would need a baseline that's per-DPR / per-machine-GPU.
+ * Structural assertions catch the regression surface area for M2.5.
  */
 
 test.describe("hyg-focus", () => {
@@ -55,7 +50,7 @@ test.describe("hyg-focus", () => {
   // headroom + Playwright overhead.
   test.setTimeout(120_000);
 
-  test("Sirius focus survives the fly-to without errors or defocus", async ({
+  test("Sirius focus respects the M2.5 flight contract end-to-end", async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -83,54 +78,226 @@ test.describe("hyg-focus", () => {
       timeout: 55_000,
     });
 
-    // Sanity: the test store hook is wired up (production code
-    // never sets the flag, so getting here means the helper
-    // injected it correctly).
-    const storeWired = await page.evaluate(() => {
+    // All three test-only window hooks must be wired up. Production
+    // code never sets `__ATLAS_TEST_FREEZE__`, so getting here means
+    // the helper injected it correctly and Scene.tsx /
+    // HygStellarMesh have mounted their probes.
+    const hooksWired = await page.evaluate(() => {
       const w = window as unknown as {
         __ATLAS_TEST_STORE__?: { getState: () => unknown };
+        __ATLAS_TEST_CAMERA__?: () => unknown;
+        __ATLAS_TEST_MESH_STATE__?: () => unknown;
       };
-      return typeof w.__ATLAS_TEST_STORE__?.getState === "function";
+      return {
+        store: typeof w.__ATLAS_TEST_STORE__?.getState === "function",
+        camera: typeof w.__ATLAS_TEST_CAMERA__ === "function",
+        meshState: typeof w.__ATLAS_TEST_MESH_STATE__ === "function",
+      };
     });
-    expect(
-      storeWired,
-      "test-only store hook missing — verify __ATLAS_TEST_FREEZE__"
-    ).toBe(true);
+    expect(hooksWired.store, "test-only store hook missing").toBe(true);
+    expect(hooksWired.camera, "test-only camera hook missing").toBe(true);
+    expect(hooksWired.meshState, "test-only mesh-state hook missing").toBe(
+      true
+    );
 
-    // Dispatch the HYG focus directly through the test store
-    // exposure. Sirius = hyg:0 (brightest catalog entry, magnitude
-    // sort, see build-hyg-binary.js).
+    // Wait for the intro animation to finish so dispatching focus
+    // immediately consumes (the focus useEffect early-returns on
+    // `isIntroAnimating`).
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const w = window as unknown as {
+              __ATLAS_TEST_STORE__?: {
+                getState: () => { isIntroAnimating: boolean };
+              };
+            };
+            return w.__ATLAS_TEST_STORE__?.getState().isIntroAnimating ?? true;
+          }),
+        { timeout: 30_000 }
+      )
+      .toBe(false);
+
+    // Pre-fly snapshots — capture target so we can later confirm
+    // it lerped (not snapped) and skipMask so we can confirm it
+    // was 0 before any flight machinery ran for hyg:0.
+    const initial = await page.evaluate(() => {
+      const w = window as unknown as {
+        __ATLAS_TEST_CAMERA__: () => {
+          target: { x: number; y: number; z: number };
+        };
+        __ATLAS_TEST_MESH_STATE__: () => {
+          meshActive: boolean;
+          skipMaskAtIndex: (k: number) => number;
+        };
+      };
+      const cam = w.__ATLAS_TEST_CAMERA__();
+      const mesh = w.__ATLAS_TEST_MESH_STATE__();
+      return {
+        target: cam.target,
+        meshActive: mesh.meshActive,
+        skipMaskAt0: mesh.skipMaskAtIndex(0),
+      };
+    });
+    expect(initial.meshActive, "mesh should be inactive pre-fly").toBe(false);
+    expect(initial.skipMaskAt0, "skipMask should be 0 pre-fly").toBe(0);
+
+    // Dispatch the HYG focus. Sirius = hyg:0 (brightest catalog
+    // entry, magnitude sort, see build-hyg-binary.js).
     await page.evaluate(() => {
       const w = window as unknown as {
-        __ATLAS_TEST_STORE__?: {
+        __ATLAS_TEST_STORE__: {
           getState: () => { setFocusId: (id: string | null) => void };
         };
       };
-      w.__ATLAS_TEST_STORE__?.getState().setFocusId("hyg:0");
+      w.__ATLAS_TEST_STORE__.getState().setFocusId("hyg:0");
     });
 
-    // Wait the position-channel cap (8 s) plus a 2 s safety margin
-    // for OrbitControls damping post-fly. The S4 controller adds
-    // scale-aware durations; for a parsec-scale start position
-    // they always saturate the 8 s clamp.
-    await page.waitForTimeout(10_000);
-
-    const afterFocus = await page.evaluate(() => {
+    // Sample 1 — t = 0.5 s after dispatch. Position channel raw
+    // alpha ~0.06, orientation channel raw alpha ~0.5 (1s clamp).
+    // target should be measurably moving but not yet at endpoint.
+    await page.waitForTimeout(500);
+    const t05 = await page.evaluate(() => {
       const w = window as unknown as {
-        __ATLAS_TEST_STORE__?: { getState: () => { focusId: string | null } };
+        __ATLAS_TEST_CAMERA__: () => {
+          target: { x: number; y: number; z: number };
+        };
       };
-      return w.__ATLAS_TEST_STORE__?.getState().focusId ?? null;
+      return w.__ATLAS_TEST_CAMERA__().target;
     });
 
-    // Focus ID survives the fly-to (no silent defocus from a
-    // stranded index or out-of-range catalog access). 10 s of
-    // wall time covers the position-channel cap (8 s) plus
-    // OrbitControls damping; if the new useFrame branch had
-    // crashed or the catalog had stranded the index, the
-    // sister-branch defocus paths in `CameraController.tsx`
-    // and `HygStellarMesh.tsx` would have flipped focusId back
-    // to null long before this read.
-    expect(afterFocus).toBe("hyg:0");
+    // Sample 2 — t = 2 s total. Orientation channel completed,
+    // position channel still mid-fly. target ≈ star_world_pos.
+    await page.waitForTimeout(1500);
+    const t2 = await page.evaluate(() => {
+      const w = window as unknown as {
+        __ATLAS_TEST_CAMERA__: () => {
+          target: { x: number; y: number; z: number };
+        };
+      };
+      return w.__ATLAS_TEST_CAMERA__().target;
+    });
+
+    // Sample 3 — t = 4 s total. Position channel raw alpha ~0.5
+    // (8 s clamp). With C-2 reverted, the mesh stays inactive
+    // and skipMask stays 0 — proves we're not force-activating
+    // mid-fly.
+    await page.waitForTimeout(2000);
+    const mid = await page.evaluate(() => {
+      const w = window as unknown as {
+        __ATLAS_TEST_MESH_STATE__: () => {
+          meshActive: boolean;
+          skipMaskAtIndex: (k: number) => number;
+        };
+      };
+      const mesh = w.__ATLAS_TEST_MESH_STATE__();
+      return {
+        meshActive: mesh.meshActive,
+        skipMaskAt0: mesh.skipMaskAtIndex(0),
+      };
+    });
+    expect(
+      mid.meshActive,
+      "mesh should still be inactive at t=4s mid-fly (C-2 force-activate revert)"
+    ).toBe(false);
+    expect(
+      mid.skipMaskAt0,
+      "skipMask should still be 0 at t=4s mid-fly (C-2 force-activate revert)"
+    ).toBe(0);
+
+    // Sample 4 — t = 10 s total. Position channel done, mesh
+    // active, skipMask = 1, camera at landing distance.
+    await page.waitForTimeout(6000);
+    const landed = await page.evaluate(() => {
+      const w = window as unknown as {
+        __ATLAS_TEST_STORE__: { getState: () => { focusId: string | null } };
+        __ATLAS_TEST_CAMERA__: () => {
+          position: { x: number; y: number; z: number };
+          target: { x: number; y: number; z: number };
+        };
+        __ATLAS_TEST_MESH_STATE__: () => {
+          meshActive: boolean;
+          skipMaskAtIndex: (k: number) => number;
+        };
+      };
+      const cam = w.__ATLAS_TEST_CAMERA__();
+      const mesh = w.__ATLAS_TEST_MESH_STATE__();
+      return {
+        focusId: w.__ATLAS_TEST_STORE__.getState().focusId,
+        position: cam.position,
+        target: cam.target,
+        meshActive: mesh.meshActive,
+        skipMaskAt0: mesh.skipMaskAtIndex(0),
+      };
+    });
+
+    // Focus survives the fly-to (no silent defocus from a
+    // stranded index or out-of-range catalog access).
+    expect(landed.focusId).toBe("hyg:0");
+
+    // Mesh active and skipMask=1 at landing — natural sa-driven
+    // gate fired post-landing, sprite suppressed for the focused
+    // star.
+    expect(
+      landed.meshActive,
+      "mesh should be active at t=10s post-landing"
+    ).toBe(true);
+    expect(landed.skipMaskAt0).toBe(1);
+
+    // Landing distance: |camera.position - controls.target|. Post-
+    // M2.5-fly, `controls.target` equals the star world position
+    // (focus-tracking glues them after the transition completes).
+    // Post-Codex-round-3 angular-radius math gives ~456 wu for
+    // Sirius; bracket [400, 1000] absorbs floating-point drift,
+    // tan(angle) precision, and any slight Sirius-radius variation
+    // from the catalog's spect+absmag inputs.
+    const dx = landed.position.x - landed.target.x;
+    const dy = landed.position.y - landed.target.y;
+    const dz = landed.position.z - landed.target.z;
+    const landingDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    expect(
+      landingDist,
+      `landing distance ${landingDist.toFixed(2)} wu out of [400, 1000] bracket`
+    ).toBeGreaterThanOrEqual(400);
+    expect(
+      landingDist,
+      `landing distance ${landingDist.toFixed(2)} wu out of [400, 1000] bracket`
+    ).toBeLessThanOrEqual(1000);
+
+    // Target was lerped, not snapped — distinct samples that
+    // trend toward the final endpoint.
+    const dist = (
+      a: { x: number; y: number; z: number },
+      b: { x: number; y: number; z: number }
+    ): number => {
+      const ax = a.x - b.x;
+      const ay = a.y - b.y;
+      const az = a.z - b.z;
+      return Math.sqrt(ax * ax + ay * ay + az * az);
+    };
+    const t05ToInitial = dist(t05, initial.target);
+    const t05ToLanded = dist(t05, landed.target);
+    const t2ToLanded = dist(t2, landed.target);
+    // (a) target moved between pre-fly and t=0.5s — not frozen.
+    //     If a regression froze the lerp, this collapses to ~0.
+    expect(
+      t05ToInitial,
+      "target did not move between pre-fly and t=0.5s — orientation lerp may be broken"
+    ).toBeGreaterThan(1.0);
+    // (b) target at t=0.5s is NOT at the final endpoint — proves
+    //     setup did NOT snap target to star_world_pos. If the
+    //     pre-M2.5 `controls.target.copy(targetPos)` snap returned,
+    //     this collapses to ~0.
+    expect(
+      t05ToLanded,
+      "target reached final endpoint by t=0.5s — possible regression to pre-M2.5 setup-time snap"
+    ).toBeGreaterThan(1.0);
+    // (c) target at t=2s is closer to the endpoint than at t=0.5s
+    //     — monotonic trend toward star world position.
+    expect(
+      t05ToLanded,
+      "target did not trend monotonically toward star world position"
+    ).toBeGreaterThan(t2ToLanded);
 
     // Console clean throughout the fly-to. The `THREE.WebGLProgram
     //    Program Info Log` X4122/X4008 precision warnings on the

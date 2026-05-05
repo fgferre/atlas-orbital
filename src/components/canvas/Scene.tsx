@@ -284,6 +284,68 @@ const NormalizedWheelZoom = ({
   return null;
 };
 
+/**
+ * T6.4-M2.5 Codex round-3 P2 — test-only camera probe.
+ *
+ * Exposes `window.__ATLAS_TEST_CAMERA__()` returning the current
+ * camera world position, OrbitControls target, and quaternion as
+ * plain objects (no Three.js types crossing the Playwright bridge).
+ * Production-inert: gated on `__ATLAS_TEST_FREEZE__` (the same flag
+ * `store.ts` reads to pin the simulation clock); tree-shaken away
+ * for end users because the parent only mounts when the flag is
+ * true at module-eval time.
+ *
+ * Used by `e2e/hyg-focus.spec.ts` to verify the M2.5 flight contract:
+ * target lerps (not snapped at setup), landing distance lands in
+ * the [400, 1000] wu bracket post-C-1 angular-radius math fix.
+ */
+const TestCameraProbe = ({
+  controlsRef,
+}: {
+  controlsRef: RefObject<OrbitControlsImpl | null>;
+}) => {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    type CameraSnapshot = {
+      position: { x: number; y: number; z: number };
+      target: { x: number; y: number; z: number };
+      quaternion: { x: number; y: number; z: number; w: number };
+    };
+    const w = window as unknown as {
+      __ATLAS_TEST_CAMERA__?: () => CameraSnapshot;
+    };
+    w.__ATLAS_TEST_CAMERA__ = () => {
+      const t = controlsRef.current?.target;
+      return {
+        position: {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z,
+        },
+        target: t ? { x: t.x, y: t.y, z: t.z } : { x: 0, y: 0, z: 0 },
+        quaternion: {
+          x: camera.quaternion.x,
+          y: camera.quaternion.y,
+          z: camera.quaternion.z,
+          w: camera.quaternion.w,
+        },
+      };
+    };
+    return () => {
+      delete (window as unknown as { __ATLAS_TEST_CAMERA__?: unknown })
+        .__ATLAS_TEST_CAMERA__;
+    };
+  }, [camera, controlsRef]);
+  return null;
+};
+
+const isTestFreezeActive =
+  typeof window !== "undefined" &&
+  Boolean(
+    (window as unknown as { __ATLAS_TEST_FREEZE__?: boolean })
+      .__ATLAS_TEST_FREEZE__
+  );
+
 interface VisualPresetLerpBridgeProps {
   bloomRef: RefObject<BloomController | null>;
   hueSatRef: RefObject<HueSaturationController | null>;
@@ -593,6 +655,7 @@ export const Scene = () => {
         />
         <DynamicZoom controlsRef={controlsRef} />
         <NormalizedWheelZoom controlsRef={controlsRef} />
+        {isTestFreezeActive && <TestCameraProbe controlsRef={controlsRef} />}
 
         {postProcessingActive && (
           <PostProcessingPipeline

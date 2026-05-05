@@ -16,7 +16,7 @@ export {
   computeAtlasFlightLanding,
   computeAtlasFlightTarget,
   computeFlightTargetDistance,
-  computeGaiaTargetFullAngleRad,
+  computeGaiaTargetAngularRadiusRad,
   type AtlasFlightTarget,
 } from "./stellarFlightSolidAngle";
 export {
