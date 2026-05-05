@@ -6,9 +6,11 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 in-progress
-— S1 + S2 + S3 shipped, S4-S7 queued. HYG fly-to navigation
-upgrade after live diagnostic of jarring arrival UX vs Gaia
-Sky's two-channel transition contract)._
+— S1 + S2 + S3 + Codex round-2 hotfix shipped, S4-S7 queued.
+HYG fly-to navigation upgrade after live diagnostic of jarring
+arrival UX vs Gaia Sky's two-channel transition contract.
+Hotfix `f54425d` addressed: cancel() onComplete leak, 10 wu
+landing floor restored, +Infinity edge case, wave-file drift)._
 
 ---
 
