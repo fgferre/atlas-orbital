@@ -181,4 +181,36 @@ export class CameraTransition {
   static linear(t: number): number {
     return t;
   }
+
+  /**
+   * Symmetric S-curve normalized to [0, 1] over [0, 1]. Port of
+   * Gaia Sky's "logisticsigmoid" mapper (default smoothing factor
+   * `60` per
+   * `gaiasky/script/v2/impl/CameraModule.java:676`).
+   *
+   * Both endpoints are softly approached, mid-flight is fast — the
+   * cinematic feel for catalog star fly-to. T6.4-M2.5 S2.
+   *
+   * Atlas-Gaia divergence (intentional): factor defaults to `12`,
+   * not Gaia's `60`. Gaia's `60` is too steep for the 4-6 s HYG
+   * transitions atlas runs (the curve flatlines at the endpoints
+   * for ~30% of the duration, feeling like the camera stalled).
+   * `12` keeps clear S-character without the stall. Override via
+   * the `factor` parameter to A/B-test on real footage.
+   *
+   * Endpoints clamp via affine renormalization
+   * `(at(t) - at(0)) / (at(1) - at(0))` so `logisticSigmoid(0) === 0`
+   * and `logisticSigmoid(1) === 1` exactly (raw sigmoid sits at
+   * ~`0.0025` and ~`0.9975` for `factor=12` without the clamp,
+   * which would visually freeze the start/end frames).
+   */
+  static logisticSigmoid(t: number, factor = 12): number {
+    const k = factor;
+    const center = 0.5;
+    const sigmoid = (x: number): number =>
+      1 / (1 + Math.exp(-k * (x - center)));
+    const a0 = sigmoid(0);
+    const a1 = sigmoid(1);
+    return (sigmoid(t) - a0) / (a1 - a0);
+  }
 }
