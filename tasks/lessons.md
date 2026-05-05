@@ -1,6 +1,12 @@
 # Lessons — Atlas Orbital
 
 Meta-rules distilled from 39 incidents (sessions 2026-04-17 → 2026-05-05).
+
+**Format note (post-L38 restructure 2026-05-05)**: lessons live as
+short rules — `Trigger / Rule / Action / Source`, max ~12 lines
+per rule. Long narratives go to `tasks/archive/postmortems/`.
+Rules without postmortem links are pre-L38 format and may be
+compressed in future passes.
 Each rule is the generalised trap that a family of incidents share. When a
 new failure mode surfaces, check whether it specialises an existing Mx
 before appending — a seventh rule only earns its place after ≥3 incidents
@@ -103,75 +109,61 @@ the executed artefact. Four gates:
   budget for. Pay the second-round cost on atlas-native waves where
   no Gaia 1:1 reference exists; skip on Gaia-borrowed sub-ondas where
   source-diff already constrains the surface.
-- **Audits (internal AND external) miss visual rendering bugs whose
-  symptoms only appear on GPU.** T6 wave (T6.0 → T6.3-ε, 17 commits)
-  passed: 1427/1427 vitest tests, lint clean, build clean, 8
-  SUBAGENT VERIFY passes (cold-read fresh Explore each fire), 2
-  rounds of Codex `gpt-5.2` audit (each catching 3-4 verified
-  surface bugs), and shipped declaring "MVP closed" twice.
-  First user-driven manual smoke (2026-05-04) revealed the
-  procedural mesh **never renders visually** at HYG positions —
-  mesh is mounted, uniforms set, render call dispatched, but
-  the GPU output is empty. Four silent root causes (float32
-  precision collapse at parsec scale; hard sprite-mesh transition
-  with mis-coordinated thresholds; only 3 of 28 visual profile
-  fields varying by class; missing supergiant spect data) all
-  invisible to: unit tests (don't render GPU), lint (syntax-only),
-  build (compile-only), SUBAGENT VERIFY (reads TS code), Codex
-  cold-read (reads source, doesn't run app). The class of bugs
-  that ALL of these miss: anything where the failure mode is
-  GPU-side at runtime under specific scale conditions. **Rule**:
-  for ANY wave that touches rendering — shaders, materials,
-  uniforms, scene-tree mounts at non-origin world positions —
-  user-driven interactive smoke is mandatory before declaring
-  MVP / wave-closed. The "deferred to user-local interactive
-  verification" pattern from T4.2-β-handler-Silver / T6.3-β /
-  T6.3-γ was the wrong escape hatch — it shifted the validation
-  from "the only path that catches this class of bug" to
-  "optional homework the user might never do." If preview-MCP
-  can't drive the trigger directly, expose dev diagnostics on
-  `window` for that session, drive it programmatically, then
-  remove diagnostics before commit (M7-style cleanup). No more
-  "deferred to user" for visual rendering claims.
-- **Cross-document consistency is a separate verification step.**
-  When applying corrections from an audit (Codex/SUBAGENT/etc.)
-  across multiple docs, the detail (ROADMAP §sub-section) and the
-  summary (STATUS §Next up + §Pipeline rows + lessons.md folds)
-  must move in lockstep. T6.4 plan went through THREE rounds of
-  doc fixes (commits 68b1d9f → 1f20e36 → 0b4c648 → and one more
-  catching residual contradictions Codex flagged as P2/P3). Each
-  pass corrected SOME locations but missed others — STATUS summary
-  lagged behind ROADMAP detail for one pass; ROADMAP heading +
-  acceptance lagged for the next; STATUS §Pipeline T4.1 row had a
-  superseded "float32-comfortable" claim for two passes. **Rule**:
-  after editing a roadmap detail block, grep cross-doc for
-  references that summarize/quote/depend-on that block. After
-  each Codex audit pass on docs, before declaring "ready for
-  fresh /loop": run a cross-doc consistency sweep checking
-  STATUS §Last-updated header + §Next up + §Pipeline rows + any
-  ROADMAP §sub-section + lessons.md citations all tell the same
-  story. The T6 doc alignment burned ~4 commits because this sweep
-  wasn't formalized; one final cross-doc pass before declaring
-  ready would've collapsed it to 1.
-- **Adapt Gaia's solved patterns; don't reinvent.** When atlas
-  hits a precision/scale problem Gaia has already solved (large
-  world coordinates is the obvious one — Gaia renders at
-  gigaparsec scales fine), use Gaia's strategy. For camera-
-  relative rendering: Gaia subtracts `cameraPos` from object
-  position in CPU using high-precision math (Vector3Q quad-double,
-  ~106 bits) BEFORE casting to float32 for GPU upload (see
-  `gaiasky/scene/component/ParticleSet.java:1112-1114` and
-  `ModelEntityRenderSystem.java:441-442`). Three.js's
-  `Matrix4.multiplyMatrices` already does this in float64 when
-  computing `modelViewMatrix`. Atlas already shipped Vector3Q
-  (T4.1-α `6105bed`) and the bridge helper (T4.1-β-bridge
-  `7b1d093`) months before T6 needed it; they sat dormant
-  because nobody mapped the T6 precision problem to the existing
-  toolkit. Pattern: when a wave deals with non-origin world
-  positions, audit BEFORE implementing whether camera-relative
-  math is needed; if yes, prefer Three.js's `modelViewMatrix`
-  idiom (free in shader) OR the existing Vector3Q helpers (T4.1
-  bridge); only invent new infrastructure if neither fits.
+
+### L37 — Rendering claims need runtime smoke
+
+**Trigger**: shader / material / canvas / scene-tree / rendering
+behavior changes; any wave touching non-origin world positions.
+
+**Rule**: do not declare shipped until real browser visual smoke
+exercises the user path.
+
+**Action**: drive via Preview MCP (or equivalent) with browser
+console + WebGL context check + visual screenshot of the user
+path. If preview can't drive the trigger directly, expose temp
+diagnostics on `window`, drive programmatically, REMOVE before
+commit. No "deferred to user" for visual rendering claims.
+
+**Source**: `tasks/archive/postmortems/T6-visual-failure.md`.
+
+### L38 — Cross-document consistency is a separate verification step
+
+**Trigger**: applying audit corrections across multiple docs.
+
+**Rule**: same fact lives in one canonical place; other docs
+link. STATUS = hot path; ROADMAP = strategic index; lessons.md
+= compact rules; `tasks/waves/<wave>.md` = active wave plan;
+`tasks/archive/` = history.
+
+**Action**: after editing a wave-file detail block, grep
+cross-doc for references; run `npm run docs:check` before
+declaring "ready for fresh /loop." Edits to wave detail don't
+ripple to STATUS unless Active wave changes.
+
+**Source**: `tasks/archive/postmortems/T6-visual-failure.md` —
+the 4-commit doc-correction cycle (`68b1d9f` → `1f20e36` →
+`0b4c648` → `3b011d5`) that this rule prevents.
+
+### L39 — Adapt Gaia's solved patterns; don't reinvent
+
+**Trigger**: atlas hits a precision/scale problem at a layer
+where Gaia already has a working strategy.
+
+**Rule**: read Gaia's source first; map atlas's problem to
+Gaia's pattern; use atlas's existing helpers OR Three.js's
+built-in equivalents; only invent new infrastructure if
+neither fits.
+
+**Action**: for non-origin-world-position rendering, prefer
+Three.js's `modelViewMatrix * pos` (camera-relative subtract
+free in shader, computed CPU-float64 by `Matrix4.multiplyMatrices`).
+Atlas's Vector3Q (T4.1-α `6105bed`) + bridge (T4.1-β-bridge
+`7b1d093`) are alternative paths for cases where modelViewMatrix
+isn't enough.
+
+**Source**: `tasks/archive/postmortems/T6-visual-failure.md` —
+T6 wave shipped Vector3Q dormant for months while ProceduralSun3D
+silently failed at parsec scale.
 
 **Fires when:** starting any port; reading a ROADMAP entry older than a
 few commits; accepting a subagent / AI / user-memory claim that scopes
