@@ -7,6 +7,7 @@ import {
   HYG_FOCUS_PREFIX,
   formatHygFocusId,
   parseHygFocusId,
+  resolveHygDistanceFromSunPc,
   resolveHygWorldPosition,
 } from "./hygFocusResolver";
 
@@ -208,5 +209,62 @@ describe("formatHygFocusId / parseHygFocusId roundtrip", () => {
     for (const k of [0, 1, 42, 1000, 109_614]) {
       expect(parseHygFocusId(formatHygFocusId(k))).toBe(k);
     }
+  });
+});
+
+describe("resolveHygDistanceFromSunPc", () => {
+  // Distance is invariant under rotation (R_x preserves vector
+  // magnitude) AND independent of the parsec→world-unit scale, so
+  // these tests use raw parsec inputs and expect the same value out.
+  // Sirius lies at ~2.6 pc; tests pin a Sirius-like position to lock
+  // the contract that the helper consumes RAW catalog positions
+  // (pre-DISTANCE_SCALE), not the rotated world units.
+  const catalog = buildCatalog([
+    1,
+    0,
+    0, // index 0: 1 pc on x
+    0,
+    3,
+    4, // index 1: 5 pc (3-4-5 right triangle)
+    -1.71,
+    0.08,
+    -2.01, // index 2: Sirius ≈ 2.6437 pc
+  ]);
+
+  it("returns the parsec magnitude for an axis-aligned star", () => {
+    expect(resolveHygDistanceFromSunPc(0, catalog)).toBeCloseTo(1.0, 5);
+  });
+
+  it("returns the Euclidean magnitude for an off-axis star (3-4-5)", () => {
+    expect(resolveHygDistanceFromSunPc(1, catalog)).toBeCloseTo(5.0, 5);
+  });
+
+  it("matches the catalog magnitude for a Sirius-like position", () => {
+    const distance = resolveHygDistanceFromSunPc(2, catalog);
+    expect(distance).not.toBeNull();
+    // sqrt(1.71² + 0.08² + 2.01²) = sqrt(6.9706) ≈ 2.6402. Float32
+    // round-trip pulls the components toward the nearest float32 so
+    // tolerance is loose at 1e-3 (matches `resolveHygWorldPosition`'s
+    // precision pin).
+    expect(distance!).toBeCloseTo(2.6402, 3);
+  });
+
+  it("returns null for negative / non-integer / out-of-range indices", () => {
+    expect(resolveHygDistanceFromSunPc(-1, catalog)).toBeNull();
+    expect(resolveHygDistanceFromSunPc(1.5, catalog)).toBeNull();
+    expect(resolveHygDistanceFromSunPc(NaN, catalog)).toBeNull();
+    expect(resolveHygDistanceFromSunPc(3, catalog)).toBeNull();
+    expect(resolveHygDistanceFromSunPc(1_000_000, catalog)).toBeNull();
+  });
+
+  it("is independent of the obliquity rotation applied by resolveHygWorldPosition", () => {
+    // The helper reads pre-rotation catalog values and computes the
+    // raw magnitude. Confirm it agrees with the world-position
+    // magnitude divided by DISTANCE_SCALE for a non-trivial star.
+    const worldPos = resolveHygWorldPosition(2, catalog)!;
+    expect(resolveHygDistanceFromSunPc(2, catalog)!).toBeCloseTo(
+      worldPos.length() / DISTANCE_SCALE,
+      3
+    );
   });
 });

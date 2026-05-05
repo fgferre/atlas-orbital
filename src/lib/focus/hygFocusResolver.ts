@@ -163,3 +163,34 @@ export const resolveHygWorldPosition = (
 
   return out.set(px, py * cosT - pz * sinT, py * sinT + pz * cosT);
 };
+
+/**
+ * Resolve a HYG star's distance from the Sun in parsec. Reads the
+ * raw catalog position (which is stored in parsec, pre-scale) so
+ * the result is independent of the obliquity rotation and the
+ * `DISTANCE_SCALE` parsec→world-unit factor (rotation preserves
+ * vector magnitude; the scale is just a unit change).
+ *
+ * Used by T6.4-M2.5 S4's HYG fly-to to feed
+ * `computeAtlasFlightLanding(radiusWu, distancePc)` from
+ * `lib/camera/stellarFlightSolidAngle.ts` — the Gaia-faithful
+ * adaptive landing target lerps anchor distances in pc, not
+ * world units.
+ *
+ * Returns `null` for an out-of-range / negative / non-integer
+ * index, matching `resolveHygWorldPosition`'s contract.
+ */
+export const resolveHygDistanceFromSunPc = (
+  starIndex: number,
+  catalog: HygCatalogData
+): number | null => {
+  if (!Number.isInteger(starIndex) || starIndex < 0) return null;
+  if (starIndex >= catalog.header.count) return null;
+
+  const i = starIndex * 3;
+  const px = catalog.positions[i];
+  const py = catalog.positions[i + 1];
+  const pz = catalog.positions[i + 2];
+
+  return Math.sqrt(px * px + py * py + pz * pz);
+};

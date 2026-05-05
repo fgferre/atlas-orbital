@@ -23,6 +23,7 @@ import {
 import { isSurfaceModeActive } from "../../lib/camera/surfaceMode";
 import {
   parseHygFocusId,
+  resolveHygDistanceFromSunPc,
   resolveHygWorldPosition,
 } from "../../lib/focus/hygFocusResolver";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
@@ -284,17 +285,13 @@ export const CameraController = () => {
       // radiusFromSpect returns 1.0 R_sun → ~4.654 wu fallback.
       const radiusWu = resolveHygRadiusWu(hygIndex, hygCatalog);
 
-      // Distance from Sun in parsec — catalog `positions[3K..3K+3]`
-      // are stored in parsec already (`hygBinary.ts:21`). The
-      // OBLIQUITY rotation in `resolveHygWorldPosition` is a
-      // length-preserving rotation, so deriving distancePc directly
-      // from the un-rotated parsec triplet matches `worldPos.length()
-      // / DISTANCE_SCALE` exactly without re-introducing the private
-      // DISTANCE_SCALE constant.
-      const px = hygCatalog.positions[hygIndex * 3];
-      const py = hygCatalog.positions[hygIndex * 3 + 1];
-      const pz = hygCatalog.positions[hygIndex * 3 + 2];
-      const distancePc = Math.sqrt(px * px + py * py + pz * pz);
+      // Distance from Sun in parsec via `resolveHygDistanceFromSunPc`
+      // (catalog `positions` are stored in parsec pre-scale —
+      // `hygBinary.ts:21`). Helper returns null on out-of-range index;
+      // the early return above already guards against that, so the
+      // null branch here is defensive only.
+      const distancePc = resolveHygDistanceFromSunPc(hygIndex, hygCatalog);
+      if (distancePc === null) return;
 
       // T6.4-M2.5 S1 — Atlas flight landing. `computeAtlasFlightLanding`
       // applies the three-way `Math.max(bodyClearance × 1.1,
