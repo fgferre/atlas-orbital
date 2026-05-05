@@ -184,7 +184,7 @@ full rationale per key.
   visual delivery failure (2026-05-04 user smoke) full narrative,
   4 root causes, and recovery plan rationale.
 - **`tasks/waves/T6.4-visual-recovery.md`** — active wave plan
-  (M1-M7, Codex audit per milestone protocol).
+  (canonical milestone list + Codex audit per milestone protocol).
 - **`tasks/lessons.md`** — operational rules (compact format
   per L38 restructure; long narratives in archive postmortems).
 - **`tasks/ROADMAP.md`** — strategic index (active wave links

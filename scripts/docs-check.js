@@ -76,9 +76,14 @@ const STALE_TERMS = [
     except: [],
   },
   {
-    pattern: /M1-M7,?\s*~?11-17\s*h/,
+    // Estimate-string variants: "M1-M7 ~11-17h" / "~11-17 h" /
+    // "M1-M7,~11-17 h" all match. Negation excluded:
+    // "M1-M5+M7 core 8-13h" is the new canonical and won't trip.
+    pattern: /(M1-M7|~?\s*11-17\s*h)/i,
     why: "T6.4 estimate updated to M1-M5+M7 core ~8-13h; M6 optional ~2-3h post-recovery.",
-    except: [],
+    // Wave file's own "Audit history" section legitimately quotes
+    // the prior estimate as it lists what each Codex round caught.
+    except: ["tasks/waves/T6.4-visual-recovery.md"],
   },
   {
     // Positive-assertion form only. Negation contexts ("NOT
@@ -91,10 +96,11 @@ const STALE_TERMS = [
   {
     pattern: /npm test\s*--\s*--run/,
     why: "Deprecated form. Use `npm run test:run` (canonical, AGENTS.md Test commands).",
-    // ROADMAP T2.0 ship row contains historical gate-output transcript
-    // ("Gates green: `npm test -- --run` 873/873, ..."). Preserved for
-    // git-blame traceability; pre-dates the AGENTS.md canonical pin.
-    except: ["tasks/ROADMAP.md"],
+    // No file-wide except. ROADMAP T2.0 historical line should be
+    // updated to canonical syntax (or moved to archive); blanket
+    // ROADMAP except masked unrelated future drift per Codex
+    // post-restructure audit 2026-05-05.
+    except: [],
   },
   {
     // Function-call usage only. Meta-discussion ("stellarPhysicsFrom
@@ -118,6 +124,70 @@ const STALE_TERMS = [
     pattern: /T6\.4 ships ONLY when all 7 milestones land/,
     why: "M6 is OPTIONAL post-recovery polish. Core ships when M1-M5 + M7 land.",
     except: [],
+  },
+  {
+    // Per L38: pre-2026-05-04 claim that the HYG zoom path is
+    // user-driveable end-to-end. Refuted by 2026-05-04 smoke.
+    pattern: /(zoom into any HYG star|users can zoom.*procedural surface)/i,
+    why: "Pre-2026-05-04 MVP claim. T6 mesh never rendered visually; T6.4 wave is the recovery path. Move to archive if quoting history.",
+    except: [],
+  },
+];
+
+/**
+ * Structural invariants — these check higher-level facts that
+ * regex alone misses. Per Codex post-restructure audit 2026-05-05.
+ */
+const STRUCTURAL_INVARIANTS = [
+  {
+    name: "T6.4 plan content lives in wave file, not ROADMAP",
+    check: () => {
+      const roadmap = readFileSafe("tasks/ROADMAP.md");
+      const stripped = stripFencedCodeBlocks(stripHtmlComments(roadmap));
+      // ROADMAP must NOT contain milestone-level T6.4 plan text.
+      // Acceptable: pointer to wave file + brief status. Forbidden:
+      // "M1 — Sphere shader" / "M2 — Glow + rays" / etc as section
+      // headers (those are wave-file content).
+      const milestoneHeaders =
+        /^####?\s+M[1-7]\s+—\s+(Sphere shader|Glow|Smooth|Class variation|Spect-missing|HygStarPanel|Final cleanup)/m;
+      if (milestoneHeaders.test(stripped)) {
+        return `ROADMAP.md contains T6.4 milestone-level headers (M1-M7) which belong in tasks/waves/T6.4-visual-recovery.md per L38 single-source rule.`;
+      }
+      return null;
+    },
+  },
+  {
+    name: "STATUS hot path size",
+    check: () => {
+      const status = readFileSafe("tasks/STATUS.md");
+      const lines = status.split("\n").length;
+      const HOT_PATH_LIMIT = 300;
+      if (lines > HOT_PATH_LIMIT) {
+        return `STATUS.md has ${lines} lines (limit ${HOT_PATH_LIMIT}). Move history to tasks/archive/, wave detail to tasks/waves/, narrative to tasks/archive/postmortems/.`;
+      }
+      return null;
+    },
+  },
+  {
+    name: "Active wave file exists for current Active wave",
+    check: () => {
+      const status = readFileSafe("tasks/STATUS.md");
+      // Look for Active wave file pointer of form
+      // `tasks/waves/<X>.md` and verify the file exists.
+      const matches = [...status.matchAll(/tasks\/waves\/([\w.+-]+\.md)/g)];
+      if (matches.length === 0) {
+        return "STATUS.md does not reference any Active wave file under tasks/waves/. Hot path must point to current wave.";
+      }
+      for (const m of matches) {
+        const filePath = `tasks/waves/${m[1]}`;
+        try {
+          statSync(resolve(REPO_ROOT, filePath));
+        } catch {
+          return `STATUS.md references ${filePath} but file does not exist.`;
+        }
+      }
+      return null;
+    },
   },
 ];
 
@@ -148,11 +218,15 @@ function readFileSafe(repoRelPath) {
 }
 
 /**
- * Strip <details>...</details> blocks before checking — those are
- * explicitly history-preserved per ROADMAP migration convention.
+ * Strip HTML comments only. Previously also stripped
+ * <details>...</details> blocks but that masked stale claims
+ * inside collapsed sections — per Codex post-restructure audit
+ * 2026-05-05, <details> is NOT a free pass; if you put stale
+ * content inside <details>, it still drifts. Migrate stale
+ * content to tasks/archive/ instead.
  */
-function stripDetailsBlocks(content) {
-  return content.replace(/<details>[\s\S]*?<\/details>/g, "");
+function stripHtmlComments(content) {
+  return content.replace(/<!--[\s\S]*?-->/g, "");
 }
 
 /**
@@ -179,7 +253,7 @@ function check() {
   for (const filePath of filesToCheck) {
     const raw = readFileSafe(filePath);
     if (!raw) continue;
-    const content = stripFencedCodeBlocks(stripDetailsBlocks(raw));
+    const content = stripFencedCodeBlocks(stripHtmlComments(raw));
     const lines = content.split("\n");
 
     for (const { pattern, why, except } of STALE_TERMS) {
@@ -196,14 +270,24 @@ function check() {
     }
   }
 
+  // Structural invariants pass.
+  for (const inv of STRUCTURAL_INVARIANTS) {
+    const failure = inv.check();
+    if (failure) {
+      console.error(`✖ structural invariant failed: ${inv.name}`);
+      console.error(`  ${failure}\n`);
+      hits++;
+    }
+  }
+
   if (hits === 0) {
     console.log(
-      `✓ docs:check clean (${filesToCheck.length} file${filesToCheck.length === 1 ? "" : "s"} scanned, ${STALE_TERMS.length} stale-term patterns checked).`
+      `✓ docs:check clean (${filesToCheck.length} file${filesToCheck.length === 1 ? "" : "s"} scanned, ${STALE_TERMS.length} stale-term patterns + ${STRUCTURAL_INVARIANTS.length} structural invariants checked).`
     );
     process.exit(0);
   } else {
     console.error(
-      `✖ docs:check found ${hits} stale-term hit${hits === 1 ? "" : "s"}. Fix above OR add an except path if intentional history.`
+      `✖ docs:check found ${hits} issue${hits === 1 ? "" : "s"}. Fix above OR add an except path if intentional history.`
     );
     process.exit(1);
   }
