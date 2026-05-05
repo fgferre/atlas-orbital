@@ -13,10 +13,15 @@ content (Wave α 2026-04-18 + white-canvas remediation 2026-04-24
 1. **Read `tasks/STATUS.md`** — hot path, ~200 lines, single
    source of truth for "what's the next action."
 2. **Read the Active wave file** that STATUS points to (today:
-   `tasks/waves/T6.4-visual-recovery.md`).
-3. **Read `tasks/lessons.md`** for operational rules
-   (compact format L37+; pre-L38 M1-M6 narratives still verbose).
-4. Use `/tmp/gaiasky/` for Gaia source cross-references.
+   `tasks/waves/T6.4-visual-recovery.md`). Read only the current
+   milestone section + shared constraints.
+3. **Consult `tasks/lessons.md` on-demand** — only when STATUS
+   or the wave file cite a lesson ID (e.g. "per L37"), or when
+   you hit an operational uncertainty. Reading the whole file at
+   session start defeats the L38 hot-path budget.
+4. Use `/tmp/gaiasky/` for Gaia source cross-references (only if
+   the active milestone is Gaia-informed; see scope tag in wave
+   file).
 
 ## Engineering standards
 

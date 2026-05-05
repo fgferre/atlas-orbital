@@ -20,12 +20,18 @@
 - For complex problems, throw more compute at it via subagents
 - One task per subagent for focused execution
 
-### 3. Self-Improvement Loop
+### 3. Self-Improvement Loop (post-L38 restructure 2026-05-05)
 
-- After ANY correction from the user: update tasks/lessons.md with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+- Lessons live in `tasks/lessons.md` as **short rules** (Trigger /
+  Rule / Action / Source — max ~12 lines each). Long narratives go
+  to `tasks/archive/postmortems/<incident>.md`, NOT inline in
+  lessons.md.
+- After a correction surfaces a NEW failure-mode pattern (not just
+  a project-specific bug): add a short rule. Postmortem captures
+  the narrative. **Do NOT** append verbose folds — that recreates
+  the inflation L38 prevents.
+- Consult lessons.md on-demand (referenced by ID from STATUS or
+  the active wave file), not as session-start mandatory read.
 
 ### 4. Verification Before Done
 
@@ -48,11 +54,20 @@
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
 
-## Task Management
+## Task Management (post-L38 restructure 2026-05-05)
 
-1. Plan First: Write plan to tasks/todo.md with checkable items
-2. Verify Plan: Check in before starting implementation
-3. Track Progress: Mark items complete as you go
-4. Explain Changes: High-level summary at each step
-5. Document Results: Add review section to tasks/todo.md
-6. Capture Lessons: Update tasks/lessons.md after corrections
+1. **Hot path**: `tasks/STATUS.md` (Active wave + Carryover +
+   Loop protocol). Single source of truth for "what's next."
+2. **Active wave plan**: `tasks/waves/<wave>.md` is canonical
+   for the current wave; ROADMAP/STATUS only pointer.
+3. **Tracking progress within a session**: use the in-conversation
+   `TodoWrite` tool, NOT a `tasks/todo.md` file. The doc tree
+   layer is for cross-session canonical state, not session
+   scratchpad.
+4. **Documentation rule (L38)**: same fact lives in ONE canonical
+   place; other docs link. Update wave-file milestone status when
+   landing M; STATUS hot path only when Active wave changes or
+   new Carryover findings emerge; lessons.md only for new
+   reusable failure-mode rules.
+5. **Final gate before commit**: `npm run docs:check` (catches
+   doc drift mechanically).

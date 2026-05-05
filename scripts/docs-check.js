@@ -34,7 +34,18 @@ const REPO_ROOT = resolve(__dirname, "..");
 /**
  * Files in scope for the consistency check.
  */
-const HOT_PATH_FILES = ["tasks/STATUS.md", "tasks/ROADMAP.md"];
+const HOT_PATH_FILES = [
+  "tasks/STATUS.md",
+  "tasks/ROADMAP.md",
+  // HANDOFF.md is the fresh-conversation entry point per the
+  // 2026-05-05 stub rewrite — agent reads it before STATUS, so
+  // stale claims here directly mislead loop kickoff.
+  "HANDOFF.md",
+  // CLAUDE.md is read by Claude Code at session start; instructions
+  // there influence agent behavior across all conversations. Stale
+  // doc-management rules can recreate the inflation L38 prevents.
+  "CLAUDE.md",
+];
 
 /**
  * Active wave files: discover any tasks/waves/*.md.
@@ -61,7 +72,7 @@ function discoverWaveFiles() {
  */
 const STALE_TERMS = [
   {
-    pattern: /First-ship MVP CLOSED/,
+    pattern: /First-ship MVP CLOSED/i,
     why: "T6 visual failure 2026-05-04 invalidated 'MVP CLOSED' claims; superseded by T6.4 PRIORITY 0.",
     except: [],
   },
@@ -71,8 +82,27 @@ const STALE_TERMS = [
     except: [],
   },
   {
-    pattern: /MVP genuinely closed/,
+    // /i flag: catches "MVP genuinely CLOSED" (uppercase as in
+    // commit-message-quote contexts) AND "MVP genuinely closed".
+    pattern: /MVP genuinely closed/i,
     why: "Same as above — T6 not delivered visually until T6.4 ships.",
+    except: [],
+  },
+  {
+    // Per Codex post-restructure round-2 (2026-05-05): the stale
+    // T6.3-ε ROADMAP row used both "double-audit-cleared" and
+    // "user-driveable path" framing. Both claim functioning visual
+    // delivery; both refuted by user smoke. Catch unsuperseded
+    // forms (negation/SUPERSEDED markers ahead are legitimate).
+    pattern: /\bdouble-audit-cleared\b/i,
+    why: "Pre-2026-05-04 T6 success claim. Refuted by user smoke. Mark as SUPERSEDED inline or move to archive.",
+    except: [],
+  },
+  {
+    // Specific to T6 wave only — generic "user-driveable" in other
+    // contexts (e.g. unrelated UX docs) is fine.
+    pattern: /T6.{0,40}user-driveable\s+path/i,
+    why: "Pre-2026-05-04 T6 success claim. The mesh doesn't render visually; path is not user-driveable end-to-end until T6.4 ships.",
     except: [],
   },
   {
