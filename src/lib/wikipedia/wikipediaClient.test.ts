@@ -537,3 +537,172 @@ describe("createWikipediaClient — abort + timeout", () => {
     expect((caught as DOMException).name).toBe("TimeoutError");
   });
 });
+
+describe("createWikipediaClient — cache integration (M6-F)", () => {
+  let fetchSpy: Mock;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    fetchSpy = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const buildSummary = (title: string, lang = "en") => ({
+    title,
+    extract: `Extract for ${title}.`,
+    thumbnailUrl: null,
+    pageUrl: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+    language: lang,
+  });
+
+  it("returns the cached summary on hit without firing fetch", async () => {
+    const cache = {
+      get: vi.fn().mockResolvedValue({
+        summary: buildSummary("Sirius"),
+        fetchedAt: Date.now(),
+      }),
+      set: vi.fn(),
+    };
+    const client = createWikipediaClient({
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      requestWaitMs: 1000,
+      cache,
+    });
+
+    const promise = client.fetchSummary("Sirius", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result?.title).toBe("Sirius");
+    expect(cache.get).toHaveBeenCalledWith("Sirius", "en");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("falls through to fetch on cache miss + writes the network result back", async () => {
+    const cache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...buildSummary("Sirius"), type: "standard" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    );
+
+    const client = createWikipediaClient({
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      requestWaitMs: 0,
+      cache,
+    });
+
+    const promise = client.fetchSummary("Sirius", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result?.title).toBe("Sirius");
+    expect(cache.get).toHaveBeenCalledWith("Sirius", "en");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // Cache write fires async after the network result resolves; let
+    // pending microtasks drain.
+    await vi.runAllTimersAsync();
+    expect(cache.set).toHaveBeenCalledWith(
+      "Sirius",
+      "en",
+      expect.objectContaining({ title: "Sirius", language: "en" })
+    );
+  });
+
+  it("does not write to cache on 404 / disambiguation / no-extract responses", async () => {
+    const cache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+    // 404 first, then disambiguation, then no-extract — none should
+    // produce a cache write.
+    fetchSpy
+      .mockResolvedValueOnce(new Response("Not Found", { status: 404 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: "disambiguation" }), {
+          status: 200,
+        })
+      );
+
+    const client = createWikipediaClient({
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      requestWaitMs: 0,
+      cache,
+    });
+
+    const r1 = client.fetchSummary("Missing", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    expect(await r1).toBeNull();
+
+    const r2 = client.fetchSummary("Disambig", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    expect(await r2).toBeNull();
+
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it("treats a cache get rejection as a miss and falls through to fetch", async () => {
+    const cache = {
+      get: vi.fn().mockRejectedValue(new Error("idb broken")),
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...buildSummary("Sirius"), type: "standard" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const client = createWikipediaClient({
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      requestWaitMs: 0,
+      cache,
+    });
+
+    const promise = client.fetchSummary("Sirius", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result?.title).toBe("Sirius");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not break the request when cache.set rejects (fire-and-forget)", async () => {
+    const cache = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockRejectedValue(new Error("idb full")),
+    };
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...buildSummary("Sirius"), type: "standard" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const client = createWikipediaClient({
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+      requestWaitMs: 0,
+      cache,
+    });
+
+    const promise = client.fetchSummary("Sirius", { suffixes: [""] });
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    // Drain microtasks so the rejected cache.set settles before
+    // assertion + before vi.useRealTimers() fires.
+    await vi.runAllTimersAsync();
+
+    expect(result?.title).toBe("Sirius");
+  });
+});

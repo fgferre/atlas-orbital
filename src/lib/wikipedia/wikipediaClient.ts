@@ -45,6 +45,8 @@
  * against Wikimedia-side abuse.
  */
 
+import { wikipediaCache as defaultWikipediaCache } from "./wikipediaCache";
+
 export interface WikipediaSummary {
   /** Page title as Wikipedia returned it (after redirects). */
   title: string;
@@ -87,6 +89,20 @@ export interface WikipediaClient {
   ): Promise<WikipediaSummary | null>;
 }
 
+/**
+ * Minimal interface every wikipediaClient cache must satisfy. The
+ * real implementation lives in `./wikipediaCache.ts`; tests can
+ * inject any object that meets this contract (including no-op
+ * stubs that return null on every read).
+ */
+export interface WikipediaCacheLike {
+  get(
+    title: string,
+    lang: string
+  ): Promise<{ summary: WikipediaSummary; fetchedAt: number } | null>;
+  set(title: string, lang: string, summary: WikipediaSummary): Promise<void>;
+}
+
 export interface WikipediaClientConfig {
   /** Override the `Api-User-Agent` header. */
   appUserAgent?: string;
@@ -100,6 +116,15 @@ export interface WikipediaClientConfig {
   fetchImpl?: typeof fetch;
   /** Inject a clock function (used by tests under fake timers). */
   nowImpl?: () => number;
+  /**
+   * IndexedDB-backed cache (M6-F). When provided the client reads
+   * cache first, falls through to the network on miss, and writes
+   * the network result back. Omitted (the default for
+   * `createWikipediaClient`) → no caching, every call goes to the
+   * network. Tests pass either a real cache, a fake, or omit
+   * entirely.
+   */
+  cache?: WikipediaCacheLike;
 }
 
 /**
@@ -246,6 +271,7 @@ export function createWikipediaClient(
     config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   const defaultLang = config.defaultLang ?? DEFAULT_LANG;
   const appUserAgent = config.appUserAgent ?? DEFAULT_APP_USER_AGENT;
+  const cache = config.cache;
 
   let lastRequestStartedAt = 0;
   let queue: Promise<unknown> = Promise.resolve();
@@ -288,12 +314,28 @@ export function createWikipediaClient(
    * parsed `WikipediaSummary` on 200, `null` on 404 / disambiguation
    * / missing-extract. Throws on network failure or non-404 / non-
    * 200 status, on timeout, and on caller abort.
+   *
+   * Cache integration (M6-F): when a cache is configured, the read
+   * happens BEFORE the rate-limit gate so a hit doesn't pay the
+   * 1-second per-tab spacing. A miss falls through to the network
+   * path; a successful network result is written back to the cache
+   * before returning. Cache failures (IDB blocked, quota, ...) are
+   * swallowed — the client must remain usable when the cache is
+   * unavailable.
    */
   async function fetchSummaryAtLang(
     lang: string,
     title: string,
     signal: AbortSignal | undefined
   ): Promise<WikipediaSummary | null> {
+    if (cache) {
+      try {
+        const cached = await cache.get(title, lang);
+        if (cached) return cached.summary;
+      } catch {
+        // Swallow cache read errors; treat as miss.
+      }
+    }
     return serializeRequest(signal, async () => {
       const { signal: combinedSignal, cleanup } = createCombinedAbort(
         requestTimeoutMs,
@@ -315,7 +357,7 @@ export function createWikipediaClient(
         if (typeof body.extract !== "string" || body.extract.length === 0) {
           return null;
         }
-        return {
+        const summary: WikipediaSummary = {
           title: body.title ?? title,
           extract: body.extract,
           thumbnailUrl: body.thumbnail?.source ?? null,
@@ -324,6 +366,17 @@ export function createWikipediaClient(
             `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`,
           language: lang,
         };
+        if (cache) {
+          // Fire-and-forget cache write. We intentionally don't
+          // await — a slow IDB write should never delay the
+          // returned summary, and write errors don't affect this
+          // request's outcome.
+          void cache.set(title, lang, summary).catch(() => {
+            // Swallow cache write errors; the network result still
+            // bubbles up to the caller successfully.
+          });
+        }
+        return summary;
       } finally {
         cleanup();
       }
@@ -377,8 +430,16 @@ export function createWikipediaClient(
 /**
  * Module-default singleton. Atlas UI consumers (sub-track D
  * HygStarPanel) call `fetchSummary` directly through this.
+ *
+ * The default singleton wires the production IndexedDB cache
+ * (`wikipediaCache`) so every read across the app benefits from
+ * cross-session reuse. The cache is imported lazily (via the
+ * top-of-file import) so test files that mock the singleton
+ * before it instantiates can keep the cache out of their wires.
  */
-export const wikipediaClient: WikipediaClient = createWikipediaClient();
+export const wikipediaClient: WikipediaClient = createWikipediaClient({
+  cache: defaultWikipediaCache,
+});
 
 export const fetchSummary = wikipediaClient.fetchSummary.bind(wikipediaClient);
 
