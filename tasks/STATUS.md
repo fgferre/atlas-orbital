@@ -7,8 +7,9 @@ History, shipped-onda detail, and audit narratives live in
 
 _Last updated: 2026-05-06 late night. T6.4 M1 + M2 shipped; M2.5
 S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped
-2026-05-06; **M6 A + B + C shipped 2026-05-06** (i18n, HYG binary
-v3, SearchBar HYG index)._ The integrator port (`HygPhysicsFlight`),
+2026-05-06; **M6 A + B + C + E shipped 2026-05-06** (i18n, HYG
+binary v3, SearchBar HYG index, Wikipedia REST client)._ The
+integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
 calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
@@ -48,10 +49,9 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**M6 sub-track E — Wikipedia REST client** (~3h, spec in wave
-file §M6 §"Sub-track E"). A + B + C shipped 2026-05-06 (U-2
-closed); E is the next independent track (heaviest unmade
-sub-track, unblocks D + F). Independent of Round-6 close.
+**M6 sub-track D — HygStarPanel UI** (~2h, spec in wave file §M6
+§"Sub-track D"). A+B+C+E shipped 2026-05-06; D consumes A's i18n
+keys + E's Wikipedia client to close U-5 (no HYG star info panel).
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
@@ -138,7 +138,7 @@ round-4 audit, do not block):
 | B ✅      | HYG binary v3 with `properName` + Bayer + Flamsteed + HD/HIP/Gliese designations | none (extends `build-hyg-binary.js`)                           |
 | C ✅      | SearchBar wires HYG name index with autocomplete                                 | none                                                           |
 | D         | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
-| E         | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |
+| E ✅      | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |
 | F         | IndexedDB persistent cache (LRU 200 entries, TTL 30 days)                        | `idb` (~3KB gzipped)                                           |
 | G         | Settings toggle for Wikipedia integration (default ON, persist localStorage)     | none                                                           |
 | H         | CSP allow `upload.wikimedia.org` (Vite config)                                   | none                                                           |
