@@ -65,30 +65,43 @@ import * as THREE from "three";
  * 0 so the cap doesn't bind; force pushes the camera toward target
  * until terminal velocity is reached.
  *
- * Starting value 0.5: at Sirius (~5.36e8 wu remaining) this gives
- * a₀ ≈ 2.7e8 wu/s², so velocity reaches the cap (~1.6e8 wu/s) in
- * ~0.6 s. Subject to R6-F empirical sweep.
+ * **Calibration first-guess (R6-F preliminary, 2026-05-06)**: 8.0.
+ * With `FRICTION_RATE = 2.0` the equilibrium velocity is
+ * `INITIAL_FORCE_FACTOR / FRICTION_RATE × distance = 4.0 × distance/s`,
+ * which exceeds `MAX_VELOCITY_FACTOR × distance = 3.0 × distance/s`
+ * — so the velocity cap binds (not the force/friction equilibrium),
+ * and the effective decay rate is `MAX_VELOCITY_FACTOR = 3.0/s`.
+ * Sirius arrival: `ln(D/G) / 3 ≈ 13.95 / 3 ≈ 4.65 s`, in the
+ * wave-file Acceptance §1 4-6 s band. Subject to user-smoke
+ * empirical refinement at R6-F close.
  */
-const INITIAL_FORCE_FACTOR = 0.5;
+const INITIAL_FORCE_FACTOR = 8.0;
 
 /**
  * Max velocity factor — dimensionless, vmax = factor × distance/s.
- * This is the dynamic terminal velocity: as the camera approaches
- * target, distance shrinks and the cap shrinks with it, naturally
- * decelerating without explicit logic.
+ * Combined with `INITIAL_FORCE_FACTOR / FRICTION_RATE` (the
+ * equilibrium velocity), the SMALLER of the two binds the per-frame
+ * stride. With first-guess constants this is the binding constraint;
+ * the system's effective decay rate (in the cap-bound regime) IS
+ * this factor.
  *
- * Starting value 0.3 (wave-file spec). With this and the other
- * starting constants (`INITIAL_FORCE_FACTOR=0.5, FRICTION_RATE=2.0`),
- * the cap-bound effective decay rate is `MAX_VELOCITY_FACTOR = 0.3/s`,
- * giving Sirius (D/G ≈ 1.15e6) an arrival of `ln(D/G) / 0.3 ≈ 46 s`.
- * That is FAR slower than the wave-file Acceptance §1 expectation
- * (4-6 s). R6-F empirical sweep is the load-bearing step that tunes
- * these constants for the Acceptance feel; until R6-F lands, the
- * shipped code path WILL feel sluggish on user smoke. Codex audit
- * 2026-05-06 P1 caught a misleading earlier draft of this comment
- * that claimed the starting constants gave ~5 s.
+ * **Calibration first-guess (R6-F preliminary, 2026-05-06)**: 3.0.
+ * Picked so Sirius (D/G ≈ 1.15e6) arrives in `ln(D/G) / 3.0 ≈ 4.65 s`
+ * — close to the wave-file Acceptance §1 4-6 s expectation for
+ * Sirius. Note: with a single decay rate, far stars arrive
+ * proportionally to `ln(distance)`, which means Betelgeuse
+ * (D/G ≈ 173) lands in `ln(173)/3 ≈ 1.7 s` (faster than the
+ * wave-file 7-10 s expectation). The acceptance §1 expected
+ * arrival times scale non-linearly with distance, which a single
+ * cap-rate cannot reproduce — R6-F empirical sweep should decide
+ * whether to introduce a distance-dependent cap (e.g. velocity
+ * proportional to `sqrt(distance)`) or accept the linear-log decay
+ * shape as Gaia-faithful (Gaia's `speedScaling` is a piecewise
+ * linear `flint` of focus distance — see
+ * `NaturalCamera.java:1421-1438`, which produces approximately the
+ * same shape).
  */
-const MAX_VELOCITY_FACTOR = 0.3;
+const MAX_VELOCITY_FACTOR = 3.0;
 
 /**
  * Friction rate — 1/s exponential decay coefficient. Higher = faster
@@ -139,6 +152,61 @@ const DECEL_ONSET_ANGULAR_RADIUS_RATIO = 3.0;
  */
 const STUCK_VELOCITY_RELATIVE = 1e-4;
 
+/**
+ * R6-E — telemetry ring buffer (debug-only, removed at R6 close).
+ *
+ * When `window.__ATLAS_DEBUG_HYG_PHYSICS__ === true` (set BEFORE the
+ * fly-to triggers — typically pasted into devtools), each `update()`
+ * appends a frame to `telemetry`. The same buffer is exposed at
+ * `window.__ATLAS_HYG_PHYSICS_TELEMETRY__` for inspection. Ring-
+ * buffered at `TELEMETRY_BUFFER_SIZE = 600` (10 s @ 60 fps) so a
+ * runaway flight doesn't allocate unbounded memory.
+ *
+ * Scope: temporary scaffolding for R6-F empirical sweep at named
+ * anchors. **Removed in the R6-H close commit** (per L37 — temp
+ * dev diagnostics must not ship beyond their wave). The window-flag
+ * gate keeps the runtime cost to a single `if` check when the
+ * production user has not opted in.
+ */
+const TELEMETRY_BUFFER_SIZE = 600;
+
+interface HygPhysicsTelemetryFrame {
+  t: number;
+  velocityMagnitude: number;
+  currentAngularRadiusRad: number;
+  distanceToTarget: number;
+  forceMagnitude: number;
+  frictionMagnitude: number;
+  done: boolean;
+}
+
+let telemetry: HygPhysicsTelemetryFrame[] | null = null;
+
+const isTelemetryEnabled = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return Boolean(
+    (window as unknown as { __ATLAS_DEBUG_HYG_PHYSICS__?: boolean })
+      .__ATLAS_DEBUG_HYG_PHYSICS__
+  );
+};
+
+const exposeTelemetry = (): void => {
+  if (typeof window === "undefined") return;
+  (
+    window as unknown as {
+      __ATLAS_HYG_PHYSICS_TELEMETRY__?: HygPhysicsTelemetryFrame[] | null;
+    }
+  ).__ATLAS_HYG_PHYSICS_TELEMETRY__ = telemetry;
+};
+
+const recordTelemetry = (frame: HygPhysicsTelemetryFrame): void => {
+  if (!telemetry) return;
+  telemetry.push(frame);
+  if (telemetry.length > TELEMETRY_BUFFER_SIZE) {
+    telemetry.shift();
+  }
+};
+
 export interface HygPhysicsFlightSpec {
   /** Current camera world position (the integrator's start state). */
   startPos: THREE.Vector3;
@@ -176,6 +244,9 @@ export class HygPhysicsFlight {
   private targetAngularRadiusRad = 0;
   private radiusWu = 0;
   private currentAngularRadiusRad = 0;
+  /** Cumulative time since `start()`, seconds. R6-E telemetry-only;
+   *  not used in the integrator's force/velocity math. */
+  private tElapsed = 0;
   /** Captured at `start()` so `progressRaw` reports the fraction
    *  of journey complete in either flight direction. */
   private initialAngularRadiusRad = 0;
@@ -217,8 +288,13 @@ export class HygPhysicsFlight {
     // landing pose.
     this.direction =
       this.currentAngularRadiusRad < this.targetAngularRadiusRad ? 1 : -1;
+    this.tElapsed = 0;
     this.onComplete = spec.onComplete;
     this.active = true;
+    // R6-E telemetry: reset buffer per fly-to so each empirical
+    // run starts clean. No-op when the debug flag is off.
+    telemetry = isTelemetryEnabled() ? [] : null;
+    exposeTelemetry();
   }
 
   /** Advance one frame. Caller passes R3F's measured `delta` (seconds);
@@ -233,6 +309,8 @@ export class HygPhysicsFlight {
       // emit a 0-dt frame on the first tick after suspend.
       return { position: this.position, done: false };
     }
+
+    this.tElapsed += dt;
 
     // 1. Direction and remaining distance to target.
     this.tmpToTarget.subVectors(this.targetPos, this.position);
@@ -318,7 +396,21 @@ export class HygPhysicsFlight {
           newDistanceToTarget *
           newDistanceToTarget;
 
-    if (gateReached || stuck) {
+    const done = gateReached || stuck;
+
+    // R6-E telemetry: per-frame state snapshot for empirical sweep.
+    // No-op when the debug flag is off (telemetry === null).
+    recordTelemetry({
+      t: this.tElapsed,
+      velocityMagnitude: this.velocity.length(),
+      currentAngularRadiusRad: this.currentAngularRadiusRad,
+      distanceToTarget: newDistanceToTarget,
+      forceMagnitude,
+      frictionMagnitude: this.tmpFrictionVec.length(),
+      done,
+    });
+
+    if (done) {
       this.completeNaturally();
       return { position: this.position, done: true };
     }
@@ -380,3 +472,13 @@ export const HYG_PHYSICS_CALIBRATION = {
   DECEL_ONSET_ANGULAR_RADIUS_RATIO,
   STUCK_VELOCITY_RELATIVE,
 } as const;
+
+/**
+ * Test-only escape hatch — clears the telemetry buffer + window
+ * exposure so cross-test bleed doesn't accumulate. Same pattern as
+ * `__resetHygFlightPosProgress` (`hygFlightPosProgress.ts:65`).
+ */
+export const __resetHygPhysicsTelemetry = (): void => {
+  telemetry = null;
+  exposeTelemetry();
+};
