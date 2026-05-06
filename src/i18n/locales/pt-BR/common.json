@@ -1,0 +1,30 @@
+{
+  "hygStarPanel": {
+    "title": "Estrela",
+    "fields": {
+      "commonName": "Nome comum",
+      "spectralClass": "Classe espectral",
+      "temperature": "Temperatura efetiva",
+      "radius": "Raio",
+      "mass": "Massa",
+      "distance": "Distância",
+      "apparentMagnitude": "Magnitude aparente",
+      "absoluteMagnitude": "Magnitude absoluta",
+      "constellation": "Constelação"
+    },
+    "units": {
+      "solarRadii": "× Sol",
+      "solarMasses": "M☉",
+      "parsec": "pc",
+      "lightYear": "al",
+      "kelvin": "K"
+    },
+    "wikipedia": {
+      "loading": "Carregando…",
+      "empty": "Nenhum artigo da Wikipédia encontrado",
+      "error": "Não foi possível carregar as informações. Tentar novamente?",
+      "retry": "Tentar novamente",
+      "readMore": "Ler mais na Wikipédia"
+    }
+  }
+}
