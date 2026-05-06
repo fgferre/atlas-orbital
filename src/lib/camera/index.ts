@@ -10,6 +10,7 @@ export {
   type OrientationLerpFrame,
   type OrientationLerpSpec,
 } from "./orientationLerp";
+export { AimLerp, type AimLerpFrame, type AimLerpSpec } from "./aimLerp";
 export {
   HygPhysicsFlight,
   HYG_PHYSICS_CALIBRATION,

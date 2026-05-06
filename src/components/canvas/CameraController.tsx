@@ -10,7 +10,7 @@ import {
   PrivilegedPosition,
   CameraTransition,
   HygPhysicsFlight,
-  OrientationLerp,
+  AimLerp,
   computeAtlasFlightLanding,
   createFocusTrackingState,
   resetFocusTrackingState,
@@ -119,7 +119,22 @@ export const CameraController = () => {
   // future scripted-tour features; no active call site uses it for
   // click-driven focus after Round-6.
   const hygPhysicsRef = useRef<HygPhysicsFlight>(new HygPhysicsFlight());
-  const orientationLerpRef = useRef<OrientationLerp>(new OrientationLerp());
+  // **Round-6 user-smoke fix (post R6-H, 2026-05-06)**: replaced
+  // `OrientationLerp` (lerped `controls.target` absolutely from old
+  // focus → new star) with `AimLerp` (slerps the aim DIRECTION,
+  // derives target as `cameraPos + aimDir × distanceToStar`). The
+  // absolute-target lerp had two failure modes under Round-6's
+  // gate-driven physics that user smoke surfaced as "marcha ré"
+  // and "tela muda para um quadro errado": (1) for the first
+  // ~hundred ms the lerped target sits BEHIND the camera along
+  // the motion axis, so OrbitControls derives a backward-looking
+  // orientation; (2) as both the lerp and the camera converge on
+  // the same axis, the lerped target can CROSS the camera path,
+  // producing a `target - camera.position → 0` degeneracy that
+  // visually flips. Aim-lerp keeps the target at the actual
+  // camera-to-star distance ahead of the camera in the slerp'd
+  // direction at all times — never crosses, never degenerates.
+  const aimLerpRef = useRef<AimLerp>(new AimLerp());
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(
     camera as THREE.PerspectiveCamera
   );
@@ -171,7 +186,7 @@ export const CameraController = () => {
     // closes the gap.
     if (!focusId) {
       hygPhysicsRef.current.cancel();
-      orientationLerpRef.current.cancel();
+      aimLerpRef.current.cancel();
       transitionRef.current.stop();
       flyingRef.current.isFlying = false;
     }
@@ -335,28 +350,23 @@ export const CameraController = () => {
       // dictate the gate, so M3 spawn invariants hold for free.
       const landing = computeAtlasFlightLanding(radiusWu, distancePc);
 
-      // Orientation lerp duration — angular sweep heuristic.
-      // **Round-6 retune (2026-05-06 user-smoke fix)**: the
-      // round-5b range (1000-4000 ms) was calibrated for the
-      // duration-driven `StellarFlightTransition` that took 3-8 s
-      // for a Sirius position lerp. Under Round-6's gate-driven
-      // physics integrator, position covers ~95 % of the journey
-      // distance in the first ~1 s under cap-bound exp decay — so
-      // a 1000-4000 ms orientation lerp lags far behind position,
-      // leaving `controls.target` BEHIND the camera's actual
-      // position for most of the flight. OrbitControls then
-      // derives camera orientation from `(camera.position,
-      // controls.target)` and the camera ends up looking BACKWARD
-      // along its motion direction — the user-reported "marcha ré"
-      // perception (camera goes in reverse before going forward).
-      // Retune: 200-500 ms range, picked to align orientation
-      // completion with the position channel's "fast progress"
-      // window (the first ~0.5 s where 78 % of the trajectory is
-      // covered). Sweeps near π (full reverse) get the 500 ms cap;
-      // small sweeps get the 200 ms floor. Factor=17 logistic
-      // sigmoid is steep enough that even 200 ms doesn't feel
-      // snappy — most of the rotation happens in the middle 60 %
-      // of duration window (~120 ms for a 200 ms lerp).
+      // **Round-6 user-smoke fix structural rewrite (post R6-H,
+      // 2026-05-06)**: aim-lerp duration. The earlier
+      // `OrientationLerp` (absolute target lerp) had two failure
+      // modes that no duration retune could solve — the lerped
+      // target sits behind the camera early in the flight, AND it
+      // can cross the camera path during the lerp (degeneracy +
+      // visual flip). `AimLerp` fixes the geometry by lerping
+      // the aim DIRECTION (target derived as `cameraPos + aimDir
+      // × distanceToStar`, never crosses, never degenerates).
+      // Duration here just controls how QUICKLY the slerp
+      // completes — short enough that the brief "looking partly
+      // off-target" period is sub-perceptible, long enough that
+      // the rotation isn't a 1-frame snap. 200-400 ms with a
+      // factor=17 logistic sigmoid puts most of the rotation
+      // (60 % of total) in a ~80-160 ms window inside the
+      // duration. Sweeps near π get the upper bound; small
+      // sweeps get the lower bound.
       const camToStart = controlsInstance.target
         .clone()
         .sub(cameraInstance.position);
@@ -365,7 +375,7 @@ export const CameraController = () => {
         camToStart.lengthSq() > 1e-12 && camToEnd.lengthSq() > 1e-12
           ? camToStart.angleTo(camToEnd)
           : 0;
-      const oriDurationMs = Math.min(500, Math.max(200, angularSweep * 200));
+      const oriDurationMs = Math.min(400, Math.max(200, angularSweep * 150));
 
       // Mutual exclusion with curated-body fly-to: stop any in-flight
       // `CameraTransition` so useFrame's HYG branch drives a single
@@ -387,9 +397,10 @@ export const CameraController = () => {
         targetAngularRadiusRad: landing.target.angularRadiusRad,
         radiusWu,
       });
-      orientationLerpRef.current.start({
+      aimLerpRef.current.start({
+        startCameraPos: cameraInstance.position,
         startTarget: controlsInstance.target,
-        endTarget: targetPos,
+        starWorldPos: targetPos,
         durationMs: oriDurationMs,
         easing: (t) => CameraTransition.logisticSigmoid(t, 17),
       });
@@ -421,7 +432,7 @@ export const CameraController = () => {
       // on each is a no-op when inactive and deliberately does NOT
       // fire `onComplete`, so `isFlying` stays as we set it below.
       hygPhysicsRef.current.cancel();
-      orientationLerpRef.current.cancel();
+      aimLerpRef.current.cancel();
       // T6.4-M2.5 S6 — clear the pre-warm signal too; switching to
       // a curated-body fly-to mid-HYG-flight should leave no stale
       // progress visible to `HygStellarMesh`.
@@ -561,25 +572,20 @@ export const CameraController = () => {
 
     const stopFlying = () => {
       flyingRef.current.isFlying = false;
-      // T6.4-M2.5 round-6 R6-D — real interrupt for HYG fly-to,
-      // cancel = full stop (NOT friction-drain). The position
-      // channel `cancel()` zeroes `velocity` synchronously and
-      // returns the frozen position; we don't re-apply it because
-      // useFrame already wrote `camera.position` last frame, so
-      // OrbitControls reads exactly the frozen state from there.
-      // The orientation channel `cancel()` returns the frozen
-      // (lerped) target — sync `controls.target` to it so the
-      // orientation visibly halts at the intermediate value
-      // instead of letting focus-tracking next frame snap it back
-      // to the star world position. Neither cancel fires
+      // T6.4-M2.5 round-6 R6-D + post-R6-H aim-lerp rewrite —
+      // real interrupt for HYG fly-to, cancel = full stop (NOT
+      // friction-drain). Both cancels zero internal state
+      // synchronously. Neither needs to re-apply state to
+      // (camera.position, controls.target) because useFrame
+      // already wrote both in the most recent frame; the
+      // OrbitControls "start" event fires immediately AFTER
+      // useFrame, so the frozen state is exactly what's already
+      // on the camera + controls. Neither cancel fires
       // `onComplete` (interrupt ≠ completion). No-op when both
       // refs are inactive (interrupting curated-body fly-to or
       // post-completion).
       hygPhysicsRef.current.cancel();
-      const frozenOrientation = orientationLerpRef.current.cancel();
-      if (frozenOrientation) {
-        controls.target.copy(frozenOrientation.target);
-      }
+      aimLerpRef.current.cancel();
       // T6.4-M2.5 S6 — clear the pre-warm signal on user
       // interrupt. M3 (cross-fade) consumes this channel; clearing
       // it on cancel prevents stale mid-fly progress after a
@@ -766,55 +772,60 @@ export const CameraController = () => {
     controlsInstance.target.copy(nextTarget);
 
     if (flyingRef.current.isFlying) {
-      // T6.4-M2.5 round-6 R6-C — branch on which transition family
-      // is active. The HYG path runs two refs in parallel: position
-      // physics + orientation lerp. The curated-body path runs the
-      // single-vector `transitionRef`. Mutual-exclusion at start
-      // sites guarantees the HYG and curated families don't both
-      // arm at once.
+      // T6.4-M2.5 round-6 R6-C + post-R6-H aim-lerp rewrite —
+      // branch on which transition family is active. The HYG path
+      // runs two refs in parallel: position physics
+      // (`HygPhysicsFlight`) + aim-direction lerp (`AimLerp`,
+      // replaces the earlier absolute-target `OrientationLerp`).
+      // Position physics is written FIRST so the aim-lerp's
+      // `update(currentCameraPos)` sees this frame's actual camera
+      // position, not last frame's. Both writes are then forced
+      // into in-frame orientation via `camera.lookAt(controls.target)`
+      // because Drei OrbitControls's useFrame runs at priority -1
+      // (BEFORE this useFrame's priority 0), which would otherwise
+      // leave the rendered quaternion derived from last frame's
+      // (position, target).
       const hygPositionActive = hygPhysicsRef.current.isActive;
-      const hygOrientationActive = orientationLerpRef.current.isActive;
+      const hygOrientationActive = aimLerpRef.current.isActive;
       if (hygPositionActive || hygOrientationActive) {
         // Position channel — gate-driven physics. Pass R3F's
         // measured `delta` (seconds) to the semi-implicit Euler
-        // integrator. R3F may emit `delta = 0` on the first frame
-        // post-resume; the integrator guards against it.
+        // integrator with sub-stepping. R3F may emit `delta = 0`
+        // on the first frame post-resume; the integrator guards
+        // against it.
         if (hygPositionActive) {
           const positionFrame = hygPhysicsRef.current.update(delta);
           if (positionFrame) {
             cameraInstance.position.copy(positionFrame.position);
           }
         }
-        // Orientation channel — duration-driven `controls.target`
-        // lerp. Overrides the focus-tracking write above so
-        // OrbitControls.update() derives the camera quaternion
-        // from `(camera.position, controls.target)` smoothly
-        // throughout the flight (option-2 coordination strategy
-        // from M2.5 §S4 wave-file).
+        // Aim channel — slerps the aim DIRECTION; derives target
+        // as `cameraPos + aimDir × distanceToStar`. Endpoint
+        // (current dir-to-star) is recomputed from this frame's
+        // updated camera position so the aim tracks motion.
         if (hygOrientationActive) {
-          const orientationFrame = orientationLerpRef.current.update();
-          if (orientationFrame) {
-            controlsInstance.target.copy(orientationFrame.target);
+          const aimFrame = aimLerpRef.current.update(cameraInstance.position);
+          if (aimFrame) {
+            controlsInstance.target.copy(aimFrame.target);
           }
         }
+        // Force in-frame orientation update. Drei OrbitControls's
+        // useFrame priority -1 runs BEFORE this priority-0
+        // useFrame, so without this `lookAt` the rendered
+        // quaternion lags position by one frame. Lookup is cheap
+        // (matrix decompose); no allocation.
+        cameraInstance.lookAt(controlsInstance.target);
         // Publish the angular-radius progress for M3's cross-fade
         // ramp. Round-6 changes the signal semantics from
-        // round-5b's "time fraction (raw alpha)" to "ratio of
-        // current to target angular radius" — the latter is
-        // monotonically gate-aligned and a natural axis for the
-        // cross-fade. Once physics deactivates, clear so M3
-        // doesn't see stale 1.0 hanging around as the mesh's
-        // natural sa-driven gate takes over.
+        // round-5b's "time fraction (raw alpha)" to a direction-
+        // agnostic angular-radius journey fraction.
         if (hygPhysicsRef.current.isActive) {
           setHygFlightPosProgress(hygPhysicsRef.current.progressRaw);
         } else {
           setHygFlightPosProgress(null);
         }
         // Both channels done → clear the global flying flag.
-        if (
-          !hygPhysicsRef.current.isActive &&
-          !orientationLerpRef.current.isActive
-        ) {
+        if (!hygPhysicsRef.current.isActive && !aimLerpRef.current.isActive) {
           flyingRef.current.isFlying = false;
         }
       } else {
