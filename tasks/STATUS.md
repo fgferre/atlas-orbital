@@ -5,30 +5,26 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-06 night. T6.4 M1 and M2 shipped; M2.5
-S1 through S7 plus rounds 3, 4, 5, 5b hotfixes shipped;
-Round-6 sub-tracks A through H all shipped 2026-05-06._
-The integrator port (`HygPhysicsFlight` + `OrientationLerp`),
-`setupCameraHyg` rewire, useFrame physics branch, cancel
-handlers, first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
-`INITIAL_FORCE_FACTOR=8.0`, Sirius arrival around 4.65 s),
-e2e respec, and sub-stepping hardening
+_Last updated: 2026-05-06 late night. T6.4 M1 + M2 shipped; M2.5
+S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped
+2026-05-06._ The integrator port (`HygPhysicsFlight`),
+aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
+useFrame physics branch, cancel handlers, first-guess
+calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
+Sirius ~4.65 s), e2e respec, and sub-stepping hardening
 (`MAX_DT_SUBSTEP=0.05 s`, `MAX_DT_TOTAL=0.1 s` per-frame
-visible-jump cap, defensive against R3F dt spikes from boot,
-suspend, or headless-test rAF throttling) all landed.
-R6-H close-out removed the R6-E telemetry scaffolding, synced
-wave file / STATUS / ROADMAP / lessons.md, and flipped M2.5
-close gate to "user-smoke Round-6 acceptance".
-_Three Codex audit rounds applied._ Round 1 (mid-R6-A+B+C):
-missing backward-flight branch added (camera-rebound case,
-mirrors Gaia's `go_to_object`). Round 2 (R6-E/F): plan-vs-source
-divergence fix — wave-file's 3× linear-stride no-warp criterion
-swapped for log-stride 1.5× (Gaia's `speedScaling` produces exp
-decay → log-stride is perception-correct per Weber-Fechner).
-Round 3 (post R6-H): `MAX_DT_TOTAL=1.0 s` cap allowed 95 % of
-trajectory in one rendered frame on tab-resume — fixed by
-reducing to 0.1 s (~26 % per-frame cap). Round-6 commit chain:
-89816e5, 9a8688e, cbb767f, 5336b70, be2406f, e5ea617, c9a0c95.
+visible-jump cap) all landed. R6-H close-out removed the R6-E
+telemetry scaffolding and synced docs.
+_Post-R6-H user-smoke regression + aim-lerp rewrite._ Smoke
+reported "marcha ré" + "tela muda para um quadro errado". Codex
+audit found three structural issues in `OrientationLerp`
+(target sat behind camera, path could cross + degenerate, Drei
+OrbitControls priority -1 lagged quaternion 1 frame). Fix:
+`AimLerp` slerps the aim DIRECTION (target = `pos + aimDir ×
+dist`, never crosses) + `camera.lookAt` after writes forces
+in-frame orientation. Round-6 commit chain (10 commits):
+89816e5, 9a8688e, cbb767f, 5336b70, be2406f, e5ea617, c9a0c95,
+48e294c (superseded), 21d7bf3 (aim-lerp), 68e7fb7 (doc cleanup).
 
 ---
 
@@ -103,17 +99,19 @@ message; user runs it manually if they want external review.
 shipped; Round-6 promoted from CONTINGENT to ACTIVE
 2026-05-06; M6 forward-port queued):
 
-| ID  | Pri | Status                              | Summary                                                                                                                                                                                                                                                                              |
-| --- | --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| U-1 | P1  | Round-6 closed, awaiting user smoke | Solar→star fly-to "jumps". Round-6 A-H shipped 2026-05-06 (commits 89816e5, 9a8688e, cbb767f, 5336b70 + R6-H close-out). Sirius arrival ~4.65 s under R6-F first-guess calibration. User smoke validates no-warp perception across 4 named stars × 2 cycles before U-1 fully closes. |
-| U-2 | P2  | Plan                                | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).                                                                                                                                                      |
-| U-3 | P2  | Plan                                | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                      |
-| U-4 | P3  | Plan                                | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                  |
-| U-5 | P2  | Plan                                | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                   |
+| ID  | Pri | Status                                          | Summary                                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| U-1 | P1  | Round-6 + aim-lerp shipped, awaiting user smoke | Solar→star fly-to "jumps". Round-6 A-H + post-R6 aim-lerp rewrite shipped 2026-05-06 (10 commits ending at 68e7fb7). Sirius arrival ~4.65 s under R6-F first-guess calibration. Initial post-R6 user smoke surfaced "marcha ré" + "tela muda" — root-caused as orientation-lag in OrientationLerp + OrbitControls priority lag; fixed structurally by AimLerp slerp + camera.lookAt. Re-smoke pending. |
+| U-2 | P2  | Plan                                            | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).                                                                                                                                                                                                                                                                        |
+| U-3 | P2  | Plan                                            | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                                                                                                                                        |
+| U-4 | P3  | Plan                                            | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                                                                                                                                    |
+| U-5 | P2  | Plan                                            | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                                                                                                                                     |
 
-**Round-6 closed** (sub-tracks A-H shipped 2026-05-06, 5
-commits). Full audit history + per-sub-track narrative in wave
-file §Round-6 §"Sub-track progress".
+**Round-6 closed + post-R6 aim-lerp rewrite** (sub-tracks A-H
+plus the post-R6-H user-smoke fix shipped 2026-05-06; 10
+commits total ending at 68e7fb7). Full audit history +
+per-sub-track narrative in wave file §Round-6 §"Sub-track
+progress".
 
 **P3 forward-looking notes** parked OUTSIDE M2.5 (Codex
 round-4 audit, do not block):
