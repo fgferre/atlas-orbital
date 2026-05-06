@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
+import { HygStarPanel } from "./HygStarPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { Sidebar } from "./Sidebar";
 import { LayersPanel } from "./LayersPanel";
@@ -84,6 +85,7 @@ export const Overlay = () => {
         <TopBar />
       </div>
       <Sidebar />
+      <HygStarPanel />
       <Timeline />
 
       <div

@@ -230,6 +230,15 @@ interface AppState {
    */
   shortcutsModalOpen: boolean;
   setShortcutsModalOpen: (open: boolean) => void;
+  /**
+   * M6-D: gates the Wikipedia "About" section in `HygStarPanel`.
+   * Default `true` so the panel renders the section on a fresh boot;
+   * sub-track G adds the user-facing settings toggle + persistence
+   * (the field is intentionally NOT in the persist `partialize` until
+   * G ships so a missing localStorage entry doesn't read as "false").
+   */
+  wikipediaIntegrationEnabled: boolean;
+  setWikipediaIntegrationEnabled: (enabled: boolean) => void;
 }
 
 // ─── Persist configuration ──────────────────────────────────────────────────
@@ -601,6 +610,9 @@ export const useStore = create<AppState>()(
       shortcutsModalOpen: false,
       setShortcutsModalOpen: (shortcutsModalOpen) =>
         set({ shortcutsModalOpen }),
+      wikipediaIntegrationEnabled: true,
+      setWikipediaIntegrationEnabled: (wikipediaIntegrationEnabled) =>
+        set({ wikipediaIntegrationEnabled }),
     }),
     {
       name: PERSIST_KEY,

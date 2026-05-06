@@ -1,8 +1,11 @@
 {
   "hygStarPanel": {
     "title": "Estrela",
+    "closeLabel": "Fechar",
+    "unknown": "—",
     "fields": {
       "commonName": "Nome comum",
+      "designation": "Designação",
       "spectralClass": "Classe espectral",
       "temperature": "Temperatura efetiva",
       "radius": "Raio",
@@ -20,6 +23,7 @@
       "kelvin": "K"
     },
     "wikipedia": {
+      "heading": "Sobre",
       "loading": "Carregando…",
       "empty": "Nenhum artigo da Wikipédia encontrado",
       "error": "Não foi possível carregar as informações. Tentar novamente?",

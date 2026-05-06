@@ -6,10 +6,9 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-06 late night. T6.4 M1 + M2 shipped; M2.5
-S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped
-2026-05-06; **M6 A + B + C + E shipped 2026-05-06** (i18n, HYG
-binary v3, SearchBar HYG index, Wikipedia REST client)._ The
-integrator port (`HygPhysicsFlight`),
+S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped 2026-05-06;
+**M6 A+B+C+D+E shipped 2026-05-06** (i18n, HYG v3, SearchBar, panel,
+Wiki client; U-2 + U-5 closed)._ The integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
 calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
@@ -49,9 +48,10 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**M6 sub-track D — HygStarPanel UI** (~2h, spec in wave file §M6
-§"Sub-track D"). A+B+C+E shipped 2026-05-06; D consumes A's i18n
-keys + E's Wikipedia client to close U-5 (no HYG star info panel).
+**M6 sub-track G — Wikipedia integration toggle** (~0.5h, spec
+in wave file §M6 §"Sub-track G"). A+B+C+D+E shipped (U-2 + U-5
+closed); G adds user-facing on/off + persist for
+`wikipediaIntegrationEnabled`.
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
@@ -107,7 +107,7 @@ shipped; Round-6 promoted from CONTINGENT to ACTIVE
 | U-2 | P2  | M6-C shipped, awaiting user smoke               | Search box doesn't find HYG stars. M6-C shipped 2026-05-06: SearchBar autocomplete now matches via proper name / Bayer (Latin or Greek glyph) / HD / HIP / Gliese. Sirius / α CMa / HD 48915 verified in Preview-MCP smoke.                                                                                                                                                                            |
 | U-3 | P2  | Plan                                            | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                                                                                                                                        |
 | U-4 | P3  | Plan                                            | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                                                                                                                                    |
-| U-5 | P2  | Plan                                            | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                                                                                                                                     |
+| U-5 | P2  | M6-D shipped                                    | No HYG star info panel. M6-D shipped 2026-05-06 — stellar-physics grid + Wikipedia "About" via M6-E client. Sirius smoke verified.                                                                                                                                                                                                                                                                     |
 
 **Round-6 closed + post-R6 aim-lerp rewrite** (sub-tracks A-H
 plus the post-R6-H user-smoke fix shipped 2026-05-06; 10
@@ -137,7 +137,7 @@ round-4 audit, do not block):
 | A ✅      | i18n foundation (en + pt-BR locales, wired via `useTranslation`)                 | `react-i18next`, `i18next`, `i18next-browser-languagedetector` |
 | B ✅      | HYG binary v3 with `properName` + Bayer + Flamsteed + HD/HIP/Gliese designations | none (extends `build-hyg-binary.js`)                           |
 | C ✅      | SearchBar wires HYG name index with autocomplete                                 | none                                                           |
-| D         | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
+| D ✅      | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
 | E ✅      | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |
 | F         | IndexedDB persistent cache (LRU 200 entries, TTL 30 days)                        | `idb` (~3KB gzipped)                                           |
 | G         | Settings toggle for Wikipedia integration (default ON, persist localStorage)     | none                                                           |

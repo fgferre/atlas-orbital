@@ -423,6 +423,61 @@ export const radiusFromSpect = (
   return tableR;
 };
 
+// ─── Stellar mass (rough heuristic) ───────────────────────────────
+
+/**
+ * Rough mass estimate in solar units. Atlas-opinion heuristic for
+ * the M6-D HygStarPanel info display — explicitly NOT a precision
+ * stellar-evolution calculation.
+ *
+ * Strategy:
+ *   - Main sequence (V or unspecified): mass-luminosity relation
+ *     `M/M_sun = (L/L_sun)^(1/3.5)` from `absmag`. Standard
+ *     approximation accurate to ~10% for M/M_sun in [0.5, 10] —
+ *     adequate for the panel's information-density purpose.
+ *   - Giants (III) / bright giants (II) / supergiants (Ia/Ib/I):
+ *     class-typical fixed values rather than the MS relation,
+ *     since post-MS evolution decouples L and M.
+ *   - White dwarfs: ~0.6 M_sun (Chandrasekhar-floor average).
+ *   - No spect / unparseable: returns NaN — caller should hide
+ *     the field rather than display a misleading number.
+ *
+ * Returns a positive finite number on success, NaN on missing /
+ * unparseable input.
+ */
+export const massFromSpectAbsmag = (
+  spect: string | null | undefined,
+  absmag: number | null | undefined
+): number => {
+  if (!spect) return NaN;
+  const parsed = parseSpectralClass(spect);
+  if (!parsed) return NaN;
+
+  if (parsed.spectralClass === "WD") return 0.6;
+
+  const lum = parsed.luminosityClass;
+  // Non-main-sequence fixed estimates (atlas-opinion; representative
+  // class midpoints per Allen's Astrophysical Quantities tables).
+  if (lum === "Ia") return 25;
+  if (lum === "Ib") return 18;
+  if (lum === "I") return 20;
+  if (lum === "II") return 12;
+  if (lum === "III") return 2.5;
+  if (lum === "IV") return 1.6;
+
+  // Main sequence (V or unspecified) — mass-luminosity relation.
+  if (typeof absmag !== "number" || !Number.isFinite(absmag)) {
+    return NaN;
+  }
+  const M_SUN_ABS = 4.83;
+  const lumOverSun = Math.pow(10, -0.4 * (absmag - M_SUN_ABS));
+  if (!Number.isFinite(lumOverSun) || lumOverSun <= 0) return NaN;
+  // M/M_sun = L^(1/3.5). Clamp to [0.05, 100] so noisy absmag
+  // entries don't return absurd masses.
+  const massSolar = Math.pow(lumOverSun, 1 / 3.5);
+  return Math.max(0.05, Math.min(100, massSolar));
+};
+
 // ─── Visual-profile aggregator ────────────────────────────────────
 
 /**
