@@ -13,20 +13,22 @@ The integrator port (`HygPhysicsFlight` + `OrientationLerp`),
 handlers, first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
 `INITIAL_FORCE_FACTOR=8.0`, Sirius arrival around 4.65 s),
 e2e respec, and sub-stepping hardening
-(`MAX_DT_SUBSTEP=0.05 s`, defensive against R3F dt spikes from
-boot, suspend, or headless-test rAF throttling) all landed.
-R6-H close-out today removed the R6-E telemetry scaffolding,
-synced wave file / STATUS / ROADMAP / lessons.md, and flipped
-M2.5 close gate to "user-smoke Round-6 acceptance".
-_Two Codex audit rounds applied during the work._ The first
-added the missing backward-flight branch (camera-rebound case,
-mirroring Gaia's `go_to_object` forward / backward dispatch).
-The second applied a plan-vs-source divergence fix that swapped
-the wave-file's broken 3× linear-stride no-warp criterion for a
-log-stride 1.5× criterion (rationale: Gaia's distance-proportional
-`speedScaling` produces exp decay, so log-stride is the
-perception-correct invariant). Round-6 commit chain: 89816e5,
-9a8688e, cbb767f, 5336b70, plus today's R6-H close-out.
+(`MAX_DT_SUBSTEP=0.05 s`, `MAX_DT_TOTAL=0.1 s` per-frame
+visible-jump cap, defensive against R3F dt spikes from boot,
+suspend, or headless-test rAF throttling) all landed.
+R6-H close-out removed the R6-E telemetry scaffolding, synced
+wave file / STATUS / ROADMAP / lessons.md, and flipped M2.5
+close gate to "user-smoke Round-6 acceptance".
+_Three Codex audit rounds applied._ Round 1 (mid-R6-A+B+C):
+missing backward-flight branch added (camera-rebound case,
+mirrors Gaia's `go_to_object`). Round 2 (R6-E/F): plan-vs-source
+divergence fix — wave-file's 3× linear-stride no-warp criterion
+swapped for log-stride 1.5× (Gaia's `speedScaling` produces exp
+decay → log-stride is perception-correct per Weber-Fechner).
+Round 3 (post R6-H): `MAX_DT_TOTAL=1.0 s` cap allowed 95 % of
+trajectory in one rendered frame on tab-resume — fixed by
+reducing to 0.1 s (~26 % per-frame cap). Round-6 commit chain:
+89816e5, 9a8688e, cbb767f, 5336b70, be2406f, e5ea617, c9a0c95.
 
 ---
 
@@ -48,27 +50,28 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
-**Default fresh-loop fire**: **user-smoke Round-6 acceptance**
-— 4 named stars (Sirius, Betelgeuse, Proxima, far-edge anchor)
-× 2 zoom cycles each. Verify no warp perception (continuous
-"leaving solar system" → "interstellar" → "approaching star"
-phases), landing pose matches M2.5 contract (~456 wu for
-Sirius), and mid-flight drag interrupts the autopilot cleanly.
-After user smoke, U-1 closes; M2.5 close gate is met.
+**Default fresh-loop fire** (autonomous-agent-actionable):
+**M6 forward-port sub-track A — i18n foundation** (~2 h, full
+spec in wave file §M6 §"Sub-track A"). Independent of the
+Round-6 flight-contract close — runs in parallel with user-smoke.
 
-**Calibration risk** (R6-F first-guess): `MAX_VELOCITY_FACTOR=3.0`
-tunes for Sirius (~4.65 s). Far stars arrive proportionally to
-ln(distance) — Betelgeuse ~1.7 s vs wave-file 7-10 s
-expectation. User-smoke decision: accept the linear-log shape
-as Gaia-faithful (matches `speedScaling`) OR add distance-
-dependent velocity scaling (e.g. `vmax ∝ sqrt(distance)`).
+**Higher-priority parallel work for the user** (only the user
+can do this): user-smoke Round-6 acceptance — 4 named stars
+(Sirius, Betelgeuse, Proxima, far-edge anchor) × 2 zoom cycles
+each. Verify no warp perception, landing pose ~456 wu for
+Sirius, mid-flight drag cleanly interrupts. Passing smoke
+closes U-1 and unblocks M3 (sprite↔mesh cross-fade).
 
-If user smoke surfaces a regression, reopen Round-6 with an
-empirical calibration sweep using telemetry — temporarily
-re-add the `__ATLAS_DEBUG_HYG_PHYSICS__` ring buffer (was
-removed at R6-H close per L37). Otherwise the next loop
-iteration picks up M3 (sprite ↔ mesh cross-fade) — now
-unblocked since M2.5 is closing on Round-6 PASS.
+**Calibration risk** (R6-F first-guess, may surface in smoke):
+`MAX_VELOCITY_FACTOR=3.0` tunes for Sirius (~4.65 s). Far stars
+arrive proportionally to ln(distance) — Betelgeuse ~1.7 s vs
+wave-file 7-10 s expectation. User-smoke decides: accept the
+linear-log shape as Gaia-faithful (matches `speedScaling`) OR
+add distance-dependent velocity scaling (e.g. `vmax ∝ sqrt(distance)`).
+If smoke surfaces a regression, reopen Round-6 with an empirical
+calibration sweep — temporarily re-add the
+`__ATLAS_DEBUG_HYG_PHYSICS__` ring buffer (removed at R6-H per
+L37).
 
 **Forward queue** (independent of M2.5 close):
 
