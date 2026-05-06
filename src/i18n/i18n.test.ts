@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import i18n, {
   DEFAULT_LANGUAGE,
   DEFAULT_NAMESPACE,
+  LANGUAGE_STORAGE_KEY,
   RESOURCES,
   SUPPORTED_LANGUAGES,
 } from "./index";
@@ -26,6 +27,20 @@ describe("i18n init", () => {
     for (const lng of SUPPORTED_LANGUAGES) {
       expect(i18n.hasResourceBundle(lng, DEFAULT_NAMESPACE)).toBe(true);
     }
+  });
+
+  it("pins an explicit detection contract for the browser detector", () => {
+    // Codex round-1 audit on M6-A: implicit defaults include cookie /
+    // sessionStorage / htmlTag detection paths. We list only the paths
+    // we actively rely on so a stray `i18next` cookie elsewhere on the
+    // host can't override the user's choice.
+    expect(i18n.options.detection).toMatchObject({
+      order: ["querystring", "localStorage", "navigator"],
+      caches: ["localStorage"],
+      lookupQuerystring: "lng",
+      lookupLocalStorage: LANGUAGE_STORAGE_KEY,
+    });
+    expect(LANGUAGE_STORAGE_KEY).toBe("i18nextLng");
   });
 });
 
@@ -60,6 +75,55 @@ describe("hygStarPanel translations", () => {
   it("falls a regional unsupported tag back to its base language ('en-US' -> 'en')", async () => {
     await i18n.changeLanguage("en-US");
     expect(i18n.t("hygStarPanel.wikipedia.loading")).toBe("Loading…");
+  });
+});
+
+describe("language resolution chain", () => {
+  // Codex round-1 audit on M6-A flagged that t() assertions alone don't
+  // pin the resolved language chain. `i18n.languages[0]` is the canary
+  // that exposed the `nonExplicitSupportedLngs: true` regression
+  // (it collapsed to ["en"] even though `t("…", { lng: "pt-BR" })`
+  // would have appeared correct in some code paths). Future consumers
+  // (sub-track G's settings toggle, the Wikipedia client's lang param)
+  // will read these fields directly — pin them here.
+
+  it("after changeLanguage('pt-BR'): exact match keeps both pt-BR and the en fallback in the chain", async () => {
+    await i18n.changeLanguage("pt-BR");
+    expect(i18n.language).toBe("pt-BR");
+    expect(i18n.resolvedLanguage).toBe("pt-BR");
+    expect(i18n.languages[0]).toBe("pt-BR");
+    expect(i18n.languages).toContain("en");
+  });
+
+  it("after changeLanguage('pt'): bare lang resolves to the pt-BR regional bundle", async () => {
+    await i18n.changeLanguage("pt");
+    // i18next normalises the active language to the matched supported
+    // tag, not the input "pt" — that's the canary for the
+    // nonExplicitSupportedLngs regression.
+    expect(i18n.language).toBe("pt-BR");
+    expect(i18n.resolvedLanguage).toBe("pt-BR");
+    expect(i18n.languages[0]).toBe("pt-BR");
+  });
+
+  it("after changeLanguage('en-US'): regional fall-through to base 'en'", async () => {
+    await i18n.changeLanguage("en-US");
+    expect(i18n.language).toBe("en");
+    expect(i18n.resolvedLanguage).toBe("en");
+    expect(i18n.languages[0]).toBe("en");
+  });
+
+  it("after changeLanguage('fr'): unsupported lang falls back to 'en'", async () => {
+    await i18n.changeLanguage("fr");
+    expect(i18n.language).toBe("en");
+    expect(i18n.resolvedLanguage).toBe("en");
+    expect(i18n.languages[0]).toBe("en");
+  });
+
+  it("after changeLanguage('pt-PT'): cross-region matcher routes to pt-BR (only Portuguese variant we ship)", async () => {
+    await i18n.changeLanguage("pt-PT");
+    expect(i18n.language).toBe("pt-BR");
+    expect(i18n.resolvedLanguage).toBe("pt-BR");
+    expect(i18n.languages[0]).toBe("pt-BR");
   });
 });
 
