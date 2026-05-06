@@ -41,8 +41,10 @@ import {
  */
 
 test.describe("hyg-focus", () => {
-  // Worst-case budget: 45 s boot + 10 s flight + Playwright overhead.
-  test.setTimeout(120_000);
+  // Worst-case budget: 45 s boot + ~50 s flight (1 Hz headless R3F
+  // × 0.1 s integrator advance per frame for a 4.65 s Sirius
+  // flight) + Playwright scheduling overhead.
+  test.setTimeout(140_000);
 
   test("Sirius focus respects the Round-6 flight contract end-to-end", async ({
     page,
@@ -162,11 +164,19 @@ test.describe("hyg-focus", () => {
       return w.__ATLAS_TEST_CAMERA__().target;
     });
 
-    // Wait for landing. Worst-case: 1 Hz R3F + first-frame dt
-    // spike + sub-stepping ⇒ camera lands within ~5 s wall. 10 s
-    // wait is well past the worst case under any healthy frame
-    // pacing.
-    await page.waitForTimeout(9500);
+    // Wait for landing. Headless Chromium runs R3F at ~1 Hz, and
+    // `MAX_DT_TOTAL = 0.1 s` (post Codex 2026-05-06 P1 mitigation
+    // — the prior 1.0 s cap allowed 95 % of trajectory in one
+    // rendered frame, defeating the no-warp purpose) caps the
+    // integrator at 0.1 s per useFrame call. So under 1 Hz R3F
+    // the integrator runs at 0.1 × wall-clock; a 4.65 s flight
+    // takes ~47 s wall. 55 s wait absorbs that plus ramp-up plus
+    // Playwright scheduling jitter, while staying inside the
+    // 120 s test timeout. In production at 60 fps the integrator
+    // runs at 1 × wall-clock (single substep per frame, no
+    // throttling) — this slow-test cost is the explicit
+    // trade-off for production warp control.
+    await page.waitForTimeout(55_000);
     const landed = await page.evaluate(() => {
       const w = window as unknown as {
         __ATLAS_TEST_STORE__: { getState: () => { focusId: string | null } };

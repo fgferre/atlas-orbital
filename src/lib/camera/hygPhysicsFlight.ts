@@ -177,33 +177,39 @@ const STUCK_VELOCITY_RELATIVE = 1e-4;
  * the camera 3.46e9 wu past Sirius (~7× the Sun→Sirius distance).
  *
  * Solution: SUB-STEPPING. When `dt > MAX_DT_SUBSTEP`, `update()` runs
- * multiple internal `MAX_DT_SUBSTEP`-sized integration steps to
- * cover the full elapsed time. This keeps the integrator in sync
- * with wall-clock under abnormal frame pacing (catalog load, tab
- * suspend, headless-test rAF throttling) without sacrificing
- * stability.
+ * multiple internal `MAX_DT_SUBSTEP`-sized integration steps. Each
+ * substep is bounded by `vmax × MAX_DT_SUBSTEP = 3 × 0.05 = 15 %`
+ * of remaining distance, so the integrator stays numerically stable
+ * regardless of upstream frame pacing (catalog load, tab suspend,
+ * headless-test rAF throttling).
  *
- * `MAX_DT_TOTAL` caps the total per-call advance to BOUND the visible
- * jump per rendered frame. Codex audit 2026-05-06 P1 (post R6-H)
- * raised that the prior `MAX_DT_TOTAL = 5.0 s` allowed a single
- * `useFrame` call to consume up to 5 s of integrator time and
- * return only the FINAL position, which renders as a single-frame
- * warp on tab-resume mid-flight (Sirius arrival at integrator
- * t ≈ 4.65 s = could land in one frame). Reduced to 1.0 s: in
- * production at 60 fps the per-frame `dt ≈ 0.0167 s` runs a
- * single sub-step (no change); after a tab-resume from suspend,
- * the per-frame visible jump is bounded at 1 s of integrator time
- * (~30 % of remaining-distance under cap-bound exp decay) instead
- * of arriving instantly. Trade-off: under headless e2e where R3F
- * runs at ~1 Hz, the integrator advances 1 s per frame = 1 ×
- * wall-clock, so a 4.65 s flight still completes in ~5 s real
- * time (test waits 10 s, comfortable headroom). A pathological
- * multi-minute suspend just means the integrator catches up
- * gradually over the next few frames, which is the correct game-
- * physics pattern for resume-from-idle.
+ * `MAX_DT_TOTAL` caps the total per-call integrator advance to bound
+ * the VISIBLE jump per rendered frame. Codex 2026-05-06 audit (post
+ * R6-H, second pass) caught a math error in the prior comment: at
+ * cap-bound `k = MAX_VELOCITY_FACTOR = 3 / s`, `update(T)` covers
+ * `1 - exp(-3 × T)` of the remaining distance, which is exponential
+ * (not linear) compounding across substeps. So the prior
+ * `MAX_DT_TOTAL = 1.0 s` actually rendered 95 % of trajectory in
+ * one frame, not the "~30 %" that earlier rationale claimed.
+ * Reduced to `0.1 s`: per-frame jump bounded at `1 - exp(-0.3) ≈
+ * 26 %` of remaining distance under cap-bound exp decay. That's
+ * still visible on tab-resume but ~3.6× smaller than the prior
+ * cap and an order of magnitude better than no clamp.
+ *
+ * Production at 60 fps: per-frame `dt ≈ 0.0167 s` runs a single
+ * sub-step (no change). On a tab-resume mid-flight, the integrator
+ * advances at most 0.1 s per frame; the dropped wall-time
+ * accumulates as "behind real-time" until the integrator catches
+ * up, which is the canonical game-physics pattern for
+ * resume-from-idle (no warp).
+ *
+ * Trade-off under headless e2e (R3F throttled to ~1 Hz): integrator
+ * runs at 0.1 × wall-clock, so a 4.65 s flight takes ~47 s wall.
+ * The e2e's `waitForTimeout` for landing is calibrated to absorb
+ * this (see `e2e/hyg-focus.spec.ts`).
  */
 const MAX_DT_SUBSTEP = 0.05;
-const MAX_DT_TOTAL = 1.0;
+const MAX_DT_TOTAL = 0.1;
 
 export interface HygPhysicsFlightSpec {
   /** Current camera world position (the integrator's start state). */
