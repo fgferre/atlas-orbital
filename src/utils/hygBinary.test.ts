@@ -433,6 +433,144 @@ describe("hygBinary / v3 designations", () => {
   });
 });
 
+describe("hygBinary / v3 string encoding (UTF-8)", () => {
+  // Codex round-1 audit on M6-B (P3-1): the M6-B first ship encoded
+  // strings via `charCodeAt(i) & 0xff`, which round-tripped 0x00–0xFF
+  // cleanly but corrupted any codepoint > 0xFF. Two real HYG names
+  // (`Bibhā` and `Sāmaya`, both with U+0101) decoded as
+  // `Bibh<SOH>` / `S<SOH>maya` on disk. Switched the pool encoder to
+  // UTF-8 so the full HYG name set survives. These tests pin both
+  // the round-trip and the byte-length cap.
+
+  it("round-trips Latin-1 codepoints (Tupã, Mönch, Lusitânia)", () => {
+    const stars = [
+      { ...SIRIUS, proper: "Tupã" },
+      { ...SIRIUS, proper: "Mönch" },
+      { ...SIRIUS, proper: "Lusitânia" },
+    ];
+    const parsed = parseHygBinaryBuffer(encodeHygCatalog(stars));
+    expect(parsed.properNameStrings).toEqual([
+      "",
+      "Tupã",
+      "Mönch",
+      "Lusitânia",
+    ]);
+    expect(parsed.properNameIndices[0]).toBe(1);
+    expect(parsed.properNameIndices[1]).toBe(2);
+    expect(parsed.properNameIndices[2]).toBe(3);
+  });
+
+  it("round-trips codepoints above U+00FF (Bibhā, Sāmaya — fixes the original M6-B corruption)", () => {
+    const stars = [
+      { ...SIRIUS, proper: "Bibhā" },
+      { ...SIRIUS, proper: "Sāmaya" },
+    ];
+    const parsed = parseHygBinaryBuffer(encodeHygCatalog(stars));
+    expect(parsed.properNameStrings).toEqual(["", "Bibhā", "Sāmaya"]);
+    // Codepoint sanity: U+0101 = 257 = 0x101, so a byte-mask of 0xFF
+    // would have collapsed both names to a SOH (0x01) prefix. Catch
+    // that regression directly on the decoded character.
+    expect("Bibhā".charCodeAt(4)).toBe(0x101);
+    expect(parsed.properNameStrings[1].charCodeAt(4)).toBe(0x101);
+  });
+
+  it("throws when an entry exceeds the 255-byte uint8 length-prefix cap", () => {
+    // 64 emoji × 4 bytes/utf-8-char = 256 bytes — one over the cap.
+    const longName = "🪐".repeat(64);
+    expect(() => encodeHygCatalog([{ ...SIRIUS, proper: longName }])).toThrow(
+      /properName entry too long/
+    );
+  });
+
+  it("rejects a v3 buffer whose proper-name pool lacks the leading sentinel", () => {
+    // Build the smallest possible v3 buffer with a size-consistent
+    // but non-sentinel-leading proper-name pool. Layout:
+    //   [36-B header][spect=1B "" sentinel][properName=2B = "A"]
+    //   [bayer=1B sentinel][constellation=1B sentinel][gliese=1B sentinel]
+    //   [body=0 stars]
+    // The properName pool's declared size matches its bytes (size
+    // validation passes), so only the leading-sentinel check should
+    // fire.
+    const totalBytes = HYG_HEADER_BYTES + 1 + 2 + 1 + 1 + 1; // = 42
+    const buffer = new ArrayBuffer(totalBytes);
+    const view = new DataView(buffer);
+    view.setUint8(0, "H".charCodeAt(0));
+    view.setUint8(1, "Y".charCodeAt(0));
+    view.setUint8(2, "G".charCodeAt(0));
+    view.setUint8(3, "1".charCodeAt(0));
+    view.setUint32(4, HYG_VERSION, true);
+    view.setUint32(8, 0, true); // count = 0
+    view.setUint32(12, 0, true); // flags = 0
+    view.setUint32(16, 1, true); // spect: 1B
+    view.setUint32(20, 2, true); // properName: 2B (no sentinel)
+    view.setUint32(24, 1, true); // bayer: 1B
+    view.setUint32(28, 1, true); // constellation: 1B
+    view.setUint32(32, 1, true); // gliese: 1B
+    let cursor = HYG_HEADER_BYTES;
+    view.setUint8(cursor++, 0); // spect sentinel ""
+    view.setUint8(cursor++, 1); // properName entry length=1 (no leading "" sentinel!)
+    view.setUint8(cursor++, "A".charCodeAt(0)); // properName entry "A"
+    view.setUint8(cursor++, 0); // bayer sentinel
+    view.setUint8(cursor++, 0); // constellation sentinel
+    view.setUint8(cursor++, 0); // gliese sentinel
+    expect(cursor).toBe(totalBytes);
+    expect(() => parseHygBinaryBuffer(buffer)).toThrow(/properName.*sentinel/);
+  });
+
+  it("v3 empty catalog parses cleanly (every pool is just the '' sentinel)", () => {
+    const parsed = parseHygBinaryBuffer(encodeHygCatalog([]));
+    expect(parsed.spectStrings).toEqual([""]);
+    expect(parsed.properNameStrings).toEqual([""]);
+    expect(parsed.bayerStrings).toEqual([""]);
+    expect(parsed.constellationStrings).toEqual([""]);
+    expect(parsed.glieseStrings).toEqual([""]);
+  });
+});
+
+describe("hygBinary / v3 raw-byte offsets (drift canary)", () => {
+  // Codex round-1 audit on M6-B (P3-3): round-trip tests would still
+  // pass if the encoder + parser drifted to the same wrong offsets
+  // together. Pin a single known star against raw DataView reads at
+  // each documented byte offset so a typo in either side gets caught
+  // independently. If this test fails, also re-bake `.bin` files —
+  // the on-disk format just changed.
+
+  it("places header table-size fields at offsets 16/20/24/28/32", () => {
+    // Encode a single star with one entry per pool so each table size
+    // is computable: spect="A1V" (4B = 1+3) plus the "" sentinel (1B)
+    // = 5B; properName="Sirius" (7B) + 1B = 8B; bayer="Alp" (4B) + 1B
+    // = 5B; constellation="CMa" (4B) + 1B = 5B; gliese="Gl 244" (7B) +
+    // 1B = 8B.
+    const buffer = encodeHygCatalog([SIRIUS_V3]);
+    const view = new DataView(buffer);
+    expect(view.getUint32(16, true)).toBe(5); // spect pool
+    expect(view.getUint32(20, true)).toBe(8); // properName pool
+    expect(view.getUint32(24, true)).toBe(5); // bayer pool
+    expect(view.getUint32(28, true)).toBe(5); // constellation pool
+    expect(view.getUint32(32, true)).toBe(8); // gliese pool
+  });
+
+  it("places per-star designation indices and IDs at the documented v3 record offsets", () => {
+    const buffer = encodeHygCatalog([SIRIUS_V3]);
+    const view = new DataView(buffer);
+    // Body starts at HYG_HEADER_BYTES + total table bytes.
+    const tableTotal =
+      view.getUint32(16, true) +
+      view.getUint32(20, true) +
+      view.getUint32(24, true) +
+      view.getUint32(28, true) +
+      view.getUint32(32, true);
+    const body = HYG_HEADER_BYTES + tableTotal;
+    expect(view.getUint16(body + 23, true)).toBe(1); // properNameIdx (uint16) → 1 = "Sirius"
+    expect(view.getUint8(body + 25)).toBe(1); // bayerIdx → "Alp"
+    expect(view.getUint8(body + 26)).toBe(1); // constellationIdx → "CMa"
+    expect(view.getUint16(body + 27, true)).toBe(1); // glieseIdx → "Gl 244"
+    expect(view.getUint8(body + 29)).toBe(9); // flamsteed
+    expect(view.getUint32(body + 30, true)).toBe(48915); // hd
+    expect(view.getUint32(body + 34, true)).toBe(32349); // hip
+  });
+});
+
 describe("hygBinary / v2 backward-compat parser", () => {
   // Build a known-good v2 buffer manually so the v2 parser branch
   // gets exercised without needing the v2 encoder (which has been

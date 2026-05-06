@@ -36,11 +36,11 @@
  *   └────────────────────────────────────────────────────────────────────────┘
  *
  *   String table (`spectStringTableBytes` bytes total, immediately after header):
- *     [uint8 length, length bytes ASCII] entries packed back-to-back.
+ *     [uint8 byte-length, length UTF-8 bytes] entries packed back-to-back.
  *     Index 0 is reserved for "no spectral classification" (length=0, no
  *     bytes follow); subsequent indices correspond to unique spectral
  *     classifications observed in the catalog (~50 entries cover ~all
- *     of HYG).
+ *     of HYG). Spectral strings are pure ASCII so UTF-8 == byte-identical.
  *
  *   Per-star record (23 B):
  *     [ 0..18) ... same as v1 above ...
@@ -51,10 +51,14 @@
  *
  *   Adds proper-name + Bayer + Flamsteed + HD + HIP + Gliese + constellation
  *   designations so the runtime can search the catalog by human-readable
- *   identifiers without a separate sidecar load. Strings are still ASCII;
- *   Greek-letter Bayer designations are stored as their HYG abbreviation
- *   ("Alp" / "Bet" / "Gam" / ...) and translated to Greek glyphs at display
- *   time per the wave-file recommendation (option (b) — minimum-diff).
+ *   identifiers without a separate sidecar load. Strings are encoded as
+ *   UTF-8; the uint8 length prefix counts BYTES, not codepoints. Greek-letter
+ *   Bayer designations are stored as their HYG abbreviation ("Alp" / "Bet" /
+ *   "Gam" / ...) and translated to Greek glyphs at display time per the
+ *   wave-file recommendation (option (b) — minimum-diff). Proper names
+ *   carry the full HYG character set (Latin-1 accents like "Tupã", "Mönch",
+ *   "Lusitânia", and CJK-extended codepoints like "Bibhā" / "Sāmaya"
+ *   without loss).
  *
  *   ┌───────────────────────────── Header (36 B) ───────────────────────────┐
  *   │  [0..4)    magic                       ASCII "HYG1"                   │
@@ -70,12 +74,16 @@
  *   └────────────────────────────────────────────────────────────────────────┘
  *
  *   Five string tables in order (each formatted like v2's spect table —
- *   uint8 length followed by ASCII bytes; index 0 is the "" sentinel):
+ *   uint8 byte-length followed by UTF-8 bytes; index 0 is the "" sentinel):
  *     1. spect          (carried over from v2; semantics unchanged)
  *     2. properName     ("Sirius", "Vega", ... — empty index 0 = no name)
  *     3. bayer          ("Alp", "Bet", "Gam", ... 24 unique values in HYG)
  *     4. constellation  ("CMa", "Ori", ... 88 IAU 3-letter abbrevs)
  *     5. gliese         ("Gl 244", "Gl 411", ... — mostly unique per-star)
+ *   The parser validates each pool starts with the "" sentinel (length-0
+ *   entry) so consumers can index by 0 to mean "no value" without
+ *   bounds-checking. A size-consistent buffer that omits the sentinel
+ *   is rejected.
  *
  *   Per-star record (38 B):
  *     [ 0..23) ... same as v2 above ...
@@ -261,9 +269,45 @@ function readMagic(view: DataView): string {
 }
 
 /**
- * Decode a single ASCII string from the buffer at `offset`. Returns the
- * string and the byte count consumed (uint8 length prefix + length bytes).
- * Throws if the declared length runs past `endOffset`.
+ * UTF-8 codecs are global since Node 11+ / all evergreen browsers, so
+ * this module avoids the `util` import that worked before strict
+ * `verbatimModuleSyntax`. Cached at module scope to skip per-call
+ * construction.
+ */
+const utf8Encoder = new TextEncoder();
+const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
+
+/**
+ * Encode a string for the on-disk pool. Returns the UTF-8 byte array
+ * and asserts the entry fits in the uint8 length prefix.
+ *
+ * **Encoding history**: M6-B's first ship (commit 55d8f90) used a
+ * single-byte mask (`charCodeAt(i) & 0xff`), labelled "ASCII" in the
+ * format doc. That round-tripped 0x00–0xFF cleanly but corrupted any
+ * codepoint > 0xFF — HYG's `Bibhā` and `Sāmaya` both contain
+ * U+0101 (LATIN SMALL LETTER A WITH MACRON) and ended up as
+ * `Bibh` / `Smaya` on disk. Codex round-1 audit caught
+ * this 2026-05-06; encoding was always meant to handle the full HYG
+ * name set without loss, and switching to UTF-8 is the smaller fix
+ * than auditing the source for >0xFF content forever. Pure-ASCII
+ * pools (bayer, constellation, gliese, spect) are byte-identical
+ * before/after; only proper-name pool grew (~15 bytes total across
+ * 15 affected names).
+ */
+function encodePoolEntry(s: string, poolName: string): Uint8Array {
+  const bytes = utf8Encoder.encode(s);
+  if (bytes.length > 255) {
+    throw new Error(
+      `HYG ${poolName} entry too long: ${bytes.length} UTF-8 bytes exceeds the uint8 length-prefix cap (max 255 per entry)`
+    );
+  }
+  return bytes;
+}
+
+/**
+ * Decode a single UTF-8 string from the buffer at `offset`. Returns
+ * the string and the byte count consumed (uint8 length prefix +
+ * length bytes). Throws if the declared length runs past `endOffset`.
  */
 function readPooledString(
   view: DataView,
@@ -278,17 +322,18 @@ function readPooledString(
       `HYG ${poolName} table corrupt: entry at offset ${offset} declares length ${len} but only ${endOffset - bodyStart} bytes remain`
     );
   }
-  let s = "";
-  for (let i = 0; i < len; i++) {
-    s += String.fromCharCode(view.getUint8(bodyStart + i));
-  }
-  return { value: s, bytesConsumed: 1 + len };
+  // Use the underlying buffer directly — DataView keeps its own
+  // byteOffset, so resolve the absolute offset before slicing.
+  const slice = new Uint8Array(view.buffer, view.byteOffset + bodyStart, len);
+  return { value: utf8Decoder.decode(slice), bytesConsumed: 1 + len };
 }
 
 /**
- * Read a contiguous string-pool region as an array of ASCII strings.
+ * Read a contiguous string-pool region as an array of UTF-8 strings.
  * Stops when `tableBytes` is consumed. Index 0 of the returned array
- * is the "" sentinel by convention (and emitted by every encoder).
+ * MUST be the "" sentinel — this is part of the format contract so
+ * consumers can index by 0 to mean "no value" without bounds-checking.
+ * Throws if the pool is empty or doesn't lead with the sentinel.
  */
 function readStringPool(
   view: DataView,
@@ -314,40 +359,50 @@ function readStringPool(
       `HYG ${poolName} table corrupt: trailing ${end - cursor} bytes after last entry`
     );
   }
+  // Sentinel validation (Codex round-1 audit on M6-B, P3-2 finding):
+  // every conforming v2/v3 pool starts with a length-0 entry so a
+  // per-star index of 0 means "no value". A size-consistent but
+  // malformed buffer (`tableBytes === 0`, or first entry non-empty)
+  // would silently break every consumer that treats `pool[0]` as
+  // safe — guard the contract here.
+  if (out.length === 0 || out[0] !== "") {
+    throw new Error(
+      `HYG ${poolName} table corrupt: missing leading "" sentinel (pool must begin with a length-0 entry; got ${out.length === 0 ? "empty pool" : `"${out[0]}"`})`
+    );
+  }
   return out;
 }
 
 /**
  * Compute the byte length of a serialised string pool (sum of
- * `1 + s.length` per entry). Empty pools that should ship the ""
- * sentinel must include `[""]` so the pool occupies exactly 1 byte.
+ * `1 + utf8Bytes(entry)` per entry). Empty pools that should ship the
+ * "" sentinel must include `[""]` so the pool occupies exactly 1 byte.
  */
-function stringPoolBytes(pool: readonly string[]): number {
+function stringPoolBytes(pool: readonly string[], poolName: string): number {
   let total = 0;
-  for (const s of pool) total += 1 + s.length;
+  for (const s of pool) total += 1 + encodePoolEntry(s, poolName).length;
   return total;
 }
 
 /**
  * Write a string pool starting at `offset`. Returns the new write
- * offset. Each entry is uint8 length prefix + ASCII bytes (low byte of
- * each char). Non-ASCII chars get masked to the low byte; callers are
- * expected to pre-validate with `HYG_MAX_*` constants and ASCII-only
- * inputs (the wave-file recommendation for v3).
+ * offset. Each entry is `[uint8 byte-length, length UTF-8 bytes]`.
  */
 function writeStringPool(
   view: DataView,
   offset: number,
-  pool: readonly string[]
+  pool: readonly string[],
+  poolName: string
 ): number {
   let cursor = offset;
   for (const s of pool) {
-    view.setUint8(cursor, s.length);
+    const bytes = encodePoolEntry(s, poolName);
+    view.setUint8(cursor, bytes.length);
     cursor += 1;
-    for (let i = 0; i < s.length; i++) {
-      view.setUint8(cursor + i, s.charCodeAt(i) & 0xff);
+    for (let i = 0; i < bytes.length; i++) {
+      view.setUint8(cursor + i, bytes[i]);
     }
-    cursor += s.length;
+    cursor += bytes.length;
   }
   return cursor;
 }
@@ -874,11 +929,14 @@ export function encodeHygCatalog(stars: HygStarInput[]): ArrayBuffer {
     (hasSpectAndAbsmag ? HYG_FLAG_HAS_SPECT_AND_ABSMAG : 0) |
     (hasDesignations ? HYG_FLAG_HAS_DESIGNATIONS : 0);
 
-  const spectBytes = stringPoolBytes(spect.pool);
-  const properBytes = stringPoolBytes(proper.pool);
-  const bayerBytes = stringPoolBytes(bayer.pool);
-  const constellationBytes = stringPoolBytes(constellation.pool);
-  const glieseBytes = stringPoolBytes(gliese.pool);
+  const spectBytes = stringPoolBytes(spect.pool, "spect");
+  const properBytes = stringPoolBytes(proper.pool, "properName");
+  const bayerBytes = stringPoolBytes(bayer.pool, "bayer");
+  const constellationBytes = stringPoolBytes(
+    constellation.pool,
+    "constellation"
+  );
+  const glieseBytes = stringPoolBytes(gliese.pool, "gliese");
   const tableBytes =
     spectBytes + properBytes + bayerBytes + constellationBytes + glieseBytes;
 
@@ -902,11 +960,11 @@ export function encodeHygCatalog(stars: HygStarInput[]): ArrayBuffer {
 
   // String tables in declared order.
   let cursor = HYG_HEADER_BYTES;
-  cursor = writeStringPool(view, cursor, spect.pool);
-  cursor = writeStringPool(view, cursor, proper.pool);
-  cursor = writeStringPool(view, cursor, bayer.pool);
-  cursor = writeStringPool(view, cursor, constellation.pool);
-  cursor = writeStringPool(view, cursor, gliese.pool);
+  cursor = writeStringPool(view, cursor, spect.pool, "spect");
+  cursor = writeStringPool(view, cursor, proper.pool, "properName");
+  cursor = writeStringPool(view, cursor, bayer.pool, "bayer");
+  cursor = writeStringPool(view, cursor, constellation.pool, "constellation");
+  cursor = writeStringPool(view, cursor, gliese.pool, "gliese");
 
   // Per-star body.
   let offset = cursor;
