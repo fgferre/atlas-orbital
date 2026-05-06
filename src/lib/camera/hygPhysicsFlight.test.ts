@@ -1,11 +1,9 @@
-// @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 
 import {
   HYG_PHYSICS_CALIBRATION,
   HygPhysicsFlight,
-  __resetHygPhysicsTelemetry,
   type HygPhysicsFlightSpec,
 } from "./hygPhysicsFlight";
 
@@ -302,76 +300,6 @@ describe("HygPhysicsFlight — backward flight (camera-rebound)", () => {
     const f = p.update(0.016);
     expect(f).not.toBeNull();
     expect(f!.done).toBe(true);
-  });
-});
-
-describe("HygPhysicsFlight — R6-E telemetry (debug-only)", () => {
-  // The telemetry ring buffer is gated on
-  // `window.__ATLAS_DEBUG_HYG_PHYSICS__ === true`. Production runs
-  // (flag absent or false) MUST allocate no telemetry. This is also
-  // why the buffer is module-level not instance-level — the same
-  // single buffer is reused across `start()` calls so consumers
-  // always read the latest fly-to.
-  type DebugWin = {
-    __ATLAS_DEBUG_HYG_PHYSICS__?: boolean;
-    __ATLAS_HYG_PHYSICS_TELEMETRY__?: unknown;
-  };
-
-  const setDebugFlag = (value: boolean | undefined): void => {
-    const w = window as unknown as DebugWin;
-    if (value === undefined) {
-      delete w.__ATLAS_DEBUG_HYG_PHYSICS__;
-    } else {
-      w.__ATLAS_DEBUG_HYG_PHYSICS__ = value;
-    }
-  };
-
-  const readTelemetry = () =>
-    (window as unknown as DebugWin).__ATLAS_HYG_PHYSICS_TELEMETRY__ as
-      | Array<{ t: number; velocityMagnitude: number; done: boolean }>
-      | null
-      | undefined;
-
-  beforeEach(() => {
-    __resetHygPhysicsTelemetry();
-    setDebugFlag(undefined);
-  });
-
-  afterEach(() => {
-    __resetHygPhysicsTelemetry();
-    setDebugFlag(undefined);
-  });
-
-  it("records nothing when flag is absent (production path)", () => {
-    const p = new HygPhysicsFlight();
-    p.start(makeSpec());
-    p.update(0.016);
-    p.update(0.016);
-    expect(readTelemetry()).toBeNull();
-  });
-
-  it("records per-frame snapshots when flag is true", () => {
-    setDebugFlag(true);
-    const p = new HygPhysicsFlight();
-    p.start(makeSpec());
-    for (let i = 0; i < 10; i++) p.update(0.016);
-    const buf = readTelemetry();
-    expect(Array.isArray(buf)).toBe(true);
-    expect(buf!.length).toBe(10);
-    expect(buf![0].t).toBeGreaterThan(0);
-    expect(buf![9].t).toBeGreaterThan(buf![0].t);
-  });
-
-  it("resets the buffer on start() when flag is on", () => {
-    setDebugFlag(true);
-    const p = new HygPhysicsFlight();
-    p.start(makeSpec());
-    p.update(0.016);
-    p.update(0.016);
-    p.start(makeSpec());
-    p.update(0.016);
-    const buf = readTelemetry();
-    expect(buf!.length).toBe(1);
   });
 });
 

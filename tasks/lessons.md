@@ -235,7 +235,18 @@ user was asking about.
 the code matches Gaia"; "we're tuning constants because the last
 tune didn't fix the perception"; "Gaia uses N here, let's use N
 too" — without first checking that atlas's call graph matches
-Gaia's at the same level.
+Gaia's at the same level. **Also fires when an acceptance
+criterion is in the wrong unit space**: "stride within 3× across
+t=1..2..3s" was structurally incompatible with the exp-decay
+shape Gaia's distance-proportional `speedScaling` produces
+(consecutive 1s strides differ by `exp(k)` ≈ 20×). The
+perception-correct invariant is log-stride (Weber-Fechner: human
+size perception is logarithmic). Round-6 R6-G audit (2026-05-06)
+fixed both directions: ported flow + corrected criterion in the
+same pass. _Sub-pattern: when picking a criterion to validate a
+ported flow, check that the criterion lives in the perceptual
+coordinate the user actually experiences, not the raw numerical
+coordinate the integrator writes to._
 
 **Canonical code markers:** `sanitizeVsopSeries()` in
 `src/lib/orbital/analytical/vsop87Planets.ts`; `provenanceFor()` in

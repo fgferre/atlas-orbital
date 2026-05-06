@@ -5,30 +5,28 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-06 evening. T6.4 M1 and M2 shipped; M2.5
-S1 through S7 plus rounds 3, 4, 5, 5b hotfixes shipped._
-**Round-6 sub-tracks A through G shipped 2026-05-06**:
-`HygPhysicsFlight` integrator, `OrientationLerp` extraction,
-`setupCameraHyg` rewire, useFrame physics branch, R6-D cancel
-handlers, R6-E telemetry behind `__ATLAS_DEBUG_HYG_PHYSICS__`,
-R6-F first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
+_Last updated: 2026-05-06 night. T6.4 M1 and M2 shipped; M2.5
+S1 through S7 plus rounds 3, 4, 5, 5b hotfixes shipped;
+Round-6 sub-tracks A through H all shipped 2026-05-06._
+The integrator port (`HygPhysicsFlight` + `OrientationLerp`),
+`setupCameraHyg` rewire, useFrame physics branch, cancel
+handlers, first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
 `INITIAL_FORCE_FACTOR=8.0`, Sirius arrival around 4.65 s),
-R6-G e2e respec, integrator sub-stepping
+e2e respec, and sub-stepping hardening
 (`MAX_DT_SUBSTEP=0.05 s`, defensive against R3F dt spikes from
-boot, suspend, or headless-test rAF throttling).
-_Two Codex audit rounds applied._ The first added the missing
-backward-flight branch (camera-rebound case, mirroring Gaia's
-`go_to_object` forward / backward dispatch). The second applied
-a plan-vs-source divergence fix that swapped the wave-file's
-broken 3× linear-stride no-warp criterion for a log-stride 1.5×
-criterion. Rationale: Gaia's distance-proportional `speedScaling`
-produces exp decay, so log-stride is the perception-correct
-invariant; linear-stride 3× was structurally incompatible.
-_Only R6-H pending._ It removes the R6-E telemetry scaffolding
-and syncs wave-file, STATUS, ROADMAP, lessons.md at Round-6
-close. M2.5 close gate flips from "user re-smoke after round-5"
-to "Round-6 PASS on the no-warp acceptance §1 plus 4 named stars
-times 2 cycles smoke".
+boot, suspend, or headless-test rAF throttling) all landed.
+R6-H close-out today removed the R6-E telemetry scaffolding,
+synced wave file / STATUS / ROADMAP / lessons.md, and flipped
+M2.5 close gate to "user-smoke Round-6 acceptance".
+_Two Codex audit rounds applied during the work._ The first
+added the missing backward-flight branch (camera-rebound case,
+mirroring Gaia's `go_to_object` forward / backward dispatch).
+The second applied a plan-vs-source divergence fix that swapped
+the wave-file's broken 3× linear-stride no-warp criterion for a
+log-stride 1.5× criterion (rationale: Gaia's distance-proportional
+`speedScaling` produces exp decay, so log-stride is the
+perception-correct invariant). Round-6 commit chain: 89816e5,
+9a8688e, cbb767f, 5336b70, plus today's R6-H close-out.
 
 ---
 
@@ -50,24 +48,27 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
-**Default fresh-loop fire**: **R6-H — Round-6 close-out**
-(~1 h, doc + minor code). Per wave-file §Round-6 §R6-H: remove
-R6-E telemetry scaffolding (`telemetry` module-state +
-`isTelemetryEnabled` + `recordTelemetry` +
-`__resetHygPhysicsTelemetry` + 3 telemetry unit tests; KEEP
-`MAX_DT_SUBSTEP/MAX_DT_TOTAL` — production hardening, not
-telemetry); flip wave-file Round-6 to "shipped" + M2.5 wave
-acceptance §3 to physics-not-lerp; flip this STATUS line to
-"user smoke Round-6 acceptance"; ROADMAP T6.4 estimate update;
-add lessons.md L41 ("porting constants ≠ porting experience"
-— Round-6 lesson, log-stride vs linear-stride criterion trap).
+**Default fresh-loop fire**: **user-smoke Round-6 acceptance**
+— 4 named stars (Sirius, Betelgeuse, Proxima, far-edge anchor)
+× 2 zoom cycles each. Verify no warp perception (continuous
+"leaving solar system" → "interstellar" → "approaching star"
+phases), landing pose matches M2.5 contract (~456 wu for
+Sirius), and mid-flight drag interrupts the autopilot cleanly.
+After user smoke, U-1 closes; M2.5 close gate is met.
 
-**Calibration risk for the user-smoke that follows R6-H**:
-`MAX_VELOCITY_FACTOR=3.0` tunes for Sirius (~4.65 s). Far stars
-arrive proportionally to ln(distance) — Betelgeuse ~1.7 s vs
-wave-file 7-10 s. User-smoke decision: accept linear-log shape
-as Gaia-faithful (`speedScaling`) OR add distance-dependent
-velocity scaling (e.g. `vmax ∝ sqrt(distance)`).
+**Calibration risk** (R6-F first-guess): `MAX_VELOCITY_FACTOR=3.0`
+tunes for Sirius (~4.65 s). Far stars arrive proportionally to
+ln(distance) — Betelgeuse ~1.7 s vs wave-file 7-10 s
+expectation. User-smoke decision: accept the linear-log shape
+as Gaia-faithful (matches `speedScaling`) OR add distance-
+dependent velocity scaling (e.g. `vmax ∝ sqrt(distance)`).
+
+If user smoke surfaces a regression, reopen Round-6 with an
+empirical calibration sweep using telemetry — temporarily
+re-add the `__ATLAS_DEBUG_HYG_PHYSICS__` ring buffer (was
+removed at R6-H close per L37). Otherwise the next loop
+iteration picks up M3 (sprite ↔ mesh cross-fade) — now
+unblocked since M2.5 is closing on Round-6 PASS.
 
 **Forward queue** (independent of M2.5 close):
 
@@ -99,18 +100,17 @@ message; user runs it manually if they want external review.
 shipped; Round-6 promoted from CONTINGENT to ACTIVE
 2026-05-06; M6 forward-port queued):
 
-| ID  | Pri | Status                               | Summary                                                                                                                                                                                                                                                                           |
-| --- | --- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U-1 | P1  | Round-6 shipped, awaiting user smoke | Solar→star fly-to "jumps". Round-6 sub-tracks A through G shipped 2026-05-06 (commits 89816e5, 9a8688e, cbb767f, 5336b70). Sirius arrival ~4.65 s under R6-F first-guess calibration. R6-H closes round; user smoke validates no-warp perception across 4 named stars × 2 cycles. |
-| U-2 | P2  | Plan                                 | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).                                                                                                                                                   |
-| U-3 | P2  | Plan                                 | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                   |
-| U-4 | P3  | Plan                                 | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                               |
-| U-5 | P2  | Plan                                 | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                |
+| ID  | Pri | Status                              | Summary                                                                                                                                                                                                                                                                              |
+| --- | --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| U-1 | P1  | Round-6 closed, awaiting user smoke | Solar→star fly-to "jumps". Round-6 A-H shipped 2026-05-06 (commits 89816e5, 9a8688e, cbb767f, 5336b70 + R6-H close-out). Sirius arrival ~4.65 s under R6-F first-guess calibration. User smoke validates no-warp perception across 4 named stars × 2 cycles before U-1 fully closes. |
+| U-2 | P2  | Plan                                | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).                                                                                                                                                      |
+| U-3 | P2  | Plan                                | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                      |
+| U-4 | P3  | Plan                                | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                  |
+| U-5 | P2  | Plan                                | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                   |
 
-**Round-6 sub-track A through G shipped** (commits 89816e5,
-9a8688e, cbb767f, 5336b70). Only R6-H pending — see "Default
-fresh-loop fire" above. Full audit history + per-sub-track
-narrative in wave file §Round-6.
+**Round-6 closed** (sub-tracks A-H shipped 2026-05-06, 5
+commits). Full audit history + per-sub-track narrative in wave
+file §Round-6 §"Sub-track progress".
 
 **P3 forward-looking notes** parked OUTSIDE M2.5 (Codex
 round-4 audit, do not block):

@@ -174,61 +174,6 @@ const STUCK_VELOCITY_RELATIVE = 1e-4;
 const MAX_DT_SUBSTEP = 0.05;
 const MAX_DT_TOTAL = 5.0;
 
-/**
- * R6-E — telemetry ring buffer (debug-only, removed at R6 close).
- *
- * When `window.__ATLAS_DEBUG_HYG_PHYSICS__ === true` (set BEFORE the
- * fly-to triggers — typically pasted into devtools), each `update()`
- * appends a frame to `telemetry`. The same buffer is exposed at
- * `window.__ATLAS_HYG_PHYSICS_TELEMETRY__` for inspection. Ring-
- * buffered at `TELEMETRY_BUFFER_SIZE = 600` (10 s @ 60 fps) so a
- * runaway flight doesn't allocate unbounded memory.
- *
- * Scope: temporary scaffolding for R6-F empirical sweep at named
- * anchors. **Removed in the R6-H close commit** (per L37 — temp
- * dev diagnostics must not ship beyond their wave). The window-flag
- * gate keeps the runtime cost to a single `if` check when the
- * production user has not opted in.
- */
-const TELEMETRY_BUFFER_SIZE = 600;
-
-interface HygPhysicsTelemetryFrame {
-  t: number;
-  velocityMagnitude: number;
-  currentAngularRadiusRad: number;
-  distanceToTarget: number;
-  forceMagnitude: number;
-  frictionMagnitude: number;
-  done: boolean;
-}
-
-let telemetry: HygPhysicsTelemetryFrame[] | null = null;
-
-const isTelemetryEnabled = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return Boolean(
-    (window as unknown as { __ATLAS_DEBUG_HYG_PHYSICS__?: boolean })
-      .__ATLAS_DEBUG_HYG_PHYSICS__
-  );
-};
-
-const exposeTelemetry = (): void => {
-  if (typeof window === "undefined") return;
-  (
-    window as unknown as {
-      __ATLAS_HYG_PHYSICS_TELEMETRY__?: HygPhysicsTelemetryFrame[] | null;
-    }
-  ).__ATLAS_HYG_PHYSICS_TELEMETRY__ = telemetry;
-};
-
-const recordTelemetry = (frame: HygPhysicsTelemetryFrame): void => {
-  if (!telemetry) return;
-  telemetry.push(frame);
-  if (telemetry.length > TELEMETRY_BUFFER_SIZE) {
-    telemetry.shift();
-  }
-};
-
 export interface HygPhysicsFlightSpec {
   /** Current camera world position (the integrator's start state). */
   startPos: THREE.Vector3;
@@ -266,9 +211,6 @@ export class HygPhysicsFlight {
   private targetAngularRadiusRad = 0;
   private radiusWu = 0;
   private currentAngularRadiusRad = 0;
-  /** Cumulative time since `start()`, seconds. R6-E telemetry-only;
-   *  not used in the integrator's force/velocity math. */
-  private tElapsed = 0;
   /** Captured at `start()` so `progressRaw` reports the fraction
    *  of journey complete in either flight direction. */
   private initialAngularRadiusRad = 0;
@@ -310,13 +252,8 @@ export class HygPhysicsFlight {
     // landing pose.
     this.direction =
       this.currentAngularRadiusRad < this.targetAngularRadiusRad ? 1 : -1;
-    this.tElapsed = 0;
     this.onComplete = spec.onComplete;
     this.active = true;
-    // R6-E telemetry: reset buffer per fly-to so each empirical
-    // run starts clean. No-op when the debug flag is off.
-    telemetry = isTelemetryEnabled() ? [] : null;
-    exposeTelemetry();
   }
 
   /** Advance one frame. Caller passes R3F's measured `delta` (seconds);
@@ -350,8 +287,6 @@ export class HygPhysicsFlight {
 
   /** Single semi-implicit Euler substep with bounded `stepDt`. */
   private advanceOneStep(stepDt: number): HygPhysicsFlightFrame {
-    this.tElapsed += stepDt;
-
     // 1. Direction and remaining distance to target.
     this.tmpToTarget.subVectors(this.targetPos, this.position);
     const distanceToTarget = this.tmpToTarget.length();
@@ -436,21 +371,7 @@ export class HygPhysicsFlight {
           newDistanceToTarget *
           newDistanceToTarget;
 
-    const done = gateReached || stuck;
-
-    // R6-E telemetry: per-frame state snapshot for empirical sweep.
-    // No-op when the debug flag is off (telemetry === null).
-    recordTelemetry({
-      t: this.tElapsed,
-      velocityMagnitude: this.velocity.length(),
-      currentAngularRadiusRad: this.currentAngularRadiusRad,
-      distanceToTarget: newDistanceToTarget,
-      forceMagnitude,
-      frictionMagnitude: this.tmpFrictionVec.length(),
-      done,
-    });
-
-    if (done) {
+    if (gateReached || stuck) {
       this.completeNaturally();
       return { position: this.position, done: true };
     }
@@ -512,13 +433,3 @@ export const HYG_PHYSICS_CALIBRATION = {
   DECEL_ONSET_ANGULAR_RADIUS_RATIO,
   STUCK_VELOCITY_RELATIVE,
 } as const;
-
-/**
- * Test-only escape hatch — clears the telemetry buffer + window
- * exposure so cross-test bleed doesn't accumulate. Same pattern as
- * `__resetHygFlightPosProgress` (`hygFlightPosProgress.ts:65`).
- */
-export const __resetHygPhysicsTelemetry = (): void => {
-  telemetry = null;
-  exposeTelemetry();
-};
