@@ -7,8 +7,8 @@ History, shipped-onda detail, and audit narratives live in
 
 _Last updated: 2026-05-06 late night. T6.4 M1 + M2 shipped; M2.5
 S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped
-2026-05-06; **M6 sub-track A (i18n foundation) shipped 2026-05-06**._
-The integrator port (`HygPhysicsFlight`),
+2026-05-06; **M6 sub-tracks A + B (i18n + HYG binary v3) shipped
+2026-05-06**._ The integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
 calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
@@ -48,10 +48,10 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**M6 sub-track B — HYG binary v3 with proper-name fields** (~2h,
-spec in wave file §M6 §"Sub-track B"). A shipped 2026-05-06; B
-is the next self-contained track, unblocks C (SearchBar HYG name
-index). Independent of Round-6 flight-contract close.
+**M6 sub-track C — SearchBar wires HYG name index** (~1.5h, spec
+in wave file §M6 §"Sub-track C"). A + B shipped 2026-05-06; C
+consumes B's v3 designations to address U-2 (search box doesn't
+find HYG stars). Independent of Round-6 close.
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
@@ -135,7 +135,7 @@ round-4 audit, do not block):
 | Sub-track | Deliverable                                                                      | New deps                                                       |
 | --------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | A ✅      | i18n foundation (en + pt-BR locales, wired via `useTranslation`)                 | `react-i18next`, `i18next`, `i18next-browser-languagedetector` |
-| B         | HYG binary v3 with `properName` + Bayer + Flamsteed + HD/HIP/Gliese designations | none (extends `build-hyg-binary.js`)                           |
+| B ✅      | HYG binary v3 with `properName` + Bayer + Flamsteed + HD/HIP/Gliese designations | none (extends `build-hyg-binary.js`)                           |
 | C         | SearchBar wires HYG name index with autocomplete                                 | none                                                           |
 | D         | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
 | E         | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |

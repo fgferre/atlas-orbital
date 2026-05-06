@@ -26,19 +26,18 @@ const buildCatalog = (
       count: n,
       flags: 1,
       hasProperMotion: true,
-      // T6.2-β-α: HygCatalogHeader gained `hasSpectAndAbsmag`. v1
-      // mock buffers don't carry spect/absmag so the flag is false;
-      // matches the v1 parser's default-fill semantics.
+      // T6.2-β-α: HygCatalogHeader gained `hasSpectAndAbsmag`. M6-B
+      // added `hasDesignations`. v1 mock buffers don't carry either,
+      // matching the v1 parser's default-fill semantics.
       hasSpectAndAbsmag: false,
+      hasDesignations: false,
     },
     positions: new Float32Array(positions),
     magnitudes: new Float32Array(n),
     colorIndices: new Float32Array(n),
     pmRA: new Int16Array(n),
     pmDec: new Int16Array(n),
-    // T6.2-β-α: HygCatalogData gained spectStrings / spectIndices /
-    // absmag. Mock with v1-equivalent defaults (empty sentinel
-    // string table + zero-filled indices + NaN-filled absmag).
+    // T6.2-β-α v2 fields. Mock with v1-equivalent defaults.
     spectStrings: [""],
     spectIndices: new Uint8Array(n),
     absmag: (() => {
@@ -46,6 +45,19 @@ const buildCatalog = (
       a.fill(NaN);
       return a;
     })(),
+    // M6-B v3 fields. Same v1-equivalent default-fill: empty sentinel
+    // pools + zero-filled per-star indices + zero numeric IDs.
+    properNameStrings: [""],
+    properNameIndices: new Uint16Array(n),
+    bayerStrings: [""],
+    bayerIndices: new Uint8Array(n),
+    constellationStrings: [""],
+    constellationIndices: new Uint8Array(n),
+    glieseStrings: [""],
+    glieseIndices: new Uint16Array(n),
+    flamsteed: new Uint8Array(n),
+    hd: new Uint32Array(n),
+    hip: new Uint32Array(n),
   };
 };
 

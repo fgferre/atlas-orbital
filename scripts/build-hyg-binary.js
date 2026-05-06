@@ -193,9 +193,11 @@ async function parseCsv(inputPath) {
     if (!header) {
       header = line.split(",").map((col) => col.replace(/^"|"$/g, "").trim());
       headerIndex = Object.fromEntries(header.map((name, i) => [name, i]));
-      // T6.2-β-β: spect + absmag added to required columns. Both have
-      // existed in HYG v4.2 since release; the build script just wasn't
-      // reading them before this commit.
+      // T6.2-β-β: spect + absmag added to required columns.
+      // M6-B: hd + gl added so the v3 binary can carry the full
+      // designation set (proper / bayer / flamsteed / hd / hip / gliese /
+      // constellation) for sub-track C's name index. proper / bayer /
+      // flam / con / hip were already extracted for the names sidecar.
       const required = [
         "mag",
         "ci",
@@ -206,6 +208,8 @@ async function parseCsv(inputPath) {
         "pmdec",
         "spect",
         "absmag",
+        "hd",
+        "gl",
       ];
       for (const name of required) {
         if (!(name in headerIndex)) {
@@ -261,7 +265,15 @@ async function parseCsv(inputPath) {
     const bayer = cells[headerIndex.bayer]?.replace(/^"|"$/g, "").trim() ?? "";
     const flam = cells[headerIndex.flam]?.replace(/^"|"$/g, "").trim() ?? "";
     const con = cells[headerIndex.con]?.replace(/^"|"$/g, "").trim() ?? "";
-    const hip = cells[headerIndex.hip]?.replace(/^"|"$/g, "").trim() ?? "";
+    const hipStr = cells[headerIndex.hip]?.replace(/^"|"$/g, "").trim() ?? "";
+    const hdStr = cells[headerIndex.hd]?.replace(/^"|"$/g, "").trim() ?? "";
+    const gliese = cells[headerIndex.gl]?.replace(/^"|"$/g, "").trim() ?? "";
+
+    // M6-B: derive integer IDs for the v3 binary record. Non-finite
+    // parses → 0 (the binary's "missing" sentinel).
+    const flamNum = Number.parseInt(flam, 10);
+    const hdNum = Number.parseInt(hdStr, 10);
+    const hipNum = Number.parseInt(hipStr, 10);
 
     stars.push({
       x,
@@ -271,15 +283,25 @@ async function parseCsv(inputPath) {
       ci: Number.isFinite(ci) ? ci : 0.65, // Sun-like default when unknown
       pmRA: Number.isFinite(pmRA) ? pmRA : 0,
       pmDec: Number.isFinite(pmDec) ? pmDec : 0,
-      // T6.2-β-β v2 fields. Empty spect / NaN absmag are encoded as
-      // sentinels by the binary encoder so they round-trip cleanly.
+      // T6.2-β-β v2 fields.
       spect,
       absmag: Number.isFinite(absmag) ? absmag : NaN,
+      // Sidecar fields (writeSidecar consumes `proper`/`bayer`/`flam`/
+      // `con`; reads `hip` and Number-coerces it). `flam` stays a string
+      // here so the existing sidecar contract (HygNamedStar.flam:string)
+      // doesn't shift.
       proper,
       bayer,
       flam,
       con,
-      hip,
+      // M6-B v3 binary designation fields. `constellation` mirrors `con`
+      // for the encoder shape; `hip` becomes a number (Number-coerced
+      // sidecar still works); `flamsteed` / `hd` are encoder-only.
+      constellation: con,
+      gliese,
+      flamsteed: Number.isFinite(flamNum) ? flamNum : 0,
+      hd: Number.isFinite(hdNum) ? hdNum : 0,
+      hip: Number.isFinite(hipNum) ? hipNum : 0,
     });
   }
 
