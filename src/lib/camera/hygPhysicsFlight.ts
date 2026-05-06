@@ -153,6 +153,28 @@ const DECEL_ONSET_ANGULAR_RADIUS_RATIO = 3.0;
 const STUCK_VELOCITY_RELATIVE = 1e-4;
 
 /**
+ * Max per-substep dt (seconds). Semi-implicit Euler with very large
+ * dt loses stability: the velocity cap is applied AFTER the
+ * acceleration step, so a single huge `position += velocity × dt`
+ * jumps the camera by `vmax × dt` regardless of remaining-distance,
+ * massively overshooting the target. R6-G e2e (2026-05-06) caught
+ * this: the test's first physics frame had `dt ≈ 2.15 s`, putting
+ * the camera 3.46e9 wu past Sirius (~7× the Sun→Sirius distance).
+ *
+ * Solution: SUB-STEPPING. When `dt > MAX_DT_SUBSTEP`, `update()` runs
+ * multiple internal `MAX_DT_SUBSTEP`-sized integration steps to
+ * cover the full elapsed time. This keeps the integrator in sync
+ * with wall-clock under abnormal frame pacing (catalog load, tab
+ * suspend, headless-test rAF throttling) without sacrificing
+ * stability. `MAX_DT_TOTAL` caps the total covered per call so a
+ * pathological dt (multi-minute suspend) doesn't burn unbounded
+ * CPU; in practice this just means the integrator falls slightly
+ * behind wall-clock after a multi-minute idle, which is harmless.
+ */
+const MAX_DT_SUBSTEP = 0.05;
+const MAX_DT_TOTAL = 5.0;
+
+/**
  * R6-E — telemetry ring buffer (debug-only, removed at R6 close).
  *
  * When `window.__ATLAS_DEBUG_HYG_PHYSICS__ === true` (set BEFORE the
@@ -309,8 +331,26 @@ export class HygPhysicsFlight {
       // emit a 0-dt frame on the first tick after suspend.
       return { position: this.position, done: false };
     }
+    // Sub-stepping: divide a large `dt` into `MAX_DT_SUBSTEP`-sized
+    // integration steps so the integrator stays stable under any
+    // R3F frame pacing. See `MAX_DT_SUBSTEP` rationale comment.
+    let dtRemaining = Math.min(dt, MAX_DT_TOTAL);
+    let result: HygPhysicsFlightFrame = {
+      position: this.position,
+      done: false,
+    };
+    while (dtRemaining > 0 && this.active) {
+      const stepDt = Math.min(dtRemaining, MAX_DT_SUBSTEP);
+      result = this.advanceOneStep(stepDt);
+      dtRemaining -= stepDt;
+      if (result.done) break;
+    }
+    return result;
+  }
 
-    this.tElapsed += dt;
+  /** Single semi-implicit Euler substep with bounded `stepDt`. */
+  private advanceOneStep(stepDt: number): HygPhysicsFlightFrame {
+    this.tElapsed += stepDt;
 
     // 1. Direction and remaining distance to target.
     this.tmpToTarget.subVectors(this.targetPos, this.position);
@@ -357,7 +397,7 @@ export class HygPhysicsFlight {
       .add(this.tmpFrictionVec);
 
     // 5. Semi-implicit Euler step:  v += a·dt;  pos += v·dt.
-    this.velocity.addScaledVector(this.tmpAccelVec, dt);
+    this.velocity.addScaledVector(this.tmpAccelVec, stepDt);
 
     // 6. Cap velocity by remaining-distance heuristic (dynamic
     //    terminal velocity that shrinks as we approach the target
@@ -368,7 +408,7 @@ export class HygPhysicsFlight {
       this.velocity.setLength(maxVelocity);
     }
 
-    this.tmpVelStep.copy(this.velocity).multiplyScalar(dt);
+    this.tmpVelStep.copy(this.velocity).multiplyScalar(stepDt);
     this.position.add(this.tmpVelStep);
 
     // 7. Recompute angular radius for the gate check.
