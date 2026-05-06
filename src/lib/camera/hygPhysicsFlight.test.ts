@@ -191,14 +191,16 @@ describe("HygPhysicsFlight — semi-implicit Euler integration", () => {
   });
 
   it("Sirius-scale arrival within wave-file Acceptance §1 4-6 s band (R6-F first-guess)", () => {
-    // Pin the R6-F first-guess calibration: `MAX_VELOCITY_FACTOR=3.0`
+    // Pin the R6-F first-guess calibration to the wave-file
+    // Acceptance §1 4-6 s spec for Sirius. `MAX_VELOCITY_FACTOR=3.0`
     // gives an effective decay rate of 3/s; Sirius (D=5.36e8 wu,
     // R≈7.96 wu, target≈0.0175 rad → D/G≈1.15e6) lands at
-    // `ln(D/G)/3 ≈ 4.65 s` plus ~0.3 s ramp-up. If user smoke
-    // refines the calibration, this test is the first signal that
-    // the constants drifted — adjust the bounds OR the constants
-    // here in the same commit so the test reflects the shipped
-    // expectation.
+    // `ln(D/G)/3 ≈ 4.65 s` plus ~0.3 s ramp-up. **The bracket
+    // matches the spec exactly** (Codex audit 2026-05-06 P3 caught
+    // the prior 3.5-7.0 bracket — it allowed ~50% drift past the
+    // upper bound to pass silently). If user smoke refines the
+    // calibration, adjust the bounds OR the constants here in the
+    // same commit so the test reflects the shipped expectation.
     const p = new HygPhysicsFlight();
     p.start({
       startPos: new THREE.Vector3(0, 0, 0),
@@ -217,8 +219,8 @@ describe("HygPhysicsFlight — semi-implicit Euler integration", () => {
     }
     expect(f).not.toBeNull();
     expect(f!.done).toBe(true);
-    expect(elapsed).toBeGreaterThanOrEqual(3.5);
-    expect(elapsed).toBeLessThanOrEqual(7.0);
+    expect(elapsed).toBeGreaterThanOrEqual(4.0);
+    expect(elapsed).toBeLessThanOrEqual(6.0);
   });
 });
 

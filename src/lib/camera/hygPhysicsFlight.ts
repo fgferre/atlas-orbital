@@ -124,20 +124,35 @@ const FRICTION_RATE = 2.0;
  * Starting value 3.0 (wave-file spec): the gate triggers at ratio
  * = 1, so a threshold of 3.0 means the explicit force-cutoff phase
  * does NOT engage before natural arrival — the camera relies on
- * the velocity cap + friction to decelerate as remaining distance
- * shrinks. Math: at terminal velocity v = MAX_VELOCITY_FACTOR ×
- * distance, friction force = FRICTION_RATE × v = 0.6 × distance,
- * which exceeds the initial force = INITIAL_FORCE_FACTOR × distance
- * = 0.5 × distance. So the system's natural equilibrium velocity is
- * v_eq = INITIAL_FORCE_FACTOR / FRICTION_RATE × distance = 0.25 ×
- * distance, well below vmax. As distance shrinks the equilibrium
- * shrinks proportionally — that IS the decel.
+ * the velocity cap to decelerate as remaining distance shrinks.
  *
- * R6-F may tune this down (e.g. to 0.5 or 1/3) if empirical sweep
- * shows the natural decel is too soft and the camera arrives faster
- * than the 4-6 s wave-file Acceptance §1 target. At ratio < 1, the
- * cutoff engages BEFORE the gate, giving the camera a friction-only
- * coast tail.
+ * **Math under the R6-F first-guess constants** (`INITIAL_FORCE_FACTOR=8.0`,
+ * `MAX_VELOCITY_FACTOR=3.0`, `FRICTION_RATE=2.0`): the unconstrained
+ * equilibrium velocity (force = friction) is
+ * `v_eq = INITIAL_FORCE_FACTOR / FRICTION_RATE × distance = 4 × distance`,
+ * which EXCEEDS the velocity cap `vmax = 3 × distance`. So the cap
+ * binds, not the friction equilibrium, and the camera flies at
+ * `v = 3 × distance` until distance shrinks. At cap-bound velocity:
+ *   force      = 8 × distance     (toward target)
+ *   friction   = 2 × v = 6 × distance  (against motion)
+ *   net accel  = 2 × distance       (still toward target — would
+ *                                    keep accelerating except the
+ *                                    cap intercepts).
+ * Effective decay rate on `distance(t)` is `MAX_VELOCITY_FACTOR = 3/s`,
+ * giving `distance(t) = D₀ × exp(-3t)` once the cap binds. Sirius
+ * (D/G ≈ 1.15e6) arrives in `ln(D/G) / 3 ≈ 4.65 s`. Codex audit
+ * 2026-05-06 P2 caught the prior version of this comment that
+ * still used the wave-file's pre-R6-F starting constants
+ * (INITIAL=0.5, MAX_VEL=0.3 → v_eq = 0.25 × distance, below cap)
+ * — runtime followed the shipped constants but the rationale text
+ * was stale.
+ *
+ * R6-F empirical sweep may tune this down (e.g. to 0.5 or 1/3) if
+ * user smoke shows the cap-bound decay is too soft and the camera
+ * arrives feeling rushed at the gate. At ratio < 1, the cutoff
+ * engages BEFORE the gate, giving the camera a friction-only coast
+ * tail (force → 0; friction decays remaining velocity exponentially
+ * at rate `FRICTION_RATE`).
  */
 const DECEL_ONSET_ANGULAR_RADIUS_RATIO = 3.0;
 
@@ -166,13 +181,29 @@ const STUCK_VELOCITY_RELATIVE = 1e-4;
  * cover the full elapsed time. This keeps the integrator in sync
  * with wall-clock under abnormal frame pacing (catalog load, tab
  * suspend, headless-test rAF throttling) without sacrificing
- * stability. `MAX_DT_TOTAL` caps the total covered per call so a
- * pathological dt (multi-minute suspend) doesn't burn unbounded
- * CPU; in practice this just means the integrator falls slightly
- * behind wall-clock after a multi-minute idle, which is harmless.
+ * stability.
+ *
+ * `MAX_DT_TOTAL` caps the total per-call advance to BOUND the visible
+ * jump per rendered frame. Codex audit 2026-05-06 P1 (post R6-H)
+ * raised that the prior `MAX_DT_TOTAL = 5.0 s` allowed a single
+ * `useFrame` call to consume up to 5 s of integrator time and
+ * return only the FINAL position, which renders as a single-frame
+ * warp on tab-resume mid-flight (Sirius arrival at integrator
+ * t ≈ 4.65 s = could land in one frame). Reduced to 1.0 s: in
+ * production at 60 fps the per-frame `dt ≈ 0.0167 s` runs a
+ * single sub-step (no change); after a tab-resume from suspend,
+ * the per-frame visible jump is bounded at 1 s of integrator time
+ * (~30 % of remaining-distance under cap-bound exp decay) instead
+ * of arriving instantly. Trade-off: under headless e2e where R3F
+ * runs at ~1 Hz, the integrator advances 1 s per frame = 1 ×
+ * wall-clock, so a 4.65 s flight still completes in ~5 s real
+ * time (test waits 10 s, comfortable headroom). A pathological
+ * multi-minute suspend just means the integrator catches up
+ * gradually over the next few frames, which is the correct game-
+ * physics pattern for resume-from-idle.
  */
 const MAX_DT_SUBSTEP = 0.05;
-const MAX_DT_TOTAL = 5.0;
+const MAX_DT_TOTAL = 1.0;
 
 export interface HygPhysicsFlightSpec {
   /** Current camera world position (the integrator's start state). */
