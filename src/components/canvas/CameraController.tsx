@@ -335,11 +335,28 @@ export const CameraController = () => {
       // dictate the gate, so M3 spawn invariants hold for free.
       const landing = computeAtlasFlightLanding(radiusWu, distancePc);
 
-      // Orientation lerp duration — angular sweep heuristic. Same
-      // formula as round-5b S3: a sweep ≥ ~2 rad (180°) gets the
-      // 4 s cap, sub-radian sweeps scale linearly down to the
-      // 1 s floor. Independent of the position-channel duration
-      // (which is gate-driven under round-6, not duration-driven).
+      // Orientation lerp duration — angular sweep heuristic.
+      // **Round-6 retune (2026-05-06 user-smoke fix)**: the
+      // round-5b range (1000-4000 ms) was calibrated for the
+      // duration-driven `StellarFlightTransition` that took 3-8 s
+      // for a Sirius position lerp. Under Round-6's gate-driven
+      // physics integrator, position covers ~95 % of the journey
+      // distance in the first ~1 s under cap-bound exp decay — so
+      // a 1000-4000 ms orientation lerp lags far behind position,
+      // leaving `controls.target` BEHIND the camera's actual
+      // position for most of the flight. OrbitControls then
+      // derives camera orientation from `(camera.position,
+      // controls.target)` and the camera ends up looking BACKWARD
+      // along its motion direction — the user-reported "marcha ré"
+      // perception (camera goes in reverse before going forward).
+      // Retune: 200-500 ms range, picked to align orientation
+      // completion with the position channel's "fast progress"
+      // window (the first ~0.5 s where 78 % of the trajectory is
+      // covered). Sweeps near π (full reverse) get the 500 ms cap;
+      // small sweeps get the 200 ms floor. Factor=17 logistic
+      // sigmoid is steep enough that even 200 ms doesn't feel
+      // snappy — most of the rotation happens in the middle 60 %
+      // of duration window (~120 ms for a 200 ms lerp).
       const camToStart = controlsInstance.target
         .clone()
         .sub(cameraInstance.position);
@@ -348,7 +365,7 @@ export const CameraController = () => {
         camToStart.lengthSq() > 1e-12 && camToEnd.lengthSq() > 1e-12
           ? camToStart.angleTo(camToEnd)
           : 0;
-      const oriDurationMs = Math.min(4000, Math.max(1000, angularSweep * 2000));
+      const oriDurationMs = Math.min(500, Math.max(200, angularSweep * 200));
 
       // Mutual exclusion with curated-body fly-to: stop any in-flight
       // `CameraTransition` so useFrame's HYG branch drives a single
