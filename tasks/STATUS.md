@@ -103,18 +103,17 @@ shipped; Round-6 promoted from CONTINGENT to ACTIVE
 
 **Round-6 active scope** (promoted from CONTINGENT 2026-05-06):
 port Gaia's interactive flight model — per-frame velocity push
-driven by `InteractiveCameraModule.java:174-200`'s control loop
-
-- `NaturalCamera.java:125,341,985-1011,1533-1537`'s force /
-  friction / velocity physics. Atlas implements as a small local
-  `HygPhysicsFlight` class with semi-implicit Euler integration,
-  calibrated empirically (4 tunable constants: initial force,
-  max velocity factor, friction rate, decel onset ratio). M2.5
-  contract preserved at the gate threshold
-  (`computeAtlasFlightTarget` → `targetAngularRadiusRad`).
-  `StellarFlightTransition` retained for the orientation-only
-  channel + future scripted-tour features. 8 sub-tracks specced
-  in wave file §Round-6 §Spec; ~10-14 h total effort.
+driven by `InteractiveCameraModule.java:174-200`'s control loop,
+combined with `NaturalCamera.java:125,341,985-1011,1533-1537`'s
+force / friction / velocity physics. Atlas implements as a
+small local `HygPhysicsFlight` class with semi-implicit Euler
+integration, calibrated empirically (4 tunable constants:
+initial force, max velocity factor, friction rate, decel onset
+ratio). M2.5 contract preserved at the gate threshold
+(`computeAtlasFlightTarget` → `targetAngularRadiusRad`).
+`StellarFlightTransition` retained for the orientation-only
+channel and future scripted-tour features. 8 sub-tracks specced
+in wave file §Round-6 §Spec; ~10-14 h total effort.
 
 **P3 forward-looking notes** parked OUTSIDE M2.5 (Codex
 round-4 audit, do not block):
