@@ -5,27 +5,30 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-\_Last updated: 2026-05-06 evening (T6.4 M1 + M2 ✅; M2.5 S1-S7
-
-- round-3 + round-4 + round-5 + round-5b hotfixes shipped;
-  **Round-6 sub-tracks A through G shipped 2026-05-06** —
-  `HygPhysicsFlight` integrator + `OrientationLerp` extracted +
-  `setupCameraHyg` rewired + useFrame branch + R6-D cancel
-  handlers + R6-E telemetry behind `__ATLAS_DEBUG_HYG_PHYSICS__`
-- R6-F first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
-  `INITIAL_FORCE_FACTOR=8.0`, Sirius arrival ~4.65 s) + R6-G e2e
-  respec + integrator sub-stepping (`MAX_DT_SUBSTEP=0.05 s`,
-  defensive against R3F dt spikes from boot/suspend/headless-test).
-  **Two Codex audit rounds applied**: P1 #2 added the missing
-  backward-flight branch (camera-rebound case, Gaia's go_to_object
-  forward/backward dispatch); P3 #5 + plan-vs-source divergence
-  fix swapped the wave-file's broken 3× linear-stride no-warp
-  criterion for log-stride 1.5× (Gaia's distance-proportional
-  `speedScaling` produces exp decay; log-stride is the perception-
-  correct invariant). **Only R6-H pending** — telemetry removal
-- STATUS/lessons.md sync at Round-6 close. M2.5 close gate flips
-  from "user re-smoke after round-5" to "Round-6 PASS on the
-  no-warp acceptance §1 + 4 named stars × 2 cycles smoke".)\_
+_Last updated: 2026-05-06 evening. T6.4 M1 and M2 shipped; M2.5
+S1 through S7 plus rounds 3, 4, 5, 5b hotfixes shipped._
+**Round-6 sub-tracks A through G shipped 2026-05-06**:
+`HygPhysicsFlight` integrator, `OrientationLerp` extraction,
+`setupCameraHyg` rewire, useFrame physics branch, R6-D cancel
+handlers, R6-E telemetry behind `__ATLAS_DEBUG_HYG_PHYSICS__`,
+R6-F first-guess calibration (`MAX_VELOCITY_FACTOR=3.0`,
+`INITIAL_FORCE_FACTOR=8.0`, Sirius arrival around 4.65 s),
+R6-G e2e respec, integrator sub-stepping
+(`MAX_DT_SUBSTEP=0.05 s`, defensive against R3F dt spikes from
+boot, suspend, or headless-test rAF throttling).
+_Two Codex audit rounds applied._ The first added the missing
+backward-flight branch (camera-rebound case, mirroring Gaia's
+`go_to_object` forward / backward dispatch). The second applied
+a plan-vs-source divergence fix that swapped the wave-file's
+broken 3× linear-stride no-warp criterion for a log-stride 1.5×
+criterion. Rationale: Gaia's distance-proportional `speedScaling`
+produces exp decay, so log-stride is the perception-correct
+invariant; linear-stride 3× was structurally incompatible.
+_Only R6-H pending._ It removes the R6-E telemetry scaffolding
+and syncs wave-file, STATUS, ROADMAP, lessons.md at Round-6
+close. M2.5 close gate flips from "user re-smoke after round-5"
+to "Round-6 PASS on the no-warp acceptance §1 plus 4 named stars
+times 2 cycles smoke".
 
 ---
 
