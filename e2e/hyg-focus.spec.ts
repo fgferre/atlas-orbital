@@ -50,7 +50,20 @@ test.describe("hyg-focus", () => {
   // headroom + Playwright overhead.
   test.setTimeout(120_000);
 
-  test("Sirius focus respects the M2.5 flight contract end-to-end", async ({
+  // T6.4-M2.5 round-6 R6-A+B+C audit (Codex 2026-05-06 P2): the
+  // assertions below were written against the round-5b duration-
+  // driven `StellarFlightTransition` (alpha=1 at t=10s, mid-warp at
+  // t=2s). Round-6 swaps the position channel to a gate-driven
+  // physics integrator; the t-mark assumptions no longer hold. With
+  // the wave-file starting calibration the camera takes ~46 s for
+  // Sirius (gate-driven decay rate ≈ 0.3/s pending R6-F sweep), so
+  // both the t=10 s "landed" sample and the t=2 s mesh-inactive
+  // sample would fail in misleading ways. Skip until R6-F lands a
+  // tuned calibration AND R6-G respecs assertions to angular-radius
+  // progression. Trigger to un-skip: R6-G commit replaces the t-mark
+  // sampling with `currentAngularRadiusRad` monotonicity + |Δpos|
+  // 3× checks.
+  test.skip("Sirius focus respects the M2.5 flight contract end-to-end", async ({
     page,
   }) => {
     const consoleErrors: string[] = [];

@@ -77,9 +77,16 @@ const INITIAL_FORCE_FACTOR = 0.5;
  * target, distance shrinks and the cap shrinks with it, naturally
  * decelerating without explicit logic.
  *
- * Starting value 0.3: at Sirius vmax = 1.6e8 wu/s. With ramp + decel
- * the full traversal lands ~5 s — close to the wave-file Acceptance
- * §1 4-6 s expectation. Subject to R6-F.
+ * Starting value 0.3 (wave-file spec). With this and the other
+ * starting constants (`INITIAL_FORCE_FACTOR=0.5, FRICTION_RATE=2.0`),
+ * the cap-bound effective decay rate is `MAX_VELOCITY_FACTOR = 0.3/s`,
+ * giving Sirius (D/G ≈ 1.15e6) an arrival of `ln(D/G) / 0.3 ≈ 46 s`.
+ * That is FAR slower than the wave-file Acceptance §1 expectation
+ * (4-6 s). R6-F empirical sweep is the load-bearing step that tunes
+ * these constants for the Acceptance feel; until R6-F lands, the
+ * shipped code path WILL feel sluggish on user smoke. Codex audit
+ * 2026-05-06 P1 caught a misleading earlier draft of this comment
+ * that claimed the starting constants gave ~5 s.
  */
 const MAX_VELOCITY_FACTOR = 0.3;
 
@@ -169,6 +176,15 @@ export class HygPhysicsFlight {
   private targetAngularRadiusRad = 0;
   private radiusWu = 0;
   private currentAngularRadiusRad = 0;
+  /** Captured at `start()` so `progressRaw` reports the fraction
+   *  of journey complete in either flight direction. */
+  private initialAngularRadiusRad = 0;
+  /** Flight direction set at `start()` and held for the whole flight
+   *  (matches Gaia's `go_to_object` branch-once contract — the loop
+   *  doesn't switch mid-flight even if friction overshoots). +1 =
+   *  forward (camera too FAR, must close in); -1 = backward (camera
+   *  too CLOSE, must back out to landing distance). */
+  private direction: 1 | -1 = 1;
   private onComplete?: () => void;
 
   /** Reusable scratch vectors so per-frame `update()` allocates
@@ -188,6 +204,19 @@ export class HygPhysicsFlight {
     const initialDist = this.position.distanceTo(this.targetPos);
     this.currentAngularRadiusRad =
       initialDist > 0 ? this.radiusWu / initialDist : 0;
+    this.initialAngularRadiusRad = this.currentAngularRadiusRad;
+    // Direction selection mirrors Gaia's `InteractiveCameraModule.
+    // go_to_object` (`InteractiveCameraModule.java:172-200`):
+    // forward when current apparent angle is BELOW target
+    // (camera too far, close in); backward when current is ABOVE
+    // target (camera too close, back out to landing distance).
+    // Codex audit 2026-05-06 P1 caught the missing backward branch
+    // — without it, the camera-rebound case (clicking a HYG star
+    // from inside the gate distance) would terminate immediately
+    // at the too-close position instead of backing out to the M2.5
+    // landing pose.
+    this.direction =
+      this.currentAngularRadiusRad < this.targetAngularRadiusRad ? 1 : -1;
     this.onComplete = spec.onComplete;
     this.active = true;
   }
@@ -214,7 +243,12 @@ export class HygPhysicsFlight {
       this.completeNaturally();
       return { position: this.position, done: true };
     }
-    this.tmpForceVec.copy(this.tmpToTarget).divideScalar(distanceToTarget);
+    // Force direction = unit vector toward (forward) or away from
+    // (backward) the target. Gate semantics flip accordingly below.
+    this.tmpForceVec
+      .copy(this.tmpToTarget)
+      .divideScalar(distanceToTarget)
+      .multiplyScalar(this.direction);
 
     // 2. Friction = -FRICTION_RATE × velocity. Linear decay (game
     //    physics canon).
@@ -222,11 +256,18 @@ export class HygPhysicsFlight {
 
     // 3. Force magnitude: ramp-up from rest until decel-onset gate.
     //    Past the gate, force = 0 and friction alone decelerates.
+    //    Decel-onset condition is direction-aware: forward triggers
+    //    when angularRatio grows past the threshold; backward when
+    //    it shrinks past 1/threshold (same proportional distance to
+    //    gate, opposite sign).
     const angularRatio =
       this.targetAngularRadiusRad > 0
         ? this.currentAngularRadiusRad / this.targetAngularRadiusRad
         : 0;
-    const inDecelPhase = angularRatio > DECEL_ONSET_ANGULAR_RADIUS_RATIO;
+    const inDecelPhase =
+      this.direction === 1
+        ? angularRatio > DECEL_ONSET_ANGULAR_RADIUS_RATIO
+        : angularRatio < 1 / DECEL_ONSET_ANGULAR_RADIUS_RATIO;
     const forceMagnitude = inDecelPhase
       ? 0
       : INITIAL_FORCE_FACTOR * distanceToTarget;
@@ -241,7 +282,9 @@ export class HygPhysicsFlight {
     this.velocity.addScaledVector(this.tmpAccelVec, dt);
 
     // 6. Cap velocity by remaining-distance heuristic (dynamic
-    //    terminal velocity that shrinks as we approach).
+    //    terminal velocity that shrinks as we approach the target
+    //    in forward, or as we recede from it in backward — both use
+    //    `distanceToTarget` as the scale).
     const maxVelocity = MAX_VELOCITY_FACTOR * distanceToTarget;
     if (this.velocity.lengthSq() > maxVelocity * maxVelocity) {
       this.velocity.setLength(maxVelocity);
@@ -255,9 +298,14 @@ export class HygPhysicsFlight {
     this.currentAngularRadiusRad =
       newDistanceToTarget > 0 ? this.radiusWu / newDistanceToTarget : 0;
 
+    // Gate semantics flip with direction. Forward: camera grew TO
+    // target (currentRadius >= target). Backward: camera shrank
+    // TO target (currentRadius <= target).
     const gateReached =
-      this.currentAngularRadiusRad >= this.targetAngularRadiusRad &&
-      this.targetAngularRadiusRad > 0;
+      this.targetAngularRadiusRad > 0 &&
+      (this.direction === 1
+        ? this.currentAngularRadiusRad >= this.targetAngularRadiusRad
+        : this.currentAngularRadiusRad <= this.targetAngularRadiusRad);
 
     // 8. Stuck-velocity fallback: friction killed all velocity but
     //    the gate hasn't triggered (tuning undershoot). Terminate
@@ -291,17 +339,26 @@ export class HygPhysicsFlight {
   }
 
   /**
-   * Progress signal for M3 cross-fade ramp. Returns `currentAngularRadiusRad
-   * / targetAngularRadiusRad` clamped to `[0, 1]` while active, else 0.
-   * Replaces the round-5 `posProgressRaw` (time-fraction) which had no
-   * meaning under gate-driven physics. This signal is monotonically
-   * non-decreasing (modulo numerical jitter from the integrator)
-   * and aligned with apparent-size growth — exactly the ramp axis
+   * Progress signal for M3 cross-fade ramp. Returns the fraction of
+   * angular-radius journey complete in `[0, 1]`, direction-agnostic.
+   * 0 = no movement (`currentAngularRadius == initialAngularRadius`).
+   * 1 = at gate (`currentAngularRadius == targetAngularRadius`).
+   * Replaces round-5's `posProgressRaw` (time-fraction) which had no
+   * meaning under gate-driven physics. Monotonically non-decreasing
+   * modulo integrator jitter and aligned with apparent-size journey
+   * regardless of forward/backward direction — that's the ramp axis
    * M3 wants for cross-fading the procedural mesh in.
    */
   get progressRaw(): number {
     if (!this.active || this.targetAngularRadiusRad <= 0) return 0;
-    const ratio = this.currentAngularRadiusRad / this.targetAngularRadiusRad;
+    const denom = Math.abs(
+      this.initialAngularRadiusRad - this.targetAngularRadiusRad
+    );
+    if (denom <= 0) return 1;
+    const traveled = Math.abs(
+      this.currentAngularRadiusRad - this.initialAngularRadiusRad
+    );
+    const ratio = traveled / denom;
     return ratio < 0 ? 0 : ratio > 1 ? 1 : ratio;
   }
 

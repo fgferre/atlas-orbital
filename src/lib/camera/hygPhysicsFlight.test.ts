@@ -126,31 +126,121 @@ describe("HygPhysicsFlight — semi-implicit Euler integration", () => {
     expect(monotonicViolations).toBe(0);
   });
 
-  it("inter-frame step magnitudes are within an order of magnitude of each other (no warp)", () => {
+  it("|Δpos| at t∈[1s,2s] vs [2s,3s] within 3× (plan spec)", () => {
+    // Translates the wave-file Round-6 R6-G no-warp criterion:
+    // "|Δpos| in [t=1s..2s] and [t=2s..3s] should be within 3× of
+    // each other (no order-of-magnitude jump)". Measured by
+    // sampling positions at three explicit t-marks, NOT by averaging
+    // a cruise window. Codex audit 2026-05-06 P3 caught the earlier
+    // looser version (10× window-style spread, skip-on-empty) that
+    // would silently allow the warp Round-6 is meant to prevent.
     const p = new HygPhysicsFlight();
     p.start(makeSpec());
-    // Skip the first 0.5 s while velocity ramps up from rest.
-    for (let i = 0; i < 30; i++) p.update(0.016);
-    let prevX = 0;
-    const steps: number[] = [];
-    {
-      const snap = p.update(0.016);
-      prevX = snap!.position.x;
+    const dt = 1 / 60; // 60 fps
+    const advance = (seconds: number) => {
+      const steps = Math.round(seconds / dt);
+      for (let i = 0; i < steps; i++) {
+        const f = p.update(dt);
+        if (!f || f.done) return false;
+      }
+      return true;
+    };
+    // Sample at t=1s.
+    expect(advance(1)).toBe(true);
+    const p1 = p["position"].x;
+    // Sample at t=2s.
+    expect(advance(1)).toBe(true);
+    const p2 = p["position"].x;
+    // Sample at t=3s.
+    expect(advance(1)).toBe(true);
+    const p3 = p["position"].x;
+    const delta12 = p2 - p1;
+    const delta23 = p3 - p2;
+    expect(delta12).toBeGreaterThan(0);
+    expect(delta23).toBeGreaterThan(0);
+    const ratio = Math.max(delta12, delta23) / Math.min(delta12, delta23);
+    expect(ratio).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("HygPhysicsFlight — backward flight (camera-rebound)", () => {
+  // Mirrors Gaia's `InteractiveCameraModule.go_to_object` backward
+  // branch: when current apparent angle > target (camera too close),
+  // the integrator must back the camera OUT to the landing distance
+  // instead of immediately completing. Codex audit 2026-05-06 P1
+  // caught the missing branch.
+  const makeBackwardSpec = (): HygPhysicsFlightSpec => ({
+    // Start INSIDE the gate (distance 10 wu from target), gate is at
+    // distance 100 wu (radius 5 / target 0.05 rad). Camera should
+    // back out to ~100 wu.
+    startPos: new THREE.Vector3(990, 0, 0),
+    targetPos: new THREE.Vector3(1000, 0, 0),
+    targetAngularRadiusRad: 0.05,
+    radiusWu: 5,
+  });
+
+  it("starts in backward direction when camera is inside gate", () => {
+    const p = new HygPhysicsFlight();
+    p.start(makeBackwardSpec());
+    // First frame should NOT immediately complete (camera too close
+    // → must back out, not stay put).
+    const f = p.update(0.016);
+    expect(f).not.toBeNull();
+    expect(f!.done).toBe(false);
+    // Camera should have moved AWAY from target (negative x).
+    expect(f!.position.x).toBeLessThan(990);
+  });
+
+  it("backs out monotonically until gate triggers from above", () => {
+    const p = new HygPhysicsFlight();
+    p.start(makeBackwardSpec());
+    let prevX = 990;
+    let monotonicViolations = 0;
+    let f: ReturnType<typeof p.update> = null;
+    for (let i = 0; i < 1200; i++) {
+      f = p.update(0.016);
+      if (!f) break;
+      // Backward: position.x should monotonically decrease.
+      if (f.position.x > prevX + 1) monotonicViolations++; // 1 wu jitter tol
+      prevX = f.position.x;
+      if (f.done) break;
     }
+    expect(monotonicViolations).toBe(0);
+    expect(f!.done).toBe(true);
+    // Final distance from target should be near gate (100 wu).
+    const finalDist = Math.abs(1000 - f!.position.x);
+    expect(finalDist).toBeGreaterThanOrEqual(100 * 0.7);
+    expect(finalDist).toBeLessThanOrEqual(100 * 1.5);
+  });
+
+  it("progressRaw grows from 0 toward 1 in the backward direction too", () => {
+    const p = new HygPhysicsFlight();
+    p.start(makeBackwardSpec());
+    expect(p.progressRaw).toBe(0);
+    // Advance a few frames into the back-out.
     for (let i = 0; i < 60; i++) {
       const f = p.update(0.016);
       if (!f || f.done) break;
-      steps.push(f.position.x - prevX);
-      prevX = f.position.x;
     }
-    if (steps.length >= 2) {
-      const minStep = Math.min(...steps.filter((s) => s > 0));
-      const maxStep = Math.max(...steps);
-      // No more than 10× spread between min and max stride during
-      // the cruise phase. This is the no-warp criterion translated
-      // to a calibration-independent shape.
-      expect(maxStep / Math.max(minStep, 1)).toBeLessThan(10);
-    }
+    // Some forward progress (in journey-fraction terms) should have
+    // been made.
+    expect(p.progressRaw).toBeGreaterThan(0);
+  });
+
+  it("camera EXACTLY at gate distance terminates immediately", () => {
+    // Edge case: initialAngularRadiusRad === targetAngularRadiusRad.
+    // The gate condition triggers on the first frame regardless of
+    // direction selection.
+    const p = new HygPhysicsFlight();
+    p.start({
+      startPos: new THREE.Vector3(900, 0, 0),
+      targetPos: new THREE.Vector3(1000, 0, 0),
+      targetAngularRadiusRad: 0.05,
+      radiusWu: 5, // gate at distance 100, we're at 100 — exact.
+    });
+    const f = p.update(0.016);
+    expect(f).not.toBeNull();
+    expect(f!.done).toBe(true);
   });
 });
 
