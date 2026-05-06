@@ -6,6 +6,17 @@ export {
   type StellarFlightSpec,
 } from "./StellarFlightTransition";
 export {
+  OrientationLerp,
+  type OrientationLerpFrame,
+  type OrientationLerpSpec,
+} from "./orientationLerp";
+export {
+  HygPhysicsFlight,
+  HYG_PHYSICS_CALIBRATION,
+  type HygPhysicsFlightFrame,
+  type HygPhysicsFlightSpec,
+} from "./hygPhysicsFlight";
+export {
   HYG_FLIGHT_PREWARM_THRESHOLD,
   getHygFlightPosProgress,
   setHygFlightPosProgress,

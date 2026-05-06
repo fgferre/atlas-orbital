@@ -9,7 +9,8 @@ import { simulationClock } from "../../lib/simulationClock";
 import {
   PrivilegedPosition,
   CameraTransition,
-  StellarFlightTransition,
+  HygPhysicsFlight,
+  OrientationLerp,
   computeAtlasFlightLanding,
   createFocusTrackingState,
   resetFocusTrackingState,
@@ -106,14 +107,19 @@ export const CameraController = () => {
   });
 
   const transitionRef = useRef<CameraTransition>(new CameraTransition());
-  // T6.4-M2.5 S3+S4 — two-channel HYG fly-to. Independent durations
-  // for position vs orientation channels; OrbitControls derives the
-  // camera quaternion each frame from the lerped `controls.target`.
-  // Mutually exclusive with `transitionRef`: starting one cancels
+  // T6.4-M2.5 round-6 R6-B — two-channel HYG fly-to under physics:
+  // position channel uses the gate-driven `HygPhysicsFlight`
+  // integrator (Gaia's `InteractiveCameraModule.go_to_object` shape,
+  // calibrated for Atlas world units); orientation channel still
+  // lerps `controls.target` via `OrientationLerp` so OrbitControls
+  // derives the camera quaternion smoothly. Mutually exclusive with
+  // `transitionRef` (curated solar bodies): starting one cancels
   // the other so the useFrame branch reads exactly one source.
-  const stellarFlightRef = useRef<StellarFlightTransition>(
-    new StellarFlightTransition()
-  );
+  // Round-5b/`StellarFlightTransition` retained in `lib/camera` for
+  // future scripted-tour features; no active call site uses it for
+  // click-driven focus after Round-6.
+  const hygPhysicsRef = useRef<HygPhysicsFlight>(new HygPhysicsFlight());
+  const orientationLerpRef = useRef<OrientationLerp>(new OrientationLerp());
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(
     camera as THREE.PerspectiveCamera
   );
@@ -151,22 +157,21 @@ export const CameraController = () => {
     // frame; a curated-body or null focus leaves the signal cleared
     // so `HygStellarMesh` falls through to its natural gate.
     setHygFlightPosProgress(null);
-    // T6.4-M2.5 round-4 C-5 — focus-cleared paths must cancel any
-    // in-flight transition. The setupCamera/setupCameraHyg branches
-    // already handle focus-to-NEW-target cases (HYG→HYG cancels via
-    // `stellarFlightRef.current.start()` overwrite; HYG→curated
-    // cancels via the explicit `stellarFlightRef.current.cancel()`
-    // at the top of `setupCamera`). The gap is `focus → null`:
-    // neither branch is invoked (the setup useEffect early-returns
-    // on `!focusId`), so the transition stayed armed. A later
-    // OrbitControls "start" event would then call `cancel()` whose
-    // `computeFrame()` (using `performance.now() - startTimeMs`)
-    // saturates both alphas to 1, returning `endTarget = previous
-    // star world position`. The handler then `controls.target.copy`s
-    // that stale endpoint, snapping the user's view back. Cancelling
-    // here closes the gap. Codex round-4 P1, 2026-05-05.
+    // T6.4-M2.5 round-4 C-5 + round-6 R6-D — focus-cleared paths
+    // must cancel any in-flight transition. The setupCamera /
+    // setupCameraHyg branches handle focus-to-NEW-target cases
+    // (HYG→HYG cancels via overwrite when `start()` is called
+    // again; HYG→curated explicitly cancels both physics +
+    // orientation refs at the top of `setupCamera`). The gap is
+    // `focus → null`: neither branch runs (the setup useEffect
+    // early-returns on `!focusId`), so a transition stayed armed.
+    // A later OrbitControls "start" event would then call cancel()
+    // whose stale-endpoint behavior (round-5 S5) snapped the
+    // controls.target back to the previous star. Cancelling here
+    // closes the gap.
     if (!focusId) {
-      stellarFlightRef.current.cancel();
+      hygPhysicsRef.current.cancel();
+      orientationLerpRef.current.cancel();
       transitionRef.current.stop();
       flyingRef.current.isFlying = false;
     }
@@ -285,19 +290,22 @@ export const CameraController = () => {
     }
 
     const setupCameraHyg = () => {
-      // T6.4-M2.5 S4 — HYG fly-to via the two-channel
-      // `StellarFlightTransition`. Position lerps along a straight
-      // line; orientation lerps `controls.target` from its current
-      // value to the star's world position so OrbitControls derives
-      // the camera quaternion smoothly throughout the flight. This
-      // is an OrbitControls-native approximation of Gaia's
-      // (dir, up) quaternion slerp (`CameraModule.java:1419-1424`),
-      // not a 1:1 port — see `StellarFlightTransition.ts` header
-      // for the divergence note (Codex round-3 P2, 2026-05-05).
-      // Replaces the pre-M2.5 path (single-channel Bézier +
-      // pre-animation `controls.target.copy(targetPos)` snap, which
-      // produced the spin-then-glide feel the user reported
-      // 2026-05-05).
+      // T6.4-M2.5 round-6 R6-B — HYG fly-to via the gate-driven
+      // physics integrator (`HygPhysicsFlight`) for the position
+      // channel + an orientation lerp (`OrientationLerp`) for
+      // `controls.target`. Both channels run in parallel with
+      // independent completion conditions: position is gate-driven
+      // (current angular radius reaches target), orientation is
+      // duration-driven. The pair replaces the round-5b
+      // `StellarFlightTransition` (pre-computed lerp + sigmoid)
+      // because the analysis under round-5 — Codex 2026-05-06 —
+      // showed that `logisticSigmoid` collapses 99.5 % of trajectory
+      // progress into a ~825 ms warp window for solar→Sirius
+      // (~6.4e8 wu/s ≈ 100× solar-system extent per frame).
+      // Round-6 ports Gaia's `InteractiveCameraModule.go_to_object`
+      // shape: per-frame velocity push from rest, friction kicks
+      // in near gate, completion when the angular gate triggers.
+      // Source citations in `hygPhysicsFlight.ts` header.
       if (!hygCatalog || hygIndex === null) return;
       const resolvedPos = resolveHygWorldPosition(hygIndex, hygCatalog);
       if (!resolvedPos) return;
@@ -317,67 +325,21 @@ export const CameraController = () => {
       const distancePc = resolveHygDistanceFromSunPc(hygIndex, hygCatalog);
       if (distancePc === null) return;
 
-      // T6.4-M2.5 S1 — Atlas flight landing. `computeAtlasFlightLanding`
-      // applies the three-way `Math.max(bodyClearance × 1.1,
-      // ATLAS_MIN_LANDING_DISTANCE_WU = 10, angleDriven)` internally,
-      // so the result already respects the body-clearance floor.
-      // The `target.angularRadiusRad` ≥ `STELLAR_MESH_ENTER_RAD × 5`
-      // invariant guarantees HygStellarMesh spawns on arrival even
-      // for ultra-distant stars beyond the Gaia/Atlas crossover
-      // (~2003 pc post Codex round-3 angular-radius fix; was
-      // ~1200 pc pre-fix when the lib halved the Gaia curve).
+      // T6.4-M2.5 S1 — Atlas flight landing. Round-6 only consumes
+      // `target.angularRadiusRad` (the gate-threshold for the
+      // physics integrator). `landing.distanceWu` is no longer the
+      // input to a duration-driven lerp; it's now an emergent
+      // property of where the integrator stops. The angular-radius
+      // anchor curve (1.0° at 1.31 pc → 0.001° at 2805 pc) plus the
+      // mesh-spawn floor (≥ STELLAR_MESH_ENTER_RAD × 5) still
+      // dictate the gate, so M3 spawn invariants hold for free.
       const landing = computeAtlasFlightLanding(radiusWu, distancePc);
-      const idealDist = landing.distanceWu;
 
-      // Direction: from star back along the line to current camera
-      // position, preserving the user's viewing orientation. Falls
-      // back to "from sun toward star" when camera is exactly at
-      // the star's world position (degenerate first-fly case).
-      const cameraOffset = cameraInstance.position.clone().sub(targetPos);
-      const direction =
-        cameraOffset.lengthSq() > 1e-6
-          ? cameraOffset.normalize()
-          : targetPos.clone().normalize().negate();
-
-      const newCamPos = targetPos
-        .clone()
-        .add(direction.multiplyScalar(idealDist));
-
-      // T6.4-M2.5 round-4 C-6 — scale-aware position duration. The
-      // pre-round-4 formula `log10(linearDist + 1) * 1500` clamped
-      // to [2000, 8000] saturated the 8000 ms cap above ~215_442 wu
-      // of linear travel. Sirius from solar-system view is ~5.3e8 wu;
-      // boot-state-to-far-HYG is ~1e12 wu — every real HYG fly-to
-      // saturated the cap, defeating Acceptance §3 which specifies
-      // close-star ~4-6 s and ultra-distant ~7-8 s. Codex round-4
-      // P2 audit, 2026-05-05.
-      //
-      // Replacement: parsec-scale axis. We have `distancePc` (star
-      // distance from Sun) already. We also derive `linearDistPc`
-      // (camera-to-target linear distance, expressed in parsec
-      // equivalents using the project's 1 pc = 206_265_000 wu scale,
-      // mirroring `Starfield.tsx:74`, `StarHoverPicker.tsx:52`,
-      // `hygFocusResolver.ts:74`, `lightRegistry.ts:54`). The
-      // effective scale uses the smaller of the two so a
-      // close-camera rebound to a distant star doesn't drag for
-      // 8 s. log10 over [0.001, 2805] pc maps to [-3, 3.45], so the
-      // formula `3500 + log10(eff) * 1500` ranges [-1000, 8675]
-      // before clamping to [2500, 8000]. Pinned at named anchors:
-      //   Sirius (2.6 pc, solar start)        → ~4123 ms
-      //   Proxima (1.3 pc, solar start)       → ~3671 ms (clamps
-      //                                         to 2500 ms only
-      //                                         for camera-rebound
-      //                                         flips)
-      //   Betelgeuse (197.8 pc, solar start)  → ~6945 ms
-      //   far-edge (2805 pc, solar start)     → 8000 ms (cap)
-      //   any close camera-rebound (eff≪1)    → 2500 ms (floor)
-      const linearDist = cameraInstance.position.distanceTo(newCamPos);
-      const linearDistPc = linearDist / 206_265_000;
-      const effectivePc = Math.max(0.001, Math.min(distancePc, linearDistPc));
-      const posDurationMs = Math.min(
-        8000,
-        Math.max(2500, 3500 + Math.log10(effectivePc) * 1500)
-      );
+      // Orientation lerp duration — angular sweep heuristic. Same
+      // formula as round-5b S3: a sweep ≥ ~2 rad (180°) gets the
+      // 4 s cap, sub-radian sweeps scale linearly down to the
+      // 1 s floor. Independent of the position-channel duration
+      // (which is gate-driven under round-6, not duration-driven).
       const camToStart = controlsInstance.target
         .clone()
         .sub(cameraInstance.position);
@@ -393,43 +355,36 @@ export const CameraController = () => {
       // source per frame. `stop()` is a no-op when not active.
       transitionRef.current.stop();
 
-      // Round-5b finding-2 (Codex audit, 2026-05-06): Gaia's
-      // scripted transition uses position factor 60 + orientation
-      // factor 17 (`/tmp/gaiasky/.../CameraModule.java:677,680`).
-      // Round-5 bumped the Atlas default to 60 across the board,
-      // closing the position-channel divergence but introducing a
-      // new one on the orientation channel. Restore Gaia parity
-      // by passing oriEasing with factor=17 explicitly here.
-      // posEasing stays at the default (factor=60).
-      stellarFlightRef.current.start({
-        startPos: cameraInstance.position.clone(),
-        endPos: newCamPos,
-        startTarget: controlsInstance.target.clone(),
-        endTarget: targetPos.clone(),
-        posDurationMs,
-        oriDurationMs,
-        oriEasing: (t) => CameraTransition.logisticSigmoid(t, 17),
-        onComplete: () => {
-          flyingRef.current.isFlying = false;
-        },
+      // Both channels arm together. Position channel is gate-driven
+      // (`HygPhysicsFlight` integrates until `currentAngularRadiusRad
+      // >= targetAngularRadiusRad`), orientation channel is
+      // duration-driven (`OrientationLerp` with Gaia's scripted
+      // factor=17 logistic sigmoid — `CameraModule.java:680`).
+      // `flyingRef.isFlying` is cleared in useFrame once BOTH refs
+      // report inactive (R6-C dispatch handles that — using two
+      // independent `onComplete` handlers would race on the late
+      // arrival).
+      hygPhysicsRef.current.start({
+        startPos: cameraInstance.position,
+        targetPos,
+        targetAngularRadiusRad: landing.target.angularRadiusRad,
+        radiusWu,
+      });
+      orientationLerpRef.current.start({
+        startTarget: controlsInstance.target,
+        endTarget: targetPos,
+        durationMs: oriDurationMs,
+        easing: (t) => CameraTransition.logisticSigmoid(t, 17),
       });
 
-      flyingRef.current.cameraTargetPos.copy(newCamPos);
       flyingRef.current.isFlying = true;
-      // Drop the pre-M2.5 `controls.target.copy(targetPos)` snap.
-      // Orientation now lerps via `stellarFlightRef`'s target channel;
-      // OrbitControls derives the camera's quaternion each frame from
-      // `(camera.position, controls.target)`, so animating `target`
-      // is the OrbitControls-native way to animate orientation
-      // (option 2 from the wave file's M2.5 §S4 coordination
-      // strategy). The derived orientation is constrained to "look
-      // at controls.target", which approximates but does not match
-      // Gaia's free quaternion slerp — see
-      // `StellarFlightTransition.ts` header for the divergence note.
       // Resetting focus-tracking state to `targetPos` matches the
-      // existing curated-body contract: post-fly, focus-tracking
-      // glues `controls.target` to the star world position (which
-      // is static for HYG stars, so no further drift).
+      // curated-body contract: post-fly, focus-tracking glues
+      // `controls.target` to the star world position (which is
+      // static for HYG stars, so no further drift). The orientation
+      // lerp's per-frame writes during the flight override the
+      // focus-tracking write in useFrame; once both flight refs
+      // are inactive, focus-tracking takes over again.
       resetFocusTrackingState(focusTrackingRef.current, targetPos);
     };
 
@@ -443,11 +398,13 @@ export const CameraController = () => {
       }
       if (!bodyData) return;
 
-      // T6.4-M2.5 S4 — mutual exclusion with HYG fly-to. Cancel any
-      // in-flight `StellarFlightTransition` so useFrame's flight
-      // branch reads a single source. `cancel()` deliberately does
-      // NOT fire `onComplete`, so isFlying stays as we set it below.
-      stellarFlightRef.current.cancel();
+      // T6.4-M2.5 round-6 — mutual exclusion with HYG fly-to.
+      // Cancel any in-flight physics + orientation channels so
+      // useFrame's flight branch reads a single source. `cancel()`
+      // on each is a no-op when inactive and deliberately does NOT
+      // fire `onComplete`, so `isFlying` stays as we set it below.
+      hygPhysicsRef.current.cancel();
+      orientationLerpRef.current.cancel();
       // T6.4-M2.5 S6 — clear the pre-warm signal too; switching to
       // a curated-body fly-to mid-HYG-flight should leave no stale
       // progress visible to `HygStellarMesh`.
@@ -587,32 +544,29 @@ export const CameraController = () => {
 
     const stopFlying = () => {
       flyingRef.current.isFlying = false;
-      // T6.4-M2.5 S5 — real interrupt for HYG fly-to. `cancel()`
-      // freezes both transition channels at their current alpha and
-      // returns the intermediate `{ position, target }` (no
-      // `onComplete` fire — interrupt is semantically distinct from
-      // natural completion, see `StellarFlightTransition.ts:185-200`).
-      // We sync `controls.target` to the frozen target so the
-      // orientation visibly halts at the lerped value instead of
-      // letting focus-tracking next frame snap it back to the star
-      // world position. The position channel naturally stops driving
-      // `camera.position` because the next useFrame branch reads
-      // `!isActive` and falls through to the user-drag path.
-      // No-op when `cancel()` returns null (no HYG transition active —
-      // either we're interrupting a curated-body fly-to or just
+      // T6.4-M2.5 round-6 R6-D — real interrupt for HYG fly-to,
+      // cancel = full stop (NOT friction-drain). The position
+      // channel `cancel()` zeroes `velocity` synchronously and
+      // returns the frozen position; we don't re-apply it because
+      // useFrame already wrote `camera.position` last frame, so
+      // OrbitControls reads exactly the frozen state from there.
+      // The orientation channel `cancel()` returns the frozen
+      // (lerped) target — sync `controls.target` to it so the
+      // orientation visibly halts at the intermediate value
+      // instead of letting focus-tracking next frame snap it back
+      // to the star world position. Neither cancel fires
+      // `onComplete` (interrupt ≠ completion). No-op when both
+      // refs are inactive (interrupting curated-body fly-to or
       // post-completion).
-      const frozen = stellarFlightRef.current.cancel();
-      if (frozen) {
-        controls.target.copy(frozen.target);
+      hygPhysicsRef.current.cancel();
+      const frozenOrientation = orientationLerpRef.current.cancel();
+      if (frozenOrientation) {
+        controls.target.copy(frozenOrientation.target);
       }
       // T6.4-M2.5 S6 — clear the pre-warm signal on user
-      // interrupt. Codex round-3 C-2 reverted the force-activate
-      // path, so HygStellarMesh's mesh state is purely sa-driven
-      // by the natural ENTER/EXIT_RAD hysteresis at this point
-      // (no force-on side-effect to undo). The signal still gets
-      // cleared so M3 (forward-port) can use the channel as a
-      // fade ramp without seeing stale mid-fly progress after a
-      // user-initiated cancel.
+      // interrupt. M3 (cross-fade) consumes this channel; clearing
+      // it on cancel prevents stale mid-fly progress after a
+      // user-initiated drag.
       setHygFlightPosProgress(null);
     };
 
@@ -679,7 +633,7 @@ export const CameraController = () => {
     focusMeshRef.current = scene.getObjectByName(focusId) ?? null;
   }, [focusId, scene]);
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     const cameraInstance = cameraRef.current;
     const controlsInstance = controlsRef.current;
     if (!cameraInstance || !controlsInstance) return;
@@ -795,38 +749,57 @@ export const CameraController = () => {
     controlsInstance.target.copy(nextTarget);
 
     if (flyingRef.current.isFlying) {
-      // T6.4-M2.5 S4 — branch on which transition is active.
-      // `stellarFlightRef` (HYG) wins when active; the curated-body
-      // `transitionRef` falls through. Mutual-exclusion at start
-      // sites guarantees at most one is active per frame.
-      if (stellarFlightRef.current.isActive) {
-        const frame = stellarFlightRef.current.update();
-        if (frame) {
-          cameraInstance.position.copy(frame.position);
-          // Override the focus-tracking write above with the lerped
-          // target. OrbitControls.update() then derives the camera
-          // quaternion from `(camera.position, controls.target)`,
-          // which is the option-2 coordination strategy from the
-          // wave file (no quaternion fight). On the final frame
-          // this equals the star world position; focus-tracking
-          // takes over post-completion.
-          controlsInstance.target.copy(frame.target);
+      // T6.4-M2.5 round-6 R6-C — branch on which transition family
+      // is active. The HYG path runs two refs in parallel: position
+      // physics + orientation lerp. The curated-body path runs the
+      // single-vector `transitionRef`. Mutual-exclusion at start
+      // sites guarantees the HYG and curated families don't both
+      // arm at once.
+      const hygPositionActive = hygPhysicsRef.current.isActive;
+      const hygOrientationActive = orientationLerpRef.current.isActive;
+      if (hygPositionActive || hygOrientationActive) {
+        // Position channel — gate-driven physics. Pass R3F's
+        // measured `delta` (seconds) to the semi-implicit Euler
+        // integrator. R3F may emit `delta = 0` on the first frame
+        // post-resume; the integrator guards against it.
+        if (hygPositionActive) {
+          const positionFrame = hygPhysicsRef.current.update(delta);
+          if (positionFrame) {
+            cameraInstance.position.copy(positionFrame.position);
+          }
         }
-        // T6.4-M2.5 S6 — publish the position-channel raw alpha so
-        // `HygStellarMesh` can pre-warm the procedural mesh during
-        // the deceleration tail. `update()` may have just flipped
-        // `isActive` to false on the completion frame — branch so
-        // a just-completed transition clears the signal in the same
-        // tick (no stale 1.0 hanging around when the mesh's natural
-        // gate has already taken over).
-        if (stellarFlightRef.current.isActive) {
-          setHygFlightPosProgress(stellarFlightRef.current.posProgressRaw);
+        // Orientation channel — duration-driven `controls.target`
+        // lerp. Overrides the focus-tracking write above so
+        // OrbitControls.update() derives the camera quaternion
+        // from `(camera.position, controls.target)` smoothly
+        // throughout the flight (option-2 coordination strategy
+        // from M2.5 §S4 wave-file).
+        if (hygOrientationActive) {
+          const orientationFrame = orientationLerpRef.current.update();
+          if (orientationFrame) {
+            controlsInstance.target.copy(orientationFrame.target);
+          }
+        }
+        // Publish the angular-radius progress for M3's cross-fade
+        // ramp. Round-6 changes the signal semantics from
+        // round-5b's "time fraction (raw alpha)" to "ratio of
+        // current to target angular radius" — the latter is
+        // monotonically gate-aligned and a natural axis for the
+        // cross-fade. Once physics deactivates, clear so M3
+        // doesn't see stale 1.0 hanging around as the mesh's
+        // natural sa-driven gate takes over.
+        if (hygPhysicsRef.current.isActive) {
+          setHygFlightPosProgress(hygPhysicsRef.current.progressRaw);
         } else {
           setHygFlightPosProgress(null);
         }
-        // `update()` flips `active = false` and fires `onComplete`
-        // (which sets `flyingRef.current.isFlying = false`) on the
-        // last frame; no manual flag flip needed here.
+        // Both channels done → clear the global flying flag.
+        if (
+          !hygPhysicsRef.current.isActive &&
+          !orientationLerpRef.current.isActive
+        ) {
+          flyingRef.current.isFlying = false;
+        }
       } else {
         const newPos = transitionRef.current.update();
         if (newPos) {
