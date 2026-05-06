@@ -184,27 +184,35 @@ export class CameraTransition {
 
   /**
    * Symmetric S-curve normalized to [0, 1] over [0, 1]. Port of
-   * Gaia Sky's "logisticsigmoid" mapper (default smoothing factor
-   * `60` per
-   * `gaiasky/script/v2/impl/CameraModule.java:676`).
+   * Gaia Sky's "logisticsigmoid" mapper.
    *
-   * Both endpoints are softly approached, mid-flight is fast — the
-   * cinematic feel for catalog star fly-to. T6.4-M2.5 S2.
+   * **Default factor `60`** matches Gaia's `getMapper` default at
+   * `CameraModule.java:1210` (which clamps the smoothing factor to
+   * `[12, 500]` and is fed Gaia's default `60` from Settings; see
+   * `MathUtilsDouble.logisticSigmoid` source). Both endpoints are
+   * softly approached over ~30% of the duration each, mid-flight
+   * is fast — the cinematic "lift-off → warp → arrival" feel for
+   * catalog star fly-to.
    *
-   * Atlas-Gaia divergence (intentional): factor defaults to `12`,
-   * not Gaia's `60`. Gaia's `60` is too steep for the 4-6 s HYG
-   * transitions atlas runs (the curve flatlines at the endpoints
-   * for ~30% of the duration, feeling like the camera stalled).
-   * `12` keeps clear S-character without the stall. Override via
-   * the `factor` parameter to A/B-test on real footage.
+   * **Pre-round-5 used factor=12** as an Atlas-opinion divergence,
+   * documented as "Gaia's 60 is too steep — feels like the camera
+   * stalled". User smoke 2026-05-05 disconfirmed that judgment:
+   * with factor=12 every solar→star fly-to felt like a jump
+   * because the camera covered most of the trajectory in the first
+   * second (no stall = no perceptual departure phase). Per
+   * `feedback_default_gaia_fidelity.md` (when stuck between match
+   * Gaia and atlas-opinion, pick Gaia), round-5 closes this
+   * divergence by aligning with Gaia's `60`. T6.4-M2.5 S2 +
+   * round-5 (2026-05-06).
    *
    * Endpoints clamp via affine renormalization
    * `(at(t) - at(0)) / (at(1) - at(0))` so `logisticSigmoid(0) === 0`
    * and `logisticSigmoid(1) === 1` exactly (raw sigmoid sits at
-   * ~`0.0025` and ~`0.9975` for `factor=12` without the clamp,
-   * which would visually freeze the start/end frames).
+   * ~`9e-14` and ~`1 - 9e-14` for `factor=60` without the clamp;
+   * for `factor=12` the raw endpoints were ~`0.0025` and ~`0.9975`,
+   * which is why the affine renorm became necessary).
    */
-  static logisticSigmoid(t: number, factor = 12): number {
+  static logisticSigmoid(t: number, factor = 60): number {
     const k = factor;
     const center = 0.5;
     const sigmoid = (x: number): number =>

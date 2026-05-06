@@ -91,39 +91,51 @@ describe("CameraTransition.logisticSigmoid — S-curve character", () => {
 });
 
 describe("CameraTransition.logisticSigmoid — factor parameter", () => {
-  it("default factor=12 is steeper than factor=4", () => {
+  it("default factor=60 is steeper than factor=12", () => {
     // Higher factor = sharper S. Sample at t=0.4 (before the
-    // midpoint inflection, where steeper curves sit lower).
+    // midpoint inflection, where steeper curves sit lower). Atlas
+    // defaults to Gaia's factor=60; the previous (round-5-removed)
+    // factor=12 default felt like a jump for cross-scale fly-to.
+    const f60 = CameraTransition.logisticSigmoid(0.4, 60);
     const f12 = CameraTransition.logisticSigmoid(0.4, 12);
-    const f4 = CameraTransition.logisticSigmoid(0.4, 4);
-    expect(f12).toBeLessThan(f4);
+    expect(f60).toBeLessThan(f12);
   });
 
-  it("factor=60 (Gaia default) preserves endpoints", () => {
-    // Even with Gaia's stiff factor=60, the affine clamp still
-    // pins endpoints exactly (the test that fails Gaia's raw
-    // sigmoid which sits at ~1e-13 from 0/1 without the
-    // renormalization).
+  it("default factor (60) preserves endpoints exactly via affine clamp", () => {
+    // Raw sigmoid at factor=60 sits at ~9e-14 from 0/1; without
+    // the (sig(t)-sig(0))/(sig(1)-sig(0)) renorm in
+    // logisticSigmoid, t=0/t=1 wouldn't pin to 0/1 exactly. This
+    // pin guards against accidental simplification of the impl.
+    expect(CameraTransition.logisticSigmoid(0)).toBe(0);
+    expect(CameraTransition.logisticSigmoid(1)).toBe(1);
+    // Same with the explicit default factor.
     expect(CameraTransition.logisticSigmoid(0, 60)).toBe(0);
     expect(CameraTransition.logisticSigmoid(1, 60)).toBe(1);
   });
 
-  it("factor=60 is so steep most of [0, 1] sits near endpoint plateaus", () => {
-    // Documents WHY atlas defaults to 12 not 60: Gaia's factor
-    // makes the curve plateau visibly. At factor=60, t=0.3 is
-    // near 0 and t=0.7 is near 1 — visible "stall" at start/end
-    // for typical 4-6s transitions.
+  it("factor=60 produces visible stall plateaus at start/end (departure phase)", () => {
+    // The Gaia default's value: ~30% of duration on each end is
+    // near-zero motion, ~40% in the middle covers the bulk of the
+    // trajectory. For cross-scale fly-to (e.g. solar-system →
+    // interstellar) this gives a clear "departure → warp →
+    // arrival" perception. At factor=60: t=0.3 sits near 0,
+    // t=0.7 sits near 1 — the warp is concentrated in [0.3, 0.7].
     const earlyAtGaia = CameraTransition.logisticSigmoid(0.3, 60);
     const lateAtGaia = CameraTransition.logisticSigmoid(0.7, 60);
     expect(earlyAtGaia).toBeLessThan(0.005);
     expect(lateAtGaia).toBeGreaterThan(0.995);
 
-    // Same input points at atlas's default factor=12 sit much
-    // closer to "moving smoothly through the curve":
-    const earlyAtAtlas = CameraTransition.logisticSigmoid(0.3, 12);
-    const lateAtAtlas = CameraTransition.logisticSigmoid(0.7, 12);
-    expect(earlyAtAtlas).toBeGreaterThan(0.05);
-    expect(lateAtAtlas).toBeLessThan(0.95);
+    // Atlas's pre-round-5 atlas-opinion default of 12 sat much
+    // closer to "moving smoothly through the curve" — but the
+    // "smooth all-through" turned the cross-scale case into a
+    // visual snap because the camera covered most of the
+    // trajectory in the first second of a 4 s budget. User smoke
+    // (2026-05-05) disconfirmed the 12 choice; Gaia's 60 reads as
+    // intentional cinematic departure, not a stall.
+    const earlyAtFactor12 = CameraTransition.logisticSigmoid(0.3, 12);
+    const lateAtFactor12 = CameraTransition.logisticSigmoid(0.7, 12);
+    expect(earlyAtFactor12).toBeGreaterThan(0.05);
+    expect(lateAtFactor12).toBeLessThan(0.95);
   });
 });
 

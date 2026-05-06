@@ -293,7 +293,11 @@ describe("StellarFlightTransition — easing channels", () => {
     const f = t.update();
     // Position at linear alpha=0.3 → 30 wu.
     expect(f!.position.x).toBeCloseTo(30, 6);
-    // Orientation at logisticSigmoid(0.3) ≈ 0.139... (slow start).
+    // Orientation at logisticSigmoid(0.3) ≈ 0.0025 with the
+    // round-5 default factor=60 (Gaia-faithful) — heavy stall in
+    // the first 30% of the duration is the intended "lift-off"
+    // departure phase. Computing both sides via the same default
+    // ensures the test is decoupled from the factor choice.
     const oriAlpha = CameraTransition.logisticSigmoid(0.3);
     expect(f!.target.x).toBeCloseTo(50 * oriAlpha, 6);
   });
