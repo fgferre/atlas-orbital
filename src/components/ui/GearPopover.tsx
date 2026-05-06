@@ -28,6 +28,12 @@ export const GearPopover = () => {
   const toggleCredits = useStore((s) => s.toggleCredits);
   const debugMode = useStore((s) => s.debugMode);
   const toggleDebugMode = useStore((s) => s.toggleDebugMode);
+  const wikipediaIntegrationEnabled = useStore(
+    (s) => s.wikipediaIntegrationEnabled
+  );
+  const setWikipediaIntegrationEnabled = useStore(
+    (s) => s.setWikipediaIntegrationEnabled
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -142,6 +148,29 @@ export const GearPopover = () => {
               </GearButton>
               <div className="px-1 text-[10px] text-white/45">
                 v0.1.0 — Atlas Orbital
+              </div>
+            </GearSection>
+
+            <GearSection label="Integrations">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={wikipediaIntegrationEnabled}
+                onClick={() =>
+                  setWikipediaIntegrationEnabled(!wikipediaIntegrationEnabled)
+                }
+                data-testid="toggle-wikipedia-integration"
+                className="flex w-full items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2.5 text-left transition-[border-color,color,background-color] hover:border-white/20 hover:bg-black/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
+              >
+                <span className="text-sm text-white">Wikipedia about-text</span>
+                <span className="text-[10px] font-orbitron uppercase tracking-[0.16em] text-white/55">
+                  {wikipediaIntegrationEnabled ? "On" : "Off"}
+                </span>
+              </button>
+              <div className="px-1 text-[10px] text-white/45">
+                Pulls a brief summary + thumbnail from Wikipedia for the
+                selected star (HYG focus). Off ⇒ no network requests, no cache
+                writes.
               </div>
             </GearSection>
 

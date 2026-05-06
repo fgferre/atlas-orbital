@@ -56,6 +56,11 @@ export type LegacyTutorialStatus = "skipped" | "completed";
 /**
  * Shape of the v1 persist envelope. `qualityMode` stays as a compat
  * read-path consumer until Wave 6 retires it.
+ *
+ * **M6-G addition (2026-05-06)**: `wikipediaIntegrationEnabled` is
+ * appended to the v1 envelope as a backward-compatible field —
+ * existing localStorage envelopes lacking it default to `true` via
+ * `coerceToV1`, no version bump needed.
  */
 export interface PersistedSlice {
   qualityMode: QualityMode;
@@ -66,6 +71,7 @@ export interface PersistedSlice {
   graphicsOverrides: GraphicsOverrides;
   customBase: GraphicsBasePreset;
   accessibility: AccessibilityState;
+  wikipediaIntegrationEnabled: boolean;
 }
 
 /** v0 envelope (what unmigrated users have in localStorage). */
@@ -194,6 +200,8 @@ export const migrate = (
     graphicsOverrides: {},
     customBase: graphics.customBase,
     accessibility: getDefaultAccessibilityState(),
+    // M6-G default — Wikipedia integration is opt-out, not opt-in.
+    wikipediaIntegrationEnabled: true,
   };
 };
 
@@ -222,6 +230,12 @@ const coerceToV1 = (input: Partial<PersistedSlice>): PersistedSlice => ({
     input.graphicsOverrides ?? DEFAULT_GRAPHICS_STATE.graphicsOverrides,
   customBase: input.customBase ?? DEFAULT_GRAPHICS_STATE.customBase,
   accessibility: input.accessibility ?? getDefaultAccessibilityState(),
+  // M6-G: default ON for envelopes that lack the field (everyone
+  // pre-2026-05-06). Explicit `=== false` check so a corrupted
+  // envelope that stores a non-boolean still flips back to the
+  // safe default.
+  wikipediaIntegrationEnabled:
+    input.wikipediaIntegrationEnabled === false ? false : true,
 });
 
 /**

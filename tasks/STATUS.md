@@ -7,8 +7,8 @@ History, shipped-onda detail, and audit narratives live in
 
 _Last updated: 2026-05-06 late night. T6.4 M1 + M2 shipped; M2.5
 S1-S7 + rounds 3, 4, 5, 5b shipped; Round-6 A-H shipped 2026-05-06;
-**M6 A+B+C+D+E shipped 2026-05-06** (i18n, HYG v3, SearchBar, panel,
-Wiki client; U-2 + U-5 closed)._ The integrator port (`HygPhysicsFlight`),
+**M6 A+B+C+D+E+G shipped 2026-05-06** (i18n, HYG v3, SearchBar, panel,
+Wiki client, settings toggle; U-2 + U-5 closed)._ The integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
 calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
@@ -48,10 +48,10 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**M6 sub-track G — Wikipedia integration toggle** (~0.5h, spec
-in wave file §M6 §"Sub-track G"). A+B+C+D+E shipped (U-2 + U-5
-closed); G adds user-facing on/off + persist for
-`wikipediaIntegrationEnabled`.
+**M6 sub-track F — IndexedDB persistent cache** (~1.5h, spec in
+wave file §M6 §"Sub-track F"). A+B+C+D+E+G shipped 2026-05-06;
+F caches Wikipedia summaries between visits via `idb` (LRU 200,
+TTL 30 days). Independent of Round-6.
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
@@ -140,7 +140,7 @@ round-4 audit, do not block):
 | D ✅      | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
 | E ✅      | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |
 | F         | IndexedDB persistent cache (LRU 200 entries, TTL 30 days)                        | `idb` (~3KB gzipped)                                           |
-| G         | Settings toggle for Wikipedia integration (default ON, persist localStorage)     | none                                                           |
+| G ✅      | Settings toggle for Wikipedia integration (default ON, persist localStorage)     | none                                                           |
 | H         | CSP allow `upload.wikimedia.org` (Vite config)                                   | none                                                           |
 
 Prior Codex audits (round-1, round-2, round-3 of T6.3-x, and

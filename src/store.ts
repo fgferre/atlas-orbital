@@ -231,11 +231,10 @@ interface AppState {
   shortcutsModalOpen: boolean;
   setShortcutsModalOpen: (open: boolean) => void;
   /**
-   * M6-D: gates the Wikipedia "About" section in `HygStarPanel`.
-   * Default `true` so the panel renders the section on a fresh boot;
-   * sub-track G adds the user-facing settings toggle + persistence
-   * (the field is intentionally NOT in the persist `partialize` until
-   * G ships so a missing localStorage entry doesn't read as "false").
+   * Gates the Wikipedia "About" section in `HygStarPanel`.
+   * Default `true`; persisted via `partialize` (M6-G shipped the
+   * Gear-popover toggle that flips it). `coerceToV1` defaults to
+   * `true` for envelopes that predate this field.
    */
   wikipediaIntegrationEnabled: boolean;
   setWikipediaIntegrationEnabled: (enabled: boolean) => void;
@@ -652,6 +651,7 @@ export const useStore = create<AppState>()(
         graphicsOverrides: state.graphicsOverrides,
         customBase: state.customBase,
         accessibility: state.accessibility,
+        wikipediaIntegrationEnabled: state.wikipediaIntegrationEnabled,
       }),
       migrate: (persistedState, version) => migrate(persistedState, version),
       onRehydrateStorage: () => (state, error) => {

@@ -124,4 +124,66 @@ describe("GearPopover", () => {
 
     expect(useStore.getState().debugMode).toBe(true);
   });
+
+  describe("Integrations / Wikipedia toggle (M6-G)", () => {
+    it("renders the Wikipedia switch reflecting the current store value", () => {
+      act(() => {
+        useStore.setState({
+          gearOpen: true,
+          wikipediaIntegrationEnabled: true,
+        });
+      });
+      render(<GearPopover />);
+
+      const sw = screen.getByRole("switch", {
+        name: /wikipedia about-text/i,
+      });
+      expect(sw).toBeInTheDocument();
+      expect(sw).toHaveAttribute("aria-checked", "true");
+      expect(sw.textContent).toMatch(/On/);
+    });
+
+    it("flips the store on click + reflects 'Off' immediately", () => {
+      act(() => {
+        useStore.setState({
+          gearOpen: true,
+          wikipediaIntegrationEnabled: true,
+        });
+      });
+      render(<GearPopover />);
+
+      const sw = screen.getByRole("switch", {
+        name: /wikipedia about-text/i,
+      });
+      act(() => {
+        fireEvent.click(sw);
+      });
+
+      expect(useStore.getState().wikipediaIntegrationEnabled).toBe(false);
+      expect(sw).toHaveAttribute("aria-checked", "false");
+      expect(sw.textContent).toMatch(/Off/);
+    });
+
+    it("flips back ON when re-clicked from the Off state", () => {
+      act(() => {
+        useStore.setState({
+          gearOpen: true,
+          wikipediaIntegrationEnabled: false,
+        });
+      });
+      render(<GearPopover />);
+
+      const sw = screen.getByRole("switch", {
+        name: /wikipedia about-text/i,
+      });
+      expect(sw).toHaveAttribute("aria-checked", "false");
+
+      act(() => {
+        fireEvent.click(sw);
+      });
+
+      expect(useStore.getState().wikipediaIntegrationEnabled).toBe(true);
+      expect(sw).toHaveAttribute("aria-checked", "true");
+    });
+  });
 });

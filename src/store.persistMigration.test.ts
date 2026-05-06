@@ -370,6 +370,7 @@ describe("migrate — v1 forward path", () => {
         colorblindMode: "none" as const,
         highContrast: false,
       },
+      wikipediaIntegrationEnabled: false,
     };
     const out = migrate(v1in, 1);
     expect(out).toEqual(v1in);
@@ -382,5 +383,17 @@ describe("migrate — v1 forward path", () => {
     expect(out.sunRenderMode).toBe("auto");
     expect(out.graphicsPreset).toBe("high");
     expect(out.graphicsOverrides).toEqual({});
+    // M6-G: missing field defaults to ON (Wikipedia integration is
+    // a feature you have to opt OUT of, not opt IN to).
+    expect(out.wikipediaIntegrationEnabled).toBe(true);
+  });
+
+  it("preserves explicit wikipediaIntegrationEnabled=false in v1 envelope (M6-G)", () => {
+    const v1in = {
+      qualityMode: "high" as const,
+      wikipediaIntegrationEnabled: false,
+    };
+    const out = migrate(v1in, 1);
+    expect(out.wikipediaIntegrationEnabled).toBe(false);
   });
 });
