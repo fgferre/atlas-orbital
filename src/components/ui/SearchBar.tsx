@@ -13,8 +13,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
-import { searchBodies } from "../../lib/bodySearch";
+import { useQualityProfile } from "../../hooks/useQualityProfile";
+import { searchBodies, type BodySearchResult } from "../../lib/bodySearch";
+import { formatHygFocusId } from "../../lib/focus/hygFocusResolver";
+import {
+  getCachedHygCatalog,
+  hygTierForQuality,
+  loadHygCatalog,
+  type HygCatalogData,
+} from "../../lib/starfield";
+import {
+  searchHygCatalog,
+  type HygSearchResult,
+} from "../../lib/starfield/hygNameIndex";
 import { useStore } from "../../store";
+import { useStarfieldCatalog } from "../canvas/useStarfieldCatalog";
 import { RailTabContent } from "./RightControlRail";
 import {
   getRightControlPanelDomId,
@@ -30,8 +43,54 @@ import {
   type RightControlPanelId,
 } from "./controlPanelConfig";
 
-const getOptionId = (listboxId: string, bodyId: string) =>
-  `${listboxId}-option-${bodyId}`;
+const getOptionId = (listboxId: string, optionKey: string) =>
+  `${listboxId}-option-${optionKey}`;
+
+/**
+ * M6-C: HYG matches show up to 5 suggestions per the wave-file spec.
+ * Curated body matches stay at the existing 6/8 (mobile/desktop)
+ * cap so the combined listbox doesn't exceed 13 items at the
+ * desktop maximum — long lists hurt keyboard-nav ergonomics.
+ */
+const HYG_RESULTS_LIMIT = 5;
+
+type SearchHit =
+  | { kind: "body"; key: string; result: BodySearchResult }
+  | { kind: "hyg"; key: string; result: HygSearchResult };
+
+/**
+ * Format the display strings for a HYG match. Primary line is the
+ * proper name when present, falling back to "α CMa" / "HD 48915" /
+ * "HIP 32349" / Gliese designation per match-field. Secondary line
+ * always carries spect class + distance ("A1V · 2.64 pc") when the
+ * catalog has those fields.
+ */
+function formatHygDisplay(hit: HygSearchResult): {
+  primary: string;
+  secondary: string;
+} {
+  let primary: string;
+  if (hit.properName) {
+    primary = hit.properName;
+  } else if (hit.bayerGreek && hit.constellation) {
+    primary = `${hit.bayerGreek} ${hit.constellation}`;
+  } else if (hit.matchedField === "hd" && hit.hd) {
+    primary = `HD ${hit.hd}`;
+  } else if (hit.matchedField === "hip" && hit.hip) {
+    primary = `HIP ${hit.hip}`;
+  } else if (hit.gliese) {
+    primary = hit.gliese;
+  } else {
+    primary = `Star #${hit.starIndex}`;
+  }
+
+  const segments: string[] = [];
+  if (hit.spect) segments.push(hit.spect);
+  if (hit.distancePc !== null && Number.isFinite(hit.distancePc)) {
+    segments.push(`${hit.distancePc.toFixed(2)} pc`);
+  }
+  return { primary, secondary: segments.join(" · ") };
+}
 
 interface SearchBarProps {
   activePanel: RightControlPanelId | null;
@@ -55,11 +114,50 @@ export const SearchBar = ({
   const isOpen = activePanel === "search";
 
   const selectId = useStore((state) => state.selectId);
+  const qualityMode = useStore((state) => state.qualityMode);
   const deferredQuery = useDeferredValue(query);
-  const results = useMemo(
+  const bodyResults = useMemo(
     () => searchBodies(deferredQuery, SOLAR_SYSTEM_BODIES, isMobile ? 6 : 8),
     [deferredQuery, isMobile]
   );
+
+  // M6-C: subscribe to the same tier-bound HYG catalog Starfield +
+  // CameraController use, so search results from the catalog can be
+  // dispatched as `hyg:K` focus IDs through the existing focus path.
+  const qualityProfile = useQualityProfile(qualityMode);
+  const hygTier = hygTierForQuality(qualityProfile.name);
+  const loadHygForTier = useCallback(() => loadHygCatalog(hygTier), [hygTier]);
+  const getCachedHygForTier = useCallback(
+    () => getCachedHygCatalog(hygTier),
+    [hygTier]
+  );
+  const hygCatalog = useStarfieldCatalog<HygCatalogData>({
+    source: "hyg",
+    loadCatalog: loadHygForTier,
+    getCachedCatalog: getCachedHygForTier,
+  });
+  const hygResults = useMemo(() => {
+    if (!hygCatalog) return [] as HygSearchResult[];
+    return searchHygCatalog(deferredQuery, hygCatalog, HYG_RESULTS_LIMIT);
+  }, [deferredQuery, hygCatalog]);
+
+  // Flat unified result list — keyboard nav indexes a single array
+  // even though the listbox renders a "Curated bodies" + "HYG stars"
+  // section divider so the user can tell them apart visually.
+  const results = useMemo<SearchHit[]>(() => {
+    const hits: SearchHit[] = [];
+    for (const result of bodyResults) {
+      hits.push({ kind: "body", key: `body:${result.body.id}`, result });
+    }
+    for (const result of hygResults) {
+      hits.push({
+        kind: "hyg",
+        key: `hyg:${result.starIndex}`,
+        result,
+      });
+    }
+    return hits;
+  }, [bodyResults, hygResults]);
 
   const quickTargets = useMemo(
     () =>
@@ -94,6 +192,23 @@ export const SearchBar = ({
       closeSearch();
     },
     [closeSearch, selectId]
+  );
+
+  /**
+   * Unified hit-select that branches by result kind. Curated bodies
+   * dispatch their string `body.id` (existing path); HYG matches
+   * format the index as a `hyg:K` focus ID via the same
+   * `formatHygFocusId` the camera path already understands.
+   */
+  const handleHitSelect = useCallback(
+    (hit: SearchHit) => {
+      if (hit.kind === "body") {
+        handleSelect(hit.result.body.id);
+        return;
+      }
+      handleSelect(formatHygFocusId(hit.result.starIndex));
+    },
+    [handleSelect]
   );
 
   useDialogFocus({
@@ -149,7 +264,7 @@ export const SearchBar = ({
         : -1;
   const activeDescendant =
     resolvedActiveIndex >= 0 && results[resolvedActiveIndex]
-      ? getOptionId(listboxId, results[resolvedActiveIndex].body.id)
+      ? getOptionId(listboxId, results[resolvedActiveIndex].key)
       : undefined;
   const hasQuery = deferredQuery.trim().length > 0;
 
@@ -176,7 +291,7 @@ export const SearchBar = ({
       results[resolvedActiveIndex]
     ) {
       event.preventDefault();
-      handleSelect(results[resolvedActiveIndex].body.id);
+      handleHitSelect(results[resolvedActiveIndex]);
       return;
     }
 
@@ -300,39 +415,88 @@ export const SearchBar = ({
           </div>
         ) : results.length > 0 ? (
           <div className="custom-scrollbar max-h-[min(20rem,45vh)] space-y-1 overflow-y-auto overscroll-contain pr-1">
-            {results.map((result, index) => {
+            {results.map((hit, index) => {
               const isActive = index === resolvedActiveIndex;
-              const optionId = getOptionId(listboxId, result.body.id);
-              const classificationLabel =
-                result.body.classification ?? result.body.type.toUpperCase();
+              const optionId = getOptionId(listboxId, hit.key);
+              // Section divider rendered above the first HYG hit so
+              // users see "Stars (HYG)" between curated and HYG groups.
+              // The header is `aria-hidden` since keyboard nav already
+              // skips it (it's not a listbox option).
+              const previous = index > 0 ? results[index - 1] : null;
+              const showSectionHeader =
+                hit.kind === "hyg" && (!previous || previous.kind !== "hyg");
 
+              const baseClassName = `flex w-full items-start justify-between gap-3 border px-3 py-3 text-left transition-[border-color,color,background-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
+                isActive
+                  ? "border-nasa-accent/60 bg-nasa-accent/10 text-white"
+                  : "border-white/5 bg-white/[0.03] text-white/80 hover:border-white/20 hover:bg-white/[0.07]"
+              }`;
+
+              if (hit.kind === "body") {
+                const classificationLabel =
+                  hit.result.body.classification ??
+                  hit.result.body.type.toUpperCase();
+                return (
+                  <button
+                    key={hit.key}
+                    id={optionId}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => handleHitSelect(hit)}
+                    className={baseClassName}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-orbitron text-[11px] uppercase tracking-[0.16em]">
+                        {hit.result.body.name.en}
+                      </div>
+                      <div className="mt-1 text-[11px] text-white/55">
+                        {hit.result.body.name.pt}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-right text-[10px] uppercase tracking-[0.16em] text-nasa-accent">
+                      {classificationLabel}
+                    </span>
+                  </button>
+                );
+              }
+
+              const display = formatHygDisplay(hit.result);
               return (
-                <button
-                  key={result.body.id}
-                  id={optionId}
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => handleSelect(result.body.id)}
-                  className={`flex w-full items-start justify-between gap-3 border px-3 py-3 text-left transition-[border-color,color,background-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation ${
-                    isActive
-                      ? "border-nasa-accent/60 bg-nasa-accent/10 text-white"
-                      : "border-white/5 bg-white/[0.03] text-white/80 hover:border-white/20 hover:bg-white/[0.07]"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="font-orbitron text-[11px] uppercase tracking-[0.16em]">
-                      {result.body.name.en}
+                <div key={hit.key}>
+                  {showSectionHeader && (
+                    <div
+                      aria-hidden="true"
+                      className="px-1 pb-1 pt-3 text-[9px] font-orbitron uppercase tracking-[0.18em] text-white/35"
+                    >
+                      Stars (HYG)
                     </div>
-                    <div className="mt-1 text-[11px] text-white/55">
-                      {result.body.name.pt}
+                  )}
+                  <button
+                    id={optionId}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => handleHitSelect(hit)}
+                    className={baseClassName}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-orbitron text-[11px] uppercase tracking-[0.16em]">
+                        {display.primary}
+                      </div>
+                      {display.secondary && (
+                        <div className="mt-1 text-[11px] text-white/55">
+                          {display.secondary}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <span className="shrink-0 text-right text-[10px] uppercase tracking-[0.16em] text-nasa-accent">
-                    {classificationLabel}
-                  </span>
-                </button>
+                    <span className="shrink-0 text-right text-[10px] uppercase tracking-[0.16em] text-nasa-accent">
+                      HYG
+                    </span>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -341,8 +505,9 @@ export const SearchBar = ({
             aria-live="polite"
             className="border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-center text-sm text-white/55"
           >
-            No match for “{query}”. Try a Portuguese name, a type like TNO, or a
-            classification such as Gas Giant.
+            No match for “{query}”. Try a Portuguese name, a type like TNO, a
+            classification such as Gas Giant, or a star designation like
+            “Sirius” / “α CMa” / “HD 48915”.
           </div>
         )}
       </div>
