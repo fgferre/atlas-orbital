@@ -52,11 +52,10 @@ import { CameraTransition } from "./CameraTransition";
  * frame). The explicit `lookAt` forces orientation in-sync with
  * position in the same frame.
  *
- * **Cancel semantics** match `OrientationLerp` / `HygPhysicsFlight`:
- * `cancel()` freezes at current eased aim, returns the frozen
- * `aimTarget`, and does NOT fire `onComplete`. The S5 interrupt
- * handoff (OrbitControls "start" handler) syncs `controls.target`
- * to that frozen value.
+ * **Cancel semantics** are simpler than `OrientationLerp`:
+ * `cancel()` only deactivates and does NOT fire `onComplete`.
+ * The most recent `update()` already wrote the current target, so
+ * the S5 interrupt path does not need a returned frozen target.
  */
 
 export interface AimLerpSpec {
@@ -74,7 +73,7 @@ export interface AimLerpSpec {
   starWorldPos: THREE.Vector3;
   /** Lerp duration, ms. */
   durationMs: number;
-  /** Default: `CameraTransition.logisticSigmoid` (factor=12). For
+  /** Default: `CameraTransition.logisticSigmoid` (factor=60). For
    *  HYG flights, callers should pass factor=17 explicitly to
    *  match Gaia's scripted-orientation pacing
    *  (`CameraModule.java:680`). */

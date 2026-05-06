@@ -110,9 +110,9 @@ export const CameraController = () => {
   // T6.4-M2.5 round-6 R6-B — two-channel HYG fly-to under physics:
   // position channel uses the gate-driven `HygPhysicsFlight`
   // integrator (Gaia's `InteractiveCameraModule.go_to_object` shape,
-  // calibrated for Atlas world units); orientation channel still
-  // lerps `controls.target` via `OrientationLerp` so OrbitControls
-  // derives the camera quaternion smoothly. Mutually exclusive with
+  // calibrated for Atlas world units); orientation channel uses
+  // `AimLerp`, which slerps the aim direction and derives a safe
+  // `controls.target` each frame. Mutually exclusive with
   // `transitionRef` (curated solar bodies): starting one cancels
   // the other so the useFrame branch reads exactly one source.
   // Round-5b/`StellarFlightTransition` retained in `lib/camera` for
@@ -307,8 +307,8 @@ export const CameraController = () => {
     const setupCameraHyg = () => {
       // T6.4-M2.5 round-6 R6-B — HYG fly-to via the gate-driven
       // physics integrator (`HygPhysicsFlight`) for the position
-      // channel + an orientation lerp (`OrientationLerp`) for
-      // `controls.target`. Both channels run in parallel with
+      // channel + `AimLerp` for the aim direction. Both channels
+      // run in parallel with
       // independent completion conditions: position is gate-driven
       // (current angular radius reaches target), orientation is
       // duration-driven. The pair replaces the round-5b
@@ -384,8 +384,8 @@ export const CameraController = () => {
 
       // Both channels arm together. Position channel is gate-driven
       // (`HygPhysicsFlight` integrates until `currentAngularRadiusRad
-      // >= targetAngularRadiusRad`), orientation channel is
-      // duration-driven (`OrientationLerp` with Gaia's scripted
+      // >= targetAngularRadiusRad`), aim channel is
+      // duration-driven (`AimLerp` with Gaia's scripted
       // factor=17 logistic sigmoid — `CameraModule.java:680`).
       // `flyingRef.isFlying` is cleared in useFrame once BOTH refs
       // report inactive (R6-C dispatch handles that — using two
@@ -409,8 +409,8 @@ export const CameraController = () => {
       // Resetting focus-tracking state to `targetPos` matches the
       // curated-body contract: post-fly, focus-tracking glues
       // `controls.target` to the star world position (which is
-      // static for HYG stars, so no further drift). The orientation
-      // lerp's per-frame writes during the flight override the
+      // static for HYG stars, so no further drift). AimLerp's
+      // per-frame writes during the flight override the
       // focus-tracking write in useFrame; once both flight refs
       // are inactive, focus-tracking takes over again.
       resetFocusTrackingState(focusTrackingRef.current, targetPos);
