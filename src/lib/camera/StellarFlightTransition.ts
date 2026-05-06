@@ -68,9 +68,15 @@ export interface StellarFlightSpec {
   posDurationMs: number;
   /** Orientation channel (target lerp) duration, ms. */
   oriDurationMs: number;
-  /** Default: `CameraTransition.logisticSigmoid` (factor 12). */
+  /** Default: `CameraTransition.logisticSigmoid` (post-round-5
+   *  default factor 60, Gaia's scripted-position pacing). */
   posEasing?: (t: number) => number;
-  /** Default: `CameraTransition.logisticSigmoid` (factor 12). */
+  /** Default: `CameraTransition.logisticSigmoid` (post-round-5
+   *  default factor 60). NOTE: Gaia's go_to_object scripted
+   *  transition uses factor 17 for orientation (60 for position) —
+   *  callers wanting Gaia parity should pass
+   *  `(t) => CameraTransition.logisticSigmoid(t, 17)` explicitly.
+   *  `CameraController.setupCameraHyg` does this. */
   oriEasing?: (t: number) => number;
   /** Fires when BOTH channels complete. */
   onComplete?: () => void;
@@ -224,12 +230,17 @@ export class StellarFlightTransition {
 
   /**
    * Position-channel raw alpha (0..1, pre-easing). Returns 0 when
-   * the transition is inactive. Drives the M2.5 S6 mesh-pre-warm
-   * signal: HygStellarMesh treats progress ≥ 0.70 as the cue to
-   * force-activate the procedural mesh during the position
-   * channel's deceleration tail (the last ~25-30% of the transition,
-   * where the camera has covered ≥ 92% of its straight-line path
-   * under the default `logisticSigmoid` easing).
+   * the transition is inactive. Originally drove the M2.5 S6
+   * mesh-pre-warm signal (force-activate the procedural mesh once
+   * raw alpha cleared 0.70). **Codex round-3 C-2 reverted that
+   * force-activate** because the resulting skipMask=1 hid the
+   * sprite while the mesh was still angularly small — exactly
+   * the gap the M3 cross-fade is meant to bridge. The getter +
+   * the singleton publisher in CameraController stay in place so
+   * M3 can consume the channel as a continuous fade ramp instead
+   * of a hard force-on. As of round-5 the default easing factor
+   * is 60 (post-round-5), so the deceleration tail also lives at
+   * raw alpha ≥ 0.70 (logisticSigmoid(0.70, 60) ≈ 0.9975).
    *
    * Intentionally raw (not eased): the threshold is a TIME-based
    * UX cue, not a SPACE-based one. Easing the value would couple

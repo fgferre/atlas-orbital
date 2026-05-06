@@ -393,6 +393,14 @@ export const CameraController = () => {
       // source per frame. `stop()` is a no-op when not active.
       transitionRef.current.stop();
 
+      // Round-5b finding-2 (Codex audit, 2026-05-06): Gaia's
+      // scripted transition uses position factor 60 + orientation
+      // factor 17 (`/tmp/gaiasky/.../CameraModule.java:677,680`).
+      // Round-5 bumped the Atlas default to 60 across the board,
+      // closing the position-channel divergence but introducing a
+      // new one on the orientation channel. Restore Gaia parity
+      // by passing oriEasing with factor=17 explicitly here.
+      // posEasing stays at the default (factor=60).
       stellarFlightRef.current.start({
         startPos: cameraInstance.position.clone(),
         endPos: newCamPos,
@@ -400,6 +408,7 @@ export const CameraController = () => {
         endTarget: targetPos.clone(),
         posDurationMs,
         oriDurationMs,
+        oriEasing: (t) => CameraTransition.logisticSigmoid(t, 17),
         onComplete: () => {
           flyingRef.current.isFlying = false;
         },
@@ -596,10 +605,14 @@ export const CameraController = () => {
       if (frozen) {
         controls.target.copy(frozen.target);
       }
-      // T6.4-M2.5 S6 — clear the pre-warm signal. If the user
-      // interrupted at progress ≥ 0.70 the mesh was force-active
-      // last frame; `HygStellarMesh`'s hysteresis state stays true
-      // and the natural `EXIT_RAD` threshold takes over from here.
+      // T6.4-M2.5 S6 — clear the pre-warm signal on user
+      // interrupt. Codex round-3 C-2 reverted the force-activate
+      // path, so HygStellarMesh's mesh state is purely sa-driven
+      // by the natural ENTER/EXIT_RAD hysteresis at this point
+      // (no force-on side-effect to undo). The signal still gets
+      // cleared so M3 (forward-port) can use the channel as a
+      // fade ramp without seeing stale mid-fly progress after a
+      // user-initiated cancel.
       setHygFlightPosProgress(null);
     };
 

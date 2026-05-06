@@ -84,9 +84,10 @@ describe("HYG_FLIGHT_PREWARM_THRESHOLD", () => {
 
   it("is the documented 0.70 cue (deceleration tail of the position channel)", () => {
     // Pin the value so a future tweak shows up in the diff. 0.70
-    // corresponds to ~92 % of the straight-line camera travel under
-    // the default logisticSigmoid(factor=12) easing — see the module
-    // header comment in `hygFlightPosProgress.ts`.
+    // corresponds to ~99.75 % of the straight-line camera travel
+    // under the post-round-5 default `logisticSigmoid(factor=60)`
+    // easing — the M3 cross-fade is expected to ramp across this
+    // threshold. See module header comment in `hygFlightPosProgress.ts`.
     expect(HYG_FLIGHT_PREWARM_THRESHOLD).toBe(0.7);
   });
 });

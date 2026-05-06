@@ -46,8 +46,8 @@ a fifth concern: HYG fly-to navigation feels jarring vs Gaia
 Sky's two-channel transition (M2.5 inserted to address). M4
 spec also expanded to put spectral color first (was 3 of 28
 fields varying; raised to descriptor-driven). Estimate now
-M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
-~2-3 h post-recovery.
+M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
+~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire**: **user re-smoke after round-5**
 — click any bright HYG star from the solar-system view, verify

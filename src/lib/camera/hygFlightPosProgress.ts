@@ -67,12 +67,19 @@ export const __resetHygFlightPosProgress = (): void => {
 };
 
 /**
- * Threshold above which `HygStellarMesh` force-activates its
- * procedural mesh during a HYG fly-to. 0.70 of the position-channel
- * raw alpha corresponds to ~92% of the straight-line camera travel
- * under the default `logisticSigmoid(factor=12)` easing — the
- * "deceleration tail" where the camera is approaching its landing
- * pose. Pre-warming here gives the M3 cross-fade a workable window
- * before arrival.
+ * Threshold reserved for the M3 cross-fade consumer. Originally
+ * (M2.5 S6, before Codex round-3 C-2 revert) HygStellarMesh used
+ * this to force-activate its procedural mesh once the position-
+ * channel raw alpha cleared 0.70 — but force-activate also wrote
+ * skipMask=1, hiding the sprite while the mesh was still
+ * angularly small (the very gap M2.5 was meant to avoid). C-2
+ * reverted the force-activate; this constant now documents the
+ * arrival-window threshold M3's cross-fade is expected to ramp
+ * across. Under the post-round-5 default `logisticSigmoid(factor=60)`
+ * easing, raw alpha 0.70 corresponds to eased alpha ≈ 0.9975 —
+ * the camera has covered ≈99.75% of its straight-line path. M3
+ * fade alpha should ramp from 0 (sprite-only) at raw ≤ 0.70 to 1
+ * (mesh-only) at the natural sa-driven gate crossing, which
+ * happens shortly after raw 0.70 for typical HYG geometries.
  */
 export const HYG_FLIGHT_PREWARM_THRESHOLD = 0.7;

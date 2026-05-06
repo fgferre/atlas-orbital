@@ -166,48 +166,54 @@ test.describe("hyg-focus", () => {
       return w.__ATLAS_TEST_CAMERA__().target;
     });
 
-    // Sample 2 — t = 2 s total. Orientation channel completed,
-    // position channel still mid-fly. target ≈ star_world_pos.
+    // Sample 2 — t = 2 s total. With round-4 C-6 the position
+    // channel duration for Sirius (2.6 pc) is ~4123 ms; with
+    // round-5 factor=60, the warp is concentrated in raw alpha
+    // [0.3, 0.7] ⇒ wall-clock [1.24 s, 2.89 s]. So at t=2 s the
+    // camera is mid-warp — target lerp running, mesh natural
+    // sa-driven gate not yet crossed (C-2 force-activate is
+    // reverted, so no force-on either). Combined sample reads
+    // both target (for the lerp-not-snapped trend) AND mesh
+    // state (regression pin against re-introducing force-activate).
     await page.waitForTimeout(1500);
-    const t2 = await page.evaluate(() => {
+    const mid = await page.evaluate(() => {
       const w = window as unknown as {
         __ATLAS_TEST_CAMERA__: () => {
           target: { x: number; y: number; z: number };
         };
-      };
-      return w.__ATLAS_TEST_CAMERA__().target;
-    });
-
-    // Sample 3 — t = 4 s total. Position channel raw alpha ~0.5
-    // (8 s clamp). With C-2 reverted, the mesh stays inactive
-    // and skipMask stays 0 — proves we're not force-activating
-    // mid-fly.
-    await page.waitForTimeout(2000);
-    const mid = await page.evaluate(() => {
-      const w = window as unknown as {
         __ATLAS_TEST_MESH_STATE__: () => {
           meshActive: boolean;
           skipMaskAtIndex: (k: number) => number;
         };
       };
+      const cam = w.__ATLAS_TEST_CAMERA__();
       const mesh = w.__ATLAS_TEST_MESH_STATE__();
       return {
+        target: cam.target,
         meshActive: mesh.meshActive,
         skipMaskAt0: mesh.skipMaskAtIndex(0),
       };
     });
+    const t2 = mid.target;
     expect(
       mid.meshActive,
-      "mesh should still be inactive at t=4s mid-fly (C-2 force-activate revert)"
+      "mesh should still be inactive mid-warp (t=2s, C-2 force-activate revert)"
     ).toBe(false);
     expect(
       mid.skipMaskAt0,
-      "skipMask should still be 0 at t=4s mid-fly (C-2 force-activate revert)"
+      "skipMask should still be 0 mid-warp (t=2s, C-2 force-activate revert)"
     ).toBe(0);
 
-    // Sample 4 — t = 10 s total. Position channel done, mesh
-    // active, skipMask = 1, camera at landing distance.
-    await page.waitForTimeout(6000);
+    // Sample 3 — t = 10 s total. Position channel done, mesh
+    // active, skipMask = 1, camera at landing distance. Pre-
+    // round-4 (when posDurationMs saturated at 8 s for every HYG
+    // fly-to) the mid-fly mesh check ran at t=4 s; round-4's
+    // parsec-scale duration formula brought Sirius down to
+    // ~4.1 s, and round-5's factor=60 concentrates the warp
+    // around t∈[1.24s, 2.89s], so the mid-fly sample moved up
+    // to t=2 s (combined with sample 2 above). The 8 s wait
+    // here keeps total elapsed at 10 s for the landed sample.
+    await page.waitForTimeout(8000);
     const landed = await page.evaluate(() => {
       const w = window as unknown as {
         __ATLAS_TEST_STORE__: { getState: () => { focusId: string | null } };
