@@ -194,6 +194,49 @@ work; two gates disagree about the same code; about to declare
 "MVP closed" / "wave closed" / similar completeness marker in a commit
 message or §Next up update.
 
+### L41 — Porting constants ≠ porting experience (architectural-layer trap)
+
+**Trigger**: a Gaia behaviour the user reports as a UX gap, fixed via
+"port the constant from Gaia source X to Atlas site Y".
+
+**Rule**: before tuning any number, identify which Gaia _flow_
+implements the behaviour. Gaia often has multiple paths for the same
+visible effect: scripted/cinematic vs interactive/physics, pre-computed
+lerp vs per-frame velocity, global mapper vs local controller. The
+right port mirrors the FLOW SHAPE, not just one constant inside it.
+Constants like `factor=60`, `factor=17`, `friction=2.0` are calibration
+inside a flow, not the flow itself. Copying them across flows
+"silently with Gaia parity" produces code that matches the wrong path
+exactly while missing the user's experience entirely.
+
+**Action**: for any UX-driven port, walk Gaia's call graph from the
+user input event (click, keypress, script call) down to the final
+camera/object mutation. Identify (a) the control loop / dispatch shape
+(per-frame events vs alpha-driven interpolation vs spring), (b) the
+state object that carries momentum/progress, (c) the gate condition
+that terminates motion. Constants come last.
+
+**Source**: `tasks/archive/postmortems/T6-visual-failure.md` —
+M2.5 + round-3..5b chained 5 commits adjusting
+`logisticSigmoid(factor)` from 12 → 60 → 60+17 to "match Gaia"
+while shipping the user's reported "snap" perception unchanged.
+The bug was that atlas's HYG focus-click had been wired to Gaia's
+`CameraModule.transition_position` (scripted lerp+sigmoid), but
+the user's click experience needs Gaia's
+`InteractiveCameraModule.go_to_object` (per-frame velocity push
+through `NaturalCamera.java`'s force/friction model). No constant
+inside the scripted flow can produce the interactive flow's feel
+because the flows are structurally different. Round-6 is the
+flow-level rewrite; the round-3..5b constant-tuning work is
+correct for its scripted-flow target but wasn't the target the
+user was asking about.
+
+**Fires when:** "user reports X feels off"; "the UX is wrong but
+the code matches Gaia"; "we're tuning constants because the last
+tune didn't fix the perception"; "Gaia uses N here, let's use N
+too" — without first checking that atlas's call graph matches
+Gaia's at the same level.
+
 **Canonical code markers:** `sanitizeVsopSeries()` in
 `src/lib/orbital/analytical/vsop87Planets.ts`; `provenanceFor()` in
 `analyticalProvider.ts`; `SatelliteEntry.source` discriminant in

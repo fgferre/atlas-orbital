@@ -6,28 +6,28 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-06 (T6.4 M1 + M2 ✅; M2.5 S1-S7 +
-round-3 + round-4 + round-5 hotfixes shipped. **User smoke
-2026-05-05** surfaced 4 issues during the 4-stars × 2-cycles
-acceptance run: (1) Search box doesn't find HYG stars (out of
-M2.5 scope, queued for M6 forward-port); (2) solar→star fly-to
-feels like a jump — system disappears in a flash, no visible
-"lift-off" phase; (2a) fly-to **only** feels smooth when
-interrupting another in-flight transition (mid-flight switching
-between similar-scale endpoints works); (3) sprite-to-mesh
-transition has a visible "pop" hiatus (M3 wave will fix, this
-gap is documented and expected); (3a) procedural-mesh disc
-ends up small at landing (Gaia-spec landing radius is ~1°
-angular radius for close stars; perception is partly amplified
-by missing M3 cross-fade). **Round-5 attempt** (commit
-`079eb52`): bumped logisticSigmoid `factor` 12→60 to match
-Gaia's `CameraModule.java:1210` clamp range. The factor=12
-default was a documented Atlas-Gaia divergence ("intentional");
-user smoke disconfirmed the rationale. factor=60 gives clear
-~30% stall on each end (departure → warp → arrival profile)
-instead of the smooth-but-snap-feeling factor=12 distribution.
-Awaiting user re-smoke of issue (2). M2.5 still agent-complete
-pending user PASS on issue (2) + the original 4-stars smoke
-per Acceptance §8.)_
+round-3 + round-4 + round-5 + round-5b hotfixes shipped.
+**Round-6 promoted from CONTINGENT to ACTIVE 2026-05-06**
+after Codex (external-friend audit) demonstrated mathematically
+that round-5's factor 12→60 cannot resolve U-1 regardless of
+the value chosen. Diagnosis: atlas's M2.5 ports Gaia's
+**scripted** `CameraModule.transition_position` flow (linear
+lerp + sigmoid mapper), but the user's "click on a star" use
+case is structurally Gaia's **interactive**
+`InteractiveCameraModule.go_to_object` flow (per-frame velocity
+push driven by `NaturalCamera.java`'s force/friction model).
+Round-5's factor=60 + lerp concentrates 99.5% of trajectory
+progress into a ~825 ms warp window for Sirius (~6.4e8 wu/s
+during warp = ~100× solar-system extent per frame at 60 fps);
+no easing-factor adjustment can fix that — the architecture
+needs to change. Round-5 + round-5b stay shipped: they
+correctly close divergences in atlas's scripted flight contract
+(factor 60/17, oriEasing, e2e + comment cleanup), and the
+contract is reusable for future cinematic-tour features. They
+just don't apply to click-driven focus, which Round-6 rewires
+to a velocity/friction physics model. M2.5 close gate flips
+from "user re-smoke after round-5" to "Round-6 PASS on the
+no-warp acceptance §1 + 4 named stars × 2 cycles smoke".)_
 
 ---
 
@@ -49,18 +49,19 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
-**Default fresh-loop fire**: **user re-smoke after round-5**
-— click any bright HYG star from the solar-system view, verify
-the fly-to now has a visible departure phase (camera lingers
-on the solar system for ~30% of the duration before warping
-toward the destination). If PASS, the next fire flips to the
-original 4-stars × 2-cycles acceptance smoke (§Acceptance §8 in
-`tasks/waves/T6.4-visual-recovery.md`). If still FAIL, escalate
-to round-6: port Gaia's `go_to_object` (interactive physics-
-push from `InteractiveCameraModule.java:174-200`) into atlas's
-HYG flight path. That's the Gaia-faithful approach for
-cross-scale fly-to and is documented at the wave file's
-§Round-6 plan.
+**Default fresh-loop fire**: **Round-6 implementation kickoff**
+— sub-tracks R6-A (HygPhysicsFlight core, ~3 h) + R6-B
+(setupCameraHyg integration, ~2 h) + R6-C (useFrame branch,
+~2 h). These three deliver the first runtime-testable physics
+flight; subsequent sub-tracks (R6-D cancel handling, R6-E
+debug telemetry, R6-F empirical calibration sweep, R6-G
+tests, R6-H docs sync) follow in sequence. Total Round-6
+estimate ~10-14 h. Full spec in
+`tasks/waves/T6.4-visual-recovery.md` §Round-6 — includes the
+5 Codex refinements (smooth orientation channel preserved,
+calibrated-not-blind-port, full-stop cancel, `targetAngularRadiusRad`
+naming consistent with C-1, semi-implicit Euler integrator) +
+the 4 starting calibration constants for R6-F.
 
 **Forward queue** (independent of M2.5 close):
 
@@ -88,24 +89,32 @@ message; user runs it manually if they want external review.
 
 ## Carryover findings
 
-**User-surfaced from 2026-05-05 smoke** (round-5 in
-flight; round-5b/M6 forward-port queued):
+**User-surfaced from 2026-05-05 smoke** (round-5 + round-5b
+shipped; Round-6 promoted from CONTINGENT to ACTIVE
+2026-05-06; M6 forward-port queued):
 
-| ID  | Pri | Status | Summary                                                                                                                             |
-| --- | --- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| U-1 | P1  | Open   | Solar→star fly-to "jumps", system disappears in a flash. Round-5 attempt: factor=60 (Gaia-default). Awaiting user re-smoke.         |
-| U-2 | P2  | Plan   | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).     |
-| U-3 | P2  | Plan   | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.     |
-| U-4 | P3  | Plan   | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine. |
-| U-5 | P2  | Plan   | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's          |
-|     |     |        | `DataInfoWindow.java`).                                                                                                             |
+| ID  | Pri | Status | Summary                                                                                                                                                                                                                                                                                            |
+| --- | --- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U-1 | P1  | Active | Solar→star fly-to "jumps". Round-5 attempt (factor=60) shipped but Codex audit 2026-05-06 mathematically demonstrated it can't fix the perception (99.5% trajectory in 20% time = ~6.4e8 wu/s warp = ~100× solar-system extent per frame). Round-6 (interactive physics flight) is the actual fix. |
+| U-2 | P2  | Plan   | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).                                                                                                                                                                    |
+| U-3 | P2  | Plan   | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                                    |
+| U-4 | P3  | Plan   | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                                |
+| U-5 | P2  | Plan   | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's `DataInfoWindow.java`).                                                                                                                                                 |
 
-**Round-6 contingent plan** (only if round-5 factor=60 doesn't
-resolve U-1): port Gaia's `go_to_object` physics-push from
-`InteractiveCameraModule.java:174-200`. Architectural
-divergence from M2.5's pre-computed lerp (HYG path becomes
-physics-driven; curated-body path stays lerp-based). Spec to
-land in wave file §Round-6 if escalated.
+**Round-6 active scope** (promoted from CONTINGENT 2026-05-06):
+port Gaia's interactive flight model — per-frame velocity push
+driven by `InteractiveCameraModule.java:174-200`'s control loop
+
+- `NaturalCamera.java:125,341,985-1011,1533-1537`'s force /
+  friction / velocity physics. Atlas implements as a small local
+  `HygPhysicsFlight` class with semi-implicit Euler integration,
+  calibrated empirically (4 tunable constants: initial force,
+  max velocity factor, friction rate, decel onset ratio). M2.5
+  contract preserved at the gate threshold
+  (`computeAtlasFlightTarget` → `targetAngularRadiusRad`).
+  `StellarFlightTransition` retained for the orientation-only
+  channel + future scripted-tour features. 8 sub-tracks specced
+  in wave file §Round-6 §Spec; ~10-14 h total effort.
 
 **P3 forward-looking notes** parked OUTSIDE M2.5 (Codex
 round-4 audit, do not block):
