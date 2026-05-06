@@ -5,27 +5,29 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-05 (T6.4 M1 + M2 ✅; M2.5 S1-S7 +
-Codex round-3 hotfix shipped + **Codex round-4 hotfix shipped** —
-round-3 fixed angular-radius math (Sirius ~456 wu, was 913 wu),
-HygStellarMesh pre-warm revert, honest comments, stronger e2e.
-Round-4 (this commit) fixes 5 audit findings the user surfaced
-running an independent Codex pass on the round-3 diff: C-5
-focus-clear cancels in-flight transition (P1; otherwise the next
-OrbitControls "start" snaps target to old endpoint); C-6 parsec-
-scale duration formula replacing the log10 linear-distance one
-that saturated 8 s for every real HYG fly-to (P2); C-7 fovFactor
-header corrected (Gaia ref fov is 40°, default 45°, fovFactor at
-default ≈ 1.138 — the round-3 header had ≈ 1 with default 60°,
-both factually wrong; recursive L40 trap); C-8 propagated post-
-round-3 numbers (913→456 wu, 509k→254k wu, 1200pc→2003pc) into
-wave Acceptance §2 + §7 + §Codex-round-3 hotfix-spec (which had
-"~600 pc" with a sign error) + CameraController comment; C-9
-clarified the 10 wu landing-floor scope as landing-only (it does
-NOT enforce minDistance — round-3 comment overstated runtime
-near-plane protection). M2.5 is agent-complete pending the user-
-driven smoke (4 named stars × 2 zoom cycles per Acceptance §8).
-M3 stays blocked behind that user smoke.)_
+_Last updated: 2026-05-06 (T6.4 M1 + M2 ✅; M2.5 S1-S7 +
+round-3 + round-4 + round-5 hotfixes shipped. **User smoke
+2026-05-05** surfaced 4 issues during the 4-stars × 2-cycles
+acceptance run: (1) Search box doesn't find HYG stars (out of
+M2.5 scope, queued for M6 forward-port); (2) solar→star fly-to
+feels like a jump — system disappears in a flash, no visible
+"lift-off" phase; (2a) fly-to **only** feels smooth when
+interrupting another in-flight transition (mid-flight switching
+between similar-scale endpoints works); (3) sprite-to-mesh
+transition has a visible "pop" hiatus (M3 wave will fix, this
+gap is documented and expected); (3a) procedural-mesh disc
+ends up small at landing (Gaia-spec landing radius is ~1°
+angular radius for close stars; perception is partly amplified
+by missing M3 cross-fade). **Round-5 attempt** (commit
+`079eb52`): bumped logisticSigmoid `factor` 12→60 to match
+Gaia's `CameraModule.java:1210` clamp range. The factor=12
+default was a documented Atlas-Gaia divergence ("intentional");
+user smoke disconfirmed the rationale. factor=60 gives clear
+~30% stall on each end (departure → warp → arrival profile)
+instead of the smooth-but-snap-feeling factor=12 distribution.
+Awaiting user re-smoke of issue (2). M2.5 still agent-complete
+pending user PASS on issue (2) + the original 4-stars smoke
+per Acceptance §8.)_
 
 ---
 
@@ -47,20 +49,31 @@ fields varying; raised to descriptor-driven). Estimate now
 M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 optional
 ~2-3 h post-recovery.
 
-**Default fresh-loop fire**: **user-driven smoke for T6.4 M2.5**
-— 4 named stars (Sirius, Betelgeuse, Proxima, Vega) × 2 zoom
-cycles each per Acceptance §8 in `tasks/waves/T6.4-visual-recovery.md`.
-The agent has shipped the M2.5 implementation (S1-S7) AND the
-Codex round-3 hotfix; what remains before M3 unblocks is the
-user-eyes confirmation that the fly-to feels right, the
-procedural mesh shows up at landing, and there's no sprite/mesh
-gap visible mid-flight.
+**Default fresh-loop fire**: **user re-smoke after round-5**
+— click any bright HYG star from the solar-system view, verify
+the fly-to now has a visible departure phase (camera lingers
+on the solar system for ~30% of the duration before warping
+toward the destination). If PASS, the next fire flips to the
+original 4-stars × 2-cycles acceptance smoke (§Acceptance §8 in
+`tasks/waves/T6.4-visual-recovery.md`). If still FAIL, escalate
+to round-6: port Gaia's `go_to_object` (interactive physics-
+push from `InteractiveCameraModule.java:174-200`) into atlas's
+HYG flight path. That's the Gaia-faithful approach for
+cross-scale fly-to and is documented at the wave file's
+§Round-6 plan.
 
-If the user smoke passes: M3 unblocks (smooth sprite ↔ mesh
-cross-fade, ~2-3h, atlas-native — see `tasks/waves/T6.4-visual-recovery.md`
-§M3). If it surfaces a defect: triage on first read; a P1/P2
-touching the M2.5 contract becomes the next fresh-loop fire per
-loop protocol step 2.
+**Forward queue** (independent of M2.5 close):
+
+- **M6 forward-port** (HygStarPanel + search + Wikipedia
+  integration + i18n foundation) — user-requested 2026-05-05
+  after the smoke. Wikipedia REST API integration matches
+  Gaia's `DataInfoWindow.java:62-71` pattern (see wave-file
+  §M6 spec). ~14 h across 8 sub-tracks; independent of the
+  flight-contract close. Can run in parallel with the
+  flight-contract user re-smoke.
+- **M3** (sprite ↔ mesh cross-fade) stays blocked until M2.5
+  closes (cross-fade is meaningless if camera is mid-snap on
+  arrival).
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
@@ -75,10 +88,27 @@ message; user runs it manually if they want external review.
 
 ## Carryover findings
 
-None active. Codex round-3 review of M2.5 (C-1..C-4) shipped in
-the round-3 hotfix; Codex round-4 review (5 findings — C-5 P1,
-C-6..C-9 P2) shipped in the round-4 hotfix. Two P3 forward-
-looking notes parked OUTSIDE the milestone (do not block M2.5):
+**User-surfaced from 2026-05-05 smoke** (round-5 in
+flight; round-5b/M6 forward-port queued):
+
+| ID  | Pri | Status | Summary                                                                                                                             |
+| --- | --- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| U-1 | P1  | Open   | Solar→star fly-to "jumps", system disappears in a flash. Round-5 attempt: factor=60 (Gaia-default). Awaiting user re-smoke.         |
+| U-2 | P2  | Plan   | Search box doesn't find HYG stars. Queued as M6 forward-port (sub-track C — name index + autocomplete on Bayer/HD/proper-name).     |
+| U-3 | P2  | Plan   | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.     |
+| U-4 | P3  | Plan   | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine. |
+| U-5 | P2  | Plan   | No HYG star info panel. Queued as M6 forward-port (sub-track D + E — HygStarPanel + Wikipedia REST integration like Gaia's          |
+|     |     |        | `DataInfoWindow.java`).                                                                                                             |
+
+**Round-6 contingent plan** (only if round-5 factor=60 doesn't
+resolve U-1): port Gaia's `go_to_object` physics-push from
+`InteractiveCameraModule.java:174-200`. Architectural
+divergence from M2.5's pre-computed lerp (HYG path becomes
+physics-driven; curated-body path stays lerp-based). Spec to
+land in wave file §Round-6 if escalated.
+
+**P3 forward-looking notes** parked OUTSIDE M2.5 (Codex
+round-4 audit, do not block):
 
 - **Singleton progress channel is unkeyed** —
   `lib/camera/hygFlightPosProgress.ts`. Today's React effect
@@ -90,6 +120,20 @@ looking notes parked OUTSIDE the milestone (do not block M2.5):
   `__ATLAS_TEST_FREEZE__` if-blocks ship in prod bundles
   (~30 lines, dead). Replace with a Vite `import.meta.env.MODE`
   guard if production-bundle absence ever matters.
+
+**M6 forward-port plan** (independent of M2.5 close):
+~14 h across 8 sub-tracks, full spec in wave file §M6.
+
+| Sub-track | Deliverable                                                                      | New deps                                                       |
+| --------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| A         | i18n foundation (en + pt-BR locales, wired via `useTranslation`)                 | `react-i18next`, `i18next`, `i18next-browser-languagedetector` |
+| B         | HYG binary v3 with `properName` + Bayer + Flamsteed + HD/HIP/Gliese designations | none (extends `build-hyg-binary.js`)                           |
+| C         | SearchBar wires HYG name index with autocomplete                                 | none                                                           |
+| D         | HygStarPanel UI (matches solar-system info-panel style) + i18n strings           | depends on A, E                                                |
+| E         | Wikipedia REST client (rate-limit + abort + disambiguation `_(star)`)            | none (browser fetch)                                           |
+| F         | IndexedDB persistent cache (LRU 200 entries, TTL 30 days)                        | `idb` (~3KB gzipped)                                           |
+| G         | Settings toggle for Wikipedia integration (default ON, persist localStorage)     | none                                                           |
+| H         | CSP allow `upload.wikimedia.org` (Vite config)                                   | none                                                           |
 
 Prior Codex audits (round-1, round-2, round-3 of T6.3-x, and
 final-pass of the L38 restructure) all addressed; corrections
