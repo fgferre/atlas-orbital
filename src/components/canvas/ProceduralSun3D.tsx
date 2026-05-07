@@ -3,6 +3,12 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
+import {
+  DEFAULT_CLASS_BIAS_CEILING,
+  DEFAULT_CLASS_BIAS_FLOOR,
+  DEFAULT_CLASS_BIAS_GAMMA,
+  SOLAR_CLASS_COLOR,
+} from "../../lib/stellarSurfaceTransfer";
 import { resolveSunRenderRange } from "../../lib/sunRenderRange";
 import {
   SUN_DEFAULT_VISUAL_PROFILE,
@@ -449,6 +455,24 @@ export const ProceduralSun3D = ({
     [visualProfile.classColor]
   );
 
+  // T6.4-M4-fix: solar reference + bias knobs are constants for the
+  // current ship; we still upload them as uniforms so the post-audit
+  // `applyClassColorTransfer` math stays driven from one source of
+  // truth (`stellarSurfaceTransfer.ts`). Building Three.Vector3 once
+  // outside the material useMemo so each material gets its own
+  // cloned reference (THREE.js shares the underlying object
+  // otherwise — mutating one material's uniform would leak into the
+  // other).
+  const solarClassColorVec = useMemo(
+    () =>
+      new THREE.Vector3(
+        SOLAR_CLASS_COLOR[0],
+        SOLAR_CLASS_COLOR[1],
+        SOLAR_CLASS_COLOR[2]
+      ),
+    []
+  );
+
   const sunMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -458,7 +482,11 @@ export const ProceduralSun3D = ({
         premultipliedAlpha: true,
         blending: THREE.NormalBlending,
         depthWrite: true,
-        // T6.1 + T6.4-M4 — surface uniforms driven by visualProfile.
+        // T6.1 + T6.4-M4-fix — surface uniforms driven by visualProfile.
+        // uTintBase=0.2 for sphere (was uTint=0.2 pre-M4); class-bias
+        // knobs from stellarSurfaceTransfer defaults. uClassColor and
+        // uSolarClassColor cloned per material to avoid uniform
+        // sharing across sphere/glow.
         uniforms: {
           uTime: { value: 0 },
           uPerlinCube: { value: perlinResources.renderTarget.texture },
@@ -467,8 +495,12 @@ export const ProceduralSun3D = ({
           uBase: { value: visualProfile.surfaceBase },
           uBrightnessOffset: { value: visualProfile.surfaceBrightnessOffset },
           uBrightness: { value: visualProfile.surfaceBrightness },
+          uTintBase: { value: visualProfile.surfaceTint },
           uClassColor: { value: classColorVec.clone() },
-          uClassWhitePoint: { value: visualProfile.surfaceWhitePoint },
+          uSolarClassColor: { value: solarClassColorVec.clone() },
+          uClassBiasGamma: { value: DEFAULT_CLASS_BIAS_GAMMA },
+          uClassBiasFloor: { value: DEFAULT_CLASS_BIAS_FLOOR },
+          uClassBiasCeiling: { value: DEFAULT_CLASS_BIAS_CEILING },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -483,8 +515,9 @@ export const ProceduralSun3D = ({
       visualProfile.surfaceBase,
       visualProfile.surfaceBrightnessOffset,
       visualProfile.surfaceBrightness,
-      visualProfile.surfaceWhitePoint,
+      visualProfile.surfaceTint,
       classColorVec,
+      solarClassColorVec,
     ]
   );
 
@@ -499,14 +532,19 @@ export const ProceduralSun3D = ({
         depthTest: true,
         blending: THREE.NormalBlending,
         side: THREE.DoubleSide,
-        // T6.1 + T6.4-M4 — glow uniforms driven by visualProfile.
-        // Shares uClassColor + uClassWhitePoint with the sphere.
+        // T6.1 + T6.4-M4-fix — glow uniforms driven by visualProfile.
+        // Same class-bias knobs as sphere (one spectral identity); only
+        // uTintBase differs (0.4 for glow vs 0.2 for sphere).
         uniforms: {
           uRadius: { value: visualProfile.glowRadius },
           uBrightness: { value: visualProfile.glowBrightness },
           uFalloffColor: { value: visualProfile.glowFalloffColor },
+          uTintBase: { value: visualProfile.glowTint },
           uClassColor: { value: classColorVec.clone() },
-          uClassWhitePoint: { value: visualProfile.surfaceWhitePoint },
+          uSolarClassColor: { value: solarClassColorVec.clone() },
+          uClassBiasGamma: { value: DEFAULT_CLASS_BIAS_GAMMA },
+          uClassBiasFloor: { value: DEFAULT_CLASS_BIAS_FLOOR },
+          uClassBiasCeiling: { value: DEFAULT_CLASS_BIAS_CEILING },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -518,8 +556,9 @@ export const ProceduralSun3D = ({
       visualProfile.glowRadius,
       visualProfile.glowBrightness,
       visualProfile.glowFalloffColor,
-      visualProfile.surfaceWhitePoint,
+      visualProfile.glowTint,
       classColorVec,
+      solarClassColorVec,
     ]
   );
 

@@ -226,20 +226,26 @@ export const proceduralSunSphereFragmentShader = `
   uniform float uBase;
   uniform float uBrightnessOffset;
   uniform float uBrightness;
-  // T6.4-M4: class-driven color path. uClassColor carries the
-  // linear-RGB blackbody color for this star (sourced CPU-side
-  // from blackbodyRgbFromTemperature(tEff) — see stellarColor.ts).
-  // uClassWhitePoint is the brightness above which the surface
-  // saturates to white, giving the HDR-core look while limb /
-  // lower-brightness regions retain the class hue. Replaces the
-  // pre-M4 (b, b*b, b*b*b*b) / uTint formula which only spanned
-  // warm-yellow -> white and could not produce blue-dominant
-  // output for hot O / B / A stars. Sphere AND glow read the same
-  // uClassColor (one uniform; same value pushed into both
-  // materials per stellarVisualProfileFrom output) so the corona
-  // hue cannot drift from the surface hue.
+  // T6.4-M4-fix: per-material tintBase + class-relative bias replace
+  // the M4 mix-to-white path. The pre-M4 atlas curve was effectively
+  // (b, b² · uTintBase, b⁴ · uTintBase³) — its multi-channel exponent
+  // shape is the source of the Sun's signature granulation contrast.
+  // uTintBase = 0.2 for sphere (was hardcoded uTint=0.2 pre-M4),
+  // 0.4 for glow (was 0.4 pre-M4). Different per material because
+  // surface and corona had distinct visual roles.
+  uniform float uTintBase;
+  // uClassColor carries the linear-RGB blackbody color for this
+  // star (CPU-side from blackbodyRgbFromTemperature(tEff)). The
+  // shader applies it as a CLASS-RELATIVE BIAS — divide by the
+  // solar reference, raise to gamma, clamp — so the Sun (where
+  // uClassColor matches the solar reference) renders byte-identical
+  // to the pre-M4 baseline by construction. See
+  // src/lib/stellarSurfaceTransfer.ts for the math + tests.
   uniform vec3 uClassColor;
-  uniform float uClassWhitePoint;
+  uniform vec3 uSolarClassColor;
+  uniform float uClassBiasGamma;
+  uniform float uClassBiasFloor;
+  uniform float uClassBiasCeiling;
 
   // T6.4-M1: view-space camera-relative position (see vertex header).
   varying vec3 vViewPos;
@@ -255,15 +261,29 @@ export const proceduralSunSphereFragmentShader = `
     return smoothstep(1.0, 1.5, nDotL + uVisibility * 2.5);
   }
 
+  vec3 classRelativeBias() {
+    // Mirror of classRelativeBias() in stellarSurfaceTransfer.ts.
+    // For the Sun, uClassColor == uSolarClassColor → ratio = (1,1,1),
+    // bias = (1,1,1), legacy curve renders byte-identical pre-M4.
+    vec3 ratio = uClassColor / max(uSolarClassColor, vec3(1e-6));
+    vec3 raw = pow(max(ratio, vec3(1e-6)), vec3(uClassBiasGamma));
+    return clamp(raw, vec3(uClassBiasFloor), vec3(uClassBiasCeiling));
+  }
+
   vec3 brightnessToColor(float b) {
-    // T6.4-M4: lerp class hue to white at high brightness so the
-    // core stays HDR-white (preserving the pre-M4 visual character
-    // for the Sun) while the limb retains class color. saturation
-    // approaches 1 at low brightness (full chroma) and 0 above
-    // uClassWhitePoint (full white).
-    float saturation = 1.0 - smoothstep(1.0, uClassWhitePoint, b);
-    vec3 chroma = mix(vec3(1.0), uClassColor, saturation);
-    return chroma * b * uBrightness;
+    // Pre-M4 atlas legacy curve, factored for runtime tintBase:
+    //   R = b × uBrightness
+    //   G = b² × uTintBase × uBrightness
+    //   B = b⁴ × uTintBase³ × uBrightness
+    // Multi-channel exponents give the granulation contrast that
+    // reads as visible surface detail (the b² and b⁴ damping make
+    // noise-pattern variance translate into chroma swings, not just
+    // luminance). The class-relative bias then modulates the curve
+    // per spectral class without disturbing the Sun-default.
+    float t1 = uTintBase;
+    float t3 = t1 * t1 * t1;
+    vec3 curve = vec3(b, b * b * t1, b * b * b * b * t3) * uBrightness;
+    return curve * classRelativeBias();
   }
 
   float ocean() {
@@ -379,15 +399,17 @@ export const proceduralSunGlowFragmentShader = `
   uniform vec3 uLightView;
   uniform float uBrightness;
   uniform float uFalloffColor;
-  // T6.4-M4: same shared uniforms as the sphere fragment. Glow
-  // brightness in this shader stays in [1.0, 1.0 + uFalloffColor],
-  // so for the Sun-default uClassWhitePoint=5 the saturate-to-white
-  // path is essentially never hit and the glow reads as full
-  // class-chroma. The path is wired anyway so future tuning of
-  // uClassWhitePoint cannot accidentally desaturate the glow vs
-  // the sphere.
+  // T6.4-M4-fix: same legacy curve × class-relative bias as the
+  // sphere fragment, but with uTintBase=0.4 (vs sphere's 0.2)
+  // because pre-M4 the corona had a more diffuse / neutral
+  // character. Sphere and glow share uClassColor + bias knobs
+  // (one spectral identity), differ only in tintBase.
+  uniform float uTintBase;
   uniform vec3 uClassColor;
-  uniform float uClassWhitePoint;
+  uniform vec3 uSolarClassColor;
+  uniform float uClassBiasGamma;
+  uniform float uClassBiasFloor;
+  uniform float uClassBiasCeiling;
 
   // T6.4-M2 coordinate-space contract (mirrors vertex header):
   // vNormalWorld is the per-fragment outward radial direction in
@@ -406,13 +428,18 @@ export const proceduralSunGlowFragmentShader = `
     return smoothstep(1.0, 1.5, nDotL + uVisibility * 2.5);
   }
 
+  vec3 classRelativeBias() {
+    vec3 ratio = uClassColor / max(uSolarClassColor, vec3(1e-6));
+    vec3 raw = pow(max(ratio, vec3(1e-6)), vec3(uClassBiasGamma));
+    return clamp(raw, vec3(uClassBiasFloor), vec3(uClassBiasCeiling));
+  }
+
   vec3 brightnessToColor(float b) {
-    // T6.4-M4: identical formula to the sphere fragment. Sharing
-    // the saturate-to-white path keeps surface and corona color
-    // in lockstep across the full brightness range.
-    float saturation = 1.0 - smoothstep(1.0, uClassWhitePoint, b);
-    vec3 chroma = mix(vec3(1.0), uClassColor, saturation);
-    return chroma * b * uBrightness;
+    // Mirror of the sphere fragment's curve, with glow's tintBase=0.4.
+    float t1 = uTintBase;
+    float t3 = t1 * t1 * t1;
+    vec3 curve = vec3(b, b * b * t1, b * b * b * b * t3) * uBrightness;
+    return curve * classRelativeBias();
   }
 
   void main() {

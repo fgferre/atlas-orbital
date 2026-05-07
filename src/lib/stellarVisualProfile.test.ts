@@ -36,10 +36,12 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — granulation (perlin cubemap)", () => {
 });
 
 describe("SUN_DEFAULT_VISUAL_PROFILE — surface sphere", () => {
-  // Source: ProceduralSun3D.tsx (sun material). T6.4-M4 swapped
-  // `surfaceTint` (vec3-channel-bias scalar) for `surfaceWhitePoint`
-  // (mix-to-white threshold) when the shader's brightness→color
-  // formula was rewritten to take `uClassColor` directly.
+  // Source: ProceduralSun3D.tsx (sun material). T6.4-M4-fix
+  // re-introduced `surfaceTint=0.2` after the audit pass found
+  // that M4's `mix(white, classColor, smoothstep)` formula could
+  // not preserve the pre-M4 Sun visual identity. The post-audit
+  // fix restores the pre-M4 `vec3(b, b², b⁴) × tint` shape with
+  // `surfaceTint` driving the b² and b⁴ damping factors.
   it("surfaceFresnelPower matches pre-T6.1 sun uFresnelPower=1", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceFresnelPower).toBe(1);
   });
@@ -55,8 +57,8 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — surface sphere", () => {
   it("surfaceBrightness matches pre-T6.1 sun uBrightness=0.6", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceBrightness).toBe(0.6);
   });
-  it("surfaceWhitePoint=5 (T6.4-M4) reproduces pre-M4 mix-to-white at HDR core", () => {
-    expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceWhitePoint).toBe(5);
+  it("surfaceTint=0.2 matches pre-M4 sphere uTint (legacy curve damping)", () => {
+    expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceTint).toBe(0.2);
   });
 });
 
@@ -69,6 +71,12 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — glow (ring corona)", () => {
   });
   it("glowFalloffColor matches pre-T6.1 glow uFalloffColor=0.5", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.glowFalloffColor).toBe(0.5);
+  });
+  it("glowTint=0.4 matches pre-M4 glow uTint (separate from sphere's 0.2)", () => {
+    // Pre-M4 the surface and glow had different tint values to give
+    // them distinct visual roles (surface deeply saturated, corona
+    // more diffuse). The post-audit fix preserves this split.
+    expect(SUN_DEFAULT_VISUAL_PROFILE.glowTint).toBe(0.4);
   });
 });
 
@@ -150,12 +158,14 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — light direction", () => {
 });
 
 describe("SUN_DEFAULT_VISUAL_PROFILE — completeness", () => {
-  it("contains exactly 28 numeric uniform fields + 1 lightDirection", () => {
+  it("contains 29 keys (27 numeric + classColor + lightDirection)", () => {
     // Pin the field count so adding a new field in
     // StellarVisualProfile flags this test (forcing the author to
-    // also extend the regression coverage above).
+    // also extend the regression coverage above). T6.4-M4-fix:
+    // dropped `surfaceWhitePoint` (1), added `surfaceTint` +
+    // `glowTint` (2) — net +1 vs M4 baseline of 28.
     const keys = Object.keys(SUN_DEFAULT_VISUAL_PROFILE);
-    expect(keys.length).toBe(28);
+    expect(keys.length).toBe(29);
   });
 
   it("every numeric field is finite (sanity — no NaN / Infinity drift)", () => {

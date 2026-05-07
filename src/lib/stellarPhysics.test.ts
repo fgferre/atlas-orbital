@@ -420,10 +420,12 @@ describe("stellarVisualProfileFrom — B-V fallback path", () => {
 });
 
 describe("stellarVisualProfileFrom — output is a valid StellarVisualProfile", () => {
-  it("contains 28 keys (26 numeric + classColor + lightDirection)", () => {
+  it("contains 29 keys (27 numeric + classColor + lightDirection)", () => {
+    // T6.4-M4-fix: dropped surfaceWhitePoint (1), added surfaceTint
+    // + glowTint (2). Net +1 vs M4 baseline of 28.
     const profile = stellarVisualProfileFrom({ bv: 0.65, spect: "G2V" });
     const keys = Object.keys(profile);
-    expect(keys.length).toBe(28);
+    expect(keys.length).toBe(29);
     for (const [key, value] of Object.entries(profile)) {
       if (key === "lightDirection" || key === "classColor") continue;
       expect(Number.isFinite(value)).toBe(true);

@@ -19,14 +19,15 @@
  * interface intentionally diverges from a previously-hardcoded
  * value.
  *
- * **What's externalized** (T6.1 baseline: 26 numeric uniforms +
- * `lightDirection`. T6.4-M4 swaps `surfaceTint` + `glowTint` for
- * `surfaceWhitePoint` + `classColor` so the new linear-RGB
- * shader path replaces the prior `vec3(b, b², b⁴) × tint`
- * formula — same 28 keys total, different shape.) Runtime-
- * mutated uniforms (`uTime`, `uVisibility`, `uDirection`,
- * `uPerlinCube`, `uCamUp`) stay inside the component — they're
- * driven by `useFrame` and have no per-star meaning.
+ * **What's externalized** (T6.4-M4-fix: 27 numeric fields +
+ * `classColor` + `lightDirection` = 29 keys total). The pre-M4
+ * `vec3(b, b², b⁴) × tint` shape is restored as the surface curve
+ * via `surfaceTint` (0.2) and `glowTint` (0.4), with `classColor`
+ * modulating per-class identity via `applyClassColorTransfer` in
+ * `stellarSurfaceTransfer.ts`. Runtime-mutated uniforms (`uTime`,
+ * `uVisibility`, `uDirection`, `uPerlinCube`, `uCamUp`) stay
+ * inside the component — they're driven by `useFrame` and have no
+ * per-star meaning.
  *
  * **What's NOT externalized** (out of scope for T6.1):
  * - Per-quality `lowRes` ray/flare width/opacity pairs
@@ -91,15 +92,15 @@ export interface StellarVisualProfile {
   /** `uBrightness`; final output multiplier. */
   surfaceBrightness: number;
   /**
-   * `uClassWhitePoint` in `proceduralSunSphereFragmentShader`
-   * (T6.4-M4). Brightness above which the surface saturates to
-   * white, giving the HDR-core look while the limb / lower-
-   * brightness regions retain `classColor`. Replaces the prior
-   * `uTint`-modulated `vec3(b, b², b⁴)` formula which could not
-   * produce blue-dominant output for hot stars regardless of
-   * the tint value.
+   * `uTintBase` in `proceduralSunSphereFragmentShader` (T6.4-M4-fix).
+   * Pre-M4 atlas hardcoded `uTint = 0.2` for the surface; the post-
+   * audit fix re-externalizes this so sphere and glow can keep
+   * different tint shapes (glow used 0.4 pre-M4 — different visual
+   * role). Drives `legacyCurve`'s b² and b⁴ damping factors:
+   * `(b, b² × tintBase, b⁴ × tintBase³)`. Replaces the M4
+   * `surfaceWhitePoint` field.
    */
-  surfaceWhitePoint: number;
+  surfaceTint: number;
 
   // ─── Glow (ring corona) shader ───
   /** `uRadius` in `proceduralSunGlowFragmentShader`; ring thickness. */
@@ -108,6 +109,14 @@ export interface StellarVisualProfile {
   glowBrightness: number;
   /** `uFalloffColor`; controls the radial falloff color cutoff. */
   glowFalloffColor: number;
+  /**
+   * `uTintBase` in `proceduralSunGlowFragmentShader` (T6.4-M4-fix).
+   * Pre-M4 hardcoded `uTint = 0.4` for the corona — different from
+   * the surface's 0.2 because the corona has a more diffuse /
+   * neutral character. Re-introduced in the post-audit fix so the
+   * surface/glow split is preserved.
+   */
+  glowTint: number;
 
   // ─── Rays shader (long thin streamers) ───
   /** `uLength` in `proceduralSunRaysFragmentShader`; ray length scalar. */
@@ -189,17 +198,21 @@ export const SUN_DEFAULT_VISUAL_PROFILE: StellarVisualProfile = {
   surfaceBase: 4,
   surfaceBrightnessOffset: 1,
   surfaceBrightness: 0.6,
-  // T6.4-M4: white-point of 5 matches the upper end of the
-  // pre-M4 `vec3(b, b², b⁴)` saturation regime — at b ≥ 5 the
-  // old formula produced `vec3(5, 25, 625) × tintScale` which
-  // already clipped to white through the post-process pipeline.
-  // The new mix-to-white formula reproduces that behavior
-  // explicitly while letting the limb retain `classColor`.
-  surfaceWhitePoint: 5,
+  // T6.4-M4-fix: re-introduced after Codex audit identified that the
+  // M4 `mix(white, classColor, smoothstep)` formula didn't preserve
+  // the pre-M4 Sun visual identity. Source: pre-M4
+  // `proceduralSunShaders.ts:246` had `b *= uTint; return (vec3(b,
+  // b², b⁴) / uTint) * uBrightness` with `uTint = 0.2` for the
+  // surface — that's `surfaceTint=0.2` here.
+  surfaceTint: 0.2,
 
   glowRadius: 0.4,
   glowBrightness: 1.06,
   glowFalloffColor: 0.5,
+  // T6.4-M4-fix: same pre-M4 source — `proceduralSunShaders.ts:382`
+  // glow had `uTint = 0.4` (different from the surface's 0.2 because
+  // the corona is more diffuse / neutral).
+  glowTint: 0.4,
 
   raysLength: 0.45,
   raysNoiseFrequency: 8,
