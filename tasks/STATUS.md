@@ -25,19 +25,16 @@ multi-frame static-region invariant variance=0 across 32 rAF at
 
 See `tasks/waves/T6.4-visual-recovery.md` for full plan.
 
-**TL;DR**: T6 wave (T6.0 → T6.3-ε, 17 commits) shipped the full
-HYG focus pipeline + 7 Codex-caught surface bugs across δ/ε.
-First user-driven manual smoke (2026-05-04) revealed the
-procedural mesh **never renders visually** at HYG positions.
-Four silent root causes (precision collapse, hard transition,
-partial class variation, missing supergiant spect). T6.4 wave
-fixes those four. **2026-05-05 user smoke after M1+M2** added
-a fifth concern: HYG fly-to navigation feels jarring vs Gaia
-Sky's two-channel transition (M2.5 inserted to address). M4
-spec also expanded to put spectral color first (was 3 of 28
-fields varying; raised to descriptor-driven). Estimate now
-M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
-~14 h (8 sub-tracks, parallelizable post-M2.5).
+**TL;DR**: T6 wave (T6.0 → T6.3-ε, 17 commits) wired the full
+HYG focus pipeline; first user smoke 2026-05-04 surfaced four
+silent root causes (precision collapse, hard transition, partial
+class variation, missing supergiant spect). T6.4 fixes those
+plus the M2.5 fly-to two-channel transition (added after the
+2026-05-05 smoke) and the M6 HygStarPanel + Wikipedia + search
+forward-port (promoted same day). M1+M2+M2.5+M3+M4+M5+M6+M7 —
+ALL shipped agent-side 2026-05-07. Wave acceptance now blocks
+entirely on user smoke (cycle spec in §"Higher-priority parallel
+work for the user" below).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
 **No T6.4 agent work pending**. M1-M7 all shipped agent-side;
@@ -71,18 +68,11 @@ calibration sweep — temporarily re-add the
 `__ATLAS_DEBUG_HYG_PHYSICS__` ring buffer (removed at R6-H per
 L37).
 
-**Forward queue** (independent of M2.5 close):
-
-- **M6 forward-port** (HygStarPanel + search + Wikipedia
-  integration + i18n foundation) — user-requested 2026-05-05
-  after the smoke. Wikipedia REST API integration matches
-  Gaia's `DataInfoWindow.java:62-71` pattern (see wave-file
-  §M6 spec). ~14 h across 8 sub-tracks; independent of the
-  flight-contract close. Can run in parallel with the
-  flight-contract user re-smoke.
-- **M3** (sprite ↔ mesh cross-fade) stays blocked until M2.5
-  closes (cross-fade is meaningless if camera is mid-snap on
-  arrival).
+**Forward queue**: empty. M6 forward-port (8 sub-tracks A-H —
+i18n + HYG binary v3 + search + HygStarPanel + Wikipedia REST +
+IndexedDB cache + settings toggle + CSP) all shipped 2026-05-06.
+M3 (sprite ↔ mesh cross-fade) shipped 2026-05-06. M5 post-audit
+H-R inference (b3f764c) + M7 closeout (1ce1d20) shipped 2026-05-07.
 
 **Codex audit policy** (revised 2026-05-05 per
 `feedback_codex_audit_frequency.md`): bundle audits to
