@@ -106,11 +106,12 @@ const STALE_TERMS = [
     except: [],
   },
   {
-    // Estimate-string variants: "M1-M7 ~11-17h" / "~11-17 h" /
-    // "M1-M7,~11-17 h" all match. Negation excluded:
-    // "M1-M5+M7 core 8-13h" is the new canonical and won't trip.
-    pattern: /(M1-M7|~?\s*11-17\s*h)/i,
-    why: "T6.4 estimate updated to M1-M5+M7 core ~8-13h; M6 optional ~2-3h post-recovery.",
+    // Original T6.4 over-estimate "~11-17 h" pre-M6-promotion.
+    // Now that M6 has shipped (sub-tracks A-H all ✅) and M7 has
+    // landed agent-side, "M1-M7" is once again a valid milestone
+    // enumeration — only the stale hour-band is forbidden here.
+    pattern: /~?\s*11-17\s*h/i,
+    why: "T6.4 estimate is now ~8-13h core + ~14h M6 forward-port; the ~11-17 h band predates the M6 promotion.",
     // Wave file's own "Audit history" section legitimately quotes
     // the prior estimate as it lists what each Codex round caught.
     except: ["tasks/waves/T6.4-visual-recovery.md"],

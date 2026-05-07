@@ -5,17 +5,19 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-07. T6.4 M1+M2+M2.5+M3+M4+M5+M6 all shipped.
-Most recent: **M4 visual-fix shipped 2026-05-07** (commit `27658aa` —
-restored legacy curve × class-relative bias after audit found M4's
-`mix-to-white` formula had washed out the Sun) and **M5 shipped
-2026-05-07** (commits `b0c9fa7` Path B + `c0f2ced` Path A wiring —
-named-star spect preserved at build, Stefan-Boltzmann fallback for
-spect-less stars). CSP fix `5f9c299` cleared the boot stall at 96%
-(blob: + jsdelivr in script-src/connect-src for troika worker
-rehydrate). Open follow-up: M4 Plan A defaults still leave Sirius
-reading red-dominant at typical surface b — calibration / Plan B
-deferred until user smoke confirms it's needed._
+_Last updated: 2026-05-07. T6.4 M1-M7 all agent-side ✅;
+wave-acceptance gate open on user smoke. Most recent
+(2026-05-07): **M5 post-audit fix** `b3f764c` (H-R-diagram
+luminosity class inference for spect-less Bayer/Flamsteed-only
+stars — closes the granulation/rays-texture identity gap Codex
+round-5 P2 flagged) + JSDoc sync `c5ecc0d`. **Plan B blend**
+`313cd9b` activated for hot stars (smoke-driven, replaced the
+prior "Plan B deferred" position). **M5 non-MS radius**
+`6d589a1` extended SB refinement to giants/supergiants. **M7
+agent closeout** clean: dev-diag sweep clean, preview boot smoke
+clean (`gl.isContextLost()===false`, `level:error` empty), L26
+multi-frame static-region invariant variance=0 across 32 rAF at
+4 corner probes._
 
 ---
 
@@ -38,20 +40,25 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**T6.4 M7 — Final cleanup + smoke** (spec in wave file §M7).
-M3-M6 + the M4 visual fix all shipped 2026-05-06/07; M7 is the
-final closeout pass — verify gates, remove session-temp telemetry
-if any, sync STATUS/wave-file/lessons. Optional follow-up before
-M7: if user smoke confirms Sirius shader calibration is needed,
-run that as a small calibration onda first (gamma/floor/ceiling
-tuning OR Plan B blend activation) before T6.4 closes.
+**No T6.4 agent work pending**. M1-M7 all shipped agent-side;
+wave acceptance is now blocked entirely on user smoke. Until
+user delivers smoke feedback, the agent has no in-scope T6.4
+ondas to fire. Other active waves (T-Closeout, T4.3, T5.x re-
+bakes) are themselves blocked behind T6.4 acceptance per
+§Other active waves below — so the natural next agent action
+on a fresh /loop fire is to re-read STATUS for new Carryover
+findings (user smoke regressions) before doing anything else.
 
 **Higher-priority parallel work for the user** (only the user
-can do this): user-smoke Round-6 acceptance — 4 named stars
-(Sirius, Betelgeuse, Proxima, far-edge anchor) × 2 zoom cycles
-each. Verify no warp perception, landing pose ~456 wu for
-Sirius, mid-flight drag cleanly interrupts. Passing smoke
-closes U-1 and unblocks M3 (sprite↔mesh cross-fade).
+can do this): full T6.4 wave acceptance smoke. Required cycle:
+4 named stars (Sirius, Betelgeuse, Proxima, far-edge anchor) ×
+2 zoom cycles each (verify no warp perception, landing pose
+~456 wu for Sirius, mid-flight drag cleanly interrupts) +
+quality-flip while focused on a HYG star (low ↔ high) +
+Gam-2 Vel or other Bayer-only sidecar (verify post-`b3f764c`
+H-R-inferred granulation/rays texture reads as giant/supergiant,
+not V-class). Passing smoke closes U-1 / U-2 / U-3 / U-5 and
+the wave; unblocks T-Closeout + T4.3 + T5.x re-bakes.
 
 **Calibration risk** (R6-F first-guess, may surface in smoke):
 `MAX_VELOCITY_FACTOR=3.0` tunes for Sirius (~4.65 s). Far stars
