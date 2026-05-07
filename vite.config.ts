@@ -36,7 +36,19 @@ function buildCspContent(mode: string): string {
   const isDev = mode === "development";
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": isDev ? ["'self'", "'unsafe-eval'"] : ["'self'"],
+    // Scripts: blob: is mandatory because troika-worker-utils +
+    // Three.js GLTFLoader / DRACO / KTX2 workers all rehydrate
+    // their module code via `importScripts(blobUrl)` from inside
+    // a Web Worker. CSP `worker-src` only controls the worker's
+    // top-level document; once running, the worker's own
+    // `importScripts` is governed by `script-src`. Without blob:
+    // the worker rehydrate fails, troika throws "init did not
+    // return a callable function", and the loader stalls at
+    // 96 % because GLTF assets never finish (T6.4 post-M6-H bug,
+    // surfaced via real-browser console smoke 2026-05-07).
+    "script-src": isDev
+      ? ["'self'", "'unsafe-eval'", "blob:"]
+      : ["'self'", "blob:"],
     // Styles: 'unsafe-inline' is required for R3F + Drei +
     // Tailwind v4's runtime style attributes. fonts.googleapis.com
     // is the @import target.
@@ -53,13 +65,31 @@ function buildCspContent(mode: string): string {
     // for canvas snapshots, upload.wikimedia.org for M6-D thumbs.
     "img-src": ["'self'", "data:", "blob:", "https://upload.wikimedia.org"],
     // Network fetches: 'self' for HYG binaries + same-origin XHRs,
-    // *.wikipedia.org for M6-E REST API. Dev adds ws/wss for HMR.
+    // cdn.jsdelivr.net for troika-three-text's unicode font resolver,
+    // *.wikipedia.org for M6-E REST API. blob: is required because
+    // GLTFLoader (and Three's TextureLoader) `fetch(blobUrl)` to
+    // resolve textures embedded in the glTF buffer-view URI rewrite
+    // path. Dev adds ws/wss for HMR.
     "connect-src": isDev
-      ? ["'self'", "ws:", "wss:", "https://*.wikipedia.org"]
-      : ["'self'", "https://*.wikipedia.org"],
-    // Workers: same-origin only (R3F's worker-loader path uses
-    // same-origin asset imports). blob: covers TextureLoader's
-    // worker-style decoding paths.
+      ? [
+          "'self'",
+          "blob:",
+          "ws:",
+          "wss:",
+          "https://cdn.jsdelivr.net",
+          "https://*.wikipedia.org",
+        ]
+      : [
+          "'self'",
+          "blob:",
+          "https://cdn.jsdelivr.net",
+          "https://*.wikipedia.org",
+        ],
+    // Workers: same-origin top-level + blob: for in-line worker
+    // construction (Three.js KTX2 / DRACO loaders create workers
+    // via `URL.createObjectURL(blob)`). Note: this controls the
+    // worker's CONTEXT, not the scripts it `importScripts` —
+    // those go through `script-src` above.
     "worker-src": ["'self'", "blob:"],
     // Disallow object/embed entirely.
     "object-src": ["'none'"],
