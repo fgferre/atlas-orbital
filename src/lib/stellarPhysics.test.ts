@@ -729,10 +729,18 @@ describe("descriptorFromCatalog — M5-Path-A physical fallback (spect empty + a
 // same tEff) instead of hardcoded "V". Closes the granulation/rays
 // texture gap for Bayer/Flamsteed-only sidecar stars (e.g. Gam-2 Vel
 // Wolf-Rayet binary that drops out of canonical MK letters).
+//
+// 2026-05-07 follow-up (Codex post-audit-of-audit): added the
+// MS_TOLERANCE_MAG = 0.5 band so catalog scatter ±0.5 mag from the
+// MS curve still resolves to V (was being misclassified as IV by
+// the strict `dimness < 0` cut). And added the Sun (G2V, 5778 K,
+// M_V=4.83) anchor that the JSDoc list named but the array omitted
+// — pre-fix, mvMS(5778) interpolated to 4.61 not 4.83.
 
 describe("descriptorFromCatalog — H-R-inferred luminosity class for spect-less stars", () => {
   it("MS-like absmag at solar tEff → V class", () => {
-    // bv=0.65 → tEff≈5778; mvMS(5778)≈4.83; absmag=4.83 → dimness=0 → V
+    // bv=0.65 → tEff≈5778; with Sun anchor mvMS(5778)=4.83 exactly;
+    // absmag=4.83 → dimness=0 → V
     const desc = descriptorFromCatalog({ bv: 0.65, absmag: 4.83, spect: "" });
     expect(desc.luminosityClass).toBe("V");
   });
@@ -764,14 +772,15 @@ describe("descriptorFromCatalog — H-R-inferred luminosity class for spect-less
     expect(desc.luminosityClass).toBe("V");
   });
 
-  it("subgiant range (dimness near -1) → IV", () => {
-    // bv=0.65 → tEff≈5778; mvMS≈4.83; absmag=3.5 → dimness=-1.33 → IV
+  it("subgiant range (dimness near -1.3) → IV (past tolerance band)", () => {
+    // bv=0.65 → tEff≈5778; mvMS=4.83; absmag=3.5 → dimness=-1.33 → IV
+    // (-1.33 < -0.5 tolerance → IV; -2 < -1.33 stays sub-III)
     const desc = descriptorFromCatalog({ bv: 0.65, absmag: 3.5, spect: "" });
     expect(desc.luminosityClass).toBe("IV");
   });
 
-  it("giant range (dimness near -3) → III", () => {
-    // bv=0.65 → tEff≈5778; mvMS≈4.83; absmag=1.5 → dimness=-3.33 → III
+  it("giant range (dimness near -3.3) → III", () => {
+    // bv=0.65 → tEff≈5778; mvMS=4.83; absmag=1.5 → dimness=-3.33 → III
     const desc = descriptorFromCatalog({ bv: 0.65, absmag: 1.5, spect: "" });
     expect(desc.luminosityClass).toBe("III");
   });
@@ -779,6 +788,81 @@ describe("descriptorFromCatalog — H-R-inferred luminosity class for spect-less
   it("no absmag → V default (no H-R inference possible)", () => {
     const desc = descriptorFromCatalog({ bv: 0.65, spect: "" });
     expect(desc.luminosityClass).toBe("V");
+  });
+
+  // T6.4-M5 post-audit-of-audit: MS tolerance band tests. Catalog
+  // scatter routinely shifts MS stars ±0.3-0.5 mag from the
+  // literature MS curve. Without these, the strict `dimness < 0`
+  // cut misclassified ~464 spect-less rows as IV (Codex P2).
+
+  it("MS scatter just brighter than baseline (dimness≈-0.3) → V (within tolerance)", () => {
+    // bv=0.65 → tEff≈5778; mvMS=4.83; absmag=4.5 → dimness=-0.33
+    // Pre-fix: dimness<0 → IV. Post-fix: |dimness|≤0.5 → V.
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 4.5, spect: "" });
+    expect(desc.luminosityClass).toBe("V");
+  });
+
+  it("MS scatter just dimmer than baseline (dimness≈+0.3) → V (always was)", () => {
+    // bv=0.65 → tEff≈5778; mvMS=4.83; absmag=5.13 → dimness=+0.30
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 5.13, spect: "" });
+    expect(desc.luminosityClass).toBe("V");
+  });
+
+  it("just past tolerance band (dimness≈-0.6) → IV (subgiant)", () => {
+    // bv=0.65 → tEff≈5778; mvMS=4.83; absmag=4.2 → dimness=-0.63
+    // Boundary check: |dimness| > 0.5 tolerance → IV.
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 4.2, spect: "" });
+    expect(desc.luminosityClass).toBe("IV");
+  });
+
+  it("Sun anchor pinned: mvMS(5778) ≈ 4.83 (Sun) within 0.05 mag", () => {
+    // Pre-fix the MS_ABSMAG_ANCHORS array skipped G2V; interpolation
+    // gave mvMS(5778) ≈ 4.61, off by 0.22 mag from the JSDoc claim.
+    // This test pins the contract via a borderline absmag that lands
+    // on V only if mvMS(5778) is within ~0.05 mag of 4.83.
+    // absmag=4.30 → dimness=4.30-4.83=-0.53 → IV (just past tolerance)
+    // If the anchor were missing, mvMS≈4.61, dimness=-0.31, → V
+    // (within tolerance) — wrong answer.
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 4.3, spect: "" });
+    expect(desc.luminosityClass).toBe("IV");
+  });
+});
+
+// T6.4-M5 post-audit-of-audit (Codex P3): tests should pin the
+// rendered visual contract, not just descriptorFromCatalog. The
+// luminosity class is a means to the granulation/rays/glow
+// identity in stellarVisualProfileFrom; if a future refactor
+// keeps the descriptor right but breaks the profile output for
+// spect-less inputs, the descriptor-only tests above wouldn't
+// catch it.
+
+describe("stellarVisualProfileFrom — spect-less giant identity (T6.4-M5 post-audit)", () => {
+  // Wolf-Rayet-like Bayer-only catalog row (Gam-2 Vel shape):
+  // hot, very luminous, no canonical MK spect string.
+  const wolfRayetLikeInput = { bv: -0.18, absmag: -5.95, spect: "" };
+
+  it("granulation cell scale differs from Sun default (V-class branch escaped)", () => {
+    const p = stellarVisualProfileFrom(wolfRayetLikeInput);
+    // V-class would reproduce SUN_DEFAULT exactly. A non-V branch
+    // pulls granAnchor.spatial off the Sun default.
+    expect(p.granulationSpatialFreq).not.toBe(
+      SUN_DEFAULT_VISUAL_PROFILE.granulationSpatialFreq
+    );
+  });
+
+  it("rays length scaled up (supergiant art-direction branch)", () => {
+    const p = stellarVisualProfileFrom(wolfRayetLikeInput);
+    // artDirectionMultipliers `isSG` branch sets raysLength=1.45
+    // (vs 1.0 for V/IV). Supergiant identity ⇒ rays lengthen.
+    expect(p.raysLength).toBeGreaterThan(SUN_DEFAULT_VISUAL_PROFILE.raysLength);
+  });
+
+  it("rays noise frequency scaled down (wide, slow supergiant rays)", () => {
+    const p = stellarVisualProfileFrom(wolfRayetLikeInput);
+    // `isSG` branch sets raysNoiseFrequency=0.5 (vs 1.0 for V/IV).
+    expect(p.raysNoiseFrequency).toBeLessThan(
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseFrequency
+    );
   });
 });
 

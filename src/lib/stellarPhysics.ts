@@ -653,6 +653,7 @@ const MS_ABSMAG_ANCHORS: ReadonlyArray<{ tEff: number; mv: number }> = [
   { tEff: 9900, mv: 0.6 },
   { tEff: 7300, mv: 2.7 },
   { tEff: 5900, mv: 4.4 },
+  { tEff: 5778, mv: 4.83 }, // Sun (G2V) — pins solar-neighborhood interpolation
   { tEff: 5100, mv: 5.9 },
   { tEff: 3800, mv: 8.8 },
   { tEff: 3030, mv: 12.3 },
@@ -689,21 +690,32 @@ const mvMSEstimate = (tEff: number): number => {
  * Algorithm: compare observed `absmag` against the V-class baseline
  * at the same `tEff` (via `mvMSEstimate`). The "dimness factor"
  * (`absmag - mvMS`) is positive for stars dimmer than MS at that
- * temperature (rare — likely catalog noise) and negative for stars
- * brighter than MS (giants / supergiants). Threshold cuts:
+ * temperature and negative for stars brighter than MS (giants /
+ * supergiants). Threshold cuts:
  *
- *   dimness ≥  0    → V    (main sequence — close to MS baseline)
- *   −2 < dimness < 0 → IV  (subgiant)
- *   −5 < dimness ≤ −2 → III (giant)
- *   −7 < dimness ≤ −5 → II  (bright giant)
- *  −10 < dimness ≤ −7 → Ib  (supergiant)
- *        dimness ≤ −10 → Ia  (bright supergiant)
+ *   −0.5 ≤ dimness         → V    (main sequence — within scatter band)
+ *   −2 < dimness < −0.5    → IV   (subgiant)
+ *   −5 < dimness ≤ −2      → III  (giant)
+ *   −7 < dimness ≤ −5      → II   (bright giant)
+ *  −10 < dimness ≤ −7      → Ib   (supergiant)
+ *        dimness ≤ −10     → Ia   (bright supergiant)
+ *
+ * The V tolerance band (`dimness ≥ −0.5`) absorbs catalog scatter
+ * (photometric noise, B-V calibration, metallicity spread) which
+ * routinely shifts MS stars ±0.3-0.5 mag from the literature MS
+ * curve. Without it, ~464 spect-less catalog rows in
+ * `dimness ∈ (−0.5, 0)` (29 hot-MS + 141 cool-MS candidates among
+ * them) would be misclassified as IV and lose the V-class
+ * granulation/rays branch in `artDirectionMultipliers` (Codex
+ * post-audit P2).
  *
  * Atlas-opinion thresholds — chosen to match the MK luminosity
  * class definitions roughly. Doesn't try to handle white dwarfs
  * (returns V for very dim outliers; real WDs have spect strings
  * starting with "D" and don't reach this path).
  */
+const MS_TOLERANCE_MAG = 0.5;
+
 const inferLuminosityClass = (
   tEff: number,
   absmag: number
@@ -715,7 +727,7 @@ const inferLuminosityClass = (
   if (dimness <= -7) return "Ib";
   if (dimness <= -5) return "II";
   if (dimness <= -2) return "III";
-  if (dimness < 0) return "IV";
+  if (dimness < -MS_TOLERANCE_MAG) return "IV";
   return "V";
 };
 
