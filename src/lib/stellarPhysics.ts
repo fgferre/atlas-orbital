@@ -626,6 +626,100 @@ const spectralClassFromTemperature = (
 };
 
 /**
+ * Approximate main-sequence (V class) absolute V-band magnitude as
+ * a function of effective temperature. Used by `inferLuminosityClass`
+ * to compare an observed `absmag` against where the V-class baseline
+ * would land at the same `tEff` — a simplified H-R-diagram lookup.
+ *
+ * Anchors (atlas-opinion, from Allen's Astrophysical Quantities V):
+ *   O5V  (~42000 K)  M_V ≈ -5.5
+ *   B0V  (~30000 K)  M_V ≈ -3.5
+ *   B5V  (~15000 K)  M_V ≈ -1.0
+ *   A0V  ( ~9900 K)  M_V ≈  0.6
+ *   F0V  ( ~7300 K)  M_V ≈  2.7
+ *   G0V  ( ~5900 K)  M_V ≈  4.4
+ *   G2V  ( ~5778 K)  M_V ≈  4.83 (Sun)
+ *   K0V  ( ~5100 K)  M_V ≈  5.9
+ *   M0V  ( ~3800 K)  M_V ≈  8.8
+ *   M5V  ( ~3030 K)  M_V ≈ 12.3
+ *
+ * Linear-interpolated in log10(tEff) space (the anchors form a
+ * roughly straight line on `log T` vs `M_V`).
+ */
+const MS_ABSMAG_ANCHORS: ReadonlyArray<{ tEff: number; mv: number }> = [
+  { tEff: 42000, mv: -5.5 },
+  { tEff: 30000, mv: -3.5 },
+  { tEff: 15000, mv: -1.0 },
+  { tEff: 9900, mv: 0.6 },
+  { tEff: 7300, mv: 2.7 },
+  { tEff: 5900, mv: 4.4 },
+  { tEff: 5100, mv: 5.9 },
+  { tEff: 3800, mv: 8.8 },
+  { tEff: 3030, mv: 12.3 },
+];
+
+const mvMSEstimate = (tEff: number): number => {
+  if (!Number.isFinite(tEff) || tEff <= 0) return 4.83; // solar fallback
+  if (tEff >= MS_ABSMAG_ANCHORS[0].tEff) return MS_ABSMAG_ANCHORS[0].mv;
+  if (tEff <= MS_ABSMAG_ANCHORS[MS_ABSMAG_ANCHORS.length - 1].tEff) {
+    return MS_ABSMAG_ANCHORS[MS_ABSMAG_ANCHORS.length - 1].mv;
+  }
+  const logT = Math.log10(tEff);
+  for (let i = 0; i < MS_ABSMAG_ANCHORS.length - 1; i++) {
+    const hi = MS_ABSMAG_ANCHORS[i];
+    const lo = MS_ABSMAG_ANCHORS[i + 1];
+    if (tEff <= hi.tEff && tEff >= lo.tEff) {
+      const logHi = Math.log10(hi.tEff);
+      const logLo = Math.log10(lo.tEff);
+      const t = (logT - logLo) / (logHi - logLo);
+      return lo.mv * (1 - t) + hi.mv * t;
+    }
+  }
+  return 4.83;
+};
+
+/**
+ * T6.4-M5 post-audit: infer luminosity class from absmag + tEff
+ * via a simplified H-R diagram lookup. Used by `descriptorFromCatalog`
+ * when `spect` is missing (Bayer/Flamsteed-only sidecar stars that
+ * fell outside the M5-Path-B allowlist). Replaces the prior
+ * hardcoded `"V"` default which gave V-class granulation / rays
+ * texture to spect-less giants and supergiants.
+ *
+ * Algorithm: compare observed `absmag` against the V-class baseline
+ * at the same `tEff` (via `mvMSEstimate`). The "dimness factor"
+ * (`absmag - mvMS`) is positive for stars dimmer than MS at that
+ * temperature (rare — likely catalog noise) and negative for stars
+ * brighter than MS (giants / supergiants). Threshold cuts:
+ *
+ *   dimness ≥  0    → V    (main sequence — close to MS baseline)
+ *   −2 < dimness < 0 → IV  (subgiant)
+ *   −5 < dimness ≤ −2 → III (giant)
+ *   −7 < dimness ≤ −5 → II  (bright giant)
+ *  −10 < dimness ≤ −7 → Ib  (supergiant)
+ *        dimness ≤ −10 → Ia  (bright supergiant)
+ *
+ * Atlas-opinion thresholds — chosen to match the MK luminosity
+ * class definitions roughly. Doesn't try to handle white dwarfs
+ * (returns V for very dim outliers; real WDs have spect strings
+ * starting with "D" and don't reach this path).
+ */
+const inferLuminosityClass = (
+  tEff: number,
+  absmag: number
+): LuminosityClass => {
+  if (!Number.isFinite(absmag) || !Number.isFinite(tEff)) return "V";
+  const mvMS = mvMSEstimate(tEff);
+  const dimness = absmag - mvMS;
+  if (dimness <= -10) return "Ia";
+  if (dimness <= -7) return "Ib";
+  if (dimness <= -5) return "II";
+  if (dimness <= -2) return "III";
+  if (dimness < 0) return "IV";
+  return "V";
+};
+
+/**
  * T6.4-M5-Path-A: physical-fallback radius via Stefan-Boltzmann when
  * `spect` is empty but `absmag` is finite. Uses B-V-derived tEff
  * (Ballesteros) for the temperature term:
@@ -702,9 +796,14 @@ export const descriptorFromCatalog = (
     // class reverse-looked up; radius via radiusFromSpect's spect-
     // empty branch (which itself routes to the SB fallback when
     // bv + absmag are finite — single source of truth).
+    // T6.4-M5 post-audit: luminosity class inferred from H-R
+    // position when absmag is available (was hardcoded "V" pre-fix,
+    // misclassifying spect-less giants/supergiants like Wolf-Rayet
+    // Bayer-only entries that drop out of the canonical MK letters).
     tEff = temperatureFromBV(input.bv);
     spectralClass = spectralClassFromTemperature(tEff);
-    luminosityClass = "V";
+    luminosityClass =
+      absmag !== null ? inferLuminosityClass(tEff, absmag) : "V";
     radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined, input.bv);
   }
 

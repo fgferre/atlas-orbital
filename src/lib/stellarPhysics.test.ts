@@ -724,6 +724,64 @@ describe("descriptorFromCatalog — M5-Path-A physical fallback (spect empty + a
   });
 });
 
+// T6.4-M5 post-audit (Codex finding): luminosityClass for spect-less
+// stars now inferred from H-R diagram (absmag vs MS baseline at the
+// same tEff) instead of hardcoded "V". Closes the granulation/rays
+// texture gap for Bayer/Flamsteed-only sidecar stars (e.g. Gam-2 Vel
+// Wolf-Rayet binary that drops out of canonical MK letters).
+
+describe("descriptorFromCatalog — H-R-inferred luminosity class for spect-less stars", () => {
+  it("MS-like absmag at solar tEff → V class", () => {
+    // bv=0.65 → tEff≈5778; mvMS(5778)≈4.83; absmag=4.83 → dimness=0 → V
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 4.83, spect: "" });
+    expect(desc.luminosityClass).toBe("V");
+  });
+
+  it("Bayer-only Wolf-Rayet-like (bv=-0.18, absmag=-5.95) → III or brighter", () => {
+    // tEff(BV=-0.18)≈13133; mvMS(13133)≈-0.5; dimness ≈ -5.95 - (-0.5) = -5.45
+    // Threshold: dimness ≤ -5 → II, ≤ -7 → Ib. So II.
+    const desc = descriptorFromCatalog({
+      bv: -0.18,
+      absmag: -5.95,
+      spect: "",
+    });
+    expect(["II", "Ib", "Ia"]).toContain(desc.luminosityClass);
+  });
+
+  it("Betelgeuse-like spect-less (bv=1.85, absmag=-5.85) → supergiant class", () => {
+    // tEff(BV=1.85)≈3334; mvMS(3334)≈11; dimness ≈ -5.85 - 11 = -16.85 → Ia
+    const desc = descriptorFromCatalog({ bv: 1.85, absmag: -5.85, spect: "" });
+    expect(desc.luminosityClass).toBe("Ia");
+  });
+
+  it("Proxima-like spect-less (bv=1.83, absmag=15.49) → V (stays MS)", () => {
+    // tEff(BV=1.83)≈3357; mvMS(3357)≈11; dimness ≈ 15.49 - 11 = 4.49 → V
+    const desc = descriptorFromCatalog({
+      bv: 1.83,
+      absmag: 15.49,
+      spect: "",
+    });
+    expect(desc.luminosityClass).toBe("V");
+  });
+
+  it("subgiant range (dimness near -1) → IV", () => {
+    // bv=0.65 → tEff≈5778; mvMS≈4.83; absmag=3.5 → dimness=-1.33 → IV
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 3.5, spect: "" });
+    expect(desc.luminosityClass).toBe("IV");
+  });
+
+  it("giant range (dimness near -3) → III", () => {
+    // bv=0.65 → tEff≈5778; mvMS≈4.83; absmag=1.5 → dimness=-3.33 → III
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: 1.5, spect: "" });
+    expect(desc.luminosityClass).toBe("III");
+  });
+
+  it("no absmag → V default (no H-R inference possible)", () => {
+    const desc = descriptorFromCatalog({ bv: 0.65, spect: "" });
+    expect(desc.luminosityClass).toBe("V");
+  });
+});
+
 describe("stellarVisualProfileFrom — Sun-identity invariant (T6.4-M4)", () => {
   // A G2V Sun-equivalent input MUST reproduce the Sun default for
   // every field except surfaceBrightness (sub-1% drift via
