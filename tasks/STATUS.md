@@ -7,8 +7,9 @@ History, shipped-onda detail, and audit narratives live in
 
 _Last updated: 2026-05-06 late night. T6.4 M1+M2 shipped; M2.5
 S1-S7 + rounds 3-5b shipped; Round-6 A-H shipped 2026-05-06;
-**M6 fully closed 2026-05-06 (A+B+C+D+E+F+G+H all ✅)** — U-2 +
-U-5 closed._ The integrator port (`HygPhysicsFlight`),
+M6 fully closed 2026-05-06 (A-H all ✅); **M3 sprite↔mesh
+cross-fade shipped 2026-05-06** — U-2 + U-3 + U-5 closed.
+The integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
 calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
@@ -16,16 +17,13 @@ Sirius ~4.65 s), e2e respec, and sub-stepping hardening
 (`MAX_DT_SUBSTEP=0.05 s`, `MAX_DT_TOTAL=0.1 s` per-frame
 visible-jump cap) all landed. R6-H close-out removed the R6-E
 telemetry scaffolding and synced docs.
-_Post-R6-H user-smoke regression + aim-lerp rewrite._ Smoke
-reported "marcha ré" + "tela muda para um quadro errado". Codex
-audit found three structural issues in `OrientationLerp`
-(target sat behind camera, path could cross + degenerate, Drei
-OrbitControls priority -1 lagged quaternion 1 frame). Fix:
-`AimLerp` slerps the aim DIRECTION (target = `pos + aimDir ×
-dist`, never crosses) + `camera.lookAt` after writes forces
-in-frame orientation. Round-6 commit chain (10 commits):
-89816e5, 9a8688e, cbb767f, 5336b70, be2406f, e5ea617, c9a0c95,
-48e294c (superseded), 21d7bf3 (aim-lerp), 68e7fb7 (doc cleanup).
+\_Post-R6-H aim-lerp rewrite._ User smoke surfaced "marcha ré"
+
+- "tela muda"; Codex found 3 structural issues in
+  `OrientationLerp` (target behind camera, path could cross,
+  Drei priority -1 lagged 1 frame). Fix: `AimLerp` slerps aim
+  direction + `camera.lookAt` forces in-frame orientation. R6
+  commit chain (10): 89816e5 → 68e7fb7.
 
 ---
 
@@ -48,10 +46,11 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**T6.4 M3 — Smooth sprite ↔ mesh cross-fade** (~2-3h, spec in
-wave file §M3). M6 fully closed; M3 unblocked by M2.5. Closes
-U-3 (sprite↔mesh "pop"). Atlas-native; replaces `a_skipMask`
-binary with `a_fadeAlpha` continuous + mesh `uVisibility` ramp.
+**T6.4 M4 — Class variation in stellarVisualProfileFrom**
+(~6-9h, spec in wave file §M4). Last big-spec milestone before
+M5/M7 polish. Pulls perceptual color/brightness/granulation
+descriptors per spectral class so HYG stars stop reading "todas
+amarelas".
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
@@ -105,7 +104,7 @@ shipped; Round-6 promoted from CONTINGENT to ACTIVE
 | --- | --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | U-1 | P1  | Round-6 + aim-lerp shipped, awaiting user smoke | Solar→star fly-to "jumps". Round-6 A-H + post-R6 aim-lerp rewrite shipped 2026-05-06 (10 commits ending at 68e7fb7). Sirius arrival ~4.65 s under R6-F first-guess calibration. Initial post-R6 user smoke surfaced "marcha ré" + "tela muda" — root-caused as orientation-lag in OrientationLerp + OrbitControls priority lag; fixed structurally by AimLerp slerp + camera.lookAt. Re-smoke pending. |
 | U-2 | P2  | M6-C shipped, awaiting user smoke               | Search box doesn't find HYG stars. M6-C shipped 2026-05-06: SearchBar autocomplete now matches via proper name / Bayer (Latin or Greek glyph) / HD / HIP / Gliese. Sirius / α CMa / HD 48915 verified in Preview-MCP smoke.                                                                                                                                                                            |
-| U-3 | P2  | Plan                                            | Sprite↔mesh transition has visible "pop". M3 wave plan covers this (cross-fade with focused-star ramp). Blocked by M2.5 close.                                                                                                                                                                                                                                                                        |
+| U-3 | P2  | M3 shipped 2026-05-06                           | Sprite↔mesh transition has visible "pop". M3 (cross-fade with focused-star ramp via continuous `a_fadeAlpha` + mesh `uVisibility` lockstep) shipped. User-perceptual smoke deferred to user.                                                                                                                                                                                                          |
 | U-4 | P3  | Plan                                            | Procedural disc small at landing. Per Gaia spec (~1° angular radius). Perception likely improves with M3 cross-fade. M4 may refine.                                                                                                                                                                                                                                                                    |
 | U-5 | P2  | M6-D shipped                                    | No HYG star info panel. M6-D shipped 2026-05-06 — stellar-physics grid + Wikipedia "About" via M6-E client. Sirius smoke verified.                                                                                                                                                                                                                                                                     |
 

@@ -9,42 +9,55 @@
  *   2. Computes per-frame solid angle via T6.3-α's
  *      `computeStellarSolidAngle(starRadius, distToCamera)`.
  *   3. Runs the hysteresis gate `shouldStellarMeshBeActive` to
- *      decide whether to mount a procedural mesh.
- *   4. When active: mounts `<ProceduralSun3D>` (T6.1) at the star's
- *      world position with a class-tuned visual profile from T6.2's
- *      `stellarVisualProfileFrom`, and writes
- *      `Starfield.a_skipMask[K] = 1` to suppress the sprite (T6.0).
- *   5. When inactive: unmounts the mesh and clears
- *      `Starfield.a_skipMask[K] = 0`.
+ *      decide the cross-fade RAMP DIRECTION (toward 1 when
+ *      `solidAngle > ENTER`, toward 0 when `< EXIT`).
+ *   4. Integrates the ramp linearly toward target over
+ *      `M3_FADE_DURATION_MS` (default 300 ms). The ramp drives
+ *      both the sprite's `a_fadeAlpha[K]` instanced attribute
+ *      (sprite alpha multiplier = `1 - ramp`) and the procedural
+ *      mesh's `uVisibility` uniform (mesh visibility = `ramp`).
+ *      Sum invariant: `(sprite alpha + mesh visibility) ≈ 1`
+ *      throughout the cross-fade.
+ *   5. Mounts `<ProceduralSun3D>` whenever `ramp > 0` (any time
+ *      the cross-fade is mid-flight or fully on); unmounts only
+ *      when ramp returns to exactly 0.
+ *
+ * **M3 history (2026-05-06)**: replaced T6.3-β's binary
+ * skipMask flip with a continuous cross-fade. The hysteresis
+ * gate at `stellarMeshGate.ts` still drives DIRECTION (when to
+ * flip target between 0 and 1); the ramp drives BLENDING (how
+ * to traverse [0..1] over wall time). Closes U-3 ("sprite↔mesh
+ * pop").
  *
  * **Single-mesh invariant**: only ONE `<HygStellarMesh>` instance
  * mounted in the scene tree (Scene.tsx mounts it exactly once).
- * Whichever HYG star is currently focused-and-large-enough gets the
+ * Whichever HYG star is currently focused-and-cross-fading gets the
  * mesh; others stay sprites. Mirrors Gaia's "render proximity star
  * model" pattern at `ModelEntityRenderSystem.java:429-443` (only
  * `proximity.updating[0]` gets the model render path).
  *
  * **Lifecycle**:
- *   - On focus change to a HYG star → recompute `starData` (position
- *     + visualProfile + radius) from the catalog. While the star is
- *     focused, run the per-frame gate.
- *   - On focus change away from any HYG star → mesh inactive,
- *     skipMask cleared, the unmount cleanup runs.
- *   - On unmount → cleanup clears the skipMask of any active star.
+ *   - On focus change to a HYG star → recompute `starData`
+ *     (position + visualProfile + radius) from the catalog.
+ *   - Per-frame integrator advances `rampRef` toward target.
+ *   - On focus change away → ramp decays toward 0 (sprite fades
+ *     IN, mesh fades OUT). Component unmounts when ramp == 0.
+ *   - On unmount → cleanup zeroes the focused-star's `a_fadeAlpha`
+ *     slot defensively (no stuck mid-fade alpha).
  *
  * **Catalog dependency**: subscribes to the same tier-bound catalog
  * Starfield uses via `useStarfieldCatalog`. Until the catalog
- * resolves, `starData` is null and the mesh stays inactive (the
+ * resolves, `starData` is null and the ramp stays at 0 (the
  * focus-change useEffect will re-evaluate when catalog arrives).
  *
- * **Skip-mask access pattern**: scans the scene for a mesh named
+ * **fadeAlpha access pattern**: scans the scene for a mesh named
  * `"atlas-starfield"` (T6.3-β added the name attribute to
  * `Starfield.tsx`'s `<mesh>` JSX). Reads
- * `geometry.getAttribute("a_skipMask")` (T6.0 attribute) and
+ * `geometry.getAttribute("a_fadeAlpha")` (M3 attribute) and
  * mutates the underlying Float32Array, then sets
  * `attribute.needsUpdate = true` to trigger GPU re-upload. Cleanup
  * resets to 0 unconditionally so a re-focus on the same star
- * re-spawns cleanly.
+ * re-spawns from the start of the fade-in.
  *
  * **Quality profile**: passes the active `qualityProfileName` from
  * the store directly into ProceduralSun3D — for T6.3-β-MVP, the
@@ -81,8 +94,19 @@ import {
 } from "../../lib/stellarVisualProfile";
 import { useStore } from "../../store";
 import type { HygCatalogData } from "../../utils/hygBinary";
+import { stepRampToward } from "./hygMeshFadeRamp";
 import { ProceduralSun3D } from "./ProceduralSun3D";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
+
+/**
+ * M3 — fade duration for the sprite↔mesh cross-fade in
+ * milliseconds. The ramp traverses [0..1] linearly over this
+ * span at any frame rate (`delta`-driven). 300 ms is the
+ * spec default — long enough that the eye perceives a smooth
+ * transition rather than a step, short enough that mid-fade
+ * doesn't read as "stuck loading".
+ */
+const M3_FADE_DURATION_MS = 300;
 
 interface HygStarData {
   /** World-space position (parsec × DISTANCE_SCALE × R_x(obliquity)). */
@@ -98,18 +122,18 @@ interface HygStarData {
 }
 
 /**
- * Locate the Starfield mesh's `a_skipMask` instanced attribute.
+ * Locate the Starfield mesh's `a_fadeAlpha` instanced attribute.
  * Returns null if the Starfield hasn't mounted yet (first frames
  * post-boot before the catalog resolves) or if the named mesh
  * isn't found (defensive — name attribute could regress).
  */
-function findStarfieldSkipMask(
+function findStarfieldFadeAlpha(
   scene: THREE.Scene
 ): THREE.InstancedBufferAttribute | null {
   const mesh = scene.getObjectByName("atlas-starfield");
   if (!mesh) return null;
   const obj3d = mesh as THREE.Object3D & { geometry?: THREE.BufferGeometry };
-  const attr = obj3d.geometry?.getAttribute("a_skipMask");
+  const attr = obj3d.geometry?.getAttribute("a_fadeAlpha");
   if (!attr) return null;
   // Narrow to InstancedBufferAttribute; the attribute is registered as
   // such by Starfield.tsx but the typed-getter returns the base class.
@@ -117,21 +141,24 @@ function findStarfieldSkipMask(
 }
 
 /**
- * Mutate the skipMask attribute for a given star index. Sets the
- * slot value and bumps `needsUpdate` so the next frame re-uploads
- * to the GPU.
+ * Mutate the fadeAlpha attribute for a given star index. Sets the
+ * slot value (clamped [0..1]) and bumps `needsUpdate` so the next
+ * frame re-uploads to the GPU. No-op when the value is already at
+ * the desired ramp position (within float-equality tolerance) so
+ * the steady-state per-frame cost is one scene lookup + one read.
  */
-function writeSkipMask(
+function writeFadeAlpha(
   scene: THREE.Scene,
   starIndex: number,
-  value: 0 | 1
+  value: number
 ): void {
-  const attr = findStarfieldSkipMask(scene);
+  const attr = findStarfieldFadeAlpha(scene);
   if (!attr) return;
   if (starIndex < 0 || starIndex >= attr.count) return;
+  const clamped = Math.max(0, Math.min(1, value));
   const arr = attr.array as Float32Array;
-  if (arr[starIndex] === value) return; // no-op if already at desired value
-  arr[starIndex] = value;
+  if (arr[starIndex] === clamped) return; // no-op when unchanged
+  arr[starIndex] = clamped;
   attr.needsUpdate = true;
 }
 
@@ -171,14 +198,10 @@ export const HygStellarMesh = () => {
   // smaller tier. Returning null here would silently strand the focus:
   // mesh disappears, sprite is gone (not in tier), camera frame loop
   // bails. Instead, defocus explicitly so OrbitControls + UI converge
-  // back to a known state. The `if (catalog && ...)` guard avoids
-  // firing during the transient first-load window when catalog is
-  // null. (Codex round-2 P2 audit, 2026-05-04.)
+  // back to a known state.
   const starData = useMemo<HygStarData | null>(() => {
     if (starIndex === null || !catalog) return null;
     if (starIndex < 0 || starIndex >= catalog.header.count) {
-      // Defer setState out of the render phase via microtask. Read store
-      // setters inside the closure (no useState dep churn).
       Promise.resolve().then(() => {
         const state = useStore.getState();
         if (state.focusId === focusId) {
@@ -193,9 +216,6 @@ export const HygStellarMesh = () => {
     if (!worldPos) return null;
 
     const bv = catalog.colorIndices[starIndex];
-    // T6.2-β: spect path. v2 catalogs populate spectIndices/spectStrings;
-    // v1 catalogs default-fill so spectIdx=0 ("" sentinel) → falls back
-    // to B-V via stellarVisualProfileFrom.
     const spectIdx = catalog.spectIndices[starIndex] ?? 0;
     const spectRaw = catalog.spectStrings[spectIdx] ?? "";
     const spect = spectRaw.length > 0 ? spectRaw : null;
@@ -215,114 +235,102 @@ export const HygStellarMesh = () => {
     const radiusWorldUnits = radiusSolar * SUN_RADIUS_WORLD_UNITS;
 
     return { worldPos, visualProfile, radiusWorldUnits };
-    // focusId is a deterministic derivation of starIndex (`parseHygFocusId`)
-    // so listing both is functionally redundant — but the lint rule only
-    // sees the symbolic dep, so we list it to keep `react-hooks/exhaustive-deps`
-    // green while documenting the relation.
   }, [starIndex, catalog, focusId]);
 
-  // Hysteresis state. Ref tracks the live boolean for useFrame; the
-  // useState mirror drives React re-renders (mount/unmount of
-  // ProceduralSun3D).
-  const meshActiveRef = useRef(false);
+  // M3 — cross-fade ramp state. `rampRef` is the live [0..1]
+  // position consumed by useFrame (no React re-render). `targetRef`
+  // tracks where the hysteresis gate wants the ramp to settle —
+  // updated each frame from `shouldStellarMeshBeActive`. The
+  // `meshActive` state mirrors `rampRef.current > 0` and drives
+  // ProceduralSun3D mount/unmount; React only re-renders on the
+  // 0↔(0,1] boundary, never per fade tick.
+  const rampRef = useRef(0);
+  const targetRef = useRef(0);
   const [meshActive, setMeshActive] = useState(false);
 
-  // Per-frame gate evaluation.
-  useFrame(() => {
+  // Per-frame integrator + gate evaluation.
+  useFrame((_, delta) => {
     if (!starData) {
       // No focus on a parseable HYG star, or catalog not loaded yet.
-      // Force inactive; cleanup useEffect handles the skipMask reset
-      // when starIndex flips to null.
-      if (meshActiveRef.current) {
-        meshActiveRef.current = false;
-        setMeshActive(false);
-      }
-      return;
+      // Force target to 0 so any in-flight ramp decays back to 0
+      // (sprite fades back IN). Mesh component unmounts via the
+      // `meshActive` flip below once ramp returns to 0.
+      targetRef.current = 0;
+    } else {
+      const distToCamera = camera.position.distanceTo(starData.worldPos);
+      const sa = computeStellarSolidAngle(
+        starData.radiusWorldUnits,
+        distToCamera
+      );
+      const wasActive = targetRef.current === 1;
+      targetRef.current = shouldStellarMeshBeActive(wasActive, sa) ? 1 : 0;
     }
 
-    const distToCamera = camera.position.distanceTo(starData.worldPos);
-    const sa = computeStellarSolidAngle(
-      starData.radiusWorldUnits,
-      distToCamera
+    rampRef.current = stepRampToward(
+      rampRef.current,
+      targetRef.current,
+      delta,
+      M3_FADE_DURATION_MS
     );
-    const next = shouldStellarMeshBeActive(meshActiveRef.current, sa);
 
-    // T6.4-M2.5 S6 + Codex round-3 hotfix (2026-05-05) — mesh
-    // activation is purely sa-driven again. The S6 pre-warm
-    // (force-activate at `getHygFlightPosProgress() ≥
-    // HYG_FLIGHT_PREWARM_THRESHOLD`) was reverted because under
-    // the M2.5 contract there is no cross-fade between sprite
-    // and mesh (M3 will ship that). Force-activating in the
-    // deceleration tail also wrote `skipMask = 1` via the
-    // useEffect below, suppressing the sprite while the mesh
-    // was still angularly small — exactly the visual gap M2.5
-    // was meant to avoid. The pre-warm signal publisher in
-    // `CameraController.useFrame` (`setHygFlightPosProgress`)
-    // and the underlying singleton + `posProgressRaw` getter
-    // on `StellarFlightTransition` remain in place so M3 can
-    // consume the channel as a continuous fade ramp instead
-    // of a binary flip.
-
-    if (next !== meshActiveRef.current) {
-      meshActiveRef.current = next;
-      setMeshActive(next);
+    // M3 — re-assert the per-star fadeAlpha each frame against
+    // whatever Starfield instanced attribute is currently live.
+    // `writeFadeAlpha` is idempotent (no-op when the slot is
+    // already at the ramp value). The defensive re-write matters
+    // during transient rebuilds: when the user changes quality
+    // while a HYG mesh is fading, Starfield re-creates its
+    // `InstancedBufferGeometry` with a fresh zero-filled
+    // `a_fadeAlpha`. Without this re-assert, the sprite would
+    // re-emerge under the procedural mesh until the next ramp
+    // step. (Carried over from T6.3-δ Codex P2 audit.)
+    if (starIndex !== null) {
+      writeFadeAlpha(scene, starIndex, rampRef.current);
     }
 
-    // T6.3-δ — re-assert skipMask each frame against whatever
-    // Starfield instanced attribute is currently live. `writeSkipMask`
-    // is idempotent (no-op when the slot already holds the desired
-    // value, see line 133) so the per-frame cost is one scene lookup
-    // + one Float32Array read in the steady state. The defensive
-    // re-write only matters during transient rebuilds: when the user
-    // changes quality while a HYG mesh is active, Starfield re-creates
-    // its `InstancedBufferGeometry` with a fresh zero-filled
-    // `a_skipMask`. Without this re-assert, the useEffect deps
-    // `[scene, starIndex, meshActive]` don't fire on catalog change,
-    // so the sprite would re-emerge under the procedural mesh until
-    // the next hysteresis flip. (Codex P2 audit, 2026-05-04.)
-    if (starIndex !== null) {
-      writeSkipMask(scene, starIndex, meshActiveRef.current ? 1 : 0);
+    // Mount/unmount React boundary. ProceduralSun3D should be
+    // alive as long as ramp > 0 (so the mesh contributes alpha to
+    // the cross-fade). It can unmount only when ramp settles back
+    // to exactly 0 (no overlap left to render).
+    const shouldRender = rampRef.current > 0;
+    if (shouldRender !== meshActive) {
+      setMeshActive(shouldRender);
     }
   });
 
-  // Skip-mask sync. When meshActive flips for a given starIndex, push
-  // the value to the Starfield instanced attribute. Cleanup on unmount
-  // OR starIndex change clears the previous slot so a re-focus on the
-  // same star re-spawns cleanly (no stuck skipMask=1 after despawn).
+  // M3 — fadeAlpha sync. When focus changes to a new HYG star, the
+  // PREVIOUS star's slot must be zeroed (ramp on the new star
+  // starts at 0 anyway, but the cleanup unblocks a re-focus on
+  // the prior star without a stuck mid-fade alpha).
   useEffect(() => {
     if (starIndex === null) return;
-    writeSkipMask(scene, starIndex, meshActive ? 1 : 0);
     return () => {
       // Cleanup: clear this star's slot. Runs on starIndex change
       // (focus moves to a different star or null) and on unmount.
-      writeSkipMask(scene, starIndex, 0);
+      writeFadeAlpha(scene, starIndex, 0);
     };
-  }, [scene, starIndex, meshActive]);
+  }, [scene, starIndex]);
 
-  // T6.4-M2.5 Codex round-3 P2 — test-only mesh-state probe. Exposes
-  // `window.__ATLAS_TEST_MESH_STATE__()` returning the live
-  // `meshActiveRef.current` plus a closure that reads any star
-  // index's `a_skipMask` slot from the Starfield instanced
-  // attribute. Production-inert: gated on `__ATLAS_TEST_FREEZE__`
-  // (the same flag `store.ts` reads to pin the simulation clock).
-  // Used by `e2e/hyg-focus.spec.ts` to assert (a) skipMask is 0
-  // pre-fly, (b) mid-fly skipMask stays 0 (C-2 force-activate
-  // revert), and (c) skipMask flips to 1 only after the natural
-  // ENTER_RAD gate fires post-landing.
+  // T6.4-M2.5 Codex round-3 P2 (carried into M3) — test-only mesh-
+  // state probe. Exposes `window.__ATLAS_TEST_MESH_STATE__()`
+  // returning the live `meshActive` + `fadeAlphaAtIndex` reader.
+  // Production-inert: gated on `__ATLAS_TEST_FREEZE__` (the same
+  // flag `store.ts` reads to pin the simulation clock). Used by
+  // `e2e/hyg-focus.spec.ts` to assert pre-fly fadeAlpha === 0
+  // and post-landing fadeAlpha === 1.
   useEffect(() => {
     const w = window as unknown as { __ATLAS_TEST_FREEZE__?: boolean };
     if (!w.__ATLAS_TEST_FREEZE__) return;
     type MeshStateSnapshot = {
       meshActive: boolean;
-      skipMaskAtIndex: (k: number) => number;
+      fadeAlphaAtIndex: (k: number) => number;
     };
     const probeWindow = window as unknown as {
       __ATLAS_TEST_MESH_STATE__?: () => MeshStateSnapshot;
     };
     probeWindow.__ATLAS_TEST_MESH_STATE__ = () => ({
-      meshActive: meshActiveRef.current,
-      skipMaskAtIndex: (k: number): number => {
-        const attr = findStarfieldSkipMask(scene);
+      meshActive: rampRef.current > 0,
+      fadeAlphaAtIndex: (k: number): number => {
+        const attr = findStarfieldFadeAlpha(scene);
         if (!attr) return 0;
         if (k < 0 || k >= attr.count) return 0;
         const arr = attr.array as Float32Array;
@@ -344,6 +352,7 @@ export const HygStellarMesh = () => {
       position={starData.worldPos}
       visualProfile={starData.visualProfile ?? SUN_DEFAULT_VISUAL_PROFILE}
       renderRange="close"
+      visibilityRef={rampRef}
     />
   );
 };

@@ -38,7 +38,7 @@ import { useCallback, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { simulationClock } from "../../lib/simulationClock";
-import { buildSkipMaskAttribute } from "./starfieldSkipMask";
+import { buildFadeAlphaAttribute } from "./starfieldFadeAlpha";
 import {
   getCachedHygCatalog,
   hygTierForQuality,
@@ -106,14 +106,16 @@ const vertexShader = /* glsl */ `
   attribute float a_size;
   attribute vec3 starColor;
 
-  // T6.0 — per-instance visibility flag (default 0). When T6.3
-  // spawns a procedural stellar mesh for star K, the CPU writes
-  // skipMaskArray[K] = 1 + attribute.needsUpdate = true; this
-  // shader then nulls the quad so the sprite + mesh don't render
-  // stacked (feedback_no_effect_stacking.md). Read as float (the
-  // > 0.5 cutoff matches the <= 1e-3 floating-tolerance idiom
-  // used in the same conditional below).
-  attribute float a_skipMask;
+  // M3 — per-instance cross-fade attribute. Replaces T6.0's binary
+  // 'a_skipMask' (0/1 hard suppression) with a continuous [0..1]
+  // ramp. HygStellarMesh writes the ramp value for the focused
+  // star K each frame; sprite alpha is multiplied by
+  // (1 - a_fadeAlpha) so the sprite fades OUT smoothly as the
+  // mesh's uVisibility ramps 0->1 in lockstep
+  // (feedback_no_effect_stacking.md still holds — invariant:
+  // (focused-sprite alpha + mesh visibility) ~= 1 throughout
+  // the cross-fade, no over-render).
+  attribute float a_fadeAlpha;
 
   uniform float yearsSinceJ2000;
 
@@ -180,12 +182,20 @@ const vertexShader = /* glsl */ `
     float boundaryFade = smoothstep(u_LEN0, u_LEN0 * 1000.0, dist);
     float alpha = clamp(opacity * u_alphaFactor * boundaryFade, 0.0, 1.0);
 
-    // 5. Quad nulling for invisible / near stars (source perf trick
-    //    from star.group.quad.vertex.glsl:121). T6.0 adds the
-    //    a_skipMask branch — when T6.3 spawns a procedural mesh
-    //    for star K it writes skipMaskArray[K]=1 and this conditional
-    //    suppresses the sprite (no stacking with the mesh).
-    if (alpha <= 1e-3 || dist < u_LEN0 || a_skipMask > 0.5) {
+    // 5. Cross-fade with the procedural mesh (M3). When
+    //    HygStellarMesh ramps a_fadeAlpha[K] from 0->1 for the
+    //    focused star, the sprite's alpha attenuates smoothly to
+    //    zero in lockstep with the mesh's uVisibility rising
+    //    from 0->1. At fadeAlpha=0 the sprite renders normally;
+    //    at fadeAlpha=1 it's fully suppressed.
+    alpha *= clamp(1.0 - a_fadeAlpha, 0.0, 1.0);
+
+    // 6. Quad nulling for invisible / near stars (source perf trick
+    //    from star.group.quad.vertex.glsl:121). After the M3
+    //    multiply above, the focused star's sprite naturally lands
+    //    in the alpha <= 1e-3 branch when the cross-fade completes,
+    //    so there is no separate skipMask conditional needed.
+    if (alpha <= 1e-3 || dist < u_LEN0) {
       alpha = 0.0;
       solidAngle = 0.0;
     }
@@ -505,15 +515,14 @@ export const Starfield = () => {
       "a_size",
       new THREE.InstancedBufferAttribute(sizeArray, 1)
     );
-    // T6.0 — `a_skipMask` is dormant infrastructure: the array is
-    // zero-filled by default (every star renders as today). T6.3
-    // will retrieve the attribute via
-    // `meshRef.current.geometry.getAttribute("a_skipMask")` and
-    // toggle entries in concert with the procedural-mesh
-    // spawn / despawn lifecycle.
+    // M3 — `a_fadeAlpha` zero-filled by default (every star
+    // renders normally). `HygStellarMesh` retrieves the attribute
+    // via `meshRef.current.geometry.getAttribute("a_fadeAlpha")`
+    // and writes a per-frame ramp [0..1] for the focused star K,
+    // cross-fading with the procedural mesh's `uVisibility`.
     geom.setAttribute(
-      "a_skipMask",
-      new THREE.InstancedBufferAttribute(buildSkipMaskAttribute(count), 1)
+      "a_fadeAlpha",
+      new THREE.InstancedBufferAttribute(buildFadeAlphaAttribute(count), 1)
     );
 
     return geom;
@@ -551,8 +560,9 @@ export const Starfield = () => {
     <mesh
       ref={meshRef}
       // T6.3-β: named so HygStellarMesh can find the geometry via
-      // scene.getObjectByName and mutate `a_skipMask` (T6.0 attribute)
-      // when a focused HYG star spawns its procedural mesh.
+      // scene.getObjectByName and mutate `a_fadeAlpha` (M3 attribute,
+      // continuous [0..1] cross-fade) when a focused HYG star
+      // spawns its procedural mesh.
       name="atlas-starfield"
       geometry={geometry}
       material={material}

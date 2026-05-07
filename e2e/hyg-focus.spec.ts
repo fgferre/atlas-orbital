@@ -37,7 +37,7 @@ import {
  * Test-only window hooks used (unchanged from round-5b):
  *   - `__ATLAS_TEST_STORE__` — store access for focus dispatch.
  *   - `__ATLAS_TEST_CAMERA__` — camera position + target snapshot.
- *   - `__ATLAS_TEST_MESH_STATE__` — mesh active + skipMask reader.
+ *   - `__ATLAS_TEST_MESH_STATE__` — mesh active + fadeAlpha reader.
  */
 
 test.describe("hyg-focus", () => {
@@ -110,7 +110,7 @@ test.describe("hyg-focus", () => {
       )
       .toBe(false);
 
-    // Pre-fly snapshot. Mesh inactive + skipMask=0 confirms no
+    // Pre-fly snapshot. Mesh inactive + fadeAlpha=0 confirms no
     // accidental S6 force-activate before any flight starts.
     const initial = await page.evaluate(() => {
       const w = window as unknown as {
@@ -120,7 +120,7 @@ test.describe("hyg-focus", () => {
         };
         __ATLAS_TEST_MESH_STATE__: () => {
           meshActive: boolean;
-          skipMaskAtIndex: (k: number) => number;
+          fadeAlphaAtIndex: (k: number) => number;
         };
       };
       const cam = w.__ATLAS_TEST_CAMERA__();
@@ -129,11 +129,11 @@ test.describe("hyg-focus", () => {
         position: cam.position,
         target: cam.target,
         meshActive: mesh.meshActive,
-        skipMaskAt0: mesh.skipMaskAtIndex(0),
+        fadeAlphaAt0: mesh.fadeAlphaAtIndex(0),
       };
     });
     expect(initial.meshActive, "mesh should be inactive pre-fly").toBe(false);
-    expect(initial.skipMaskAt0, "skipMask should be 0 pre-fly").toBe(0);
+    expect(initial.fadeAlphaAt0, "fadeAlpha should be 0 pre-fly").toBe(0);
 
     // Dispatch the HYG focus. Sirius = hyg:0 (brightest catalog
     // entry, magnitude sort, see build-hyg-binary.js).
@@ -186,7 +186,7 @@ test.describe("hyg-focus", () => {
         };
         __ATLAS_TEST_MESH_STATE__: () => {
           meshActive: boolean;
-          skipMaskAtIndex: (k: number) => number;
+          fadeAlphaAtIndex: (k: number) => number;
         };
       };
       const cam = w.__ATLAS_TEST_CAMERA__();
@@ -196,7 +196,7 @@ test.describe("hyg-focus", () => {
         position: cam.position,
         target: cam.target,
         meshActive: mesh.meshActive,
-        skipMaskAt0: mesh.skipMaskAtIndex(0),
+        fadeAlphaAt0: mesh.fadeAlphaAtIndex(0),
       };
     });
 
@@ -204,10 +204,12 @@ test.describe("hyg-focus", () => {
     // index or an out-of-range catalog access).
     expect(landed.focusId).toBe("hyg:0");
 
-    // Mesh active + skipMask=1 at landing — natural sa-gate fired
-    // post-landing, sprite suppressed for the focused star.
+    // Mesh active + fadeAlpha=1 at landing — natural sa-gate fired
+    // post-landing, ramp settled to 1 over ~300 ms (M3 cross-fade),
+    // sprite fully attenuated (`alpha *= (1 - 1) = 0`) and the
+    // procedural mesh fully visible (`uVisibility = 1`).
     expect(landed.meshActive, "mesh should be active post-landing").toBe(true);
-    expect(landed.skipMaskAt0).toBe(1);
+    expect(landed.fadeAlphaAt0).toBe(1);
 
     // Landing distance: |camera.position - controls.target|. Post-
     // flight orientation lerp has long since settled; controls.target

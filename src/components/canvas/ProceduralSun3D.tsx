@@ -336,6 +336,18 @@ interface ProceduralSun3DProps {
    * `BillboardEntityRenderSystem.java:122-128` pattern.
    */
   renderRange?: "close" | "far";
+  /**
+   * M3 — optional cross-fade ramp source. When provided,
+   * each frame the component reads `ref.current` (clamped
+   * [0..1]) and writes it to all four materials' `uVisibility`
+   * uniforms in lockstep with the Starfield sprite's
+   * `a_fadeAlpha` ramp. Sum invariant: sprite + mesh ≈ 1.
+   *
+   * When omitted (Sun mount, pre-M3 behaviour), `uVisibility`
+   * stays at its initialized value of 1.0 — the Sun has no
+   * sprite-side counterpart to cross-fade with.
+   */
+  visibilityRef?: React.MutableRefObject<number>;
 }
 
 export const ProceduralSun3D = ({
@@ -344,6 +356,7 @@ export const ProceduralSun3D = ({
   position = [0, 0, 0],
   visualProfile = SUN_DEFAULT_VISUAL_PROFILE,
   renderRange,
+  visibilityRef,
 }: ProceduralSun3DProps) => {
   const { gl } = useThree();
   const profile = SUN_FX_PROFILES[qualityProfileName];
@@ -665,6 +678,15 @@ export const ProceduralSun3D = ({
     // removed. The glow billboard now derives its quad axes in view space
     // (camera at origin, canonical up = (0,1,0)), so the world-space
     // camera-up vector is no longer needed shader-side.
+
+    // M3 — cross-fade ramp source. When `visibilityRef` is
+    // wired (HygStellarMesh path), the ref drives the uniform
+    // each frame; otherwise the uniform stays at its init value
+    // (Sun mount behavior, byte-identical to pre-M3).
+    if (visibilityRef) {
+      const ramp = Math.max(0, Math.min(1, visibilityRef.current ?? 0));
+      sunMaterial.uniforms.uVisibility.value = ramp;
+    }
 
     // Shared values
     const visibility = sunMaterial.uniforms.uVisibility.value;
