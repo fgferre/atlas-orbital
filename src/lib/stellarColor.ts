@@ -97,10 +97,10 @@ const hellandSrgbFromTemperature = (tEff: number): [number, number, number] => {
  *
  * Pinned named-star outputs (see `stellarColor.test.ts`):
  *
- *   Sun (5778 K)        → linear RGB ≈ (1.000, 0.747, 0.594) — warm white
- *   Sirius (9940 K)     → linear RGB ≈ (0.598, 0.748, 1.000) — blue-white
- *   Betelgeuse (3500 K) → linear RGB ≈ (1.000, 0.408, 0.142) — deep orange
- *   Proxima (3050 K)    → linear RGB ≈ (1.000, 0.314, 0.075) — reddish-orange
+ *   Sun (5778 K)        → linear RGB ≈ (1.000, 0.891, 0.796) — warm white
+ *   Sirius (9940 K)     → linear RGB ≈ (0.592, 0.703, 1.000) — blue-white
+ *   Betelgeuse (3500 K) → linear RGB ≈ (1.000, 0.530, 0.266) — deep orange
+ *   Proxima (3050 K)    → linear RGB ≈ (1.000, 0.450, 0.166) — reddish-orange
  *
  * Non-finite or negative temperatures fall back to the Sun-like
  * value (5778 K) so caller-side guards aren't required for
