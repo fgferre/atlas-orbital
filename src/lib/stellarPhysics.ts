@@ -164,12 +164,29 @@ export const parseSpectralClass = (
 
   const classLetter = mkMatch[1].toUpperCase() as Exclude<SpectralClass, "WD">;
   const subclass = mkMatch[2] !== undefined ? Number(mkMatch[2]) : NaN;
-  const luminosityRaw = mkMatch[3];
-  const luminosityClass = luminosityRaw
-    ? (luminosityRaw as LuminosityClass)
-    : null;
+  // T6.4 post-audit P2: the regex is case-insensitive so we accept
+  // "g2v" / "M2ia" alongside the canonical "G2V" / "M2Ia". The
+  // class letter is uppercased above; the luminosity class needs
+  // the same canonicalization or downstream lookups
+  // (`RADIUS_FACTOR_BY_LUMINOSITY`, `GRANULATION_BY_LUMINOSITY`)
+  // miss and return `undefined` despite the type cast.
+  const luminosityClass = mkMatch[3] ? normalizeLuminosity(mkMatch[3]) : null;
 
   return { spectralClass: classLetter, subclass, luminosityClass };
+};
+
+/**
+ * Canonicalize a parsed luminosity-class token to the exact
+ * casing of `LuminosityClass`. Roman numerals are case-insensitive
+ * in MK notation; "Ia" / "Ib" mix upper- and lower-case so a
+ * blanket `.toUpperCase()` would yield "IA" / "IB" which are not
+ * keys in `LuminosityClass`. The helper handles both shapes.
+ */
+const normalizeLuminosity = (raw: string): LuminosityClass => {
+  const u = raw.toUpperCase();
+  if (u === "IA") return "Ia";
+  if (u === "IB") return "Ib";
+  return u as LuminosityClass;
 };
 
 // ─── Effective temperature ────────────────────────────────────────
@@ -678,8 +695,8 @@ const glowScaleFromAbsmag = (absmag: number | null): number => {
 
 /**
  * T6.4-M4 — rays / flares / glow-falloff multipliers per
- * (spectral class, luminosity class, T_eff) — atlas-opinion
- * art-direction layer.
+ * (spectral class, luminosity class, T_eff, absmag) —
+ * atlas-opinion art-direction layer.
  *
  * Heuristics (per spec §S6):
  *   - Hot main-sequence (O / B / A V) → cleaner / sharper falloff,
@@ -687,19 +704,30 @@ const glowScaleFromAbsmag = (absmag: number | null): number => {
  *   - Cool dwarf main-sequence (K / M V) → busier rays, broader
  *     halo (active-chromosphere look). M-dwarfs especially get
  *     pronounced flares (Proxima-like activity).
- *   - Supergiants (Ia / Ib / I / II) → wide, slow rays; muted
- *     flares (low-gravity envelope).
+ *   - Supergiants (Ia / Ib / I / II) → wide, slow rays
+ *     (`raysLength` ↑, `raysNoiseFrequency` ↓); muted flares
+ *     (low-gravity envelope).
  *   - Solar G/F V → returns 1.0× across the board so the Sun
  *     default reproduces byte-identical for these fields.
+ *
+ * Absmag participation (T6.4 post-audit P3): rays + flares
+ * amplitude scale by `pow(10, -0.4 × (absmag - M_sun_V) × 0.10)`
+ * clamped to [0.5, 2.0]. So a luminous K giant (absmag negative)
+ * has a proportionally larger ray field than a faint K dwarf
+ * (absmag large). Sun-equivalent absmag = 4.83 → 1.0× (Sun
+ * byte-identical).
  */
 const artDirectionMultipliers = (
   spectralClass: SpectralClass,
   luminosityClass: LuminosityClass,
-  tEff: number
+  tEff: number,
+  absmag: number | null
 ): {
   raysAmplitude: number;
   flaresAmp: number;
   glowFalloffColor: number;
+  raysLength: number;
+  raysNoiseFrequency: number;
 } => {
   const isHotMS = luminosityClass === "V" && tEff > 7500;
   const isCoolMS = luminosityClass === "V" && tEff < 4500;
@@ -710,8 +738,9 @@ const artDirectionMultipliers = (
     luminosityClass === "I" ||
     luminosityClass === "II";
 
-  const raysAmplitude = isHotMS ? 0.6 : isCoolMS ? 1.4 : isSG ? 1.0 : 1.0;
-  const flaresAmp = isHotMS
+  // Class-driven amplitude baselines.
+  const classRaysAmp = isHotMS ? 0.6 : isCoolMS ? 1.4 : isSG ? 1.0 : 1.0;
+  const classFlaresAmp = isHotMS
     ? 0.3
     : isCoolMS && spectralClass === "M"
       ? 1.8
@@ -720,9 +749,58 @@ const artDirectionMultipliers = (
         : isSG
           ? 0.7
           : 1.0;
+
+  // T6.4 post-audit P3: absmag participation per M4 §S6 ("Scale by
+  // both class AND `absmag` so a luminous K giant has a
+  // proportionally larger ray field than a faint K dwarf").
+  // Sun-equivalent absmag = 4.83 → 1.0 (byte-identical to pre-fix
+  // behaviour) for both scales.
+  //
+  // Two SEPARATE scales — rays and flares each get their own:
+  //   - **Rays** track luminosity strongly. Bigger envelope =
+  //     bigger ray field. Exponent 0.10, clamp [0.5, 2.0].
+  //   - **Flares** are a chromospheric-activity character marker
+  //     (M-dwarf "Proxima-like activity" per §S6). Real flare
+  //     activity correlates with convective dynamo / rapid
+  //     rotation, NOT luminosity. A literal "Same dual-driver as
+  //     rays" would crush Proxima's flaresAmp to 0.9× Sun
+  //     (1.8 class × 0.5 absmag-clamp), contradicting the §S6
+  //     "pronounced flares" intent. Use a gentler exponent (0.05)
+  //     and tighter clamp [0.7, 1.5] so the M-dwarf chromosphere
+  //     character survives while still letting absmag participate.
+  const M_SUN_V_ABS = 4.83;
+  const absmagDelta =
+    absmag !== null && Number.isFinite(absmag) ? absmag - M_SUN_V_ABS : 0;
+  const raysAbsmagScale =
+    absmag !== null && Number.isFinite(absmag)
+      ? Math.max(0.5, Math.min(2.0, Math.pow(10, -0.4 * absmagDelta * 0.1)))
+      : 1.0;
+  const flaresAbsmagScale =
+    absmag !== null && Number.isFinite(absmag)
+      ? Math.max(0.7, Math.min(1.5, Math.pow(10, -0.4 * absmagDelta * 0.05)))
+      : 1.0;
+
+  const raysAmplitude = classRaysAmp * raysAbsmagScale;
+  const flaresAmp = classFlaresAmp * flaresAbsmagScale;
   const glowFalloffColor = isHotMS ? 0.7 : isCoolMS ? 1.3 : 1.0;
 
-  return { raysAmplitude, flaresAmp, glowFalloffColor };
+  // T6.4 post-audit P3: supergiants get "wide, slow rays" per the
+  // M4 §S6 spec. `raysLength` is the per-ray length scalar; bigger
+  // = longer streamers reaching further from the disc.
+  // `raysNoiseFrequency` is the spatial frequency of the modulation
+  // noise; LOWER frequency = bigger / wider structures (so 0.5×
+  // gives the wide-ray look). Other classes pass through 1.0 so
+  // Sun-default and main-sequence stars match pre-fix output.
+  const raysLength = isSG ? 1.45 : 1.0;
+  const raysNoiseFrequency = isSG ? 0.5 : 1.0;
+
+  return {
+    raysAmplitude,
+    flaresAmp,
+    glowFalloffColor,
+    raysLength,
+    raysNoiseFrequency,
+  };
 };
 
 /**
@@ -773,7 +851,8 @@ export const stellarVisualProfileFrom = (
   const art = artDirectionMultipliers(
     desc.spectralClass,
     desc.luminosityClass,
-    desc.tEff
+    desc.tEff,
+    desc.absmag
   );
 
   // Brightness + hue (preserved from T6.2-α).
@@ -794,6 +873,12 @@ export const stellarVisualProfileFrom = (
     glowFalloffColor:
       SUN_DEFAULT_VISUAL_PROFILE.glowFalloffColor * art.glowFalloffColor,
 
+    // T6.4 post-audit P3 — `raysLength` and `raysNoiseFrequency`
+    // now class-tuned (supergiants get longer, lower-frequency
+    // rays for the "wide, slow" supergiant look).
+    raysLength: SUN_DEFAULT_VISUAL_PROFILE.raysLength * art.raysLength,
+    raysNoiseFrequency:
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseFrequency * art.raysNoiseFrequency,
     raysNoiseAmplitude:
       SUN_DEFAULT_VISUAL_PROFILE.raysNoiseAmplitude * art.raysAmplitude,
     raysHue: SUN_DEFAULT_VISUAL_PROFILE.raysHue + hueOffset,

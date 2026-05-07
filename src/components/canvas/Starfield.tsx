@@ -177,9 +177,21 @@ const vertexShader = /* glsl */ `
       3.0e-8
     );
 
-    // 4. Boundary fade (near-camera) — θ.7 hero-star billboard takes
-    //    over inside u_LEN0.
-    float boundaryFade = smoothstep(u_LEN0, u_LEN0 * 1000.0, dist);
+    // 4. Boundary fade (near-camera). M3-fix (T6.4 post-audit) —
+    //    the focused star is identified by 'a_fadeAlpha > 0' (only
+    //    HygStellarMesh ramps the instance attribute up, and only
+    //    on the focused slot). For that one slot we bypass the
+    //    boundary fade so the sprite stays alive while the mesh
+    //    ramps in. Without this bypass the legacy LEN0 cutoff
+    //    (~133,689 wu) extinguishes the sprite long before the
+    //    mesh ENTER threshold (~7,700 wu for typical HYG sizes),
+    //    leaving a ~17x distance gap where neither sprite nor mesh
+    //    renders. Non-focused stars keep the original Gaia
+    //    behaviour (LEN0 takes over to the hero-star billboard).
+    bool isFocused = a_fadeAlpha > 0.0;
+    float boundaryFade = isFocused
+      ? 1.0
+      : smoothstep(u_LEN0, u_LEN0 * 1000.0, dist);
     float alpha = clamp(opacity * u_alphaFactor * boundaryFade, 0.0, 1.0);
 
     // 5. Cross-fade with the procedural mesh (M3). When
@@ -193,9 +205,10 @@ const vertexShader = /* glsl */ `
     // 6. Quad nulling for invisible / near stars (source perf trick
     //    from star.group.quad.vertex.glsl:121). After the M3
     //    multiply above, the focused star's sprite naturally lands
-    //    in the alpha <= 1e-3 branch when the cross-fade completes,
-    //    so there is no separate skipMask conditional needed.
-    if (alpha <= 1e-3 || dist < u_LEN0) {
+    //    in the alpha <= 1e-3 branch when the cross-fade completes.
+    //    The 'dist < u_LEN0' kill only applies to NON-focused stars
+    //    so the focused-star ramp can finish smoothly.
+    if (alpha <= 1e-3 || (!isFocused && dist < u_LEN0)) {
       alpha = 0.0;
       solidAngle = 0.0;
     }

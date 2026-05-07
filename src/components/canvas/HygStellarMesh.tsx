@@ -298,10 +298,16 @@ export const HygStellarMesh = () => {
   });
 
   // M3 — fadeAlpha sync. When focus changes to a new HYG star, the
-  // PREVIOUS star's slot must be zeroed (ramp on the new star
-  // starts at 0 anyway, but the cleanup unblocks a re-focus on
-  // the prior star without a stuck mid-fade alpha).
+  // PREVIOUS star's slot must be zeroed (cleanup) AND the live
+  // ramp/target refs must reset to 0 so the NEW star starts the
+  // cross-fade from scratch. Without the reset (T6.4 post-audit
+  // P2 finding) a refocus while one star was fully meshed would
+  // carry rampRef.current=1 into the next frame, instantly
+  // suppressing the new star's sprite — the new star would mount
+  // its mesh at full visibility instead of ramping in over 300 ms.
   useEffect(() => {
+    rampRef.current = 0;
+    targetRef.current = 0;
     if (starIndex === null) return;
     return () => {
       // Cleanup: clear this star's slot. Runs on starIndex change

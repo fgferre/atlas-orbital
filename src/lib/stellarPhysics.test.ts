@@ -139,6 +139,35 @@ describe("parseSpectralClass — edge cases", () => {
   it("normalizes case on the class letter", () => {
     expect(parseSpectralClass("g2v")?.spectralClass).toBe("G");
   });
+
+  // T6.4 post-audit P2: the regex is case-insensitive but only the
+  // class letter was uppercased pre-fix, so `parseSpectralClass('g2v')`
+  // returned `{ luminosityClass: 'v' }` (lowercase). Downstream
+  // lookups (`RADIUS_FACTOR_BY_LUMINOSITY`, `GRANULATION_BY_LUMINOSITY`)
+  // are keyed by the canonical "V" / "Ia" forms — the lowercase value
+  // silently returned `undefined`. Pin canonicalization here.
+  it("normalizes lowercase main-sequence luminosity to V", () => {
+    expect(parseSpectralClass("g2v")?.luminosityClass).toBe("V");
+    expect(parseSpectralClass("m5.5v")?.luminosityClass).toBe("V");
+  });
+
+  it("normalizes mixed-case supergiant luminosity to Ia / Ib", () => {
+    expect(parseSpectralClass("m2ia")?.luminosityClass).toBe("Ia");
+    expect(parseSpectralClass("m1IB")?.luminosityClass).toBe("Ib");
+    expect(parseSpectralClass("M2IA")?.luminosityClass).toBe("Ia");
+  });
+
+  it("normalizes lowercase giant / subgiant luminosity to canonical case", () => {
+    expect(parseSpectralClass("k0iii")?.luminosityClass).toBe("III");
+    expect(parseSpectralClass("f5iv")?.luminosityClass).toBe("IV");
+  });
+
+  it("downstream radiusFromSpect handles lowercase input correctly", () => {
+    // Pre-fix: radiusFromSpect("k0iii") → undefined (cast lie).
+    // Post-fix: returns 30 (giant table value).
+    expect(radiusFromSpect("k0iii")).toBe(30);
+    expect(radiusFromSpect("m2ia")).toBe(1000);
+  });
 });
 
 describe("temperatureFromSpect — main-sequence anchors", () => {
@@ -609,18 +638,32 @@ describe("stellarVisualProfileFrom — class distinction (4 named stars)", () =>
     );
   });
 
-  it("Proxima M-dwarf has pronounced flares (1.8× Sun)", () => {
+  // T6.4 post-audit P3: flaresAmp = class × flaresAbsmagScale, with
+  // the gentle absmag exponent (0.05, clamp [0.7, 1.5]) so M-dwarf
+  // chromospheric character survives. Proxima absmag=15.49 →
+  // flaresAbsmagScale clamps at 0.7. Class multiplier (M-dwarf
+  // cool MS) = 1.8. Net = 1.8 × 0.7 = 1.26× Sun.
+  it("Proxima M-dwarf flares ≈ 1.26× Sun (1.8 class × 0.7 absmag-clamp)", () => {
     expect(proxima.flaresAmp).toBeCloseTo(
-      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 1.8,
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 1.26,
       4
+    );
+    // Pronounced character preserved (>1× Sun) despite absmag damping.
+    expect(proxima.flaresAmp).toBeGreaterThan(
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp
     );
   });
 
-  it("Sirius (hot MS) has muted flares (0.3× Sun)", () => {
+  // Sirius absmag=1.42 → flaresAbsmagScale = pow(10, -0.4×-3.41×0.05)
+  //                                        = pow(10, 0.0682) ≈ 1.170.
+  // Class multiplier (hot MS) = 0.3. Net = 0.3 × 1.170 ≈ 0.351.
+  it("Sirius (hot MS) flares ≈ 0.35× Sun (0.3 class × 1.17 absmag-scale)", () => {
     expect(sirius.flaresAmp).toBeCloseTo(
-      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 0.3,
-      4
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 0.351,
+      2
     );
+    // Still muted vs Sun (hot MS character preserved).
+    expect(sirius.flaresAmp).toBeLessThan(SUN_DEFAULT_VISUAL_PROFILE.flaresAmp);
   });
 
   it("Sirius granulation contrast < Sun's (radiative atmosphere)", () => {
@@ -640,5 +683,135 @@ describe("stellarVisualProfileFrom — class distinction (4 named stars)", () =>
     expect(sirius.classColor).not.toBe(sun.classColor);
     expect(betelgeuse.classColor).not.toBe(sun.classColor);
     expect(proxima.classColor).not.toBe(sun.classColor);
+  });
+});
+
+// ─── T6.4 post-audit P3 — art-direction absmag + supergiant geometry ──
+
+describe("artDirectionMultipliers via stellarVisualProfileFrom — P3 fix", () => {
+  // Same spectral class, same T_eff, different absmag should produce
+  // a noticeably different ray amplitude — proving absmag participates
+  // in the art-direction layer (M4 §S6: "luminous K giant has a
+  // proportionally larger ray field than a faint K dwarf").
+  it("absmag participates: luminous star has bigger rays than faint star at same class", () => {
+    const luminousK = stellarVisualProfileFrom({
+      bv: 1.1,
+      spect: "K0III",
+      absmag: -1.0, // luminous giant
+    });
+    const faintK = stellarVisualProfileFrom({
+      bv: 1.1,
+      spect: "K0III",
+      absmag: 5.0, // faint
+    });
+    expect(luminousK.raysNoiseAmplitude).toBeGreaterThan(
+      faintK.raysNoiseAmplitude
+    );
+    expect(luminousK.flaresAmp).toBeGreaterThan(faintK.flaresAmp);
+  });
+
+  // Sun-equivalent absmag must keep the absmag-scale at exactly 1.0
+  // (Sun-byte-identical guard for the art-direction layer).
+  it("Sun-equivalent absmag (4.83) returns 1.0× absmag-scale → solar default rays/flares", () => {
+    const solarish = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: 4.83,
+    });
+    // G2V isHotMS=false, isCoolMS=false, isSG=false → classRaysAmp=1.0,
+    // classFlaresAmp=1.0. With absmagScale=1.0, the multiplier is 1.0.
+    expect(solarish.raysNoiseAmplitude).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseAmplitude,
+      6
+    );
+    expect(solarish.flaresAmp).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp,
+      6
+    );
+  });
+
+  // Absmag clamp: very luminous (absmag = -10) → absmagScale clamped to 2.0.
+  it("clamps absmag-scale at 2.0 for ultra-luminous stars", () => {
+    const ultraBrightG = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G0V",
+      absmag: -10, // hypergiant-bright
+    });
+    const sun = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: 4.83,
+    });
+    // Ultra-bright G0V isHotMS=false, isCoolMS=false, isSG=false → classRays=1.0.
+    // absmagScale clamps at 2.0. So raysNoiseAmplitude = default * 2.0.
+    expect(
+      ultraBrightG.raysNoiseAmplitude / sun.raysNoiseAmplitude
+    ).toBeCloseTo(2.0, 2);
+  });
+
+  // Absmag clamp: very faint (absmag = 20) → absmagScale clamped to 0.5.
+  it("clamps absmag-scale at 0.5 for ultra-faint stars", () => {
+    const ultraFaintG = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G0V",
+      absmag: 20, // ultra-faint
+    });
+    const sun = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: 4.83,
+    });
+    expect(ultraFaintG.raysNoiseAmplitude / sun.raysNoiseAmplitude).toBeCloseTo(
+      0.5,
+      2
+    );
+  });
+
+  // Supergiants get "wide, slow rays" per §S6: longer raysLength + lower
+  // raysNoiseFrequency. Pin the geometry shift relative to a main-sequence
+  // K star at the same temperature.
+  it("supergiants get longer rays + lower frequency than main-sequence", () => {
+    const betelgeuse = stellarVisualProfileFrom({
+      bv: 1.85,
+      spect: "M2Ia",
+      absmag: -5.85,
+    });
+    const m2v = stellarVisualProfileFrom({
+      bv: 1.5,
+      spect: "M2V",
+      absmag: 11.0, // M dwarf typical
+    });
+    expect(betelgeuse.raysLength).toBeGreaterThan(m2v.raysLength);
+    expect(betelgeuse.raysNoiseFrequency).toBeLessThan(m2v.raysNoiseFrequency);
+  });
+
+  // Sun: main-sequence → no geometry override.
+  it("Sun keeps default raysLength + raysNoiseFrequency (Sun-byte-identical)", () => {
+    const sun = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: 4.83,
+    });
+    expect(sun.raysLength).toBe(SUN_DEFAULT_VISUAL_PROFILE.raysLength);
+    expect(sun.raysNoiseFrequency).toBe(
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseFrequency
+    );
+  });
+
+  // Null absmag falls back to 1.0× scale (defensive on missing catalog data).
+  it("null absmag falls back to 1.0× scale (no NaN propagation)", () => {
+    const noAbsmag = stellarVisualProfileFrom({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: null,
+    });
+    expect(noAbsmag.raysNoiseAmplitude).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseAmplitude,
+      6
+    );
+    expect(noAbsmag.flaresAmp).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp,
+      6
+    );
   });
 });

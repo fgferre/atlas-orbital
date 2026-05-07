@@ -350,6 +350,14 @@ export interface StarfieldSolidAngleInputs {
   sizeFactor?: number;
   /** `u_alphaSizeBr.x` — global alpha scale. Default: 1.0. */
   alphaFactor?: number;
+  /**
+   * `a_fadeAlpha` — M3 cross-fade ramp. Non-zero only for the
+   * focused star (HygStellarMesh ramps from 0 to 1 over 300 ms).
+   * When > 0 the mirror bypasses the LEN0 boundary fade and the
+   * `dist < LEN0` kill so the M3 ramp solely drives the sprite's
+   * alpha. Default 0 (sprite path identical to pre-M3 behaviour).
+   */
+  fadeAlpha?: number;
 }
 
 /**
@@ -375,6 +383,8 @@ export const starfieldSolidAngleMetrics = (
   const power = input.brightnessPower ?? U_BRIGHTNESS_POWER_DEFAULT;
   const sizeFactor = input.sizeFactor ?? 1;
   const alphaFactor = input.alphaFactor ?? 1;
+  const fadeAlpha = input.fadeAlpha ?? 0;
+  const isFocused = fadeAlpha > 0;
 
   const rawSolidAngle = size / dist;
   const opacity = lintSmoothstep(rawSolidAngle, sMin, sMax, oMin, oMax);
@@ -396,9 +406,18 @@ export const starfieldSolidAngleMetrics = (
   // Smoothstep-style boundary fade. Far stars fade IN (0 at LEN0, 1 at
   // LEN0·1000). The near-camera check in the shader also nulls the quad
   // when `dist < LEN0`; we return alpha = 0 in that branch too.
-  const boundaryFade = smoothstep(LEN0, LEN0 * 1000, dist);
+  // M3-fix (T6.4 post-audit): the focused star (a_fadeAlpha > 0)
+  // bypasses both the boundary-fade and the dist<LEN0 kill so the
+  // M3 ramp's `(1 - fadeAlpha)` factor is the sole alpha driver.
+  // Without this bypass LEN0 (~133,689 wu) extinguishes the sprite
+  // long before mesh ENTER (~7,700 wu for typical HYG sizes),
+  // creating a ~17x distance gap where neither sprite nor mesh
+  // renders.
+  const boundaryFade = isFocused ? 1 : smoothstep(LEN0, LEN0 * 1000, dist);
   let alpha = clamp(opacity * alphaFactor * boundaryFade, 0, 1);
-  if (alpha <= 1e-3 || dist < LEN0) alpha = 0;
+  // M3 cross-fade multiplier — same factor the GLSL applies.
+  alpha *= clamp(1 - fadeAlpha, 0, 1);
+  if (alpha <= 1e-3 || (!isFocused && dist < LEN0)) alpha = 0;
 
   return {
     rawSolidAngle,
