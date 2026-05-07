@@ -23,3 +23,28 @@
 export function buildFadeAlphaAttribute(count: number): Float32Array {
   return new Float32Array(count);
 }
+
+/**
+ * T6.4 post-audit P1 follow-up — `a_focusMask` instance attribute.
+ *
+ * Identifies the focused star regardless of cross-fade ramp state.
+ * `a_fadeAlpha` only goes > 0 once `HygStellarMesh.shouldStellarMeshBeActive`
+ * crosses the ENTER threshold (~7.7k wu camera distance for typical
+ * HYG sizes), but the legacy `dist < u_LEN0` kill (~134k wu)
+ * extinguishes the sprite long before that. Without a focus signal
+ * separate from the ramp value, the sprite is dead while the mesh
+ * hasn't started ramping — neither renders for ~17× distance band.
+ *
+ * `a_focusMask` is set to 1 the moment the user picks a HYG star
+ * (HygStellarMesh effect fires before the gate is even evaluated)
+ * so the vertex shader can bypass the LEN0 kill for that one slot
+ * across the entire focus lifetime, not just during the ramp.
+ *
+ * Float32 to match the rest of the instanced upload path, even
+ * though only 0/1 values are written. A bool-bit packing would
+ * shrink the upload but cost a code-path divergence for marginal
+ * memory win at 109 k entries (~430 KB).
+ */
+export function buildFocusMaskAttribute(count: number): Float32Array {
+  return new Float32Array(count);
+}

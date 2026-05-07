@@ -294,19 +294,24 @@ describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () =
     expect(m.alpha).toBe(0);
   });
 
-  // M3 cross-fade focused-star bypass (T6.4 post-audit fix). The
-  // legacy `dist < LEN0` kill extinguishes the sprite ~17× before
-  // the mesh ENTER threshold for typical HYG sizes. Without the
-  // bypass, the user sees a "hole" between sprite-off and
-  // mesh-visible while flying TO a star. With the bypass, the M3
-  // ramp `(1 - fadeAlpha)` is the sole alpha driver for the
-  // focused star and the cross-fade lockstep invariant
-  // `(1 - fadeAlpha) + uVisibility = 1` (mesh-side) holds end-to-end.
-  describe("M3 focused-star bypass (a_fadeAlpha > 0)", () => {
+  // M3 cross-fade focused-star bypass (T6.4 post-audit fix +
+  // post-audit P1 follow-up). Two distinct signals drive the
+  // bypass:
+  //   - `focusMask` (0 / 1) is the focus IDENTITY. Set to 1 by
+  //     HygStellarMesh on starIndex change, BEFORE the mesh gate
+  //     fires. Drives the LEN0 / boundaryFade bypass.
+  //   - `fadeAlpha` ([0..1]) is the ramp VALUE that comes alive
+  //     once the mesh gate crosses ENTER_RAD; multiplies the
+  //     sprite's alpha by (1 - fadeAlpha) for the cross-fade.
+  //
+  // Without separating the signals, the LEN0 → ENTER_RAD distance
+  // band leaves the sprite extinguished AND the mesh inactive
+  // (~17× span for typical HYG sizes). Pinning here.
+  describe("M3 focused-star bypass (a_focusMask > 0.5)", () => {
     const SIZE = 1e-9 * DISTANCE_SCALE; // typical HYG size
     const NEAR_DIST = LEN0 * 0.05; // well inside LEN0
 
-    it("non-focused star (fadeAlpha=0) keeps the LEN0 kill — no regression", () => {
+    it("non-focused star (focusMask=0) keeps the LEN0 kill — no regression", () => {
       const m = starfieldSolidAngleMetrics({
         size: SIZE,
         dist: NEAR_DIST,
@@ -315,79 +320,94 @@ describe("starfieldSolidAngleMetrics — Gaia Sky vertex solid-angle port", () =
       expect(m.alpha).toBe(0);
     });
 
-    it("focused star at fadeAlpha=0.5 bypasses LEN0 — sprite alive at half ramp", () => {
-      // Mid-ramp: sprite alpha is driven by `opacity * (1 - 0.5) = 0.5×opacity`
-      // (boundaryFade forced to 1, dist<LEN0 kill skipped).
+    // T6.4 post-audit P1 follow-up GAP coverage. Pre-fix this
+    // is exactly the case that left the user with neither sprite
+    // nor mesh visible. Post-fix, focusMask=1 alone is enough to
+    // bypass the LEN0 kill — fadeAlpha staying at 0 means the
+    // M3 ramp hasn't started yet, so the sprite renders at full
+    // opacity awaiting the mesh.
+    it("focused star at fadeAlpha=0 inside LEN0 → sprite ALIVE (fills the gap)", () => {
       const m = starfieldSolidAngleMetrics({
         size: SIZE,
         dist: NEAR_DIST,
+        focusMask: 1,
+        fadeAlpha: 0,
+      });
+      expect(m.boundaryFade).toBe(1);
+      // Sprite alpha = opacity × 1 × (1 - 0) = opacity. At NEAR_DIST
+      // with this size, opacity saturates to oMax = 1.
+      expect(m.alpha).toBe(1);
+    });
+
+    it("focused star at fadeAlpha=0.5 → sprite at half ramp (mid cross-fade)", () => {
+      const m = starfieldSolidAngleMetrics({
+        size: SIZE,
+        dist: NEAR_DIST,
+        focusMask: 1,
         fadeAlpha: 0.5,
       });
       expect(m.boundaryFade).toBe(1);
-      // Alpha should be opacity × 0.5 (since alphaFactor defaults to 1).
-      // We don't pin the exact opacity here (it depends on solidAngleMap),
-      // but it should be strictly positive and at most half of the
-      // unfocused-far baseline.
       expect(m.alpha).toBeGreaterThan(0);
       expect(m.alpha).toBeLessThanOrEqual(0.5);
     });
 
-    it("focused star at fadeAlpha=0 (legacy slot) behaves like non-focused", () => {
-      // fadeAlpha === 0 means HygStellarMesh hasn't started ramping
-      // — the slot is at zero. Sprite path identical to pre-M3.
-      const focused = starfieldSolidAngleMetrics({
-        size: SIZE,
-        dist: NEAR_DIST,
-        fadeAlpha: 0,
-      });
-      const baseline = starfieldSolidAngleMetrics({
-        size: SIZE,
-        dist: NEAR_DIST,
-      });
-      expect(focused.alpha).toBe(baseline.alpha);
-      expect(focused.boundaryFade).toBe(baseline.boundaryFade);
-    });
-
-    it("focused star at fadeAlpha=1 (mesh fully active) — sprite fully suppressed", () => {
-      // End-of-ramp: `(1 - 1) = 0`, sprite alpha = 0. Cross-fade
-      // hands fully over to the mesh.
+    it("focused star at fadeAlpha=1 (mesh fully active) → sprite fully suppressed", () => {
       const m = starfieldSolidAngleMetrics({
         size: SIZE,
         dist: NEAR_DIST,
+        focusMask: 1,
         fadeAlpha: 1,
       });
       expect(m.alpha).toBe(0);
     });
 
-    it("sum invariant: sprite + mesh ≈ 1 across the ramp (fadeAlpha ∈ (0,1])", () => {
-      // The mesh-side ramp value equals fadeAlpha (HygStellarMesh
-      // writes the same number to both the instance attribute and
-      // ProceduralSun3D's uVisibility uniform). For a focused
-      // star with saturated opacity (close range, large solid
-      // angle), sprite + mesh = (1-t) + t = 1 throughout the
-      // ramp. The corner case `t = 0` is omitted: at NEAR_DIST
-      // with fadeAlpha=0 the slot is treated as non-focused
-      // (legacy LEN0 kill applies), which only matters at the
-      // instant immediately before the ramp starts. In production
-      // HygStellarMesh advances `t > 0` on the first useFrame
-      // tick after the gate becomes active.
+    it("focusMask without fadeAlpha at far distance: sprite identical to baseline", () => {
+      // Pre-ramp focused star at FAR distance: boundaryFade is
+      // already 1 from the natural smoothstep, so the bypass is
+      // a no-op. Sprite alpha matches the unfocused-far case.
+      const farFocused = starfieldSolidAngleMetrics({
+        size: SIZE,
+        dist: LEN0 * 1e4,
+        focusMask: 1,
+        fadeAlpha: 0,
+      });
+      const farUnfocused = starfieldSolidAngleMetrics({
+        size: SIZE,
+        dist: LEN0 * 1e4,
+      });
+      expect(farFocused.alpha).toBe(farUnfocused.alpha);
+      expect(farFocused.boundaryFade).toBe(1);
+      expect(farUnfocused.boundaryFade).toBe(1);
+    });
+
+    it("sum invariant: sprite + mesh ≈ 1 across the ramp (focusMask=1, fadeAlpha ∈ [0,1])", () => {
+      // The mesh-side value equals fadeAlpha (HygStellarMesh writes
+      // the same ramp number to both the instance attribute and
+      // ProceduralSun3D's uVisibility uniform). For a focused star
+      // with saturated opacity, sprite + mesh = (1-t) + t = 1 across
+      // the FULL ramp including t = 0 — possible now that focusMask
+      // identifies the focused slot independent of the ramp.
       const baseline = starfieldSolidAngleMetrics({
         size: SIZE,
         dist: NEAR_DIST,
-        fadeAlpha: 1e-6,
+        focusMask: 1,
+        fadeAlpha: 0,
       });
       const opacityAtNear = baseline.opacity;
-      // At NEAR_DIST with this size opacity saturates to oMax = 1.
       expect(opacityAtNear).toBe(1);
-      for (const t of [0.05, 0.25, 0.5, 0.75, 0.95]) {
+      for (const t of [0, 0.05, 0.25, 0.5, 0.75, 0.95, 1]) {
         const m = starfieldSolidAngleMetrics({
           size: SIZE,
           dist: NEAR_DIST,
+          focusMask: 1,
           fadeAlpha: t,
         });
         const sprite = m.alpha;
         const mesh = t;
-        approxEq(sprite, opacityAtNear * (1 - t), 1e-2);
+        // Sprite contribution: opacity * (1 - t). At t=1 the kill
+        // threshold (alpha <= 1e-3) fires first → sprite=0.
+        const expectedSprite = t === 1 ? 0 : opacityAtNear * (1 - t);
+        approxEq(sprite, expectedSprite, 1e-2);
         approxEq(sprite + mesh, 1, 1e-2);
       }
     });

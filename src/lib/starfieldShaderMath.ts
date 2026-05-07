@@ -351,13 +351,24 @@ export interface StarfieldSolidAngleInputs {
   /** `u_alphaSizeBr.x` — global alpha scale. Default: 1.0. */
   alphaFactor?: number;
   /**
-   * `a_fadeAlpha` — M3 cross-fade ramp. Non-zero only for the
-   * focused star (HygStellarMesh ramps from 0 to 1 over 300 ms).
-   * When > 0 the mirror bypasses the LEN0 boundary fade and the
-   * `dist < LEN0` kill so the M3 ramp solely drives the sprite's
-   * alpha. Default 0 (sprite path identical to pre-M3 behaviour).
+   * `a_fadeAlpha` — M3 cross-fade ramp value. Non-zero on the
+   * focused slot once `HygStellarMesh.shouldStellarMeshBeActive`
+   * crosses ENTER_RAD; ramps from 0 to 1 over 300 ms. The sprite's
+   * alpha is multiplied by `(1 - fadeAlpha)` so it fades out in
+   * lockstep with the mesh fading in. Default 0.
    */
   fadeAlpha?: number;
+  /**
+   * `a_focusMask` — focus identity (1 = focused star slot,
+   * 0 = otherwise). T6.4 post-audit P1 follow-up. Set to 1 on
+   * starIndex change (BEFORE the mesh gate fires) so the LEN0
+   * bypass is active across the entire focus lifetime, not just
+   * during the M3 ramp's [0..1] traversal. Without this signal
+   * the legacy `dist < LEN0` kill (~134k wu) extinguishes the
+   * sprite ~17× before mesh ENTER (~7.7k wu for typical HYG
+   * sizes) — the band between is invisible.
+   */
+  focusMask?: number;
 }
 
 /**
@@ -384,7 +395,13 @@ export const starfieldSolidAngleMetrics = (
   const sizeFactor = input.sizeFactor ?? 1;
   const alphaFactor = input.alphaFactor ?? 1;
   const fadeAlpha = input.fadeAlpha ?? 0;
-  const isFocused = fadeAlpha > 0;
+  const focusMask = input.focusMask ?? 0;
+  // T6.4 post-audit P1 follow-up: focus identity is `focusMask`,
+  // NOT `fadeAlpha > 0`. The first round of the fix gated the
+  // bypass on fadeAlpha but the LEN0→ENTER_RAD distance band
+  // sees fadeAlpha=0 (mesh gate hasn't fired yet) and the
+  // bypass missed. Splitting the signals closes the band.
+  const isFocused = focusMask > 0.5;
 
   const rawSolidAngle = size / dist;
   const opacity = lintSmoothstep(rawSolidAngle, sMin, sMax, oMin, oMax);

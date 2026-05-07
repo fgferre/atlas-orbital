@@ -127,13 +127,14 @@ interface HygStarData {
  * post-boot before the catalog resolves) or if the named mesh
  * isn't found (defensive — name attribute could regress).
  */
-function findStarfieldFadeAlpha(
-  scene: THREE.Scene
+function findStarfieldAttribute(
+  scene: THREE.Scene,
+  attributeName: "a_fadeAlpha" | "a_focusMask"
 ): THREE.InstancedBufferAttribute | null {
   const mesh = scene.getObjectByName("atlas-starfield");
   if (!mesh) return null;
   const obj3d = mesh as THREE.Object3D & { geometry?: THREE.BufferGeometry };
-  const attr = obj3d.geometry?.getAttribute("a_fadeAlpha");
+  const attr = obj3d.geometry?.getAttribute(attributeName);
   if (!attr) return null;
   // Narrow to InstancedBufferAttribute; the attribute is registered as
   // such by Starfield.tsx but the typed-getter returns the base class.
@@ -152,13 +153,40 @@ function writeFadeAlpha(
   starIndex: number,
   value: number
 ): void {
-  const attr = findStarfieldFadeAlpha(scene);
+  const attr = findStarfieldAttribute(scene, "a_fadeAlpha");
   if (!attr) return;
   if (starIndex < 0 || starIndex >= attr.count) return;
   const clamped = Math.max(0, Math.min(1, value));
   const arr = attr.array as Float32Array;
   if (arr[starIndex] === clamped) return; // no-op when unchanged
   arr[starIndex] = clamped;
+  attr.needsUpdate = true;
+}
+
+/**
+ * T6.4 post-audit P1 follow-up — write the focusMask attribute
+ * for a given star index. Mirrors `writeFadeAlpha` shape (idempotent
+ * on no-change, bumps `needsUpdate`) but writes the focus IDENTITY
+ * bit (1 = focused, 0 = not). The vertex shader bypasses the LEN0
+ * kill on the slot where this is `> 0.5`, so the focused star's
+ * sprite stays alive throughout the entire LEN0→ENTER_RAD band
+ * (where `a_fadeAlpha` is still 0 because the mesh gate hasn't
+ * crossed). Keep separate from `writeFadeAlpha` so the ramp-value
+ * write site (per-frame, useFrame integrator) and the
+ * focus-identity write site (per-focus-change, useEffect) stay
+ * cleanly factored.
+ */
+function writeFocusMask(
+  scene: THREE.Scene,
+  starIndex: number,
+  value: 0 | 1
+): void {
+  const attr = findStarfieldAttribute(scene, "a_focusMask");
+  if (!attr) return;
+  if (starIndex < 0 || starIndex >= attr.count) return;
+  const arr = attr.array as Float32Array;
+  if (arr[starIndex] === value) return;
+  arr[starIndex] = value;
   attr.needsUpdate = true;
 }
 
@@ -297,22 +325,28 @@ export const HygStellarMesh = () => {
     }
   });
 
-  // M3 — fadeAlpha sync. When focus changes to a new HYG star, the
-  // PREVIOUS star's slot must be zeroed (cleanup) AND the live
-  // ramp/target refs must reset to 0 so the NEW star starts the
-  // cross-fade from scratch. Without the reset (T6.4 post-audit
-  // P2 finding) a refocus while one star was fully meshed would
-  // carry rampRef.current=1 into the next frame, instantly
-  // suppressing the new star's sprite — the new star would mount
-  // its mesh at full visibility instead of ramping in over 300 ms.
+  // M3 — fadeAlpha sync + focus identity. When focus changes to a
+  // new HYG star:
+  //   1. Live ramp/target refs reset to 0 so the cross-fade
+  //      starts fresh on the new star (T6.4 post-audit P2 fix —
+  //      without the reset, a refocus while one star was fully
+  //      meshed would carry rampRef=1 into the next frame and
+  //      instantly suppress the new star's sprite).
+  //   2. `a_focusMask` is set to 1 IMMEDIATELY on the new star
+  //      (T6.4 post-audit P1 follow-up — separate from the
+  //      cross-fade ramp value, so the LEN0 bypass fires across
+  //      the entire LEN0→ENTER_RAD band where `a_fadeAlpha` is
+  //      still 0). Cleanup zeros both slots on the prior star.
   useEffect(() => {
     rampRef.current = 0;
     targetRef.current = 0;
     if (starIndex === null) return;
+    writeFocusMask(scene, starIndex, 1);
     return () => {
-      // Cleanup: clear this star's slot. Runs on starIndex change
+      // Cleanup: clear this star's slots. Runs on starIndex change
       // (focus moves to a different star or null) and on unmount.
       writeFadeAlpha(scene, starIndex, 0);
+      writeFocusMask(scene, starIndex, 0);
     };
   }, [scene, starIndex]);
 
@@ -336,7 +370,7 @@ export const HygStellarMesh = () => {
     probeWindow.__ATLAS_TEST_MESH_STATE__ = () => ({
       meshActive: rampRef.current > 0,
       fadeAlphaAtIndex: (k: number): number => {
-        const attr = findStarfieldFadeAlpha(scene);
+        const attr = findStarfieldAttribute(scene, "a_fadeAlpha");
         if (!attr) return 0;
         if (k < 0 || k >= attr.count) return 0;
         const arr = attr.array as Float32Array;

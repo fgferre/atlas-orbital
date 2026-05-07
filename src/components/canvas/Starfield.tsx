@@ -38,7 +38,10 @@ import { useCallback, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { simulationClock } from "../../lib/simulationClock";
-import { buildFadeAlphaAttribute } from "./starfieldFadeAlpha";
+import {
+  buildFadeAlphaAttribute,
+  buildFocusMaskAttribute,
+} from "./starfieldFadeAlpha";
 import {
   getCachedHygCatalog,
   hygTierForQuality,
@@ -112,10 +115,20 @@ const vertexShader = /* glsl */ `
   // star K each frame; sprite alpha is multiplied by
   // (1 - a_fadeAlpha) so the sprite fades OUT smoothly as the
   // mesh's uVisibility ramps 0->1 in lockstep
-  // (feedback_no_effect_stacking.md still holds — invariant:
+  // (feedback_no_effect_stacking.md still holds - invariant:
   // (focused-sprite alpha + mesh visibility) ~= 1 throughout
   // the cross-fade, no over-render).
   attribute float a_fadeAlpha;
+  // T6.4 post-audit P1 follow-up - focus identity SEPARATE from
+  // the cross-fade ramp. HygStellarMesh sets a_focusMask=1 on the
+  // focused slot the moment the user picks a star (BEFORE the
+  // ramp gate fires), and 0 on cleanup. The vertex shader uses
+  // this to bypass the legacy LEN0 kill for the focused star
+  // throughout its entire focus lifetime - not just during the
+  // 0->1 ramp. Without this, the LEN0 kill (~134k wu) extinguishes
+  // the sprite ~17x before mesh ENTER (~7.7k wu) for typical HYG
+  // sizes, leaving a band where neither sprite nor mesh renders.
+  attribute float a_focusMask;
 
   uniform float yearsSinceJ2000;
 
@@ -177,18 +190,20 @@ const vertexShader = /* glsl */ `
       3.0e-8
     );
 
-    // 4. Boundary fade (near-camera). M3-fix (T6.4 post-audit) —
-    //    the focused star is identified by 'a_fadeAlpha > 0' (only
-    //    HygStellarMesh ramps the instance attribute up, and only
-    //    on the focused slot). For that one slot we bypass the
-    //    boundary fade so the sprite stays alive while the mesh
-    //    ramps in. Without this bypass the legacy LEN0 cutoff
-    //    (~133,689 wu) extinguishes the sprite long before the
-    //    mesh ENTER threshold (~7,700 wu for typical HYG sizes),
-    //    leaving a ~17x distance gap where neither sprite nor mesh
-    //    renders. Non-focused stars keep the original Gaia
-    //    behaviour (LEN0 takes over to the hero-star billboard).
-    bool isFocused = a_fadeAlpha > 0.0;
+    // 4. Boundary fade (near-camera). M3-fix (T6.4 post-audit) -
+    //    the focused star is identified by 'a_focusMask > 0.5',
+    //    NOT by 'a_fadeAlpha > 0'. The first round of this fix
+    //    (commit a4eb7a5) gated the bypass on fadeAlpha, but
+    //    HygStellarMesh only ramps fadeAlpha up after the mesh
+    //    gate (sa > ENTER_RAD) crosses, which happens at much
+    //    closer distance than LEN0. Result: during the band
+    //    LEN0 -> ENTER_RAD, fadeAlpha stayed 0 and the bypass
+    //    never fired. Separating focus identity (a_focusMask, set
+    //    on starIndex change) from the ramp value (a_fadeAlpha,
+    //    set per-frame by the mesh gate) closes the band: the
+    //    sprite is alive at full opacity until the mesh starts
+    //    fading it out via (1 - a_fadeAlpha).
+    bool isFocused = a_focusMask > 0.5;
     float boundaryFade = isFocused
       ? 1.0
       : smoothstep(u_LEN0, u_LEN0 * 1000.0, dist);
@@ -536,6 +551,16 @@ export const Starfield = () => {
     geom.setAttribute(
       "a_fadeAlpha",
       new THREE.InstancedBufferAttribute(buildFadeAlphaAttribute(count), 1)
+    );
+    // T6.4 post-audit P1 follow-up — `a_focusMask` zero-filled by
+    // default. HygStellarMesh writes `1` to the focused star's slot
+    // on starIndex change (BEFORE the mesh ramp gate fires) so the
+    // vertex-shader bypass for the LEN0 kill is active across the
+    // entire focus lifetime, closing the LEN0→ENTER_RAD distance
+    // band where the prior fadeAlpha-only bypass missed.
+    geom.setAttribute(
+      "a_focusMask",
+      new THREE.InstancedBufferAttribute(buildFocusMaskAttribute(count), 1)
     );
 
     return geom;
