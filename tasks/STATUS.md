@@ -5,25 +5,17 @@ single-source-of-truth for "what's the next agent action" only.
 History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
-_Last updated: 2026-05-06 late night. T6.4 M1+M2 shipped; M2.5
-S1-S7 + rounds 3-5b shipped; Round-6 A-H shipped 2026-05-06;
-M6 fully closed 2026-05-06 (A-H all ✅); M3 sprite↔mesh
-cross-fade shipped 2026-05-06; **M4 class variation in
-stellarVisualProfileFrom shipped 2026-05-06** — U-2 + U-3 + U-5
-closed; perceptual smoke of 4 named stars pending user.
-The integrator port (`HygPhysicsFlight`),
-aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
-useFrame physics branch, cancel handlers, first-guess
-calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
-Sirius ~4.65 s), e2e respec, and sub-stepping hardening
-(`MAX_DT_SUBSTEP=0.05 s`, `MAX_DT_TOTAL=0.1 s` per-frame
-visible-jump cap) all landed. R6-H close-out removed the R6-E
-telemetry scaffolding and synced docs. Post-R6-H aim-lerp rewrite
-addressed user smoke ("marcha ré" / "tela muda") — Codex found 3
-structural issues in `OrientationLerp` (target behind camera,
-path could cross, Drei priority -1 lagged 1 frame); fix uses
-`AimLerp` slerping aim direction + `camera.lookAt` for in-frame
-orientation. R6 commit chain (10): 89816e5 → 68e7fb7._
+_Last updated: 2026-05-07. T6.4 M1+M2+M2.5+M3+M4+M5+M6 all shipped.
+Most recent: **M4 visual-fix shipped 2026-05-07** (commit `27658aa` —
+restored legacy curve × class-relative bias after audit found M4's
+`mix-to-white` formula had washed out the Sun) and **M5 shipped
+2026-05-07** (commits `b0c9fa7` Path B + `c0f2ced` Path A wiring —
+named-star spect preserved at build, Stefan-Boltzmann fallback for
+spect-less stars). CSP fix `5f9c299` cleared the boot stall at 96%
+(blob: + jsdelivr in script-src/connect-src for troika worker
+rehydrate). Open follow-up: M4 Plan A defaults still leave Sirius
+reading red-dominant at typical surface b — calibration / Plan B
+deferred until user smoke confirms it's needed._
 
 ---
 
@@ -46,12 +38,13 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**T6.4 M5 — Spect-missing fallback via absmag** (spec in wave
-file §M5). Most HYG entries have `spect`, but the ~20% without
-it currently fall through to a B-V-only path that ignores
-`absmag`. M5 lights up an absmag-driven temperature-class
-estimate so spect-less stars also get classColor + granulation
-tuning instead of solar defaults.
+**T6.4 M7 — Final cleanup + smoke** (spec in wave file §M7).
+M3-M6 + the M4 visual fix all shipped 2026-05-06/07; M7 is the
+final closeout pass — verify gates, remove session-temp telemetry
+if any, sync STATUS/wave-file/lessons. Optional follow-up before
+M7: if user smoke confirms Sirius shader calibration is needed,
+run that as a small calibration onda first (gamma/floor/ceiling
+tuning OR Plan B blend activation) before T6.4 closes.
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars
