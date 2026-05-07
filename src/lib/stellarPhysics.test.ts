@@ -487,12 +487,12 @@ describe("stellarVisualProfileFrom — B-V fallback path", () => {
 });
 
 describe("stellarVisualProfileFrom — output is a valid StellarVisualProfile", () => {
-  it("contains 29 keys (27 numeric + classColor + lightDirection)", () => {
-    // T6.4-M4-fix: dropped surfaceWhitePoint (1), added surfaceTint
-    // + glowTint (2). Net +1 vs M4 baseline of 28.
+  it("contains 30 keys (28 numeric + classColor + lightDirection)", () => {
+    // T6.4-M5 post-audit: added planBWeight (Plan B activation
+    // weight per tEff). Net +1 vs M4-fix baseline of 29.
     const profile = stellarVisualProfileFrom({ bv: 0.65, spect: "G2V" });
     const keys = Object.keys(profile);
-    expect(keys.length).toBe(29);
+    expect(keys.length).toBe(30);
     for (const [key, value] of Object.entries(profile)) {
       if (key === "lightDirection" || key === "classColor") continue;
       expect(Number.isFinite(value)).toBe(true);
@@ -507,6 +507,59 @@ describe("stellarVisualProfileFrom — output is a valid StellarVisualProfile", 
       expect(channel).toBeGreaterThanOrEqual(0);
       expect(channel).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// T6.4-M5 post-audit: Plan B blend is activated per tEff in
+// stellarVisualProfileFrom. Sun + cool stars stay at weight=0
+// (pure legacy path); hot stars (>~7500 K) ramp toward 1.
+
+describe("stellarVisualProfileFrom — Plan B activation per tEff", () => {
+  it("Sun (G2V, ~5740 K) → planBWeight = 0 (pure legacy)", () => {
+    const p = stellarVisualProfileFrom({ bv: 0.65, spect: "G2V" });
+    expect(p.planBWeight).toBe(0);
+  });
+
+  it("Betelgeuse (M2Ia, ~3520 K) → planBWeight = 0 (cool star, legacy preserved)", () => {
+    const p = stellarVisualProfileFrom({
+      bv: 1.85,
+      spect: "M2Ia",
+      absmag: -5.85,
+    });
+    expect(p.planBWeight).toBe(0);
+  });
+
+  it("Proxima (M5.5V, ~3030 K) → planBWeight = 0 (cool star)", () => {
+    const p = stellarVisualProfileFrom({
+      bv: 1.83,
+      spect: "M5.5V",
+      absmag: 15.49,
+    });
+    expect(p.planBWeight).toBe(0);
+  });
+
+  it("Sirius (A1V, ~9640 K) → planBWeight near 1 (hot star, Plan B active)", () => {
+    // tEff(A,1) = 9640 K; weight = (9640 - 7500) / 2500 = 0.856
+    const p = stellarVisualProfileFrom({
+      bv: 0.0,
+      spect: "A1V",
+      absmag: 1.42,
+    });
+    expect(p.planBWeight).toBeCloseTo(0.856, 2);
+  });
+
+  it("Vega (A0V, 9900 K) → planBWeight near 0.96", () => {
+    const p = stellarVisualProfileFrom({
+      bv: 0.0,
+      spect: "A0V",
+      absmag: 0.58,
+    });
+    expect(p.planBWeight).toBeCloseTo(0.96, 2);
+  });
+
+  it("Hot O-type (~30000 K) → planBWeight clamps at 1.0", () => {
+    const p = stellarVisualProfileFrom({ bv: -0.3, spect: "O5V" });
+    expect(p.planBWeight).toBe(1.0);
   });
 });
 

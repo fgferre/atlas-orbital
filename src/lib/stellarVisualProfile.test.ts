@@ -158,14 +158,21 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — light direction", () => {
 });
 
 describe("SUN_DEFAULT_VISUAL_PROFILE — completeness", () => {
-  it("contains 29 keys (27 numeric + classColor + lightDirection)", () => {
+  it("contains 30 keys (28 numeric + classColor + lightDirection)", () => {
     // Pin the field count so adding a new field in
     // StellarVisualProfile flags this test (forcing the author to
-    // also extend the regression coverage above). T6.4-M4-fix:
-    // dropped `surfaceWhitePoint` (1), added `surfaceTint` +
-    // `glowTint` (2) — net +1 vs M4 baseline of 28.
+    // also extend the regression coverage above). T6.4-M5 post-audit:
+    // added `planBWeight` (Plan B blend weight, 0 for Sun) — net
+    // +1 vs M4-fix baseline of 29.
     const keys = Object.keys(SUN_DEFAULT_VISUAL_PROFILE);
-    expect(keys.length).toBe(29);
+    expect(keys.length).toBe(30);
+  });
+
+  it("planBWeight = 0 (Sun below Plan B activation threshold)", () => {
+    // T6.4-M5 Plan B is gated on tEff > ~7500 K. Sun at 5778 K is
+    // far below, so weight = 0 and the Sun renders pure legacy ×
+    // bias (byte-identical pre-M4 by construction).
+    expect(SUN_DEFAULT_VISUAL_PROFILE.planBWeight).toBe(0);
   });
 
   it("every numeric field is finite (sanity — no NaN / Infinity drift)", () => {

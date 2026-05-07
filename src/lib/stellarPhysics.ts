@@ -45,6 +45,7 @@
  */
 
 import { blackbodyRgbFromTemperature } from "./stellarColor";
+import { planBWeight } from "./stellarSurfaceTransfer";
 import {
   SUN_DEFAULT_VISUAL_PROFILE,
   type StellarVisualProfile,
@@ -1025,5 +1026,9 @@ export const stellarVisualProfileFrom = (
     flaresHue: SUN_DEFAULT_VISUAL_PROFILE.flaresHue + hueOffset,
 
     classColor,
+    // T6.4-M5 Plan B: weight derived once per focus change from
+    // tEff. Hot stars (>~7500 K) ramp toward 1; everything else
+    // stays at 0.
+    planBWeight: planBWeight(desc.tEff),
   };
 };

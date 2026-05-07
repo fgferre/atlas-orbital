@@ -501,6 +501,7 @@ export const ProceduralSun3D = ({
           uClassBiasGamma: { value: DEFAULT_CLASS_BIAS_GAMMA },
           uClassBiasFloor: { value: DEFAULT_CLASS_BIAS_FLOOR },
           uClassBiasCeiling: { value: DEFAULT_CLASS_BIAS_CEILING },
+          uPlanBWeight: { value: visualProfile.planBWeight },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -516,6 +517,7 @@ export const ProceduralSun3D = ({
       visualProfile.surfaceBrightnessOffset,
       visualProfile.surfaceBrightness,
       visualProfile.surfaceTint,
+      visualProfile.planBWeight,
       classColorVec,
       solarClassColorVec,
     ]
@@ -545,6 +547,7 @@ export const ProceduralSun3D = ({
           uClassBiasGamma: { value: DEFAULT_CLASS_BIAS_GAMMA },
           uClassBiasFloor: { value: DEFAULT_CLASS_BIAS_FLOOR },
           uClassBiasCeiling: { value: DEFAULT_CLASS_BIAS_CEILING },
+          uPlanBWeight: { value: visualProfile.planBWeight },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -557,6 +560,7 @@ export const ProceduralSun3D = ({
       visualProfile.glowBrightness,
       visualProfile.glowFalloffColor,
       visualProfile.glowTint,
+      visualProfile.planBWeight,
       classColorVec,
       solarClassColorVec,
     ]

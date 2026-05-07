@@ -157,6 +157,15 @@ export interface StellarVisualProfile {
    * `proceduralSunShaders.ts:269-279`.
    */
   classColor: readonly [number, number, number];
+  /**
+   * `uPlanBWeight` shared sphere + glow uniform (T6.4-M5 post-audit).
+   * Plan B blend weight derived CPU-side from `tEff` via `planBWeight`
+   * in `stellarSurfaceTransfer.ts`. 0 for Sun + cool stars (pure
+   * legacy curve × class bias preserves Atlas stylization), ramping
+   * to 1 above ~7500 K (hot stars route to blackbody-linear curve
+   * for proper blue-white identity). Sun-default = 0.
+   */
+  planBWeight: number;
 
   // ─── Light direction (cross-material) ───
   /**
@@ -233,6 +242,10 @@ export const SUN_DEFAULT_VISUAL_PROFILE: StellarVisualProfile = {
   // here) so the Sun's pre-M4 baseline is reproducible byte-for-byte
   // independent of the helper's piecewise fit.
   classColor: [1.0, 0.891, 0.796] as const,
+  // T6.4-M5 Plan B: Sun is well below the 7500 K activation threshold,
+  // so weight = 0 (pure legacy × bias path). Preserves Sun byte-
+  // identical pre-M4 by construction.
+  planBWeight: 0,
 
   lightDirection: [1, 1, 1] as const,
 };

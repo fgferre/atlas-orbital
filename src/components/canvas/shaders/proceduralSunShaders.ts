@@ -246,6 +246,13 @@ export const proceduralSunSphereFragmentShader = `
   uniform float uClassBiasGamma;
   uniform float uClassBiasFloor;
   uniform float uClassBiasCeiling;
+  // T6.4-M5 post-audit (Plan B activated): hot stars (tEff > ~7500 K)
+  // can't go blue-white through the legacy × bias path because the
+  // b^4 × tintBase^3 damping in blue collapses regardless of bias.
+  // uPlanBWeight is the [0..1] blend weight from planBWeight(tEff)
+  // (CPU-side, once per focus change). 0 = pure legacy×bias (Sun +
+  // cool stars), 1 = pure blackbody-linear (Sirius, Vega, Rigel).
+  uniform float uPlanBWeight;
 
   // T6.4-M1: view-space camera-relative position (see vertex header).
   varying vec3 vViewPos;
@@ -271,19 +278,27 @@ export const proceduralSunSphereFragmentShader = `
   }
 
   vec3 brightnessToColor(float b) {
-    // Pre-M4 atlas legacy curve, factored for runtime tintBase:
+    // Plan A: pre-M4 atlas legacy curve × class-relative bias.
     //   R = b × uBrightness
     //   G = b² × uTintBase × uBrightness
     //   B = b⁴ × uTintBase³ × uBrightness
     // Multi-channel exponents give the granulation contrast that
-    // reads as visible surface detail (the b² and b⁴ damping make
+    // reads as visible surface detail (b² and b⁴ damping make
     // noise-pattern variance translate into chroma swings, not just
-    // luminance). The class-relative bias then modulates the curve
-    // per spectral class without disturbing the Sun-default.
+    // luminance). The class-relative bias modulates the curve per
+    // spectral class without disturbing the Sun-default.
     float t1 = uTintBase;
     float t3 = t1 * t1 * t1;
     vec3 curve = vec3(b, b * b * t1, b * b * b * b * t3) * uBrightness;
-    return curve * classRelativeBias();
+    vec3 planA = curve * classRelativeBias();
+
+    // Plan B: blackbody-linear curve (no per-channel exponent),
+    // blended in for hot stars where the legacy b⁴ damping
+    // structurally prevents blue dominance. uPlanBWeight = 0 for
+    // Sun + cool stars (full Plan A); → 1 for Sirius/Vega/Rigel.
+    if (uPlanBWeight <= 0.0) return planA;
+    vec3 planB = uClassColor * b * uBrightness;
+    return mix(planA, planB, uPlanBWeight);
   }
 
   float ocean() {
@@ -410,6 +425,7 @@ export const proceduralSunGlowFragmentShader = `
   uniform float uClassBiasGamma;
   uniform float uClassBiasFloor;
   uniform float uClassBiasCeiling;
+  uniform float uPlanBWeight;
 
   // T6.4-M2 coordinate-space contract (mirrors vertex header):
   // vNormalWorld is the per-fragment outward radial direction in
@@ -435,11 +451,17 @@ export const proceduralSunGlowFragmentShader = `
   }
 
   vec3 brightnessToColor(float b) {
-    // Mirror of the sphere fragment's curve, with glow's tintBase=0.4.
+    // Mirror of the sphere fragment's curve + Plan B blend, with
+    // glow's tintBase=0.4. Same uPlanBWeight uniform shared with
+    // sphere so corona color stays in lockstep with surface across
+    // the full temperature range.
     float t1 = uTintBase;
     float t3 = t1 * t1 * t1;
     vec3 curve = vec3(b, b * b * t1, b * b * b * b * t3) * uBrightness;
-    return curve * classRelativeBias();
+    vec3 planA = curve * classRelativeBias();
+    if (uPlanBWeight <= 0.0) return planA;
+    vec3 planB = uClassColor * b * uBrightness;
+    return mix(planA, planB, uPlanBWeight);
   }
 
   void main() {

@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyClassColorTransfer,
+  applyTransferWithPlanB,
+  blackbodyLinearCurve,
   classRelativeBias,
   DEFAULT_CLASS_BIAS_CEILING,
   DEFAULT_CLASS_BIAS_FLOOR,
   DEFAULT_CLASS_BIAS_GAMMA,
   legacyCurve,
+  PLAN_B_TEFF_RAMP_K,
+  PLAN_B_TEFF_THRESHOLD_K,
+  planBWeight,
   SOLAR_CLASS_COLOR,
 } from "./stellarSurfaceTransfer";
 
@@ -264,6 +269,124 @@ describe("applyClassColorTransfer — Betelgeuse / Proxima (red dominance)", () 
         betelgeuse[1] !== proxima[1] ||
         betelgeuse[2] !== proxima[2]
     ).toBe(true);
+  });
+});
+
+// T6.4-M5 Plan B (activated 2026-05-07): hot stars only.
+
+describe("planBWeight — temperature-gated activation", () => {
+  it("Sun (5778 K) → 0 (below activation threshold)", () => {
+    expect(planBWeight(5778)).toBe(0);
+  });
+
+  it("Cool stars (Betelgeuse 3500 K, Proxima 3050 K) → 0", () => {
+    expect(planBWeight(3500)).toBe(0);
+    expect(planBWeight(3050)).toBe(0);
+  });
+
+  it("Exactly at threshold (7500 K) → 0", () => {
+    expect(planBWeight(7500)).toBe(0);
+  });
+
+  it("Just above threshold (7501 K) → tiny positive weight", () => {
+    expect(planBWeight(7501)).toBeGreaterThan(0);
+    expect(planBWeight(7501)).toBeLessThan(0.001);
+  });
+
+  it("Sirius (9940 K) → ~0.976 (8/2.5 of ramp)", () => {
+    // (9940 - 7500) / 2500 = 0.976
+    expect(planBWeight(9940)).toBeCloseTo(0.976, 3);
+  });
+
+  it("Vega (9602 K) → ~0.841", () => {
+    expect(planBWeight(9602)).toBeCloseTo(0.841, 3);
+  });
+
+  it("Hot O-type (>=10000 K) → clamped at 1.0", () => {
+    expect(planBWeight(10000)).toBe(1.0);
+    expect(planBWeight(30000)).toBe(1.0);
+  });
+
+  it("Non-finite input → 0 (defensive)", () => {
+    expect(planBWeight(NaN)).toBe(0);
+    expect(planBWeight(Infinity)).toBe(0);
+  });
+});
+
+describe("blackbodyLinearCurve — pure linear chromaticity", () => {
+  it("Sirius classColor at b=2 → blue dominant by construction", () => {
+    const [r, g, b] = blackbodyLinearCurve(
+      2,
+      SIRIUS_CLASS_COLOR,
+      TYPICAL_BRIGHTNESS
+    );
+    // (0.592, 0.703, 1.0) × 2 × 0.6 = (0.71, 0.844, 1.2)
+    expect(r).toBeCloseTo(0.71, 2);
+    expect(g).toBeCloseTo(0.844, 2);
+    expect(b).toBeCloseTo(1.2, 2);
+    expect(b).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(r);
+  });
+});
+
+describe("applyTransferWithPlanB — blend behaviour", () => {
+  it("Sun (tEff=5778) returns pure Plan A (weight=0)", () => {
+    const planA = applyClassColorTransfer(
+      2,
+      SUN_TINT_BASE,
+      TYPICAL_BRIGHTNESS,
+      SOLAR_CLASS_COLOR
+    );
+    const blended = applyTransferWithPlanB(
+      2,
+      SUN_TINT_BASE,
+      TYPICAL_BRIGHTNESS,
+      SOLAR_CLASS_COLOR,
+      5778
+    );
+    expect(blended).toEqual(planA);
+  });
+
+  it("Sirius (tEff=9940) blends mostly toward Plan B → blue dominant at b=2", () => {
+    const [r, g, b] = applyTransferWithPlanB(
+      2,
+      SUN_TINT_BASE,
+      TYPICAL_BRIGHTNESS,
+      SIRIUS_CLASS_COLOR,
+      9940
+    );
+    // Plan B at b=2 = (0.71, 0.844, 1.2). Plan A is red-dominant.
+    // weight=0.976 → mostly Plan B → blue dominant.
+    expect(b).toBeGreaterThan(g);
+    expect(b).toBeGreaterThan(r);
+  });
+
+  it("Cool supergiants (Betelgeuse tEff=3520) preserve Plan A red stylization", () => {
+    const planA = applyClassColorTransfer(
+      2,
+      SUN_TINT_BASE,
+      TYPICAL_BRIGHTNESS,
+      BETELGEUSE_CLASS_COLOR
+    );
+    const blended = applyTransferWithPlanB(
+      2,
+      SUN_TINT_BASE,
+      TYPICAL_BRIGHTNESS,
+      BETELGEUSE_CLASS_COLOR,
+      3520
+    );
+    // tEff far below threshold → weight=0 → identical to Plan A.
+    expect(blended).toEqual(planA);
+  });
+});
+
+describe("Plan B threshold constants", () => {
+  it("PLAN_B_TEFF_THRESHOLD_K = 7500 (between G and A class anchors)", () => {
+    expect(PLAN_B_TEFF_THRESHOLD_K).toBe(7500);
+  });
+
+  it("PLAN_B_TEFF_RAMP_K = 2500 (full activation by ~10000 K)", () => {
+    expect(PLAN_B_TEFF_RAMP_K).toBe(2500);
   });
 });
 
