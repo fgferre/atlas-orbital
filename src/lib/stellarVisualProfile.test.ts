@@ -36,15 +36,15 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — granulation (perlin cubemap)", () => {
 });
 
 describe("SUN_DEFAULT_VISUAL_PROFILE — surface sphere", () => {
-  // Source: ProceduralSun3D.tsx:397-402
+  // Source: ProceduralSun3D.tsx (sun material). T6.4-M4 swapped
+  // `surfaceTint` (vec3-channel-bias scalar) for `surfaceWhitePoint`
+  // (mix-to-white threshold) when the shader's brightness→color
+  // formula was rewritten to take `uClassColor` directly.
   it("surfaceFresnelPower matches pre-T6.1 sun uFresnelPower=1", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceFresnelPower).toBe(1);
   });
   it("surfaceFresnelInfluence matches pre-T6.1 sun uFresnelInfluence=0.8", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceFresnelInfluence).toBe(0.8);
-  });
-  it("surfaceTint matches pre-T6.1 sun uTint=0.2", () => {
-    expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceTint).toBe(0.2);
   });
   it("surfaceBase matches pre-T6.1 sun uBase=4", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceBase).toBe(4);
@@ -55,21 +55,34 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — surface sphere", () => {
   it("surfaceBrightness matches pre-T6.1 sun uBrightness=0.6", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceBrightness).toBe(0.6);
   });
+  it("surfaceWhitePoint=5 (T6.4-M4) reproduces pre-M4 mix-to-white at HDR core", () => {
+    expect(SUN_DEFAULT_VISUAL_PROFILE.surfaceWhitePoint).toBe(5);
+  });
 });
 
 describe("SUN_DEFAULT_VISUAL_PROFILE — glow (ring corona)", () => {
-  // Source: ProceduralSun3D.tsx:424-427
   it("glowRadius matches pre-T6.1 glow uRadius=0.4", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.glowRadius).toBe(0.4);
-  });
-  it("glowTint matches pre-T6.1 glow uTint=0.4", () => {
-    expect(SUN_DEFAULT_VISUAL_PROFILE.glowTint).toBe(0.4);
   });
   it("glowBrightness matches pre-T6.1 glow uBrightness=1.06", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.glowBrightness).toBe(1.06);
   });
   it("glowFalloffColor matches pre-T6.1 glow uFalloffColor=0.5", () => {
     expect(SUN_DEFAULT_VISUAL_PROFILE.glowFalloffColor).toBe(0.5);
+  });
+});
+
+describe("SUN_DEFAULT_VISUAL_PROFILE — class color (T6.4-M4, shared sphere + glow)", () => {
+  it("classColor pinned to blackbody(5778 K) ≈ (1.0, 0.891, 0.796) linear-RGB", () => {
+    const [r, g, b] = SUN_DEFAULT_VISUAL_PROFILE.classColor;
+    expect(r).toBeCloseTo(1.0, 3);
+    expect(g).toBeCloseTo(0.891, 3);
+    expect(b).toBeCloseTo(0.796, 3);
+  });
+  it("classColor reads as r > g > b (warm-white solar bias)", () => {
+    const [r, g, b] = SUN_DEFAULT_VISUAL_PROFILE.classColor;
+    expect(r).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(b);
   });
 });
 
@@ -148,7 +161,8 @@ describe("SUN_DEFAULT_VISUAL_PROFILE — completeness", () => {
   it("every numeric field is finite (sanity — no NaN / Infinity drift)", () => {
     const profile: StellarVisualProfile = SUN_DEFAULT_VISUAL_PROFILE;
     for (const [key, value] of Object.entries(profile)) {
-      if (key === "lightDirection") continue;
+      // Tuple fields are validated structurally via dedicated tests above.
+      if (key === "lightDirection" || key === "classColor") continue;
       expect(Number.isFinite(value)).toBe(true);
     }
   });

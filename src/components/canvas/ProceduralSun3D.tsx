@@ -435,6 +435,20 @@ export const ProceduralSun3D = ({
     visualProfile.granulationFlatten,
   ]);
 
+  // T6.4-M4: classColor as a Three.Vector3 so the uniform binding
+  // can mutate in place (Three.js patches in-place vec3 uniforms
+  // without reallocating the GPU buffer; a fresh array on every
+  // render would force a re-upload). Memoized on the tuple identity.
+  const classColorVec = useMemo(
+    () =>
+      new THREE.Vector3(
+        visualProfile.classColor[0],
+        visualProfile.classColor[1],
+        visualProfile.classColor[2]
+      ),
+    [visualProfile.classColor]
+  );
+
   const sunMaterial = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -444,16 +458,17 @@ export const ProceduralSun3D = ({
         premultipliedAlpha: true,
         blending: THREE.NormalBlending,
         depthWrite: true,
-        // T6.1 — surface uniforms driven by visualProfile.
+        // T6.1 + T6.4-M4 — surface uniforms driven by visualProfile.
         uniforms: {
           uTime: { value: 0 },
           uPerlinCube: { value: perlinResources.renderTarget.texture },
           uFresnelPower: { value: visualProfile.surfaceFresnelPower },
           uFresnelInfluence: { value: visualProfile.surfaceFresnelInfluence },
-          uTint: { value: visualProfile.surfaceTint },
           uBase: { value: visualProfile.surfaceBase },
           uBrightnessOffset: { value: visualProfile.surfaceBrightnessOffset },
           uBrightness: { value: visualProfile.surfaceBrightness },
+          uClassColor: { value: classColorVec.clone() },
+          uClassWhitePoint: { value: visualProfile.surfaceWhitePoint },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -465,10 +480,11 @@ export const ProceduralSun3D = ({
       perlinResources.renderTarget.texture,
       visualProfile.surfaceFresnelPower,
       visualProfile.surfaceFresnelInfluence,
-      visualProfile.surfaceTint,
       visualProfile.surfaceBase,
       visualProfile.surfaceBrightnessOffset,
       visualProfile.surfaceBrightness,
+      visualProfile.surfaceWhitePoint,
+      classColorVec,
     ]
   );
 
@@ -483,12 +499,14 @@ export const ProceduralSun3D = ({
         depthTest: true,
         blending: THREE.NormalBlending,
         side: THREE.DoubleSide,
-        // T6.1 — glow uniforms driven by visualProfile.
+        // T6.1 + T6.4-M4 — glow uniforms driven by visualProfile.
+        // Shares uClassColor + uClassWhitePoint with the sphere.
         uniforms: {
           uRadius: { value: visualProfile.glowRadius },
-          uTint: { value: visualProfile.glowTint },
           uBrightness: { value: visualProfile.glowBrightness },
           uFalloffColor: { value: visualProfile.glowFalloffColor },
+          uClassColor: { value: classColorVec.clone() },
+          uClassWhitePoint: { value: visualProfile.surfaceWhitePoint },
           uVisibility: { value: 1 },
           uDirection: { value: 1 },
           uLightView: { value: lightDirWorld.clone() },
@@ -498,9 +516,10 @@ export const ProceduralSun3D = ({
     [
       lightDirWorld,
       visualProfile.glowRadius,
-      visualProfile.glowTint,
       visualProfile.glowBrightness,
       visualProfile.glowFalloffColor,
+      visualProfile.surfaceWhitePoint,
+      classColorVec,
     ]
   );
 

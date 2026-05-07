@@ -223,10 +223,23 @@ export const proceduralSunSphereFragmentShader = `
   uniform samplerCube uPerlinCube;
   uniform float uFresnelPower;
   uniform float uFresnelInfluence;
-  uniform float uTint;
   uniform float uBase;
   uniform float uBrightnessOffset;
   uniform float uBrightness;
+  // T6.4-M4: class-driven color path. uClassColor carries the
+  // linear-RGB blackbody color for this star (sourced CPU-side
+  // from blackbodyRgbFromTemperature(tEff) — see stellarColor.ts).
+  // uClassWhitePoint is the brightness above which the surface
+  // saturates to white, giving the HDR-core look while limb /
+  // lower-brightness regions retain the class hue. Replaces the
+  // pre-M4 (b, b*b, b*b*b*b) / uTint formula which only spanned
+  // warm-yellow -> white and could not produce blue-dominant
+  // output for hot O / B / A stars. Sphere AND glow read the same
+  // uClassColor (one uniform; same value pushed into both
+  // materials per stellarVisualProfileFrom output) so the corona
+  // hue cannot drift from the surface hue.
+  uniform vec3 uClassColor;
+  uniform float uClassWhitePoint;
 
   // T6.4-M1: view-space camera-relative position (see vertex header).
   varying vec3 vViewPos;
@@ -243,8 +256,14 @@ export const proceduralSunSphereFragmentShader = `
   }
 
   vec3 brightnessToColor(float b) {
-    b *= uTint;
-    return (vec3(b, b * b, b * b * b * b) / uTint) * uBrightness;
+    // T6.4-M4: lerp class hue to white at high brightness so the
+    // core stays HDR-white (preserving the pre-M4 visual character
+    // for the Sun) while the limb retains class color. saturation
+    // approaches 1 at low brightness (full chroma) and 0 above
+    // uClassWhitePoint (full white).
+    float saturation = 1.0 - smoothstep(1.0, uClassWhitePoint, b);
+    vec3 chroma = mix(vec3(1.0), uClassColor, saturation);
+    return chroma * b * uBrightness;
   }
 
   float ocean() {
@@ -358,9 +377,17 @@ export const proceduralSunGlowFragmentShader = `
   uniform float uVisibility;
   uniform float uDirection;
   uniform vec3 uLightView;
-  uniform float uTint;
   uniform float uBrightness;
   uniform float uFalloffColor;
+  // T6.4-M4: same shared uniforms as the sphere fragment. Glow
+  // brightness in this shader stays in [1.0, 1.0 + uFalloffColor],
+  // so for the Sun-default uClassWhitePoint=5 the saturate-to-white
+  // path is essentially never hit and the glow reads as full
+  // class-chroma. The path is wired anyway so future tuning of
+  // uClassWhitePoint cannot accidentally desaturate the glow vs
+  // the sphere.
+  uniform vec3 uClassColor;
+  uniform float uClassWhitePoint;
 
   // T6.4-M2 coordinate-space contract (mirrors vertex header):
   // vNormalWorld is the per-fragment outward radial direction in
@@ -380,8 +407,12 @@ export const proceduralSunGlowFragmentShader = `
   }
 
   vec3 brightnessToColor(float b) {
-    b *= uTint;
-    return (vec3(b, b * b, b * b * b * b) / uTint) * uBrightness;
+    // T6.4-M4: identical formula to the sphere fragment. Sharing
+    // the saturate-to-white path keeps surface and corona color
+    // in lockstep across the full brightness range.
+    float saturation = 1.0 - smoothstep(1.0, uClassWhitePoint, b);
+    vec3 chroma = mix(vec3(1.0), uClassColor, saturation);
+    return chroma * b * uBrightness;
   }
 
   void main() {

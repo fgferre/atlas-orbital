@@ -19,8 +19,11 @@
  * interface intentionally diverges from a previously-hardcoded
  * value.
  *
- * **What's externalized** (28 visual fields — per ROADMAP §T6.1's
- * Codex-expanded count, plus the lightDirection vector). Runtime-
+ * **What's externalized** (T6.1 baseline: 26 numeric uniforms +
+ * `lightDirection`. T6.4-M4 swaps `surfaceTint` + `glowTint` for
+ * `surfaceWhitePoint` + `classColor` so the new linear-RGB
+ * shader path replaces the prior `vec3(b, b², b⁴) × tint`
+ * formula — same 28 keys total, different shape.) Runtime-
  * mutated uniforms (`uTime`, `uVisibility`, `uDirection`,
  * `uPerlinCube`, `uCamUp`) stay inside the component — they're
  * driven by `useFrame` and have no per-star meaning.
@@ -40,12 +43,17 @@
  *   decisions tied to the component's coordinate frame, not
  *   visual identity.
  *
- * Future ondas (T6.4 class-tuned granulation, T6.5 limb darkening)
- * extend this profile with class-driven values; T6.4 specifically
- * tunes `granulationSpatialFreq` / corona density per spectral
- * class. The profile shape is forward-compatible: every consumer
- * reads the field by name; new fields default to the Sun value
- * without requiring callsite churn.
+ * Future ondas (T6.5 limb darkening) extend this profile with
+ * additional class-driven values. The profile shape is forward-
+ * compatible: every consumer reads the field by name; new fields
+ * default to the Sun value without requiring callsite churn.
+ *
+ * **T6.4-M4 update**: granulation cell scale (`granulationSpatialFreq`,
+ * `granulationTemporalFreq`, `granulationContrast`) is now
+ * tuned per luminosity class + temperature in
+ * `stellarVisualProfileFrom`; supergiant cells are larger / slower
+ * / higher-contrast than main-sequence; hot O / B / A stars get
+ * granulation flattened to mimic radiative atmospheres.
  */
 
 /**
@@ -76,20 +84,26 @@ export interface StellarVisualProfile {
   surfaceFresnelPower: number;
   /** `uFresnelInfluence`; rim-glow intensity. */
   surfaceFresnelInfluence: number;
-  /** `uTint`; brightness-to-color hue tilt. */
-  surfaceTint: number;
   /** `uBase`; brightness multiplier from cubemap sample. */
   surfaceBase: number;
   /** `uBrightnessOffset`; DC term added before fresnel. */
   surfaceBrightnessOffset: number;
   /** `uBrightness`; final output multiplier. */
   surfaceBrightness: number;
+  /**
+   * `uClassWhitePoint` in `proceduralSunSphereFragmentShader`
+   * (T6.4-M4). Brightness above which the surface saturates to
+   * white, giving the HDR-core look while the limb / lower-
+   * brightness regions retain `classColor`. Replaces the prior
+   * `uTint`-modulated `vec3(b, b², b⁴)` formula which could not
+   * produce blue-dominant output for hot stars regardless of
+   * the tint value.
+   */
+  surfaceWhitePoint: number;
 
   // ─── Glow (ring corona) shader ───
   /** `uRadius` in `proceduralSunGlowFragmentShader`; ring thickness. */
   glowRadius: number;
-  /** `uTint`; hue tilt of the glow. */
-  glowTint: number;
   /** `uBrightness`; glow output multiplier. */
   glowBrightness: number;
   /** `uFalloffColor`; controls the radial falloff color cutoff. */
@@ -122,6 +136,18 @@ export interface StellarVisualProfile {
   flaresNoiseFrequency: number;
   /** `uNoiseAmplitude`; flare modulation noise depth. */
   flaresNoiseAmplitude: number;
+
+  // ─── Class color (shared sphere + glow, T6.4-M4) ───
+  /**
+   * Linear-RGB blackbody color shared by `proceduralSunSphereFragmentShader`'s
+   * and `proceduralSunGlowFragmentShader`'s `uClassColor` uniform. Sourced
+   * from `blackbodyRgbFromTemperature(tEff)` in
+   * `stellarVisualProfileFrom`; a single value drives both materials so
+   * the corona color cannot drift from the surface color. Linear-RGB
+   * because every consuming material is `toneMapped: false` per
+   * `proceduralSunShaders.ts:269-279`.
+   */
+  classColor: readonly [number, number, number];
 
   // ─── Light direction (cross-material) ───
   /**
@@ -160,13 +186,18 @@ export const SUN_DEFAULT_VISUAL_PROFILE: StellarVisualProfile = {
 
   surfaceFresnelPower: 1,
   surfaceFresnelInfluence: 0.8,
-  surfaceTint: 0.2,
   surfaceBase: 4,
   surfaceBrightnessOffset: 1,
   surfaceBrightness: 0.6,
+  // T6.4-M4: white-point of 5 matches the upper end of the
+  // pre-M4 `vec3(b, b², b⁴)` saturation regime — at b ≥ 5 the
+  // old formula produced `vec3(5, 25, 625) × tintScale` which
+  // already clipped to white through the post-process pipeline.
+  // The new mix-to-white formula reproduces that behavior
+  // explicitly while letting the limb retain `classColor`.
+  surfaceWhitePoint: 5,
 
   glowRadius: 0.4,
-  glowTint: 0.4,
   glowBrightness: 1.06,
   glowFalloffColor: 0.5,
 
@@ -183,6 +214,12 @@ export const SUN_DEFAULT_VISUAL_PROFILE: StellarVisualProfile = {
   flaresHue: 0,
   flaresNoiseFrequency: 4,
   flaresNoiseAmplitude: 0.2,
+
+  // T6.4-M4: blackbody at solar T_eff = 5778 K, in linear-RGB.
+  // Pinned numerically (not derived from blackbodyRgbFromTemperature
+  // here) so the Sun's pre-M4 baseline is reproducible byte-for-byte
+  // independent of the helper's piecewise fit.
+  classColor: [1.0, 0.891, 0.796] as const,
 
   lightDirection: [1, 1, 1] as const,
 };

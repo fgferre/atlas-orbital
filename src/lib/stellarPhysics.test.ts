@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  descriptorFromCatalog,
   parseSpectralClass,
   radiusFromSpect,
   stellarVisualProfileFrom,
@@ -390,14 +391,254 @@ describe("stellarVisualProfileFrom — B-V fallback path", () => {
 });
 
 describe("stellarVisualProfileFrom — output is a valid StellarVisualProfile", () => {
-  it("contains all 28 numeric fields + lightDirection", () => {
+  it("contains 28 keys (26 numeric + classColor + lightDirection)", () => {
     const profile = stellarVisualProfileFrom({ bv: 0.65, spect: "G2V" });
     const keys = Object.keys(profile);
-    expect(keys.length).toBe(28); // 27 numeric + lightDirection (= 28 keys)
-    // All numeric fields finite.
+    expect(keys.length).toBe(28);
     for (const [key, value] of Object.entries(profile)) {
-      if (key === "lightDirection") continue;
+      if (key === "lightDirection" || key === "classColor") continue;
       expect(Number.isFinite(value)).toBe(true);
     }
+  });
+
+  it("classColor is a 3-tuple of finite numbers in [0, 1]", () => {
+    const profile = stellarVisualProfileFrom({ bv: 0.65, spect: "G2V" });
+    expect(profile.classColor).toHaveLength(3);
+    for (const channel of profile.classColor) {
+      expect(Number.isFinite(channel)).toBe(true);
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// ─── T6.4-M4 — descriptor + class-aware profile pins ────────────────
+
+describe("descriptorFromCatalog — named-star descriptors", () => {
+  it("Sun (G2V, bv=0.65, absmag=4.83)", () => {
+    const desc = descriptorFromCatalog({
+      bv: 0.65,
+      spect: "G2V",
+      absmag: 4.83,
+    });
+    expect(desc.spectralClass).toBe("G");
+    expect(desc.luminosityClass).toBe("V");
+    expect(desc.tEff).toBeCloseTo(5_740, 0); // G2 interpolated
+    expect(desc.absmag).toBe(4.83);
+    expect(desc.radiusSolar).toBeCloseTo(0.987, 2);
+  });
+
+  it("Sirius (A1V, bv=0.0, absmag=1.42)", () => {
+    const desc = descriptorFromCatalog({
+      bv: 0.0,
+      spect: "A1V",
+      absmag: 1.42,
+    });
+    expect(desc.spectralClass).toBe("A");
+    expect(desc.luminosityClass).toBe("V");
+    // tEff(A,1) = 9900 + (7300 - 9900) * 0.1 = 9900 - 260 = 9640 K
+    expect(desc.tEff).toBeCloseTo(9_640, 0);
+    expect(desc.absmag).toBe(1.42);
+  });
+
+  it("Betelgeuse (M2Iab → primary luminosity Ia, bv=1.5, absmag=-5.85)", () => {
+    // parseSpectralClass returns the longest-match luminosity prefix.
+    // Catalog spect strings often write "M2Iab" / "M2Ia-b"; we test
+    // the canonical "M2Ia" form (spec uses Ia or Ia-Iab).
+    const desc = descriptorFromCatalog({
+      bv: 1.85,
+      spect: "M2Ia",
+      absmag: -5.85,
+    });
+    expect(desc.spectralClass).toBe("M");
+    expect(desc.luminosityClass).toBe("Ia");
+    // tEff(M,2) = 3800 + (2400 - 3800) * 0.2 = 3520 K
+    expect(desc.tEff).toBeCloseTo(3_520, 0);
+    expect(desc.radiusSolar).toBe(1000);
+  });
+
+  it("Proxima (M5.5V, bv=1.83, absmag=15.49)", () => {
+    const desc = descriptorFromCatalog({
+      bv: 1.83,
+      spect: "M5.5V",
+      absmag: 15.49,
+    });
+    expect(desc.spectralClass).toBe("M");
+    expect(desc.luminosityClass).toBe("V");
+    // tEff(M,5.5) = 3800 + (2400 - 3800) * 0.55 = 3030 K
+    expect(desc.tEff).toBeCloseTo(3_030, 0);
+  });
+
+  it("missing spect falls back to spectralClass=G, luminosity=V, B-V T_eff", () => {
+    const desc = descriptorFromCatalog({ bv: 0.65 });
+    expect(desc.spectralClass).toBe("G");
+    expect(desc.luminosityClass).toBe("V");
+    // Ballesteros at bv=0.65 → ~5778 K
+    expect(desc.tEff).toBeCloseTo(5_778, -1);
+  });
+
+  it("non-finite absmag is normalized to null", () => {
+    const desc = descriptorFromCatalog({ bv: 0.65, absmag: NaN });
+    expect(desc.absmag).toBeNull();
+  });
+});
+
+describe("stellarVisualProfileFrom — Sun-identity invariant (T6.4-M4)", () => {
+  // A G2V Sun-equivalent input MUST reproduce the Sun default for
+  // every field except surfaceBrightness (sub-1% drift via
+  // brightnessScaleFromTemperature). This is the regression
+  // guard for "did we accidentally make the Sun look different".
+  const sunInput = { bv: 0.65, spect: "G2V", absmag: 4.83 };
+
+  it("granulation cell scale matches Sun default (V class anchor)", () => {
+    const p = stellarVisualProfileFrom(sunInput);
+    expect(p.granulationSpatialFreq).toBe(
+      SUN_DEFAULT_VISUAL_PROFILE.granulationSpatialFreq
+    );
+    expect(p.granulationTemporalFreq).toBe(
+      SUN_DEFAULT_VISUAL_PROFILE.granulationTemporalFreq
+    );
+  });
+
+  it("granulationContrast within 5% of Sun default (T_eff ≈ 5740 ≠ 5778)", () => {
+    const p = stellarVisualProfileFrom(sunInput);
+    expect(
+      Math.abs(
+        p.granulationContrast - SUN_DEFAULT_VISUAL_PROFILE.granulationContrast
+      )
+    ).toBeLessThan(0.05 * SUN_DEFAULT_VISUAL_PROFILE.granulationContrast);
+  });
+
+  it("glowBrightness identical to Sun default (absmag=4.83 → scale=1.0)", () => {
+    const p = stellarVisualProfileFrom(sunInput);
+    expect(p.glowBrightness).toBe(SUN_DEFAULT_VISUAL_PROFILE.glowBrightness);
+  });
+
+  it("rays/flares amplitude identical to Sun default (G class is neither hot nor cool MS)", () => {
+    const p = stellarVisualProfileFrom(sunInput);
+    expect(p.raysNoiseAmplitude).toBe(
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseAmplitude
+    );
+    expect(p.flaresAmp).toBe(SUN_DEFAULT_VISUAL_PROFILE.flaresAmp);
+  });
+
+  it("classColor close to SUN_DEFAULT classColor (warm white)", () => {
+    const p = stellarVisualProfileFrom(sunInput);
+    const [r, g, b] = p.classColor;
+    const [sr, sg, sb] = SUN_DEFAULT_VISUAL_PROFILE.classColor;
+    expect(Math.abs(r - sr)).toBeLessThan(0.05);
+    expect(Math.abs(g - sg)).toBeLessThan(0.05);
+    expect(Math.abs(b - sb)).toBeLessThan(0.05);
+  });
+});
+
+describe("stellarVisualProfileFrom — class distinction (4 named stars)", () => {
+  const sirius = stellarVisualProfileFrom({
+    bv: 0.0,
+    spect: "A1V",
+    absmag: 1.42,
+  });
+  const betelgeuse = stellarVisualProfileFrom({
+    bv: 1.85,
+    spect: "M2Ia",
+    absmag: -5.85,
+  });
+  const proxima = stellarVisualProfileFrom({
+    bv: 1.83,
+    spect: "M5.5V",
+    absmag: 15.49,
+  });
+  const sun = stellarVisualProfileFrom({
+    bv: 0.65,
+    spect: "G2V",
+    absmag: 4.83,
+  });
+
+  it("Sirius classColor reads blue-white (b > g > r)", () => {
+    const [r, g, b] = sirius.classColor;
+    expect(b).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(r);
+  });
+
+  it("Betelgeuse classColor reads orange-red (r > g > b)", () => {
+    const [r, g, b] = betelgeuse.classColor;
+    expect(r).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(b);
+    // Strongly red-tilted: r/b ratio ≥ 3 (deep orange)
+    expect(r / Math.max(b, 1e-6)).toBeGreaterThan(3);
+  });
+
+  it("Proxima classColor warmer-than-Betelgeuse on red dominance", () => {
+    // Proxima is cooler (3050 K vs 3500 K) → even more red-tilted
+    expect(
+      proxima.classColor[0] / Math.max(proxima.classColor[2], 1e-6)
+    ).toBeGreaterThan(
+      betelgeuse.classColor[0] / Math.max(betelgeuse.classColor[2], 1e-6)
+    );
+  });
+
+  it("Betelgeuse granulation cell is much larger than Sun (Ia anchor)", () => {
+    // spatial frequency lower = larger cells. Ia=1.5 vs V=6.0 (4× larger cells).
+    expect(betelgeuse.granulationSpatialFreq).toBeLessThan(
+      sun.granulationSpatialFreq
+    );
+    expect(betelgeuse.granulationSpatialFreq).toBe(1.5);
+  });
+
+  it("Betelgeuse glowBrightness clamped to 3× Sun (M_V=-5.85 hits ceiling)", () => {
+    // 10^(-0.4 × (-5.85 - 4.83) × 0.15) = 10^0.6408 ≈ 4.37 → clamp 3.0
+    expect(betelgeuse.glowBrightness).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.glowBrightness * 3.0,
+      4
+    );
+  });
+
+  it("Proxima glowBrightness clamped to 0.5× Sun (M_V=15.49 hits floor)", () => {
+    // 10^(-0.4 × (15.49 - 4.83) × 0.15) ≈ 10^-0.6396 ≈ 0.229 → clamp 0.5
+    expect(proxima.glowBrightness).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.glowBrightness * 0.5,
+      4
+    );
+  });
+
+  it("Sirius glowBrightness scales up (~1.6× Sun for M_V=1.42)", () => {
+    // 10^(-0.4 × (1.42 - 4.83) × 0.15) = 10^0.2046 ≈ 1.602
+    expect(sirius.glowBrightness).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.glowBrightness * 1.602,
+      2
+    );
+  });
+
+  it("Proxima M-dwarf has pronounced flares (1.8× Sun)", () => {
+    expect(proxima.flaresAmp).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 1.8,
+      4
+    );
+  });
+
+  it("Sirius (hot MS) has muted flares (0.3× Sun)", () => {
+    expect(sirius.flaresAmp).toBeCloseTo(
+      SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * 0.3,
+      4
+    );
+  });
+
+  it("Sirius granulation contrast < Sun's (radiative atmosphere)", () => {
+    expect(sirius.granulationContrast).toBeLessThan(sun.granulationContrast);
+  });
+
+  it("Proxima granulation contrast > Sun's (deep convection)", () => {
+    expect(proxima.granulationContrast).toBeGreaterThan(
+      sun.granulationContrast
+    );
+  });
+
+  it("classColor is INDEPENDENT across stars (no shared reference / mutation)", () => {
+    // Coupling-bug guard: the four profiles must each have their own
+    // classColor tuple — same identity check would let one star's
+    // descriptor mutate another's render.
+    expect(sirius.classColor).not.toBe(sun.classColor);
+    expect(betelgeuse.classColor).not.toBe(sun.classColor);
+    expect(proxima.classColor).not.toBe(sun.classColor);
   });
 });

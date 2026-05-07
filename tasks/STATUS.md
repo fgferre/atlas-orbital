@@ -7,8 +7,10 @@ History, shipped-onda detail, and audit narratives live in
 
 _Last updated: 2026-05-06 late night. T6.4 M1+M2 shipped; M2.5
 S1-S7 + rounds 3-5b shipped; Round-6 A-H shipped 2026-05-06;
-M6 fully closed 2026-05-06 (A-H all ✅); **M3 sprite↔mesh
-cross-fade shipped 2026-05-06** — U-2 + U-3 + U-5 closed.
+M6 fully closed 2026-05-06 (A-H all ✅); M3 sprite↔mesh
+cross-fade shipped 2026-05-06; **M4 class variation in
+stellarVisualProfileFrom shipped 2026-05-06** — U-2 + U-3 + U-5
+closed; perceptual smoke of 4 named stars pending user.
 The integrator port (`HygPhysicsFlight`),
 aim-direction lerp (`AimLerp`), `setupCameraHyg` rewire,
 useFrame physics branch, cancel handlers, first-guess
@@ -44,11 +46,12 @@ M1+M2 ✅, M2.5+M3+M4+M5+M7 core ~14-22 h; M6 forward-port
 ~14 h (8 sub-tracks, parallelizable post-M2.5).
 
 **Default fresh-loop fire** (autonomous-agent-actionable):
-**T6.4 M4 — Class variation in stellarVisualProfileFrom**
-(~6-9h, spec in wave file §M4). Last big-spec milestone before
-M5/M7 polish. Pulls perceptual color/brightness/granulation
-descriptors per spectral class so HYG stars stop reading "todas
-amarelas".
+**T6.4 M5 — Spect-missing fallback via absmag** (spec in wave
+file §M5). Most HYG entries have `spect`, but the ~20% without
+it currently fall through to a B-V-only path that ignores
+`absmag`. M5 lights up an absmag-driven temperature-class
+estimate so spect-less stars also get classColor + granulation
+tuning instead of solar defaults.
 
 **Higher-priority parallel work for the user** (only the user
 can do this): user-smoke Round-6 acceptance — 4 named stars

@@ -44,6 +44,7 @@
  * unparseable garbage, empty string).
  */
 
+import { blackbodyRgbFromTemperature } from "./stellarColor";
 import {
   SUN_DEFAULT_VISUAL_PROFILE,
   type StellarVisualProfile,
@@ -478,7 +479,7 @@ export const massFromSpectAbsmag = (
   return Math.max(0.05, Math.min(100, massSolar));
 };
 
-// ─── Visual-profile aggregator ────────────────────────────────────
+// ─── Visual descriptor + visual-profile aggregator ────────────────
 
 /**
  * Star data subset needed to build a visual profile. Atlas's
@@ -495,6 +496,71 @@ export interface StellarPhysicsInput {
   /** Absolute magnitude (M_V). Optional until T6.2-β. */
   absmag?: number | null;
 }
+
+/**
+ * T6.4-M4 — bundled visual descriptor that `stellarVisualProfileFrom`
+ * consumes internally. Surfaces every parsed/derived field the
+ * downstream class-aware composition needs (color, granulation,
+ * rays/flares, glow scale) so the visual-profile builder doesn't
+ * re-parse `spect` mid-pipeline. M5 (spect-fallback via absmag)
+ * also reads this shape.
+ *
+ * `luminosityClass` defaults to `"V"` (main sequence) when the
+ * catalog string carries no luminosity hint — consistent with
+ * `radiusFromSpect`'s "V or unspecified" branch. The visual
+ * descriptor is therefore non-null on every field, simplifying
+ * downstream callers.
+ */
+export interface StellarVisualDescriptor {
+  /** Effective temperature in Kelvin. */
+  tEff: number;
+  /** MK class letter or `"WD"`. Defaults to `"G"` for unparseable input. */
+  spectralClass: SpectralClass;
+  /** Roman numeral. Defaults to `"V"` (main sequence) when absent. */
+  luminosityClass: LuminosityClass;
+  /** Catalog B-V (preserved verbatim — kept for downstream auditability). */
+  bv: number;
+  /** V-band absolute magnitude, or `null` when absent / non-finite. */
+  absmag: number | null;
+  /** Radius in solar units, via `radiusFromSpect`. */
+  radiusSolar: number;
+}
+
+/**
+ * Build a visual descriptor from raw HYG catalog fields. Mirrors the
+ * resolution sequence inside `stellarVisualProfileFrom` so callers
+ * (M5 forward-port, info-panel labels) can share the same parsed
+ * shape without re-implementing the spect / B-V fallback.
+ */
+export const descriptorFromCatalog = (
+  input: StellarPhysicsInput
+): StellarVisualDescriptor => {
+  const parsed = input.spect ? parseSpectralClass(input.spect) : null;
+
+  let tEff: number;
+  if (parsed) {
+    tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
+  } else {
+    tEff = temperatureFromBV(input.bv);
+  }
+
+  const spectralClass: SpectralClass = parsed?.spectralClass ?? "G";
+  const luminosityClass: LuminosityClass = parsed?.luminosityClass ?? "V";
+  const absmag =
+    typeof input.absmag === "number" && Number.isFinite(input.absmag)
+      ? input.absmag
+      : null;
+  const radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined);
+
+  return {
+    tEff,
+    spectralClass,
+    luminosityClass,
+    bv: input.bv,
+    absmag,
+    radiusSolar,
+  };
+};
 
 /**
  * Map an effective temperature to a hue offset for the rays /
@@ -542,51 +608,199 @@ const brightnessScaleFromTemperature = (tEff: number): number => {
 };
 
 /**
+ * T6.4-M4 — luminosity-class anchors for granulation cell scale
+ * + temporal rate + base contrast. Atlas-opinion midpoints
+ * grounded in stellar-evolution H_p (pressure scale height)
+ * intuition: supergiants have huge H_p (low surface gravity at
+ * extended atmospheres) → very large cells / slow turnover;
+ * main-sequence has H_p matched to T_eff; white dwarfs have
+ * tiny scale heights → high spatial frequency / fast turnover.
+ *
+ * The V-class row equals the Sun default (spatial=6, temporal=0.10,
+ * contrast=0.25) so a G2V input under
+ * `stellarVisualProfileFrom` reproduces SUN_DEFAULT_VISUAL_PROFILE
+ * for those three fields exactly.
+ */
+const GRANULATION_BY_LUMINOSITY: Record<
+  LuminosityClass,
+  { spatial: number; temporal: number; contrast: number }
+> = {
+  "0": { spatial: 1.0, temporal: 0.015, contrast: 0.5 },
+  Ia: { spatial: 1.5, temporal: 0.02, contrast: 0.45 },
+  Ib: { spatial: 2.5, temporal: 0.03, contrast: 0.4 },
+  I: { spatial: 2.0, temporal: 0.025, contrast: 0.42 },
+  II: { spatial: 3.0, temporal: 0.04, contrast: 0.38 },
+  III: { spatial: 4.0, temporal: 0.06, contrast: 0.35 },
+  IV: { spatial: 5.0, temporal: 0.08, contrast: 0.3 },
+  V: { spatial: 6.0, temporal: 0.1, contrast: 0.25 },
+  VI: { spatial: 8.0, temporal: 0.15, contrast: 0.18 },
+  VII: { spatial: 12.0, temporal: 0.2, contrast: 0.1 },
+};
+
+/**
+ * T6.4-M4 — temperature multiplier on granulation contrast.
+ * Anchored at solar T_eff so a Sun input returns scale=1.0
+ * exactly. Hot stars (radiative atmospheres → suppressed
+ * convection visibility) get scale → 0.2; cool stars (deep
+ * convection zones → strong cell contrast) get scale → 1.5.
+ *
+ * Clamped tightly because the exponential blows past usable
+ * brightness at extreme temperatures.
+ */
+const granulationContrastTempScale = (tEff: number): number => {
+  const T_SUN = 5778;
+  return Math.max(0.2, Math.min(1.5, Math.exp((T_SUN - tEff) / 4000)));
+};
+
+/**
+ * T6.4-M4 — `absmag` → multiplicative scale on `glowBrightness`.
+ *
+ * Pure visual-art knob: the actual luminosity-flux ratio across
+ * the catalog spans ~10^9; mapping that 1:1 would crush faint
+ * dwarfs to invisible and blow out supergiants. The damped
+ * exponent (0.15) compresses the visual range to roughly
+ * [0.5, 3.0], giving Rigel-class supergiants a noticeably
+ * brighter halo than Sirius-class A dwarfs without saturating
+ * post-process bloom. Anchored at M_sun = +4.83 so a Sun-equivalent
+ * absmag returns 1.0 exactly.
+ *
+ * NOT a physics claim about coronal energetics — purely an
+ * art-direction layer.
+ */
+const glowScaleFromAbsmag = (absmag: number | null): number => {
+  if (absmag === null || !Number.isFinite(absmag)) return 1.0;
+  const M_SUN_V = 4.83;
+  return Math.max(
+    0.5,
+    Math.min(3.0, Math.pow(10, -0.4 * (absmag - M_SUN_V) * 0.15))
+  );
+};
+
+/**
+ * T6.4-M4 — rays / flares / glow-falloff multipliers per
+ * (spectral class, luminosity class, T_eff) — atlas-opinion
+ * art-direction layer.
+ *
+ * Heuristics (per spec §S6):
+ *   - Hot main-sequence (O / B / A V) → cleaner / sharper falloff,
+ *     muted flares (radiative-atmosphere look).
+ *   - Cool dwarf main-sequence (K / M V) → busier rays, broader
+ *     halo (active-chromosphere look). M-dwarfs especially get
+ *     pronounced flares (Proxima-like activity).
+ *   - Supergiants (Ia / Ib / I / II) → wide, slow rays; muted
+ *     flares (low-gravity envelope).
+ *   - Solar G/F V → returns 1.0× across the board so the Sun
+ *     default reproduces byte-identical for these fields.
+ */
+const artDirectionMultipliers = (
+  spectralClass: SpectralClass,
+  luminosityClass: LuminosityClass,
+  tEff: number
+): {
+  raysAmplitude: number;
+  flaresAmp: number;
+  glowFalloffColor: number;
+} => {
+  const isHotMS = luminosityClass === "V" && tEff > 7500;
+  const isCoolMS = luminosityClass === "V" && tEff < 4500;
+  const isSG =
+    luminosityClass === "0" ||
+    luminosityClass === "Ia" ||
+    luminosityClass === "Ib" ||
+    luminosityClass === "I" ||
+    luminosityClass === "II";
+
+  const raysAmplitude = isHotMS ? 0.6 : isCoolMS ? 1.4 : isSG ? 1.0 : 1.0;
+  const flaresAmp = isHotMS
+    ? 0.3
+    : isCoolMS && spectralClass === "M"
+      ? 1.8
+      : isCoolMS
+        ? 1.3
+        : isSG
+          ? 0.7
+          : 1.0;
+  const glowFalloffColor = isHotMS ? 0.7 : isCoolMS ? 1.3 : 1.0;
+
+  return { raysAmplitude, flaresAmp, glowFalloffColor };
+};
+
+/**
  * Aggregate star data → `StellarVisualProfile`.
  *
- * Algorithm:
- *   1. If `spect` provided AND parseable → use spectral path:
- *      - `tEff` from `temperatureFromSpect(class, subclass)`
- *      - radius (informational only here; T6.3 consumes it for
- *        solid-angle gating, not for the visual profile)
- *   2. Else → B-V fallback:
- *      - `tEff` from `temperatureFromBV(bv)` (Ballesteros)
- *   3. Derive surface brightness scale + rays/flares hue offset
- *      from `tEff` (atlas-opinion mappings).
- *   4. Spread on top of `SUN_DEFAULT_VISUAL_PROFILE` so any field
- *      not explicitly tuned inherits Sun's value (forward-compat
- *      with T6.4's class-tuned granulation override pattern).
+ * **T6.4-M4 algorithm** (replaces the T6.2-α profile pattern):
+ *   1. Build a `StellarVisualDescriptor` via `descriptorFromCatalog`.
+ *      Resolves `tEff` (spectral path → Ballesteros fallback),
+ *      `luminosityClass` (default `"V"`), `radiusSolar`.
+ *   2. `classColor = blackbodyRgbFromTemperature(tEff)` — drives
+ *      the new shared `uClassColor` uniform on sphere + glow.
+ *   3. Granulation cell scale + time + contrast from
+ *      `GRANULATION_BY_LUMINOSITY[luminosityClass]`, with a
+ *      `tEff`-dependent contrast scale (hot stars → flatter,
+ *      cool stars → stronger). V-class anchors at the Sun default.
+ *   4. Glow brightness scaled by `glowScaleFromAbsmag(absmag)` —
+ *      luminous supergiants get brighter halos than dim M dwarfs.
+ *      Sun-equivalent `absmag = 4.83` → 1.0 (no Sun churn).
+ *   5. Rays / flares amplitude + glow falloff via
+ *      `artDirectionMultipliers` — hot stars cleaner, cool
+ *      dwarfs more active, supergiants wider/slower.
+ *   6. Surface brightness scale + rays/flares hue offset
+ *      preserved from T6.2-α (atlas-opinion temperature mappings).
  *
- * Returns a profile that's spread-derivable from
- * `SUN_DEFAULT_VISUAL_PROFILE`, so the regression test pattern
- * pinned by `stellarVisualProfile.test.ts` continues to hold for
- * solar-like inputs.
+ * Solar identity invariant: a G2V input with `bv = 0.65,
+ * absmag = 4.83` is byte-identical to `SUN_DEFAULT_VISUAL_PROFILE`
+ * for every field except `surfaceBrightness` (sub-1% drift via
+ * `brightnessScaleFromTemperature` because `tEff(G,2)` ≈ 5740 K
+ * ≠ 5778 K exactly). Pinned in `stellarPhysics.test.ts`.
  */
 export const stellarVisualProfileFrom = (
   input: StellarPhysicsInput
 ): StellarVisualProfile => {
-  // Determine effective temperature.
-  let tEff: number;
-  if (input.spect) {
-    const parsed = parseSpectralClass(input.spect);
-    if (parsed) {
-      tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
-    } else {
-      tEff = temperatureFromBV(input.bv);
-    }
-  } else {
-    tEff = temperatureFromBV(input.bv);
-  }
+  const desc = descriptorFromCatalog(input);
 
-  // Derived visual modulators.
-  const hueOffset = hueOffsetFromTemperature(tEff);
-  const brightnessScale = brightnessScaleFromTemperature(tEff);
+  // Class color (linear-RGB blackbody).
+  const classColor = blackbodyRgbFromTemperature(desc.tEff);
+
+  // Granulation: class anchor × temperature contrast scale.
+  const granAnchor = GRANULATION_BY_LUMINOSITY[desc.luminosityClass];
+  const granContrast =
+    granAnchor.contrast * granulationContrastTempScale(desc.tEff);
+
+  // Glow brightness scale from absmag (luminosity proxy).
+  const glowScale = glowScaleFromAbsmag(desc.absmag);
+
+  // Art-direction layer (rays / flares / glow falloff).
+  const art = artDirectionMultipliers(
+    desc.spectralClass,
+    desc.luminosityClass,
+    desc.tEff
+  );
+
+  // Brightness + hue (preserved from T6.2-α).
+  const hueOffset = hueOffsetFromTemperature(desc.tEff);
+  const brightnessScale = brightnessScaleFromTemperature(desc.tEff);
 
   return {
     ...SUN_DEFAULT_VISUAL_PROFILE,
+
+    granulationSpatialFreq: granAnchor.spatial,
+    granulationTemporalFreq: granAnchor.temporal,
+    granulationContrast: granContrast,
+
     surfaceBrightness:
       SUN_DEFAULT_VISUAL_PROFILE.surfaceBrightness * brightnessScale,
+
+    glowBrightness: SUN_DEFAULT_VISUAL_PROFILE.glowBrightness * glowScale,
+    glowFalloffColor:
+      SUN_DEFAULT_VISUAL_PROFILE.glowFalloffColor * art.glowFalloffColor,
+
+    raysNoiseAmplitude:
+      SUN_DEFAULT_VISUAL_PROFILE.raysNoiseAmplitude * art.raysAmplitude,
     raysHue: SUN_DEFAULT_VISUAL_PROFILE.raysHue + hueOffset,
+
+    flaresAmp: SUN_DEFAULT_VISUAL_PROFILE.flaresAmp * art.flaresAmp,
     flaresHue: SUN_DEFAULT_VISUAL_PROFILE.flaresHue + hueOffset,
+
+    classColor,
   };
 };
