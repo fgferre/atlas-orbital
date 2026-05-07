@@ -417,13 +417,42 @@ export const radiusFromSpect = (
   // White dwarfs.
   if (parsed.spectralClass === "WD") return RADIUS_FACTOR_BY_LUMINOSITY.VII;
 
-  // Non-main-sequence: class-factor only.
+  // Non-main-sequence: class-factor table baseline + Stefan-Boltzmann
+  // refinement when absmag is available. T6.4-M5 post-audit fix —
+  // the class table values (`RADIUS_FACTOR_BY_LUMINOSITY.Ia = 1000`,
+  // `Ib = 500`, etc.) are M-supergiant-biased averages. Without SB
+  // refinement, hot supergiants like Rigel (B8Ia, real R≈78 R_sun)
+  // got the same 1000 R_sun as cool supergiants like Betelgeuse.
+  // Codex audit (2026-05-07) flagged this as P2 — Rigel rendered
+  // ~13× too large. Routing through the same SB blend pattern as
+  // the main-sequence path gives ~80 R_sun for Rigel and improves
+  // Betelgeuse from 500 → 429 (still V-band-underestimated for
+  // cool stars but directionally better).
   if (
     parsed.luminosityClass !== null &&
     parsed.luminosityClass !== "V" &&
     parsed.luminosityClass !== "VII"
   ) {
-    return RADIUS_FACTOR_BY_LUMINOSITY[parsed.luminosityClass];
+    const tableR = RADIUS_FACTOR_BY_LUMINOSITY[parsed.luminosityClass];
+    if (Number.isFinite(absmag)) {
+      const M_SUN_ABS = 4.83;
+      const T_SUN = 5778;
+      const tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
+      if (Number.isFinite(tEff) && tEff > 0) {
+        const lumOverSun = Math.pow(
+          10,
+          -0.4 * ((absmag as number) - M_SUN_ABS)
+        );
+        const tRatio = T_SUN / tEff;
+        const sbR = Math.sqrt(lumOverSun) * tRatio * tRatio;
+        // Geometric-mean blend with the table value matches the MS
+        // path's behaviour — protects against catalog absmag noise
+        // without throwing away the SB physics signal.
+        const blended = Math.sqrt(tableR * Math.max(1e-3, sbR));
+        return Math.max(1e-3, Math.min(2000, blended));
+      }
+    }
+    return tableR;
   }
 
   // Main sequence (V or unspecified default).

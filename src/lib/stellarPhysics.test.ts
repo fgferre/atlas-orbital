@@ -358,8 +358,30 @@ describe("radiusFromSpect — Stefan-Boltzmann refinement with absmag", () => {
   it("NaN absmag is ignored (not Number.isFinite)", () => {
     expect(radiusFromSpect("G2V", NaN)).toBeCloseTo(0.96, 1);
   });
-  it("non-main-sequence ignores absmag (uses class factor only)", () => {
-    expect(radiusFromSpect("M2Ia", 0)).toBe(1000);
+  // T6.4-M5 post-audit: non-MS path now applies the SB blend too
+  // (was table-only pre-fix). Codex flagged Rigel B8Ia returning
+  // 1000 R_sun (vs real ~78) because the Ia table value is M-
+  // supergiant-biased.
+  it("Rigel B8Ia (absmag=-7.84) blends down to ~80 R_sun via SB (was 1000 pre-fix)", () => {
+    // tEff(B,8) ≈ 11920 K; L ≈ 116,950 L_sun;
+    // sbR ≈ √116950 × (5778/11920)² ≈ 80.4
+    // blended = √(1000 × 80.4) ≈ 283.5
+    expect(radiusFromSpect("B8Ia", -7.84)).toBeCloseTo(283, 0);
+  });
+
+  it("Betelgeuse M2Ib (absmag=-5.85) blends down to ~429 R_sun (was 500 pre-fix)", () => {
+    // tableR=500, sbR≈369 → blended ≈ √(500 × 369) ≈ 429.3
+    expect(radiusFromSpect("M2Ib", -5.85)).toBeCloseTo(429.3, 0);
+  });
+
+  it("non-MS without absmag preserves table value (back-compat)", () => {
+    expect(radiusFromSpect("M2Ia")).toBe(1000);
+    expect(radiusFromSpect("K0III")).toBe(30);
+  });
+
+  it("non-MS with absmag=0 (artificial) blends with SB term", () => {
+    // M2Ia + absmag=0: L=85.5 L_sun, sbR≈24.9, blended≈√(1000×24.9)≈158
+    expect(radiusFromSpect("M2Ia", 0)).toBeCloseTo(158, 0);
   });
 });
 
@@ -530,7 +552,9 @@ describe("descriptorFromCatalog — named-star descriptors", () => {
     expect(desc.luminosityClass).toBe("Ia");
     // tEff(M,2) = 3800 + (2400 - 3800) * 0.2 = 3520 K
     expect(desc.tEff).toBeCloseTo(3_520, 0);
-    expect(desc.radiusSolar).toBe(1000);
+    // T6.4-M5 post-audit: non-MS path now applies SB blend.
+    // tableR=1000, sbR≈369 → blended ≈ √(1000 × 369) ≈ 607.
+    expect(desc.radiusSolar).toBeCloseTo(607, 0);
   });
 
   it("Proxima (M5.5V, bv=1.83, absmag=15.49)", () => {
@@ -632,7 +656,7 @@ describe("descriptorFromCatalog — M5-Path-A physical fallback (spect empty + a
   // Sanity: when spect IS present (post-Path-B for named stars),
   // we DON'T go through the fallback — radius comes from the spect
   // table or Stefan-Boltzmann refinement.
-  it("when spect is present, the fallback is NOT used (spect path takes priority)", () => {
+  it("when spect is present, Path A (B-V SB) is NOT used (spect path takes priority)", () => {
     const descWith = descriptorFromCatalog({
       bv: 1.85,
       absmag: -5.85,
@@ -640,8 +664,10 @@ describe("descriptorFromCatalog — M5-Path-A physical fallback (spect empty + a
     });
     expect(descWith.spectralClass).toBe("M");
     expect(descWith.luminosityClass).toBe("Ia");
-    // M2Ia table value is 1000 R_sun.
-    expect(descWith.radiusSolar).toBe(1000);
+    // T6.4-M5 post-audit: spect path now applies SB blend on non-MS
+    // classes too (was table-only pre-fix). M2Ia table=1000, sbR≈369
+    // (M-supergiant V-band underestimate), blended≈607.
+    expect(descWith.radiusSolar).toBeCloseTo(607, 0);
   });
 });
 
