@@ -764,12 +764,14 @@ const radiusFromAbsmagBvFallback = (
  *   2. If `spect` is empty/unparseable but `absmag` is finite →
  *      M5-Path-A physical fallback: tEff from B-V Ballesteros,
  *      spectralClass reverse-looked-up from tEff, radius via
- *      Stefan-Boltzmann from absmag + tEff. luminosityClass stays
- *      "V" (we cannot reliably infer giant/supergiant without
- *      spectral typing — the radius is the visually important
- *      output, and SB gives that correctly).
+ *      Stefan-Boltzmann from absmag + tEff. luminosityClass
+ *      inferred via simplified H-R-diagram lookup
+ *      (`inferLuminosityClass`) — compares observed absmag against
+ *      V-class baseline at the same tEff to distinguish MS / sub-
+ *      giant / giant / supergiant (post-audit, was hardcoded "V").
  *   3. Otherwise → tEff from B-V, spectralClass from B-V, radius
- *      defaults to 1.0 (legacy behaviour for stars without absmag).
+ *      defaults to 1.0, luminosityClass "V" (legacy behaviour for
+ *      stars without absmag — no H-R position to infer from).
  */
 export const descriptorFromCatalog = (
   input: StellarPhysicsInput
