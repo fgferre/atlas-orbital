@@ -16,14 +16,12 @@ calibration (`MAX_VELOCITY_FACTOR=3.0`, `INITIAL_FORCE_FACTOR=8.0`,
 Sirius ~4.65 s), e2e respec, and sub-stepping hardening
 (`MAX_DT_SUBSTEP=0.05 s`, `MAX_DT_TOTAL=0.1 s` per-frame
 visible-jump cap) all landed. R6-H close-out removed the R6-E
-telemetry scaffolding and synced docs.
-\_Post-R6-H aim-lerp rewrite._ User smoke surfaced "marcha ré"
-
-- "tela muda"; Codex found 3 structural issues in
-  `OrientationLerp` (target behind camera, path could cross,
-  Drei priority -1 lagged 1 frame). Fix: `AimLerp` slerps aim
-  direction + `camera.lookAt` forces in-frame orientation. R6
-  commit chain (10): 89816e5 → 68e7fb7.
+telemetry scaffolding and synced docs. Post-R6-H aim-lerp rewrite
+addressed user smoke ("marcha ré" / "tela muda") — Codex found 3
+structural issues in `OrientationLerp` (target behind camera,
+path could cross, Drei priority -1 lagged 1 frame); fix uses
+`AimLerp` slerping aim direction + `camera.lookAt` for in-frame
+orientation. R6 commit chain (10): 89816e5 → 68e7fb7._
 
 ---
 
