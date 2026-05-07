@@ -544,30 +544,105 @@ export interface StellarVisualDescriptor {
 }
 
 /**
+ * Reverse-lookup spectral class from effective temperature. Used by
+ * `descriptorFromCatalog` when `spect` is missing (catalog long-tail
+ * after the M5-Path-B frequency cap) — gives a usable best-guess
+ * class letter from the B-V-derived temperature so downstream
+ * granulation / hue selection has something better than the prior
+ * hardcoded "G" default.
+ */
+const spectralClassFromTemperature = (
+  tEff: number
+): Exclude<SpectralClass, "WD"> => {
+  // Walk the MK anchors; pick the class whose anchor is closest
+  // (in log space) to tEff. Anchors are class-zero edges; a star at
+  // 5500K (between G0=5900 and K0=5100) is closer to G0 ratio-wise.
+  let best: Exclude<SpectralClass, "WD"> = "G";
+  let bestDist = Infinity;
+  for (const c of MK_CLASS_ORDER) {
+    const dist = Math.abs(Math.log(tEff / MK_TEMP_ANCHORS_K[c]));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = c;
+    }
+  }
+  return best;
+};
+
+/**
+ * T6.4-M5-Path-A: physical-fallback radius via Stefan-Boltzmann when
+ * `spect` is empty but `absmag` is finite. Uses B-V-derived tEff
+ * (Ballesteros) for the temperature term:
+ *
+ *   L/L_sun = 10^(-0.4 × (absmag - M_SUN_V_ABS))
+ *   R/R_sun = √(L/L_sun) × (T_sun / T_eff)²
+ *
+ * Clamped to [1e-3, 2000] so noisy absmag entries don't return absurd
+ * radii. Returns null if absmag is non-finite (caller falls back to
+ * the radiusFromSpect default).
+ */
+const radiusFromAbsmagBv = (bv: number, absmag: number): number | null => {
+  if (!Number.isFinite(absmag)) return null;
+  const tEff = temperatureFromBV(bv);
+  if (!Number.isFinite(tEff) || tEff <= 0) return null;
+  const M_SUN_V = 4.83;
+  const T_SUN = 5778;
+  const lumOverSun = Math.pow(10, -0.4 * (absmag - M_SUN_V));
+  if (!Number.isFinite(lumOverSun) || lumOverSun <= 0) return null;
+  const tRatio = T_SUN / tEff;
+  const r = Math.sqrt(lumOverSun) * tRatio * tRatio;
+  return Math.max(1e-3, Math.min(2000, r));
+};
+
+/**
  * Build a visual descriptor from raw HYG catalog fields. Mirrors the
  * resolution sequence inside `stellarVisualProfileFrom` so callers
  * (M5 forward-port, info-panel labels) can share the same parsed
  * shape without re-implementing the spect / B-V fallback.
+ *
+ * **Resolution priority** (T6.4-M5):
+ *   1. If `spect` parses → spectralClass, luminosityClass, tEff
+ *      from MK lookup + radius from `radiusFromSpect` (handles
+ *      Stefan-Boltzmann refinement when absmag is also present).
+ *   2. If `spect` is empty/unparseable but `absmag` is finite →
+ *      M5-Path-A physical fallback: tEff from B-V Ballesteros,
+ *      spectralClass reverse-looked-up from tEff, radius via
+ *      Stefan-Boltzmann from absmag + tEff. luminosityClass stays
+ *      "V" (we cannot reliably infer giant/supergiant without
+ *      spectral typing — the radius is the visually important
+ *      output, and SB gives that correctly).
+ *   3. Otherwise → tEff from B-V, spectralClass from B-V, radius
+ *      defaults to 1.0 (legacy behaviour for stars without absmag).
  */
 export const descriptorFromCatalog = (
   input: StellarPhysicsInput
 ): StellarVisualDescriptor => {
   const parsed = input.spect ? parseSpectralClass(input.spect) : null;
-
-  let tEff: number;
-  if (parsed) {
-    tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
-  } else {
-    tEff = temperatureFromBV(input.bv);
-  }
-
-  const spectralClass: SpectralClass = parsed?.spectralClass ?? "G";
-  const luminosityClass: LuminosityClass = parsed?.luminosityClass ?? "V";
   const absmag =
     typeof input.absmag === "number" && Number.isFinite(input.absmag)
       ? input.absmag
       : null;
-  const radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined);
+
+  let tEff: number;
+  let spectralClass: SpectralClass;
+  let luminosityClass: LuminosityClass;
+  let radiusSolar: number;
+
+  if (parsed) {
+    // Spectral path (~99% of catalog post-Path-B).
+    tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
+    spectralClass = parsed.spectralClass;
+    luminosityClass = parsed.luminosityClass ?? "V";
+    radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined);
+  } else {
+    // Path A: spect empty, fall back to physics. tEff from B-V.
+    tEff = temperatureFromBV(input.bv);
+    spectralClass = spectralClassFromTemperature(tEff);
+    luminosityClass = "V";
+    const sbRadius =
+      absmag !== null ? radiusFromAbsmagBv(input.bv, absmag) : null;
+    radiusSolar = sbRadius ?? 1.0;
+  }
 
   return {
     tEff,

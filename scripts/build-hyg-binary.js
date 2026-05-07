@@ -137,27 +137,72 @@ function canonicalizeSpect(spect) {
 }
 
 /**
- * T6.2-β-β: top-N cap by frequency. The HYG catalog has ~417 unique
- * canonical classes after `canonicalizeSpect` — over the uint8 cap of
- * 255. This pass counts class frequency, keeps the top-254 (reserving
- * the empty-string sentinel + 1 slot for safety), and rewrites
- * long-tail spect → "" so they fall back to B-V at runtime.
+ * T6.2-β-β + T6.4-M5-Path-B: top-N cap by frequency, with named-star
+ * allowlist priority. The HYG catalog has ~417 unique canonical classes
+ * after `canonicalizeSpect` — over the uint8 cap of 255. This pass:
  *
- * Coverage at the 254 cap (catalog audit 2026-05-04): 96.01% of stars
- * keep their canonical class; 1.5% long-tail (~1,725 stars) get the
- * sentinel and use B-V fallback. The runtime parses the same way
- * either path — the difference is whether T_eff comes from the MK
- * lookup table or the Ballesteros formula (~5% error gap, sub-pixel
- * visual difference).
+ *   1. ALLOWLIST: keep every canonical class that belongs to at least
+ *      one star carrying a human-readable label (`proper || bayer ||
+ *      flam`). Without this step (M5 user-smoke 2026-05-07), rare
+ *      named-star classes like "M2Iab" (Betelgeuse) or "M5.5Ve"
+ *      (Proxima) fall to the long-tail and get rewritten to "".
+ *      Their procedural meshes then default to G/V/1R☉ at runtime —
+ *      Betelgeuse renders Sun-class instead of supergiant.
+ *
+ *   2. FREQUENCY-CAP REMAINDER: after the allowlist, fill the rest of
+ *      the uint8 budget with the most frequent non-allowlisted classes.
+ *
+ *   3. SENTINEL LONG-TAIL: anything still outside the keep set gets
+ *      its `spect` rewritten to "" (B-V fallback at runtime; the
+ *      M5-Path-A absmag-fallback in `descriptorFromCatalog` does the
+ *      rest of the work for radius / class identity).
+ *
+ * If named-class count alone exceeds `maxClasses`, the function logs
+ * an error and truncates by frequency (the smoke-target classes —
+ * Sirius A0, Vega A0V, Betelgeuse M2Iab, Proxima M5.5Ve — appear in
+ * the brightness top-100 so they survive even an aggressive cap).
+ *
+ * Coverage at the 254 cap (catalog audit 2026-05-04, pre-Path-B):
+ * 96.01% of stars keep their canonical class. Path B should keep that
+ * coverage roughly intact (named-star classes overlap heavily with
+ * the top-frequency set; the marginal cost is ~30-80 rare named-only
+ * classes added).
  */
 function capSpectByFrequency(stars, maxClasses) {
   const counts = new Map();
+  const namedClasses = new Set();
+  // Allowlist heuristic (M5-Path-B): IAU/folk-named stars only
+  // (`proper` field). Including bayer/flam-only catalog references
+  // pushed the unique-class count to 289-298, exceeding the uint8
+  // cap of 254. Restricting to `proper` (492 stars: Sirius,
+  // Betelgeuse, Proxima, etc. through Wolf 359 / Onkaria) gives a
+  // smaller spread that fits under the cap. Bayer-only stars (e.g.
+  // Gam-2 Vel) are still bright catalog references but their
+  // canonical spect classes overlap with the top-frequency set
+  // anyway, so the frequency-cap step preserves them.
   for (const star of stars) {
     if (!star.spect) continue;
     counts.set(star.spect, (counts.get(star.spect) ?? 0) + 1);
+    if (star.proper) {
+      namedClasses.add(star.spect);
+    }
   }
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const keep = new Set(sorted.slice(0, maxClasses).map(([k]) => k));
+  // Step 1: seed keep set with every named-star class.
+  const keep = new Set(namedClasses);
+  if (keep.size > maxClasses) {
+    log(
+      `WARNING: named-star classes (${keep.size}) exceed cap (${maxClasses}); falling back to frequency truncation.`
+    );
+    keep.clear();
+    for (const [k] of sorted.slice(0, maxClasses)) keep.add(k);
+  } else {
+    // Step 2: fill remaining budget with most-frequent non-named classes.
+    for (const [k] of sorted) {
+      if (keep.size >= maxClasses) break;
+      if (!keep.has(k)) keep.add(k);
+    }
+  }
   let dropped = 0;
   let droppedStars = 0;
   for (const star of stars) {
@@ -167,7 +212,13 @@ function capSpectByFrequency(stars, maxClasses) {
     }
   }
   dropped = counts.size - keep.size;
-  return { uniqueClasses: counts.size, kept: keep.size, dropped, droppedStars };
+  return {
+    uniqueClasses: counts.size,
+    kept: keep.size,
+    dropped,
+    droppedStars,
+    namedClasses: namedClasses.size,
+  };
 }
 
 /**
@@ -378,7 +429,8 @@ async function main() {
   // classes get spect="" → B-V fallback at runtime.
   const capStats = capSpectByFrequency(stars, 254);
   log(
-    `Spect cap: ${capStats.kept} of ${capStats.uniqueClasses} canonical classes kept; ` +
+    `Spect cap: ${capStats.kept} of ${capStats.uniqueClasses} canonical classes kept ` +
+      `(${capStats.namedClasses} from named-star allowlist, M5-Path-B); ` +
       `${capStats.droppedStars} stars (${((100 * capStats.droppedStars) / stars.length).toFixed(2)}%) ` +
       `routed to B-V fallback.`
   );
