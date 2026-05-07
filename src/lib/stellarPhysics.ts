@@ -377,14 +377,40 @@ const MAIN_SEQUENCE_RADIUS_SOLAR: Record<
  *      compute correctly even when the table-level approximation
  *      would over-estimate them.
  *
+ * **T6.4-M5-Path-A**: when `spect` is empty AND both `absmag` and
+ * `bv` are finite, the early-return `1.0` is replaced with a
+ * Stefan-Boltzmann fallback via `radiusFromAbsmagBvFallback`. This
+ * means consumers (HygStellarMesh, CameraController, hygStarInfo)
+ * automatically pick up correct radii for spect-less stars without
+ * needing to route through `descriptorFromCatalog`. Bumping the
+ * signature with an optional third parameter is the minimum-diff
+ * way to thread B-V into the fallback path.
+ *
  * Returns 0 for invalid input (never NaN — downstream consumers
  * use this to scale geometry).
  */
 export const radiusFromSpect = (
   spect: string | null | undefined,
-  absmag?: number
+  absmag?: number,
+  bv?: number
 ): number => {
-  if (!spect) return 1.0;
+  if (!spect) {
+    // T6.4-M5-Path-A — Stefan-Boltzmann fallback when both absmag
+    // and bv are finite. Path A reaches three callsites this way:
+    // procedural-mesh radius (HygStellarMesh.tsx:259), camera-flight
+    // target radius (CameraController.tsx:67), info-panel display
+    // (hygStarInfo.ts:150).
+    if (
+      typeof absmag === "number" &&
+      Number.isFinite(absmag) &&
+      typeof bv === "number" &&
+      Number.isFinite(bv)
+    ) {
+      const fallback = radiusFromAbsmagBvFallback(bv, absmag);
+      if (fallback !== null) return fallback;
+    }
+    return 1.0;
+  }
   const parsed = parseSpectralClass(spect);
   if (!parsed) return 1.0;
 
@@ -581,7 +607,14 @@ const spectralClassFromTemperature = (
  * radii. Returns null if absmag is non-finite (caller falls back to
  * the radiusFromSpect default).
  */
-const radiusFromAbsmagBv = (bv: number, absmag: number): number | null => {
+// Note: forward-referenced from `radiusFromSpect` above (M5-Path-A
+// fallback when spect is empty). Module-init resolves all const
+// arrow functions before any of them is called, so the forward
+// reference is safe.
+const radiusFromAbsmagBvFallback = (
+  bv: number,
+  absmag: number
+): number | null => {
   if (!Number.isFinite(absmag)) return null;
   const tEff = temperatureFromBV(bv);
   if (!Number.isFinite(tEff) || tEff <= 0) return null;
@@ -633,15 +666,16 @@ export const descriptorFromCatalog = (
     tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
     spectralClass = parsed.spectralClass;
     luminosityClass = parsed.luminosityClass ?? "V";
-    radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined);
+    radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined, input.bv);
   } else {
-    // Path A: spect empty, fall back to physics. tEff from B-V.
+    // Path A: spect empty, fall back to physics. tEff from B-V;
+    // class reverse-looked up; radius via radiusFromSpect's spect-
+    // empty branch (which itself routes to the SB fallback when
+    // bv + absmag are finite — single source of truth).
     tEff = temperatureFromBV(input.bv);
     spectralClass = spectralClassFromTemperature(tEff);
     luminosityClass = "V";
-    const sbRadius =
-      absmag !== null ? radiusFromAbsmagBv(input.bv, absmag) : null;
-    radiusSolar = sbRadius ?? 1.0;
+    radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined, input.bv);
   }
 
   return {

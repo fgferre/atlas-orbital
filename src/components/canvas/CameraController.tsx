@@ -64,9 +64,11 @@ const resolveHygRadiusWu = (
   const spect = spectRaw.length > 0 ? spectRaw : null;
   const absmagRaw = catalog.absmag[hygIndex];
   const absmag = Number.isFinite(absmagRaw) ? absmagRaw : null;
+  const bv = catalog.colorIndices[hygIndex];
   const radiusSolar = radiusFromSpect(
     spect,
-    absmag !== null ? absmag : undefined
+    absmag !== null ? absmag : undefined,
+    bv // M5-Path-A: SB fallback when spect is empty.
   );
   return radiusSolar * SUN_RADIUS_WORLD_UNITS;
 };

@@ -149,7 +149,8 @@ export function buildHygStarInfo(
   }
   const radiusSolar = radiusFromSpect(
     spect,
-    Number.isFinite(absmag) ? absmag : undefined
+    Number.isFinite(absmag) ? absmag : undefined,
+    Number.isFinite(bv) ? bv : undefined // M5-Path-A: SB fallback when spect empty.
   );
   const massSolar = massFromSpectAbsmag(
     spect,

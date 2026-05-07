@@ -301,6 +301,51 @@ describe("radiusFromSpect — edge cases", () => {
   });
 });
 
+describe("radiusFromSpect — M5-Path-A fallback (spect empty + absmag + bv)", () => {
+  // T6.4-M5-Path-A: when spect is empty but bv + absmag are finite,
+  // fall back to Stefan-Boltzmann via Ballesteros tEff. Critical
+  // for the long-tail named stars (Bayer/Flamsteed-only) that didn't
+  // make the M5-Path-B allowlist — they get correct radii via this
+  // path despite spect="".
+  it("Betelgeuse-like (no spect) returns supergiant-scale radius (>100 R_sun)", () => {
+    const r = radiusFromSpect("", -5.85, 1.85);
+    expect(r).toBeGreaterThan(100);
+    expect(r).toBeLessThan(2000); // ceiling clamp
+  });
+
+  it("Proxima-like (no spect) returns sub-solar (red-dwarf range)", () => {
+    const r = radiusFromSpect("", 15.49, 1.83);
+    expect(r).toBeLessThan(0.5);
+    expect(r).toBeGreaterThan(0.001); // floor clamp
+  });
+
+  it("hot MS-like (no spect, bv=-0.1, absmag=1.0) returns ~few R_sun", () => {
+    const r = radiusFromSpect("", 1.0, -0.1);
+    expect(r).toBeGreaterThan(1);
+    expect(r).toBeLessThan(10);
+  });
+
+  it("no spect + no absmag → 1.0 (legacy default preserved)", () => {
+    expect(radiusFromSpect("", undefined, 0.65)).toBe(1.0);
+  });
+
+  it("no spect + no bv → 1.0 (legacy default preserved)", () => {
+    expect(radiusFromSpect("", 5.0, undefined)).toBe(1.0);
+  });
+
+  it("no spect + NaN absmag → 1.0", () => {
+    expect(radiusFromSpect("", NaN, 0.65)).toBe(1.0);
+  });
+
+  it("when spect is non-empty the SB fallback path is NOT used (existing logic)", () => {
+    // Sirius A1V with absmag=1.42: spect path uses table+SB blend.
+    // tableR(A1V) = 1.66; sbR(absmag=1.42, tEff=9640) ≈ 1.728;
+    // blended (geometric mean) ≈ √(1.66 × 1.728) = 1.69. Real
+    // Sirius radius is ~1.711 R_sun — within ~1%.
+    expect(radiusFromSpect("A1V", 1.42)).toBeCloseTo(1.69, 1);
+  });
+});
+
 describe("radiusFromSpect — Stefan-Boltzmann refinement with absmag", () => {
   it("Sun G2V with absmag = 4.83 (canonical M_V_sun) returns ~1 R_sun", () => {
     // tEff(G,2) ≈ 5740 K, T_sun = 5778 K; lumOverSun = 1; tRatio ≈ 1.007

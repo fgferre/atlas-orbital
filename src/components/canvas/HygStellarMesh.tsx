@@ -258,7 +258,8 @@ export const HygStellarMesh = () => {
 
     const radiusSolar = radiusFromSpect(
       spect,
-      absmag !== null ? absmag : undefined
+      absmag !== null ? absmag : undefined,
+      bv // M5-Path-A: enables SB fallback when spect is empty.
     );
     const radiusWorldUnits = radiusSolar * SUN_RADIUS_WORLD_UNITS;
 
