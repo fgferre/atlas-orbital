@@ -87,9 +87,9 @@ message; user runs it manually if they want external review.
 
 ## Carryover findings
 
-**User-surfaced from 2026-05-05 smoke** (round-5 + round-5b
-shipped; Round-6 promoted from CONTINGENT to ACTIVE
-2026-05-06; M6 forward-port queued):
+**User-surfaced from 2026-05-05 smoke** (all rounds + M6
+forward-port shipped agent-side 2026-05-06/07; awaiting user
+smoke for full wave acceptance):
 
 | ID  | Pri | Status                                          | Summary                                                                                                                                                                                                                                                                                                                                                                                                |
 | --- | --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -119,8 +119,8 @@ round-4 audit, do not block):
   (~30 lines, dead). Replace with a Vite `import.meta.env.MODE`
   guard if production-bundle absence ever matters.
 
-**M6 forward-port plan** (independent of M2.5 close):
-~14 h across 8 sub-tracks, full spec in wave file §M6.
+**M6 forward-port — shipped 2026-05-06** (8 sub-tracks across
+~14 h, all ✅; full spec in wave file §M6):
 
 | Sub-track | Deliverable                                                                      | New deps                                                       |
 | --------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
