@@ -6,26 +6,17 @@ History, shipped-onda detail, and audit narratives live in
 `tasks/archive/`. Wave-specific plans live in `tasks/waves/`.
 
 _Last updated: 2026-05-08. T6.4 M1-M7 all agent-side ✅;
-wave-acceptance gate open on user smoke. Most recent post-audit
-fixes (Codex review chain): **M5 H-R inference** `b3f764c`
-(luminosity class for spect-less stars) + JSDoc sync `c5ecc0d`,
-**MS tolerance band + Sun anchor** `9578156` (10-anchor V-class
-baseline + ±0.5 mag scatter band, +7 tests), **prose alignment**
-`adc0091` (Carryover/M2.5/M6 framings refreshed), **Path A
-radius gap** `5051723` (radiusFromSpect now receives null in
-Path A so unparseable non-empty spect can't bypass the SB
-fallback), **HYG click → info panel + orbital-engine guard**
-`932dd10` (StarHoverPicker uses `selectId` so HYG click opens
-HygStarPanel like SearchBar; Sidebar guards `useOrbitalCalculation`
-so HYG selectedId no longer pollutes `level:error` console with
-"No orbital provider available"). **Plan B blend** `313cd9b`
-activated for hot stars (smoke-driven, replaced prior "Plan B
-deferred" position). **M5 non-MS radius** `6d589a1` extended SB
-refinement to giants/supergiants. **M7 agent closeout** clean:
-dev-diag sweep clean, preview boot smoke clean
-(`gl.isContextLost()===false`, `level:error` empty), L26
-multi-frame static-region invariant variance=0 across 32 rAF
-at 4 corner probes._
+wave-acceptance gate open on user smoke. Post-audit Codex review
+chain landed: M5 H-R inference + JSDoc sync (`b3f764c`/`c5ecc0d`),
+MS tolerance band + Sun anchor (`9578156`), prose alignment
+(`adc0091`), Path A radius gap (`5051723`), HYG click → info
+panel + orbital-engine guard (`932dd10`), onPointerMissed race
+defense (`7e30ab2`). Plan B blend `313cd9b` activated for hot
+stars; M5 non-MS radius `6d589a1` extended SB to giants /
+supergiants. M7 agent closeout clean: `gl.isContextLost()===false`,
+`level:error` empty, L26 invariant variance=0 across 32 rAF.
+Per-commit detail lives in `tasks/waves/T6.4-visual-recovery.md`
+§M5 / §M6 sub-track sections._
 
 ---
 
