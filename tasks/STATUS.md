@@ -14,11 +14,15 @@ baseline + ±0.5 mag scatter band, +7 tests), **prose alignment**
 `adc0091` (Carryover/M2.5/M6 framings refreshed), **Path A
 radius gap** `5051723` (radiusFromSpect now receives null in
 Path A so unparseable non-empty spect can't bypass the SB
-fallback). **Plan B blend** `313cd9b` activated for hot stars
-(smoke-driven, replaced prior "Plan B deferred" position).
-**M5 non-MS radius** `6d589a1` extended SB refinement to
-giants/supergiants. **M7 agent closeout** clean: dev-diag
-sweep clean, preview boot smoke clean
+fallback), **HYG click → info panel + orbital-engine guard**
+`932dd10` (StarHoverPicker uses `selectId` so HYG click opens
+HygStarPanel like SearchBar; Sidebar guards `useOrbitalCalculation`
+so HYG selectedId no longer pollutes `level:error` console with
+"No orbital provider available"). **Plan B blend** `313cd9b`
+activated for hot stars (smoke-driven, replaced prior "Plan B
+deferred" position). **M5 non-MS radius** `6d589a1` extended SB
+refinement to giants/supergiants. **M7 agent closeout** clean:
+dev-diag sweep clean, preview boot smoke clean
 (`gl.isContextLost()===false`, `level:error` empty), L26
 multi-frame static-region invariant variance=0 across 32 rAF
 at 4 corner probes._
