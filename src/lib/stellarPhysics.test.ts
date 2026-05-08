@@ -815,6 +815,27 @@ describe("descriptorFromCatalog — H-R-inferred luminosity class for spect-less
     expect(desc.luminosityClass).toBe("IV");
   });
 
+  it("unparseable non-empty spect (e.g. raw 'WR') → SB fallback, not 1.0", () => {
+    // Codex post-audit-of-audit: pre-fix, descriptorFromCatalog Path
+    // A passed input.spect into radiusFromSpect, which for "WR"
+    // (non-empty unparseable) would skip the SB-fallback branch and
+    // return 1.0 — contradicting the Path A "empty/unparseable →
+    // SB fallback" contract. Inputs that escape canonicalizeSpect
+    // (build-time only sanitizer) would silently misrender.
+    // Wolf-Rayet-like params (bv=-0.18, absmag=-5.95) — SB radius
+    // for tEff≈13133K and absmag=-5.95 should be on the order of
+    // tens of R_sun, not 1.0.
+    const desc = descriptorFromCatalog({
+      bv: -0.18,
+      absmag: -5.95,
+      spect: "WR",
+    });
+    expect(desc.radiusSolar).not.toBe(1.0);
+    expect(desc.radiusSolar).toBeGreaterThan(5);
+    // Luminosity class should also escape "V" via H-R inference.
+    expect(desc.luminosityClass).not.toBe("V");
+  });
+
   it("Sun anchor pinned: mvMS(5778) ≈ 4.83 (Sun) within 0.05 mag", () => {
     // Pre-fix the MS_ABSMAG_ANCHORS array skipped G2V; interpolation
     // gave mvMS(5778) ≈ 4.61, off by 0.22 mag from the JSDoc claim.

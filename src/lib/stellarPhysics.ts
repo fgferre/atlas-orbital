@@ -806,19 +806,26 @@ export const descriptorFromCatalog = (
     luminosityClass = parsed.luminosityClass ?? "V";
     radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined, input.bv);
   } else {
-    // Path A: spect empty, fall back to physics. tEff from B-V;
-    // class reverse-looked up; radius via radiusFromSpect's spect-
-    // empty branch (which itself routes to the SB fallback when
-    // bv + absmag are finite — single source of truth).
+    // Path A: spect empty OR unparseable, fall back to physics.
+    // tEff from B-V; class reverse-looked up; radius via
+    // radiusFromSpect's spect-empty branch (which itself routes
+    // to the SB fallback when bv + absmag are finite — single
+    // source of truth).
     // T6.4-M5 post-audit: luminosity class inferred from H-R
     // position when absmag is available (was hardcoded "V" pre-fix,
     // misclassifying spect-less giants/supergiants like Wolf-Rayet
     // Bayer-only entries that drop out of the canonical MK letters).
+    // T6.4-M5 post-audit-of-audit (Codex): pass `null` (not the
+    // original `input.spect`) into radiusFromSpect so unparseable
+    // non-empty strings (e.g. raw "WR" before canonicalization) hit
+    // the SB-fallback branch rather than `parseSpectralClass`'s
+    // 1.0-default. canonicalizeSpect strips these at build time, but
+    // the exported helper shouldn't depend on that pre-condition.
     tEff = temperatureFromBV(input.bv);
     spectralClass = spectralClassFromTemperature(tEff);
     luminosityClass =
       absmag !== null ? inferLuminosityClass(tEff, absmag) : "V";
-    radiusSolar = radiusFromSpect(input.spect, absmag ?? undefined, input.bv);
+    radiusSolar = radiusFromSpect(null, absmag ?? undefined, input.bv);
   }
 
   return {
