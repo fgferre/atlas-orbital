@@ -24,6 +24,7 @@ import {
   setDeferredTextureBudget,
 } from "../../lib/deferredTextureCache";
 import { isCriticalStarfieldReady } from "../../lib/sceneReadiness";
+import { parseHygFocusId } from "../../lib/focus/hygFocusResolver";
 import { resolveSunRenderMode } from "../../lib/sunRenderMode";
 import { SolarSystem } from "./SolarSystem";
 import { SunBillboard } from "./SunBillboard";
@@ -537,7 +538,32 @@ export const Scene = () => {
           needs a keybind since there's nothing to flip-visible. */}
       <Canvas
         shadows="soft"
-        onPointerMissed={() => setSelectedId(null)}
+        // R3F fires this synchronously on a canvas-level click that
+        // misses every raycastable scene object. HYG stars aren't
+        // R3F-raycastable (they're rendered via the custom Starfield
+        // mesh outside the R3F event manager), so a click on a HYG
+        // star always counts as a "miss" here. StarHoverPicker
+        // claims those clicks via a separate native canvas
+        // `click` listener that runs in the same event tick — but
+        // the relative listener order is implementation-detail
+        // (R3F connects in `<Canvas>`-level useEffect; our picker
+        // connects in its own child useEffect). Defer the clear to
+        // a microtask so all sync click handlers complete first; if
+        // the picker claimed a HYG selection, leave it alone.
+        // Curated bodies still deselect on miss-click via the
+        // microtask path (selectedId becomes null normally).
+        onPointerMissed={() => {
+          queueMicrotask(() => {
+            const { selectedId: currentSelectedId } = useStore.getState();
+            if (
+              currentSelectedId &&
+              parseHygFocusId(currentSelectedId) !== null
+            ) {
+              return;
+            }
+            setSelectedId(null);
+          });
+        }}
         dpr={canvasDpr}
         camera={cameraConfig}
         gl={glConfig}
