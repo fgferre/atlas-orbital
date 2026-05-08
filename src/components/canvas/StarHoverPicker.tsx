@@ -118,21 +118,18 @@ export const StarHoverPicker = () => {
   const showStarfield = useStore((s) => s.showStarfield);
   const qualityMode = useStore((s) => s.qualityMode);
   const setHoveredStar = useStore((s) => s.setHoveredStar);
-  // T6.3-β: click → focus dispatch. setFocusId accepts any string;
-  // routes "hyg:K"-prefixed IDs through the T6.0 fallback branch in
-  // CameraController (proximity-damping useEffect), and HygStellarMesh
-  // consumes the same focusId to spawn the procedural mesh when the
-  // T6.3-α hysteresis gate fires.
-  const setFocusId = useStore((s) => s.setFocusId);
-  // T6.3-ε: clear selectedId on HYG click. Sidebar resolves panel
-  // contents via `BODIES_BY_ID.get(selectedId)` and is HYG-blind
-  // today; without this clear, clicking a HYG star while a curated
-  // body is selected would leave the panel showing stale body info
-  // while the camera flies elsewhere. Full HYG body-info panel
-  // (name, spectral class, distance) is a future onda — for now a
-  // closed panel matches "I'm focused on something the panel can't
-  // describe" honestly. (Codex round-2 P3 audit, 2026-05-04.)
-  const setSelectedId = useStore((s) => s.setSelectedId);
+  // T6.3-β: click → focus dispatch. M6-D follow-up uses `selectId`
+  // (unified focus+select dispatch from `store.ts`) so the click
+  // path matches SearchBar + curated-body click paths and opens
+  // `HygStarPanel` on HYG click. Pre-fix wired `setFocusId(...)` +
+  // `setSelectedId(null)` (T6.3-ε), which predated `HygStarPanel`
+  // — the panel gates on `parseHygFocusId(selectedId)` and the
+  // curated `Sidebar` gates on `BODIES_BY_ID.get(selectedId)`,
+  // so the two sidepanels are mutually exclusive on ID type and
+  // can both safely consume the same `selectedId`. Bonus: `selectId`
+  // pushes prev focus to `focusHistory`, so back-navigation now
+  // includes HYG focuses too. (Codex post-audit 2026-05-08.)
+  const selectId = useStore((s) => s.selectId);
 
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
@@ -363,12 +360,9 @@ export const StarHoverPicker = () => {
         }
       }
       if (best !== null && Math.sqrt(bestDist) <= HOVER_PICK_THRESHOLD_PX) {
-        setFocusId(formatHygFocusId(best.entry.index));
-        // T6.3-ε — see useStore subscription rationale near top of
-        // component. Clears stale curated-body panel state on HYG
-        // click so the user doesn't see Earth's panel while the
-        // camera flies to Sirius.
-        setSelectedId(null);
+        // Unified focus+select dispatch — see useStore subscription
+        // rationale near top of component.
+        selectId(formatHygFocusId(best.entry.index));
       }
     };
 
@@ -384,15 +378,7 @@ export const StarHoverPicker = () => {
       setHoveredStar(null);
       canvas.style.cursor = "";
     };
-  }, [
-    enabled,
-    gl,
-    camera,
-    candidates,
-    setHoveredStar,
-    setFocusId,
-    setSelectedId,
-  ]);
+  }, [enabled, gl, camera, candidates, setHoveredStar, selectId]);
 
   return null;
 };

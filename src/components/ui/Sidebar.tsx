@@ -21,7 +21,16 @@ export const Sidebar = () => {
   const setSelectedId = useStore((state) => state.setSelectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
   const b = selectedId ? BODIES_BY_ID.get(selectedId) : undefined;
-  const orbitalResult = useOrbitalCalculation(selectedId ?? "sun", b?.parentId);
+  // T6.4 post-audit (Codex): only feed the orbital engine known
+  // curated body IDs. For HYG focus IDs (`hyg:K`) or any
+  // selectedId that BODIES_BY_ID doesn't carry, fall back to
+  // "sun" — otherwise `orbitalEngine.calculatePosition` throws
+  // "No orbital provider available" → telemetry.error →
+  // `console.error` on every Sidebar render. The Sidebar is
+  // already invisible for non-curated `selectedId` (see
+  // `isVisible` below), but the orbital call still ran.
+  const orbitalBodyId = b && selectedId ? selectedId : "sun";
+  const orbitalResult = useOrbitalCalculation(orbitalBodyId, b?.parentId);
   const orbitalCalculation =
     orbitalResult.state === "ready" ? orbitalResult.data : null;
 
