@@ -241,9 +241,10 @@ const MK_CLASS_ORDER: ReadonlyArray<Exclude<SpectralClass, "WD">> = [
  * pair. Linear interpolation between class anchors along the
  * subclass digit; class beyond Y returns the Y0 anchor.
  *
- * For white dwarfs (`spectralClass === "WD"`), uses a separate
- * mapping (DA2 ≈ 25,000 K, DA9 ≈ 5,500 K — wider range than
- * main-sequence subclass spacing). Subclass 1 = hottest.
+ * For white dwarfs (`spectralClass === "WD"`), uses the MK
+ * temperature-index definition: the digit n in "DAn" is
+ * n ≈ 50400 / Teff, so Teff ≈ 50400 / n (DA2 ≈ 25,200 K,
+ * DA9 ≈ 5,600 K). Subclass 1 = hottest.
  *
  * For unknown subclass (NaN), returns the class-anchor temperature
  * (subclass 0).
@@ -253,14 +254,14 @@ export const temperatureFromSpect = (
   subclass: number
 ): number => {
   if (spectralClass === "WD") {
-    // White-dwarf temperature scale: DA1-DA9 spans ~50,000 → 5,500 K.
-    // Source: Bergeron et al. spectral grids (atlas-opinion midpoints).
-    // Subclass 1 (hottest) = 50,000 K; subclass 9 (coolest) = 5,500 K.
+    // White-dwarf temperature index is RECIPROCAL, not linear: the
+    // MK subclass digit n in "DAn" is defined as n ≈ round(50400/Teff)
+    // (Teff ≈ 50400/n). DA2 → ~25,200 K (Sirius B), DA9 → ~5,600 K.
+    // The previous linear interpolation between 50,000 K and 5,500 K
+    // gave DA2 ≈ 44,400 K — almost double the real value, contradicting
+    // this function's own docstring and rendering hot WDs far too blue.
     if (!Number.isFinite(subclass)) return 10_000; // unknown → typical mid-range
-    const wdAnchorHot = 50_000;
-    const wdAnchorCool = 5_500;
-    const t = Math.max(0, Math.min(1, (subclass - 1) / 8));
-    return wdAnchorHot * (1 - t) + wdAnchorCool * t;
+    return Math.max(3_000, Math.min(80_000, 50_400 / subclass));
   }
 
   const idx = MK_CLASS_ORDER.indexOf(spectralClass);

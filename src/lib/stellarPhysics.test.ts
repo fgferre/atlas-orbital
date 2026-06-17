@@ -194,15 +194,17 @@ describe("temperatureFromSpect — main-sequence anchors", () => {
 });
 
 describe("temperatureFromSpect — white dwarfs", () => {
-  it("DA1 (hottest WD) returns ~50,000 K", () => {
-    expect(temperatureFromSpect("WD", 1)).toBeCloseTo(50_000, 0);
+  it("DA1 (hottest WD) returns ~50,400 K", () => {
+    // MK index: Teff ≈ 50400 / n → DA1 = 50,400 K.
+    expect(temperatureFromSpect("WD", 1)).toBeCloseTo(50_400, 0);
   });
-  it("DA9 (coolest WD) returns ~5,500 K", () => {
-    expect(temperatureFromSpect("WD", 9)).toBeCloseTo(5_500, 0);
+  it("DA9 (coolest WD) returns ~5,600 K", () => {
+    expect(temperatureFromSpect("WD", 9)).toBeCloseTo(5_600, 0);
   });
-  it("DA2 (Sirius B) returns ~44,400 K", () => {
-    // (50000 - 5500) * (8/8) at sub=1; sub=2 → t = 1/8 → 50000*7/8 + 5500*1/8 = 44438
-    expect(temperatureFromSpect("WD", 2)).toBeCloseTo(44_437.5, 0);
+  it("DA2 (Sirius B) returns ~25,200 K", () => {
+    // Teff ≈ 50400 / 2 = 25,200 K — matches the literature value for
+    // Sirius B (~25,000 K), not the old inverted 44,400 K.
+    expect(temperatureFromSpect("WD", 2)).toBeCloseTo(25_200, 0);
   });
   it("WD with NaN subclass returns mid-range 10,000 K", () => {
     expect(temperatureFromSpect("WD", NaN)).toBe(10_000);
