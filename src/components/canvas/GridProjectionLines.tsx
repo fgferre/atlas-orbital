@@ -130,23 +130,48 @@ export const GridProjectionLines = () => {
     focusId !== "sun" &&
     parseHygFocusId(focusId) === null;
 
+  // Live handle to the drei <Line>'s underlying Line2 so the frame loop
+  // can push new vertex positions straight to the GPU geometry. drei
+  // memoises the LineGeometry on the `points` ARRAY IDENTITY, so the
+  // previous approach (mutating the points[] entries in place) was
+  // silently dropped after the first render — the projection line stayed
+  // frozen at its degenerate mount-time positions and never tracked the
+  // focused body.
+  const lineRef = useRef<Line2 | null>(null);
+
   useFrame(() => {
     if (!active) return;
     const focusObj = scene.getObjectByName(focusId);
     if (!focusObj) return;
 
+    const line = lineRef.current;
+    if (!line) return;
+
     focusObj.getWorldPosition(TMP_FOCUS);
 
-    // Leg 1: sun (grid origin, y=planeOffset) to focus's XZ
-    // projection on the plane. `points[0]` stays pinned at origin
-    // (re-set each frame to keep the scratch vector honest).
-    points[0].set(0, GRID_RECURSIVE_CONFIG.planeYOffset, 0);
-    points[1].set(TMP_FOCUS.x, GRID_RECURSIVE_CONFIG.planeYOffset, TMP_FOCUS.z);
-    // Leg 2: XZ projection up to focus itself.
-    points[2].copy(TMP_FOCUS);
+    const y = GRID_RECURSIVE_CONFIG.planeYOffset;
+    // Leg 1: grid origin (Sun) → focus's XZ projection on the plane.
+    // Leg 2: XZ projection up to the focus itself.
+    line.geometry.setPositions([
+      0,
+      y,
+      0,
+      TMP_FOCUS.x,
+      y,
+      TMP_FOCUS.z,
+      TMP_FOCUS.x,
+      TMP_FOCUS.y,
+      TMP_FOCUS.z,
+    ]);
   });
 
   if (!active) return null;
 
-  return <GridProjectionLinesInner points={points} color={orientationColor} />;
+  return (
+    <GridProjectionLinesInner
+      ref={lineRef}
+      points={points}
+      color={orientationColor}
+    />
+  );
 };
