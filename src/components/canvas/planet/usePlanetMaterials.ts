@@ -570,9 +570,18 @@ export function usePlanetMaterials({
           // We only cast shadows on the lit side.
           float sunDot = dot(normalize(vObjectNormal), lightDir);
 
-          // Smoothly fade out the shadow effect as we approach the terminator (day/night line)
-          // This prevents hard artifacts at the shadow edge near the dark side.
-          float terminatorFade = smoothstep(0.0, 0.2, sunDot);
+          // Keep the ring shadow present right up to the lighting
+          // terminator, fading it out only across a thin band so it does
+          // not lift off into a bright, un-shadowed sliver before the
+          // night side (the visible "gap" between the ring shadow and
+          // Saturn's dark side). The standard material already darkens
+          // via NdotL (≈ sunDot) toward the terminator, so a 0.2-wide
+          // band removed the shadow over the dimmest fifth of the lit
+          // hemisphere — wide enough to see. 0.05 confines the fade to
+          // where the surface is already near-black (NdotL ≲ 0.05),
+          // which also keeps the grazing-ray intersection noise this
+          // fade was meant to hide below the visibility threshold.
+          float terminatorFade = smoothstep(0.0, 0.05, sunDot);
 
           if (terminatorFade > 0.0) {
             // Intersect with Ring Plane (y=0). Skip near-parallel rays

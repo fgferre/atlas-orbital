@@ -94,6 +94,9 @@ const noopRaycast: THREE.Object3D["raycast"] = () => null;
 export const PlanetLabels3D = () => {
   const showLabels = useStore((s) => s.showLabels);
   const labelMode = useStore((s) => s.labelMode);
+  // Same focus action the HTML labels call (PlanetOverlay.tsx:68-71) so
+  // SDF labels are clickable with identical behavior.
+  const selectId = useStore((s) => s.selectId);
   const { scene, camera } = useThree();
 
   // Imperatively-managed group refs. A plain Map (held by useRef)
@@ -178,12 +181,19 @@ export const PlanetLabels3D = () => {
         const distance = group.position.distanceTo(camera.position);
         const rawFontScale =
           (distance / FONT_DISTANCE_DIVISOR) * FONT_WORLD_BASE;
-        // Clamp to `[FONT_WORLD_BASE, LABEL_SCALE_MAX_WORLD_UNITS]`.
-        // Lower bound keeps labels readable at near distances; upper
-        // bound prevents GPU rasterization stalls at extreme camera
-        // positions (see the `LABEL_SCALE_MAX_WORLD_UNITS` header).
+        // Cap the world-space scale ONLY at the top end. The size is
+        // deliberately proportional to distance (screen-stable: the
+        // on-screen pixel height stays ~constant, FONT_WORLD_BASE /
+        // FONT_DISTANCE_DIVISOR ≈ 0.009 rad). A LOWER clamp at
+        // FONT_WORLD_BASE world units USED to live here and broke that:
+        // for any body closer than FONT_DISTANCE_DIVISOR (the normal
+        // focus-mode regime) it pinned the label at 9 world units, so
+        // the on-screen size grew as 9/distance and the text ballooned
+        // as the camera approached. The upper cap stays — it prevents
+        // GPU rasterization stalls at the ~1e12 intro-camera distances
+        // (see the LABEL_SCALE_MAX_WORLD_UNITS header).
         const clampedFontScale = Math.min(
-          Math.max(rawFontScale, FONT_WORLD_BASE),
+          rawFontScale,
           LABEL_SCALE_MAX_WORLD_UNITS
         );
         group.scale.setScalar(clampedFontScale);
@@ -213,7 +223,22 @@ export const PlanetLabels3D = () => {
             outlineWidth={LABEL_OUTLINE_WIDTH}
             outlineColor={LABEL_OUTLINE_COLOR}
             outlineOpacity={LABEL_OUTLINE_OPACITY}
-            raycast={noopRaycast}
+            // Clickable like the HTML labels (PlanetOverlay.tsx). The
+            // `<Text>` keeps troika's default raycast (no `noopRaycast`
+            // override) so R3F's pointer system can hit it; hidden
+            // groups (`group.visible = false`) are skipped by the event
+            // raycaster, matching what is on screen.
+            onClick={(e) => {
+              e.stopPropagation();
+              selectId(body.id);
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = "pointer";
+            }}
+            onPointerOut={() => {
+              document.body.style.cursor = "auto";
+            }}
           >
             {body.name.en}
           </Text>

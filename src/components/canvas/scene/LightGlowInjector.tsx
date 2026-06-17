@@ -80,9 +80,18 @@ function useLightGlowCatalog(): HygCatalogData | null {
       return;
     }
     let cancelled = false;
-    loadHygCatalog(tier).then((data) => {
-      if (!cancelled) setCatalog(data);
-    });
+    loadHygCatalog(tier)
+      .then((data) => {
+        if (!cancelled) setCatalog(data);
+      })
+      .catch((err) => {
+        // Catalog load failure → no LightGlow lights, degrade quietly.
+        // Without this .catch a rejected HYG fetch/parse surfaced as an
+        // unhandled promise rejection.
+        if (!cancelled) {
+          console.warn("[LightGlow] HYG catalog load failed:", err);
+        }
+      });
     return () => {
       cancelled = true;
     };

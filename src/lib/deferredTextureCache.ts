@@ -241,29 +241,34 @@ const startLoad = (entry: DeferredTextureEntry) => {
   syncEntrySnapshot(entry);
   notifyEntry(entry);
 
-  entry.promise = loader
-    .loadAsync(entry.url!)
-    .then((texture) => {
-      texture.colorSpace = entry.colorSpace;
-      texture.needsUpdate = true;
-      entry.texture = texture;
-      entry.status = "ready";
-      entry.promise = null;
-      entry.lastUsedAt = getNow();
-      syncEntrySnapshot(entry);
-      notifyEntry(entry);
-      evictToBudget();
-      return texture;
-    })
-    .catch((error: unknown) => {
-      entry.texture = null;
-      entry.status = "error";
-      entry.error = error instanceof Error ? error.message : "Failed to load";
-      entry.promise = null;
-      syncEntrySnapshot(entry);
-      notifyEntry(entry);
-      throw error;
-    });
+  const loaded = loader.loadAsync(entry.url!).then((texture) => {
+    texture.colorSpace = entry.colorSpace;
+    texture.needsUpdate = true;
+    entry.texture = texture;
+    entry.status = "ready";
+    entry.promise = null;
+    entry.lastUsedAt = getNow();
+    syncEntrySnapshot(entry);
+    notifyEntry(entry);
+    evictToBudget();
+    return texture;
+  });
+  entry.promise = loaded;
+  // Handle load failure on a SIDE consumer (not chained into
+  // entry.promise, so its Promise<Texture> type is preserved). This
+  // both records the error state AND registers a rejection handler on
+  // `loaded`, so a failed fetch/404/decode no longer surfaces as an
+  // unhandled promise rejection — the previous re-throw did, because
+  // the acquire/preload call sites never await entry.promise. Consumers
+  // read the failure via entry.status / the snapshot+listener channel.
+  void loaded.catch((error: unknown) => {
+    entry.texture = null;
+    entry.status = "error";
+    entry.error = error instanceof Error ? error.message : "Failed to load";
+    entry.promise = null;
+    syncEntrySnapshot(entry);
+    notifyEntry(entry);
+  });
 };
 
 export const setDeferredTextureBudget = (budgetBytes: number | null) => {

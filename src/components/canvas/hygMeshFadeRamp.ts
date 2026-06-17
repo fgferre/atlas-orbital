@@ -31,7 +31,16 @@ export function stepRampToward(
   durationMs: number
 ): number {
   if (durationMs <= 0) return Math.max(0, Math.min(1, target));
-  const stepMagnitude = (dtSeconds * 1000) / durationMs;
+  // Guard non-finite dt (honors the NaN-safety promised in the docstring
+  // — Math.max(0, Math.min(1, NaN)) is NaN, so an unguarded NaN dt would
+  // poison the ramp) and clamp pathological spikes such as the large raw
+  // R3F delta on the first frame after a backgrounded tab resumes, so the
+  // cross-fade animates instead of snapping. 0.1 s matches the camera
+  // flight dt cap.
+  const dt = Number.isFinite(dtSeconds)
+    ? Math.min(Math.max(dtSeconds, 0), 0.1)
+    : 0;
+  const stepMagnitude = (dt * 1000) / durationMs;
   const remaining = target - current;
   if (Math.abs(remaining) <= stepMagnitude) return target;
   const next = current + Math.sign(remaining) * stepMagnitude;

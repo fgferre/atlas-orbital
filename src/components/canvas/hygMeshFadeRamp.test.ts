@@ -92,6 +92,19 @@ describe("stepRampToward — linear integrator", () => {
     expect(stepRampToward(0.42, 0, 0, 300)).toBe(0.42);
   });
 
+  it("treats non-finite dt as a no-op (honors documented NaN-safety)", () => {
+    expect(stepRampToward(0.3, 1, NaN, 300)).toBe(0.3);
+    expect(stepRampToward(0.3, 1, Infinity, 300)).toBe(0.3);
+  });
+
+  it("clamps a huge dt spike (tab-resume) so the ramp animates instead of snapping", () => {
+    // dt = 10s would otherwise jump straight to target; clamped to 0.1s
+    // → step = 0.333, so from 0 it advances by ~0.333, not to 1.
+    const next = stepRampToward(0, 1, 10, 300);
+    expect(next).toBeCloseTo((0.1 * 1000) / 300, 6);
+    expect(next).toBeLessThan(1);
+  });
+
   it("preserves the cross-fade sum invariant at every tick (sprite + mesh = 1)", () => {
     // Critical M3 contract: at no point should the sum of the
     // sprite-side multiplier `(1 - r)` and the mesh-side
