@@ -2,6 +2,8 @@ import { Loader } from "./components/ui/Loader";
 import { Suspense, lazy, useEffect } from "react";
 import { MotionConfig } from "framer-motion";
 import { useStore } from "./store";
+import { ErrorBoundary } from "./components/utils/ErrorBoundary";
+import { AppCrashCard } from "./components/utils/AppCrashCard";
 
 const Scene = lazy(() =>
   import("./components/canvas/Scene").then((module) => ({
@@ -102,34 +104,40 @@ function App() {
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
-        <Suspense fallback={null}>
-          {/* fallback={null} — Overlay is the full chrome (top bar, controls);
-            a skeleton would flash more than the real UI appearing. */}
-          <Overlay />
-        </Suspense>
-        <Suspense
-          fallback={
-            <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-              <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
-            </div>
-          }
-        >
-          <TutorialOverlay />
-        </Suspense>
-        <Suspense
-          fallback={
-            <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-              <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
-            </div>
-          }
-        >
-          <CreditsModal />
-        </Suspense>
-        <Suspense fallback={null}>
-          {/* fallback={null} — tooltip is hidden until hover; a skeleton would
-            flash in empty space before any hover even happens. */}
-          <StarHoverTooltip />
-        </Suspense>
+        {/* UI-subtree boundary: a crash in the lazy chrome shows a card
+          but leaves the 3D scene above running. Scene itself is covered
+          by the top-level boundary in main.tsx (a scene-less app is a
+          full takeover, not a partial-degradation case). */}
+        <ErrorBoundary fallback={(props) => <AppCrashCard {...props} />}>
+          <Suspense fallback={null}>
+            {/* fallback={null} — Overlay is the full chrome (top bar, controls);
+              a skeleton would flash more than the real UI appearing. */}
+            <Overlay />
+          </Suspense>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+                <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+              </div>
+            }
+          >
+            <TutorialOverlay />
+          </Suspense>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+                <div className="h-6 w-6 rounded-full border-2 border-nasa-accent/30 border-t-nasa-accent animate-spin" />
+              </div>
+            }
+          >
+            <CreditsModal />
+          </Suspense>
+          <Suspense fallback={null}>
+            {/* fallback={null} — tooltip is hidden until hover; a skeleton would
+              flash in empty space before any hover even happens. */}
+            <StarHoverTooltip />
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </MotionConfig>
   );
