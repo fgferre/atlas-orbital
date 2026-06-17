@@ -592,20 +592,27 @@ export const Starfield = () => {
   });
   /* eslint-enable react-hooks/immutability */
 
-  // Own the GPU lifecycle of the memoised geometry + material. These
-  // are the heaviest objects in the scene (~109k-instance buffer); R3F
-  // only auto-disposes objects it instantiates from JSX, NOT ones
-  // created in useMemo and attached via prop, so without this they leak
-  // VRAM on every quality-tier / catalog rebuild and on unmount
-  // (mirrors the dispose pattern already used in ProceduralSun3D /
-  // GridRecursive). The cleanup runs against the PREVIOUS values when
-  // either identity changes, then once more on unmount.
+  // Own the GPU lifecycle of the memoised geometry + material. These are
+  // the heaviest objects in the scene (~109k-instance buffer); R3F only
+  // auto-disposes objects it instantiates from JSX, NOT ones created in
+  // useMemo and attached via prop (mirrors ProceduralSun3D / GridRecursive).
+  //
+  // Geometry rebuilds on quality-tier / catalog change — dispose the
+  // PREVIOUS one when it changes and on unmount.
   useEffect(() => {
     return () => {
       geometry?.dispose();
+    };
+  }, [geometry]);
+  // Material is memoised once (deps []), stable across geometry rebuilds.
+  // Disposing it on a geometry change would free a material the freshly
+  // re-mounted <mesh> still references, forcing a shader recompile —
+  // dispose only on unmount.
+  useEffect(() => {
+    return () => {
       material?.dispose();
     };
-  }, [geometry, material]);
+  }, [material]);
 
   if (!geometry) return null;
 

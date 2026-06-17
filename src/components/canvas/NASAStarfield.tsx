@@ -135,16 +135,25 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     material.uniforms.vfxHdrGain.value = qualityProfile.vfxHdrGain;
   });
 
-  // Dispose the memoised geometry + material when rebuilt (catalog
-  // change) or on unmount. R3F does not auto-dispose objects created in
-  // useMemo and attached via prop, so without this the BufferGeometry +
-  // ShaderMaterial leak VRAM on every source toggle / catalog reload.
+  // R3F does not auto-dispose objects created in useMemo and attached via
+  // prop, so we own their GPU lifecycle here.
+  //
+  // Geometry rebuilds on catalog/tier change — dispose the PREVIOUS one
+  // when it changes and on unmount.
   useEffect(() => {
     return () => {
       geometry?.dispose();
+    };
+  }, [geometry]);
+  // Material is memoised once (deps []), stable across geometry rebuilds.
+  // Disposing it on a geometry change would free a material the freshly
+  // re-mounted <points> still references, forcing a shader recompile —
+  // dispose only on unmount.
+  useEffect(() => {
+    return () => {
       material.dispose();
     };
-  }, [geometry, material]);
+  }, [material]);
 
   if (!geometry) {
     return null;
