@@ -14,11 +14,16 @@ interface AppCrashCardProps {
 }
 
 /**
- * Fallback UI for the app-shell ErrorBoundaries. Before this, `ErrorBoundary`
- * was wired ONLY per-planet (`Planet.tsx`), so an uncaught render error in
- * `Scene` / `Overlay` / the lazy UI subtrees produced a blank page with no
+ * Fallback UI for the app-shell ErrorBoundaries (top-level in `main.tsx`,
+ * UI-subtree in `App.tsx`). Before this, `ErrorBoundary` was wired ONLY
+ * per-planet (`Planet.tsx`), so a render error in the `Overlay` / lazy UI
+ * subtrees or the `Scene` component shell produced a blank page with no
  * recovery. This card keeps failure honest: it names the error and offers a
  * cheap retry (re-render the subtree) plus a hard reload.
+ *
+ * Coverage caveat: these are DOM-tree boundaries. Errors thrown INSIDE the
+ * R3F `<Canvas>` children render in react-three-fiber's reconciler and are
+ * NOT caught here — they need an in-canvas boundary (see `Scene.tsx`).
  *
  * Deliberately self-contained — no i18n / store / framer-motion — so it still
  * renders when one of those is the thing that crashed. English-only for the

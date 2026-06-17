@@ -38,10 +38,13 @@ import { initializeOrbitalEngine } from "./lib/orbital/setup";
 initializeOrbitalEngine();
 
 createRoot(document.getElementById("root")!).render(
-  // App-shell ErrorBoundary: before this, an uncaught render error anywhere
-  // in the tree produced a blank page (ErrorBoundary was wired only
-  // per-planet). The top-level boundary turns any such crash into a
-  // recoverable card instead of a dead white screen.
+  // App-shell ErrorBoundary: catches render errors in the DOM React tree
+  // (the UI chrome and the <Scene> component shell) and shows a recoverable
+  // card instead of a blank page. NOTE: errors thrown inside the R3F
+  // <Canvas> children (SolarSystem, GridAuLabels, post-processing) render in
+  // react-three-fiber's own reconciler and are NOT caught here — those need
+  // an in-canvas boundary (per-planet ones exist in Planet.tsx; a scene-wide
+  // one is a follow-up).
   <ErrorBoundary fallback={(props) => <AppCrashCard {...props} fullScreen />}>
     <App />
   </ErrorBoundary>
