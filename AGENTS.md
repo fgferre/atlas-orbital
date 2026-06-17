@@ -19,6 +19,7 @@
 15. Performance & Efficiency: Prioritize efficient code. Consider algorithmic complexity, unnecessary renders/re-renders, and network/resource usage.
 16. Rationalization: Avoid over-engineering. Ensure technical decisions are rational, sustainable, and the simplest possible way to achieve the goal.
 17. Clean Code Architecture: Ensure meaningful naming, SRP (Single Responsibility), and DRY (Don't Repeat Yourself) are applied to every module.
+18. Visual/render fidelity is a first-class pillar — judged by two gates, never by suspicion of polish. **(a) Honest:** it reflects real data or real physics; where it must approximate or fill a gap procedurally, it says so (provenance / JSDoc / credits) — the same discipline as the "not to scale" toggle; inventing detail and presenting it as measured is forbidden. **(b) Adaptive:** it is additive on capable hardware and degrades to a fast floor via `src/lib/qualityProfile.ts` + the `VISUAL_FIDELITY` tiers, so it never costs a learner reach (a perf regression is tier-gated, not dropped). "Reference-grade" means auditable + physically-grounded + progressively-better-per-tier, not "exact in everything." Full rubric + sanctioned render track: `tasks/opportunity-sweep-findings-v2-2026-06-16.md`.
 
 ## Test commands
 
