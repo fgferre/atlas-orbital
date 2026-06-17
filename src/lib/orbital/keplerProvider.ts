@@ -15,7 +15,7 @@ import type {
   OrbitalPositionResult,
   OsculatingElements,
 } from "./types";
-import { J2000_EPOCH } from "./time";
+import { dateToTDB } from "./time";
 import {
   elementsToCartesian,
   ecliptic2ThreeJs,
@@ -186,15 +186,19 @@ export class KeplerProvider implements OrbitalProvider {
    * Calculate orbital position using Keplerian elements
    */
   calculatePosition(context: OrbitalCalculationContext): OrbitalPositionResult {
-    const { bodyId, date, jdTDB } = context;
+    const { bodyId, jdTDB } = context;
 
     const elements = this.elementsDatabase.get(bodyId);
     if (!elements) {
       throw new Error(`No Keplerian elements registered for body: ${bodyId}`);
     }
 
-    // Calculate days since J2000.0
-    const daysSinceJ2000 = (date.getTime() - J2000_EPOCH.getTime()) / 86400000;
+    // Calculate days since J2000.0 on the TDB timescale, matching the
+    // analytical providers (which use context.jdTDB). Using the raw
+    // UTC `date` here advanced the mean anomaly on a clock ~69 s behind
+    // TDB, so a body's Kepler-fallback position disagreed in phase with
+    // its analytical sibling. jdTDB is already computed by the engine.
+    const daysSinceJ2000 = jdTDB - 2451545.0;
 
     // Calculate position
     const position = calculateKeplerianPosition(elements, daysSinceJ2000);
@@ -223,7 +227,12 @@ export class KeplerProvider implements OrbitalProvider {
     const elements = this.elementsDatabase.get(bodyId);
     if (!elements) return null;
 
-    const daysSinceJ2000 = (date.getTime() - J2000_EPOCH.getTime()) / 86400000;
+    // Match calculatePosition: advance the osculating elements on the TDB
+    // timescale the analytical providers use, not raw UTC — otherwise the
+    // orbit-line elements lag the marker position by ~69 s of mean anomaly
+    // (the same position-vs-sibling phase bug this provider's position path
+    // was just fixed to avoid).
+    const daysSinceJ2000 = dateToTDB(date) - 2451545.0;
     return calculateOsculatingElements(elements, daysSinceJ2000);
   }
 }
