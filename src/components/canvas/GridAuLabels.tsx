@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { AU_TO_3D_UNITS } from "../../lib/astrophysics";
+import { AU_TO_3D_UNITS, AstroPhysics } from "../../lib/astrophysics";
 import { GRID_ORIENTATION_COLORS } from "../../lib/gridOrientation";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
@@ -41,16 +41,20 @@ import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
  * readable face toward the camera regardless of orbit angle, same
  * as the body name labels in `PlanetLabels3D`.
  *
- * **Scale-mode caveat.** Labels sit at `au × AU_TO_3D_UNITS`
- * world-unit positions. This aligns with planet positions in
- * `realistic` scale mode (where `1 AU = 1000 world units` by the
- * planet positioner). In `didactic` mode planets are compressed
- * through `AstroPhysics.mapDidacticHeliocentricDistance` while
- * the grid + these labels stay at linear-AU spacing — known
- * drift flagged earlier by the user (their "scale mode should
- * only exaggerate radii, not compress distances" proposal). That
- * architectural change is a separate wave; δ does NOT adjust
- * label positions per scale mode.
+ * **Scale-mode alignment** (fixed 2026-06-17, opportunity-sweep
+ * do-now). Each label sits at the SAME world radius the planet
+ * positioner uses for a heliocentric body at that AU distance:
+ * `au × AU_TO_3D_UNITS` in `realistic` mode, and
+ * `AstroPhysics.mapDidacticHeliocentricDistance(au)` in `didactic`
+ * mode (the exact calls `calculateLocalPosition` /
+ * heliocentric positioning apply at astrophysics.ts:439-451,623-626).
+ * Previously the labels stayed at linear-AU spacing in BOTH modes,
+ * so in didactic mode the "1 / 5 / 10 AU" ruler drifted away from
+ * where the planets were actually drawn — a learner counting AU
+ * rings was silently misled. The ruler now reads true against the
+ * compressed positions. (Radii stay exaggerated independently; this
+ * fixes only the distance ruler, not sizes — the grid backdrop is a
+ * generic world-unit reference, not an AU-tied set of rings.)
  *
  * **Layout** mirrors the old EclipticGrid pattern:
  *   - X-axis labels at `(au × 1000, planeY, tickOffset)` —
@@ -82,6 +86,7 @@ export const GridAuLabels = () => {
   const showEclipticGrid = useStore((s) => s.showEclipticGrid);
   const showLabels = useStore((s) => s.showLabels);
   const gridOrientation = useStore((s) => s.gridOrientation);
+  const scaleMode = useStore((s) => s.scaleMode);
   const { camera } = useThree();
 
   const labelColor = useMemo(() => {
@@ -120,7 +125,13 @@ export const GridAuLabels = () => {
   return (
     <group raycast={noopRaycast}>
       {TICK_AU_VALUES.map((au) => {
-        const worldRadius = au * AU_TO_3D_UNITS;
+        // Match the planet positioner so the ruler reads true in both
+        // scale modes (didactic compresses heliocentric distance; see
+        // the Scale-mode alignment note above).
+        const worldRadius =
+          scaleMode === "didactic"
+            ? AstroPhysics.mapDidacticHeliocentricDistance(au)
+            : au * AU_TO_3D_UNITS;
         const text = `${au} AU`;
         return (
           <group key={au}>
