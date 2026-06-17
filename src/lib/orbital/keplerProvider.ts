@@ -152,7 +152,9 @@ export class KeplerProvider implements OrbitalProvider {
   readonly id = "kepler";
   readonly name = "Keplerian Solver";
   readonly model = "Kepler" as const;
-  readonly timeScale = "UTC" as const;
+  // Both calculatePosition (context.jdTDB) and getOsculatingElements
+  // (dateToTDB) advance on the TDB timescale the analytical providers use.
+  readonly timeScale = "TDB" as const;
   readonly outputFrame = "J2000_ECLIPTIC" as const;
   readonly supportedBodies: string[] = [];
 
