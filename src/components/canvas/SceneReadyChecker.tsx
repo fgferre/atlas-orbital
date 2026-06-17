@@ -47,10 +47,15 @@ export const SceneReadyChecker = () => {
   useEffect(() => {
     frameCount.current = 0;
     hasMarkedReady.current = false;
-    setSceneReady(false);
 
+    // `setSceneReady` is a one-way latch in the store: it only ever
+    // climbs to true. We never write `false` here — a spurious reset on
+    // a benign effect re-run (asset-gate churn) is exactly what used to
+    // regress the loader stage out of "ready". Resetting the local
+    // frame counter is harmless: if readiness was already latched, the
+    // re-count's `setSceneReady(true)` is a no-op.
     if (!criticalAssetsReady) {
-      return () => setSceneReady(false);
+      return;
     }
 
     // Safety hatch — force ready after the fallback window so the
@@ -69,7 +74,6 @@ export const SceneReadyChecker = () => {
 
     return () => {
       window.clearTimeout(timeoutId);
-      setSceneReady(false);
     };
   }, [criticalAssetsReady, setSceneReady]);
 

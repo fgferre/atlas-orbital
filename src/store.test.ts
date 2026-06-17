@@ -132,6 +132,20 @@ describe("store phase 4 regression guards", () => {
     expect(useStore.getState().tutorialCompletionStatus).toBe("skipped");
   });
 
+  it("latches isSceneReady true and ignores spurious false resets", () => {
+    expect(useStore.getState().isSceneReady).toBe(false);
+
+    // Genuine readiness latches true.
+    useStore.getState().setSceneReady(true);
+    expect(useStore.getState().isSceneReady).toBe(true);
+
+    // A spurious reset (asset-gate effect churn mid-boot) must NOT
+    // retract readiness — this is what regressed the loader stage out
+    // of "ready" and collapsed the meter to ~70 %.
+    useStore.getState().setSceneReady(false);
+    expect(useStore.getState().isSceneReady).toBe(true);
+  });
+
   it("keeps tutorial completion clearing selection and persisting completion", () => {
     useStore.setState({
       selectedId: "earth",

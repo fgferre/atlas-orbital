@@ -100,6 +100,9 @@ const TechReadout = ({
 
 export const Loader = () => {
   const { progress, active } = useProgress();
+  // `isSceneReady` is a one-way latch in the store (see `setSceneReady`):
+  // once true it never retracts, so the loader stage cannot regress out
+  // of "ready" and the exit gate below stays stable.
   const isSceneReady = useStore((state) => state.isSceneReady);
   const isLoaderHidden = useStore((state) => state.isLoaderHidden);
   const setLoaderHidden = useStore((state) => state.setLoaderHidden);

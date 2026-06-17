@@ -14,6 +14,16 @@ export const getNextLoaderDisplayProgress = (
     return 100;
   }
 
+  // Monotonic floor: the boot meter must never run backward. Stage
+  // regressions (a spurious `isSceneReady`/asset-readiness bounce
+  // mid-boot) collapse the target band and would otherwise animate the
+  // bar *down* — `Math.sign(delta) === -1` below eases toward a lower
+  // target. Holding at `previousValue` keeps the meter honest: progress
+  // only ever climbs. The `ready` override above still forces 100.
+  if (targetValue <= previousValue) {
+    return previousValue;
+  }
+
   const delta = targetValue - previousValue;
 
   if (Math.abs(delta) < 0.35) {

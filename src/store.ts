@@ -582,9 +582,19 @@ export const useStore = create<AppState>()(
             ? state
             : { criticalAssetsReady: ready }
         ),
+      // One-way latch: scene-ready never retracts within a session. The
+      // boot pipeline only ever needs to flip this true (SceneReadyChecker's
+      // frame counter or its 8 s safety hatch). Spurious `false` writes —
+      // from over-broad asset-gate effect re-runs/cleanups churning
+      // `criticalAssetsReady` mid-boot — would otherwise regress the loader
+      // stage out of "ready", re-flashing "Warming up renderer" and
+      // collapsing the meter band to ~70 %. The loader is one-shot per
+      // session, so a flag that only ever climbs to ready is correct, and
+      // it makes the regression structurally impossible regardless of which
+      // effect churns. `false` is ignored by design.
       setSceneReady: (ready) =>
         set((state) =>
-          state.isSceneReady === ready ? state : { isSceneReady: ready }
+          !ready || state.isSceneReady ? state : { isSceneReady: true }
         ),
       setLoaderHidden: (hidden) =>
         set((state) =>
