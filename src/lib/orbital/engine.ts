@@ -34,6 +34,18 @@ function getCacheKey(bodyId: string, jdTDB: number): string {
 }
 
 /**
+ * Hard cap on the position cache. The key quantizes jdTDB to a
+ * ~0.864 s bucket, so steady playback at 1× reuses entries — but
+ * under time-warp every frame advances the simulated clock past the
+ * bucket, producing a unique key per frame. Without a bound the Map
+ * would grow without limit (one of the primary features turns the
+ * cache into a leak). Evicting the oldest insertion (Map preserves
+ * insertion order) bounds growth while keeping recent times hot.
+ * ~30 visible bodies × a generous time window fits comfortably.
+ */
+const MAX_POSITION_CACHE_ENTRIES = 2000;
+
+/**
  * Orbital Engine
  *
  * Manages orbital position calculations with caching and provider selection.
@@ -204,6 +216,13 @@ export class OrbitalEngine {
         jdTDB,
         timestamp: Date.now(),
       });
+      // Bound the Map so time-warp playback (unique key per frame)
+      // cannot grow it without limit. Evict oldest-inserted entries.
+      while (this.positionCache.size > MAX_POSITION_CACHE_ENTRIES) {
+        const oldest = this.positionCache.keys().next().value;
+        if (oldest === undefined) break;
+        this.positionCache.delete(oldest);
+      }
     }
 
     return result;
@@ -239,8 +258,17 @@ export class OrbitalEngine {
   getOsculatingElements(bodyId: string, date: Date): OsculatingElements | null {
     const metadata = getOrbitalMetadata(bodyId);
 
-    // Try to get from analytical provider first
-    if (metadata?.primaryProvider && metadata.primaryProvider !== "kepler") {
+    // Try the analytical provider ONLY when the date is inside its
+    // advertised validity range — the same gate selectProvider() uses
+    // for the position. Without this gate the orbit-line elements kept
+    // using out-of-validity analytical theory while the body marker
+    // dropped to the Kepler fallback, so the rendered ellipse and the
+    // body's position disagreed at extreme dates.
+    if (
+      isWithinValidityRange(bodyId, date) &&
+      metadata?.primaryProvider &&
+      metadata.primaryProvider !== "kepler"
+    ) {
       const provider = this.providers.get(metadata.primaryProvider);
       if (provider?.getOsculatingElements) {
         const elements = provider.getOsculatingElements(bodyId, date);

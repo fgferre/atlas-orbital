@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { OrbitalEngine } from "./engine";
+import { keplerProvider } from "./keplerProvider";
+import { initializeOrbitalEngine } from "./setup";
 
 describe("OrbitalEngine cache stats", () => {
   let engine: OrbitalEngine;
@@ -114,5 +116,50 @@ describe("OrbitalEngine cache stats", () => {
     engine.calculatePosition("mars", date);
     expect(engine.getCacheStats().hits).toBe(2);
     expect(engine.getCacheStats().misses).toBe(2);
+  });
+});
+
+describe("OrbitalEngine cache bound (time-warp leak guard)", () => {
+  it("evicts oldest entries so the cache cannot grow without bound", () => {
+    const engine = new OrbitalEngine();
+    const base = Date.UTC(2025, 0, 1, 0, 0, 0, 0);
+    // Each call advances simulated time well past the ~0.864 s cache
+    // bucket, so every call is a distinct key — the exact pattern that
+    // made the Map grow unbounded under fast-forward playback.
+    for (let i = 0; i < 2500; i++) {
+      engine.calculatePosition("earth", new Date(base + i * 3_600_000));
+    }
+    const { size } = engine.getCacheStats();
+    expect(size).toBeGreaterThan(0);
+    expect(size).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe("OrbitalEngine.getOsculatingElements validity gating", () => {
+  it("falls back to Kepler outside the analytical validity range, matching the position provider", () => {
+    // Seed the singleton keplerProvider's element database so the
+    // out-of-validity fallback path exists (idempotent).
+    initializeOrbitalEngine();
+    const engine = new OrbitalEngine();
+    // Ceres' asteroid-osculating theory is valid 1900–2050; 1890 is
+    // outside it, where the position drops to the Kepler fallback.
+    const outOfRange = new Date("1890-01-01T00:00:00Z");
+
+    // Position drops to the Kepler fallback at this date.
+    expect(engine.getProvenance("ceres", outOfRange).isFallback).toBe(true);
+
+    // The orbit-line osculating elements must follow the SAME provider
+    // selection — not silently keep using out-of-validity analytical
+    // theory while the body marker is on the Kepler fallback.
+    const viaEngine = engine.getOsculatingElements("ceres", outOfRange);
+    const viaKepler = keplerProvider.getOsculatingElements("ceres", outOfRange);
+    expect(viaEngine).toEqual(viaKepler);
+
+    // Sanity: inside the window the analytical provider IS used, so the
+    // elements differ from the Kepler fallback.
+    const inRange = new Date("2025-01-01T00:00:00Z");
+    const analytic = engine.getOsculatingElements("ceres", inRange);
+    const kepler = keplerProvider.getOsculatingElements("ceres", inRange);
+    expect(analytic).not.toEqual(kepler);
   });
 });
