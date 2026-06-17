@@ -3,14 +3,33 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 import { VISUAL_PRESETS } from "../../config/visualPresets";
+import { AstroPhysics } from "../../lib/astrophysics";
 import {
   GRID_ORIENTATION_COLORS,
   getGridOrientationMatrix,
 } from "../../lib/gridOrientation";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
-import { getGridRecScaling } from "./shaders/gridRecScaling";
+import { GRIDREC_CIRCLE_LEVEL1_F, GRIDREC_N } from "./shaders/gridRecMath";
+import {
+  getGridRecAuLockedScaling,
+  gridRecBaseRingWorldRadius,
+} from "./shaders/gridRecScaling";
 import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
+
+/**
+ * World radius the level-1 ring (k=1) lands at when `u_tessQuality
+ * = 1`, derived from the plane size + shader ring constants. Locking
+ * `u_tessQuality = baseRingRadius / auToWorld(10^decade)` pins that
+ * ring to the AU-decade's world radius — the same radius the body
+ * positioner draws a body at `10^decade` AU. Constant per build (mesh
+ * size + shader constants are fixed).
+ */
+const GRID_REC_BASE_RING_WORLD_RADIUS = gridRecBaseRingWorldRadius(
+  GRID_RECURSIVE_CONFIG.worldSize,
+  GRIDREC_CIRCLE_LEVEL1_F,
+  GRIDREC_N
+);
 
 /**
  * Atlas port of Gaia's `GridRecursive` entity (MPL-2.0) — replaces
@@ -23,12 +42,25 @@ import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
  * Ship scope by sub-wave:
  *  - **T4.4b** (shipped `94af1b8`): horizontal quad + shader mount
  *    on the ecliptic plane, CIRCULAR style default, static uniforms.
- *  - **T4.4c** (this file, below): per-frame `getGridRecScaling`
- *    driver pushing camera-distance → `u_tessQuality` +
- *    `u_heightScale`. The grid now actually zooms through decades
- *    as the camera pulls back, matching Gaia's recursive behavior
- *    (`GridRecUpdater.java:80-81`). The level-1 rings swap
- *    smoothly between decades via the `heightScale` fade.
+ *  - **T4.4c** (this file, below): per-frame scaling driver pushing
+ *    the camera distance → `u_tessQuality` + `u_heightScale`. The
+ *    grid zooms through decades as the camera pulls back, matching
+ *    Gaia's recursive behavior (`GridRecUpdater.java:80-81`); the
+ *    level-1 rings swap smoothly between decades via the
+ *    `heightScale` fade.
+ *  - **Scale-lock fix** (2026-06-17): the driver now pins the
+ *    level-1 ring to the AU-decade world radius the body positioner
+ *    uses (`getGridRecAuLockedScaling` + `AstroPhysics.auToWorld` /
+ *    `worldToAu`) instead of the original scale-invariant
+ *    `getGridRecScaling(camera.position.length())`. The original
+ *    walk emitted a camera-relative ratio with no world anchor, so
+ *    in didactic mode (where bodies are log-compressed via
+ *    `mapDidacticHeliocentricDistance`) the rings drifted free of the
+ *    planets under zoom. The grid and bodies now share ONE transform,
+ *    so a planet at `10^decade` AU sits on the level-1 ring in both
+ *    scale modes by construction. See `getGridRecAuLockedScaling`
+ *    JSDoc for the ring-radius derivation and the saturated-cap
+ *    handling.
  *  - **T4.4d** (this file, below): orientation toggle (Equatorial /
  *    Ecliptic / Galactic) per `GridRecursiveRadio.java:34-48`
  *    transform-name swap + per-orientation color callouts. Applied
@@ -59,6 +91,7 @@ export const GridRecursive = () => {
   const { camera } = useThree();
   const visualPreset = useStore((state) => state.visualPreset);
   const gridOrientation = useStore((state) => state.gridOrientation);
+  const scaleMode = useStore((state) => state.scaleMode);
   const guideIntensity = VISUAL_PRESETS[visualPreset]?.guideIntensity ?? 1;
 
   const material = useMemo(() => buildGridRecShaderMaterial(), []);
@@ -98,11 +131,31 @@ export const GridRecursive = () => {
 
     const dist = camera.position.length();
 
-    // T4.4c — Gaia's recursive decade walk. Feeds atlas world
-    // units directly into the scale-invariant algorithm; see
-    // `gridRecScaling.ts` JSDoc for why no AU conversion is
-    // required.
-    const scaling = getGridRecScaling(dist);
+    // Scale-lock fix (2026-06-17): pin the grid rings to the AU-decade
+    // world radii the BODIES use, instead of the raw-camera-distance
+    // scale-invariant walk that floated the rings free of the planets.
+    //
+    // 1. Convert the camera's world distance into the heliocentric AU
+    //    it represents (the SAME space bodies are positioned in), so
+    //    the decade is chosen in AU, not raw world units.
+    // 2. Lock the level-1 ring to `auToWorld(10^decade)` — the world
+    //    radius a body at `10^decade` AU is drawn at — via
+    //    `getGridRecAuLockedScaling`. A planet at `10^decade` AU then
+    //    sits on that ring in BOTH didactic and realistic modes by
+    //    construction (in realistic `auToWorld` is linear `au×1000`,
+    //    so this reduces to the trivially-correct linear lock).
+    //
+    // The old scale-invariant `getGridRecScaling(dist)` could not lock:
+    // its `tessQuality` is a camera-relative ratio with no world anchor
+    // (see `gridRecScaling.ts` JSDoc). Feeding it an effective-AU would
+    // NOT have helped — the fix is to derive `tessQuality` from a fixed
+    // AU-decade world radius.
+    const effectiveAU = AstroPhysics.worldToAu(dist, scaleMode);
+    const scaling = getGridRecAuLockedScaling(
+      effectiveAU,
+      (au) => AstroPhysics.auToWorld(au, scaleMode),
+      GRID_REC_BASE_RING_WORLD_RADIUS
+    );
     const uniforms = materialRef.current.uniforms;
     uniforms.u_tessQuality.value = scaling.tessQuality;
     uniforms.u_heightScale.value = scaling.heightScale;

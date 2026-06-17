@@ -36,6 +36,25 @@ const DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS = [
   [80, 2350],
 ] as const satisfies readonly NumericAnchor[];
 
+/**
+ * Hard cap on the didactic heliocentric world distance — the curve
+ * saturates here so deep-Kuiper / scattered-disc bodies don't shoot
+ * off to the scene horizon. Past this radius the compression is flat,
+ * which is what makes `worldToAu` non-invertible beyond the cap.
+ */
+const DIDACTIC_HELIOCENTRIC_WORLD_CAP = 3200;
+
+/**
+ * The AU at which the (uncapped) didactic compression curve first
+ * reaches `DIDACTIC_HELIOCENTRIC_WORLD_CAP`. Computed from the anchor
+ * table (the log-linear extrapolation beyond the `80 AU → 2350`
+ * anchor crosses 3200 at ≈323.13 AU). `worldToAu` clamps its inverse
+ * search to this AU and returns it as the fixed effective-AU for any
+ * world distance in the saturated regime, so decade selection stays
+ * finite and bounded instead of frozen / NaN / runaway.
+ */
+const DIDACTIC_SATURATION_AU = 323.1341;
+
 export type BodyType =
   | "star"
   | "planet"
@@ -397,7 +416,85 @@ export class AstroPhysics {
       distanceAU,
       DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS
     );
-    return Math.min(mapped, 3200);
+    return Math.min(mapped, DIDACTIC_HELIOCENTRIC_WORLD_CAP);
+  }
+
+  /**
+   * Canonical heliocentric AU → world-units transform. THE single
+   * authority shared by the body positioner, the grid, and the AU
+   * labels so "a planet at v AU sits on the grid feature for v AU"
+   * holds by construction in both scale modes.
+   *
+   * Factored (not re-derived) from the inline logic the body
+   * positioner already runs:
+   *  - didactic: `mapDidacticHeliocentricDistance(au)` — the exact
+   *    compression `calculateLocalPosition` applies at
+   *    `astrophysics.ts:439-451` and `mapPhysicalPositionToDisplay`
+   *    applies at `:623-626`.
+   *  - realistic: `au × AU_TO_3D_UNITS` — the linear scale
+   *    `calculateLocalPosition` applies at `:451`.
+   *
+   * Mirror of the tick-positioning patch in
+   * `GridAuLabels.tsx:131-134`. No new physics.
+   */
+  static auToWorld(au: number, scaleMode: ScaleMode): number {
+    return scaleMode === "didactic"
+      ? this.mapDidacticHeliocentricDistance(au)
+      : au * AU_TO_3D_UNITS;
+  }
+
+  /**
+   * Inverse of {@link auToWorld}: world-units → effective heliocentric
+   * AU. Lets a consumer holding a world-space distance (e.g. the grid
+   * driving its decade from `camera.position.length()`) recover the
+   * AU it represents, so decade selection happens in the SAME space
+   * the bodies are positioned in.
+   *
+   * - realistic: trivial linear inverse `world / AU_TO_3D_UNITS`.
+   * - didactic: monotonic inverse of the (uncapped) compression curve
+   *   via binary search over `DIDACTIC_HELIOCENTRIC_DISTANCE_ANCHORS`.
+   *
+   * **Saturated regime (the cap).** `mapDidacticHeliocentricDistance`
+   * is hard-capped at `DIDACTIC_HELIOCENTRIC_WORLD_CAP` (3200 world
+   * units), reached at ≈323 AU — so it is NOT invertible beyond the
+   * cap (every farther AU maps to the same 3200). This method handles
+   * that explicitly: for `world ≥ cap` it returns the fixed
+   * saturation AU (`DIDACTIC_SATURATION_AU`) rather than NaN, a
+   * frozen value, or a runaway search result. A consumer past the cap
+   * therefore keeps reading a finite, bounded effective-AU — its
+   * decade simply stops advancing, exactly as the planet positions
+   * (which also cap at 3200) stop moving outward. Below the cap the
+   * inverse is exact (round-trips `auToWorld`).
+   */
+  static worldToAu(world: number, scaleMode: ScaleMode): number {
+    if (scaleMode === "realistic") {
+      return world / AU_TO_3D_UNITS;
+    }
+
+    if (!Number.isFinite(world) || world <= 0) {
+      return 0;
+    }
+
+    // Past the cap the forward curve is flat → no unique inverse.
+    // Return the fixed saturation AU so callers stay finite + bounded.
+    if (world >= DIDACTIC_HELIOCENTRIC_WORLD_CAP) {
+      return DIDACTIC_SATURATION_AU;
+    }
+
+    // Monotonic-increasing curve over (0, DIDACTIC_SATURATION_AU];
+    // binary-search in log space (the curve is ~log-linear). 60
+    // iterations resolves AU to ~machine precision over this domain.
+    let lowAU = 0;
+    let highAU = DIDACTIC_SATURATION_AU;
+    for (let iteration = 0; iteration < 60; iteration++) {
+      const midAU = 0.5 * (lowAU + highAU);
+      if (this.mapDidacticHeliocentricDistance(midAU) < world) {
+        lowAU = midAU;
+      } else {
+        highAU = midAU;
+      }
+    }
+    return 0.5 * (lowAU + highAU);
   }
 
   static resolveParallelLightReferencePoint(

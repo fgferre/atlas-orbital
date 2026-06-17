@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { SOLAR_SYSTEM_BODIES } from "../data/celestialBodies";
-import { AstroPhysics } from "./astrophysics";
+import { AstroPhysics, AU_TO_3D_UNITS } from "./astrophysics";
 
 const TEST_DATE = new Date("2000-01-01T12:00:00Z");
 
@@ -353,6 +353,102 @@ describe("AstroPhysics didactic geometry", () => {
 
     expect(shadowExtent).toBeCloseTo(semanticRadius, 8);
     expect(shadowExtent).toBeLessThan(0.1);
+  });
+
+  it("auToWorld(realistic) is the linear au × AU_TO_3D_UNITS transform", () => {
+    expect(AstroPhysics.auToWorld(1, "realistic")).toBe(AU_TO_3D_UNITS);
+    expect(AstroPhysics.auToWorld(1, "realistic")).toBe(1000);
+    expect(AstroPhysics.auToWorld(5.2, "realistic")).toBe(5200);
+    expect(AstroPhysics.auToWorld(0, "realistic")).toBe(0);
+  });
+
+  it("auToWorld(didactic) equals the heliocentric compression curve", () => {
+    // Factored from mapDidacticHeliocentricDistance — must agree exactly.
+    for (const au of [0.39, 1, 5.2, 30.05, 80, 400]) {
+      expect(AstroPhysics.auToWorld(au, "didactic")).toBe(
+        AstroPhysics.mapDidacticHeliocentricDistance(au)
+      );
+    }
+    // Anchor spot-checks: 1 AU → 440, 80 AU → 2350 (anchor table).
+    expect(AstroPhysics.auToWorld(1, "didactic")).toBeCloseTo(440, 6);
+    expect(AstroPhysics.auToWorld(80, "didactic")).toBeCloseTo(2350, 6);
+  });
+
+  it("auToWorld(didactic) saturates at the 3200 world cap", () => {
+    // Past ≈323 AU the curve is flat at the cap.
+    expect(AstroPhysics.auToWorld(400, "didactic")).toBe(3200);
+    expect(AstroPhysics.auToWorld(60000, "didactic")).toBe(3200);
+  });
+
+  it("worldToAu(realistic) inverts auToWorld linearly", () => {
+    expect(AstroPhysics.worldToAu(1000, "realistic")).toBe(1);
+    for (const au of [0.1, 1, 9.58, 40, 1000]) {
+      const world = AstroPhysics.auToWorld(au, "realistic");
+      expect(AstroPhysics.worldToAu(world, "realistic")).toBeCloseTo(au, 9);
+    }
+  });
+
+  it("round-trips worldToAu(auToWorld(x)) ≈ x across the anchor regime (didactic)", () => {
+    // Below the cap the didactic compression is strictly monotonic, so
+    // the binary-search inverse is exact (to ~machine precision).
+    for (const au of [0.05, 0.39, 1, 1.52, 5.2, 19.2, 39.48, 80, 100, 300]) {
+      const world = AstroPhysics.auToWorld(au, "didactic");
+      expect(AstroPhysics.worldToAu(world, "didactic")).toBeCloseTo(au, 4);
+    }
+  });
+
+  it("round-trips both modes at the cap boundary without NaN / runaway (didactic saturated regime)", () => {
+    // AT the cap: worldToAu returns the fixed saturation AU (finite).
+    const atCap = AstroPhysics.worldToAu(3200, "didactic");
+    expect(Number.isFinite(atCap)).toBe(true);
+    expect(atCap).toBeGreaterThan(300);
+    expect(atCap).toBeLessThan(400);
+
+    // PAST the cap: still finite + bounded (the decade freezes rather
+    // than advancing into a runaway value or NaN).
+    for (const world of [3200, 5000, 20000, 1e6]) {
+      const au = AstroPhysics.worldToAu(world, "didactic");
+      expect(Number.isFinite(au)).toBe(true);
+      expect(au).toBe(atCap);
+    }
+    // And it never returns NaN for degenerate inputs.
+    expect(AstroPhysics.worldToAu(0, "didactic")).toBe(0);
+    expect(AstroPhysics.worldToAu(-5, "didactic")).toBe(0);
+    expect(Number.isNaN(AstroPhysics.worldToAu(Number.NaN, "didactic"))).toBe(
+      false
+    );
+  });
+
+  it("auToWorld places planets on their AU-decade world radius identically to the body positioner (the scale-lock invariant)", () => {
+    // The HARD requirement reduced to a unit invariant: the world
+    // radius auToWorld(au) MUST match the radius the heliocentric body
+    // positioner draws a body at that AU (mapDidacticHeliocentricDistance
+    // in didactic; au×1000 in realistic). This is what the grid now
+    // locks its rings to, so a planet at v AU sits on the v-AU feature.
+    for (const au of [1, 5.2, 9.58, 30.05]) {
+      const direction = new THREE.Vector3(1, 0, 0);
+      const didacticBody = AstroPhysics.mapPhysicalPositionToDisplay({
+        body: getBody("earth"),
+        parentBody: getBody("sun"),
+        positionAU: direction.clone().multiplyScalar(au),
+        scaleMode: "didactic",
+      });
+      expect(didacticBody.length()).toBeCloseTo(
+        AstroPhysics.auToWorld(au, "didactic"),
+        6
+      );
+
+      const realisticBody = AstroPhysics.mapPhysicalPositionToDisplay({
+        body: getBody("earth"),
+        parentBody: getBody("sun"),
+        positionAU: direction.clone().multiplyScalar(au),
+        scaleMode: "realistic",
+      });
+      expect(realisticBody.length()).toBeCloseTo(
+        AstroPhysics.auToWorld(au, "realistic"),
+        6
+      );
+    }
   });
 
   it("preserves more visible hierarchy across large moon systems", () => {

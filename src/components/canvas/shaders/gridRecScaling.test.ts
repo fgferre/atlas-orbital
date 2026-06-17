@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getGridRecAuLockedScaling,
   getGridRecScaling,
+  gridRecBaseRingWorldRadius,
   gridRecLint,
   GRID_REC_DECADE_MAX,
   GRID_REC_DECADE_MIN,
 } from "./gridRecScaling";
+import { gridRecCircleGridFunc } from "./gridRecMath";
 
 // Citations under /tmp/gaiasky/core/src/gaiasky/scene/system/update/
 // unless otherwise noted.
@@ -139,6 +142,173 @@ describe("getGridRecScaling — decade-bracket algorithm", () => {
       const r = getGridRecScaling(d);
       expect(r.heightScale).toBeGreaterThanOrEqual(0);
       expect(r.heightScale).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// Atlas grid plane + shader ring constants (gridRecursiveConfig.ts:10,
+// gridRecMath.ts:46,31). Pinned here so the lock math is verified
+// against the real geometry the shader renders.
+const WORLD_SIZE = 40000;
+const LEVEL1_F = 10.0;
+const GRID_N = 10.0;
+
+describe("gridRecBaseRingWorldRadius — level-1 ring world radius at tessQuality=1", () => {
+  it("derives 200 world units (first BRIGHT ring at dist=2) for atlas's 40k plane + Gaia ring constants", () => {
+    // Bright rings are at cos(π·dist)=1 → even dist (2,4,…); dist=1 is a
+    // dark trough. R at the first bright ring (dist=2), tessQuality=1:
+    // R = (worldSize/2) / (LEVEL1_F · N) = 20000 / 100 = 200.
+    // (Anchoring to dist=1 → 100 would pin bodies into the dark gap.)
+    expect(gridRecBaseRingWorldRadius(WORLD_SIZE, LEVEL1_F, GRID_N)).toBe(200);
+  });
+});
+
+describe("getGridRecAuLockedScaling — pins the level-1 ring to the AU-decade world radius", () => {
+  const baseRingRadius = gridRecBaseRingWorldRadius(
+    WORLD_SIZE,
+    LEVEL1_F,
+    GRID_N
+  );
+  // baseRingRadius / tessQuality is the world radius of the first bright
+  // ring (shader dist=2). Locking is correct iff that equals
+  // auToWorld(10^decade) — i.e. a body at 10^decade AU sits on the ring.
+  const lockedRingWorldRadius = (tessQuality: number) =>
+    baseRingRadius / tessQuality;
+
+  // Realistic transform: linear au × 1000 (AU_TO_3D_UNITS).
+  const realisticAuToWorld = (au: number) => au * 1000;
+
+  it("realistic: ring k=1 lands exactly on the AU-decade world radius", () => {
+    // effectiveAU within decade 0 ([1,10) AU) → lock to auToWorld(1)=1000.
+    for (const effAU of [1, 3, 9.9]) {
+      const r = getGridRecAuLockedScaling(
+        effAU,
+        realisticAuToWorld,
+        baseRingRadius
+      );
+      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(1000, 6);
+    }
+    // decade 1 ([10,100) AU) → lock to auToWorld(10)=10000.
+    const r2 = getGridRecAuLockedScaling(
+      40,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    expect(lockedRingWorldRadius(r2.tessQuality)).toBeCloseTo(10000, 6);
+  });
+
+  it("a body at 10^decade AU lands on a BRIGHT ring (cos(π·dist)=1), not a trough — guards the dist=2 anchor", () => {
+    // The shader lights rings where cos(π·dist)=1 (dist = 2,4,6…); dist=1
+    // is a dark trough. A body at 10^decade AU sits at world radius
+    // auToWorld(10^decade); that radius MUST coincide with a bright ring.
+    // This is exactly what the algebraic baseRingRadius/tessQuality
+    // identity could NOT catch — it holds for both the dist=1 trough and
+    // the dist=2 ring; only the shader func distinguishes them. (Fails
+    // with the old dist=1 anchor: gridFunc would read ≈ −1.)
+    const halfPlane = WORLD_SIZE / 2;
+    for (const effAU of [1, 3, 9.9, 40, 250]) {
+      const r = getGridRecAuLockedScaling(
+        effAU,
+        realisticAuToWorld,
+        baseRingRadius
+      );
+      const decadeLowerAU = Math.pow(10, Math.floor(Math.log10(effAU)));
+      const bodyRadius = realisticAuToWorld(decadeLowerAU);
+      const tcX = bodyRadius / halfPlane; // radial sample on the +x axis
+      const gridFunc = gridRecCircleGridFunc(tcX, 0, r.tessQuality, LEVEL1_F);
+      expect(gridFunc).toBeCloseTo(1, 6); // bright ring, NOT a trough (−1)
+    }
+  });
+
+  it("locked ring radius is INDEPENDENT of fine camera position within a decade (no drift)", () => {
+    // The core scale-lock property the old walk lacked: moving the
+    // camera within a decade must NOT move the ring.
+    const a = getGridRecAuLockedScaling(
+      1.1,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    const b = getGridRecAuLockedScaling(
+      9.8,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    expect(a.tessQuality).toBe(b.tessQuality);
+    expect(lockedRingWorldRadius(a.tessQuality)).toBeCloseTo(1000, 6);
+  });
+
+  it("didactic: ring k=1 lands on the compressed AU-decade world radius (so a planet at 10^decade AU sits on it)", () => {
+    // Representative compressed transform: decade boundaries map to
+    // distinct compressed world radii (NOT linear). The lock must use
+    // whatever auToWorld returns, so the ring follows the compression.
+    const didacticAuToWorld = (au: number) => {
+      if (au <= 0.1) return 50;
+      if (au <= 1) return 440;
+      if (au <= 10) return 1200;
+      return 2485;
+    };
+    // effectiveAU in [1,10) → decade 0 → lock to auToWorld(1)=440.
+    const r = getGridRecAuLockedScaling(5.2, didacticAuToWorld, baseRingRadius);
+    expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(440, 6);
+    // effectiveAU in [10,100) → decade 1 → lock to auToWorld(10)=1200.
+    const r2 = getGridRecAuLockedScaling(30, didacticAuToWorld, baseRingRadius);
+    expect(lockedRingWorldRadius(r2.tessQuality)).toBeCloseTo(1200, 6);
+  });
+
+  it("heightScale fades 1 → 0 across the decade in AU space", () => {
+    // Near the decade lower bound → heightScale ≈ 1.
+    const lower = getGridRecAuLockedScaling(
+      1.001,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    expect(lower.heightScale).toBeGreaterThan(0.99);
+    // Near the decade upper bound → heightScale ≈ 0.
+    const upper = getGridRecAuLockedScaling(
+      9.99,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    expect(upper.heightScale).toBeLessThan(0.01);
+    // Mid-decade is between.
+    const mid = getGridRecAuLockedScaling(
+      5,
+      realisticAuToWorld,
+      baseRingRadius
+    );
+    expect(mid.heightScale).toBeGreaterThan(0);
+    expect(mid.heightScale).toBeLessThan(1);
+  });
+
+  it("handles the saturated regime (capped auToWorld) without NaN / runaway", () => {
+    // Past the didactic cap, auToWorld returns the SAME capped world
+    // radius for every farther decade, so the ring freezes at the cap
+    // exactly as the (also-capped) planet positions do.
+    const cappedAuToWorld = (au: number) => Math.min(au * 100, 3200);
+    for (const effAU of [400, 5000, 1e6]) {
+      const r = getGridRecAuLockedScaling(
+        effAU,
+        cappedAuToWorld,
+        baseRingRadius
+      );
+      expect(Number.isFinite(r.tessQuality)).toBe(true);
+      expect(Number.isFinite(r.heightScale)).toBe(true);
+      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(3200, 6);
+    }
+  });
+
+  it("falls back to a sane innermost decade for degenerate effective-AU", () => {
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const r = getGridRecAuLockedScaling(
+        bad,
+        realisticAuToWorld,
+        baseRingRadius
+      );
+      expect(Number.isFinite(r.tessQuality)).toBe(true);
+      expect(r.tessQuality).toBeGreaterThan(0);
+      expect(r.heightScale).toBe(1);
+      // Fallback locks to auToWorld(1) = 1000.
+      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(1000, 6);
     }
   });
 });

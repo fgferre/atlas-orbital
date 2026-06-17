@@ -88,3 +88,112 @@ export const getGridRecScaling = (
 
   return { tessQuality, heightScale };
 };
+
+/**
+ * World radius of the first BRIGHT level-1 `circle_rec` ring when
+ * `u_tessQuality = 1`. The shader lights a ring where `cos(π · dist) = 1`
+ * — i.e. at EVEN integer `dist` (2, 4, 6 …); ODD `dist` (1, 3 …) is a
+ * dark trough (`cos(π) = −1`, `gridRecShader.ts:150,171`). Here
+ * `dist = length(tc · u_tessQuality · GRIDREC_CIRCLE_LEVEL1_F · GRIDREC_N · 2)`
+ * and `tc` runs `[-1, 1]` across the plane, so a world radius `R` maps
+ * to `tc = R / (worldSize / 2)` (`gridRecShader.ts:138-141`). Solving the
+ * first bright ring (`dist = 2`) for `R` at `tessQuality = 1` gives
+ * `R = (worldSize / 2) / (LEVEL1_F · N)`. A target ring radius `W` is then
+ * locked by `u_tessQuality = baseRingRadius / W` so a body at `W` sits ON
+ * that bright ring (see {@link getGridRecAuLockedScaling}).
+ *
+ * ⚠ The `dist = 2` anchor is load-bearing. Anchoring to `dist = 1`
+ * (an extra `× 2` in the denominator → 100 wu) would pin the body to a
+ * TROUGH — it would sit in the dark gap at HALF the radius of the nearest
+ * visible ring (a constant 2× offset, both scale modes). The shader-
+ * brightness test in `gridRecScaling.test.ts` guards this; the algebraic
+ * `baseRingRadius / tessQuality === auToWorld` identity cannot (it holds
+ * for both anchors).
+ */
+export const gridRecBaseRingWorldRadius = (
+  worldSize: number,
+  level1F: number,
+  gridN: number
+): number => worldSize / 2 / (level1F * gridN);
+
+/**
+ * AU-decade-locked variant of {@link getGridRecScaling}.
+ *
+ * **Why this exists.** The base `getGridRecScaling` is scale-invariant:
+ * it emits a `tessQuality` normalized within whatever decade contains
+ * the *raw camera distance*, so the rendered ring radius
+ * (`baseRingRadius / tessQuality`) floats with the camera and is NOT
+ * anchored to any fixed world position. That is the scale-lock bug —
+ * in didactic mode the grid rings drift away from the planets, which
+ * sit at compressed world radii via `AstroPhysics.auToWorld`. (In
+ * realistic mode they only *appear* to agree at certain camera
+ * distances because both pipelines are linear.) Feeding an
+ * effective-AU into the scale-invariant walk does NOT fix this — the
+ * output is still a camera-relative normalized ratio with no world
+ * anchor.
+ *
+ * **What this does instead.** It pins the first BRIGHT level-1 ring (at
+ * shader `dist=2`, where `cos(π·dist)=1`) to the world radius of the
+ * AU-decade currently enclosing the camera's effective-AU position. The
+ * caller supplies:
+ *  - `effectiveAU` — the camera's position expressed in heliocentric
+ *    AU (`AstroPhysics.worldToAu(camera.position.length(), scaleMode)`),
+ *    so the decade is chosen in the same space the bodies live in;
+ *  - `auToWorld` — `AstroPhysics.auToWorld(au, scaleMode)`, so the
+ *    locked radius uses the EXACT transform the body positioner uses.
+ *
+ * The result locks `u_tessQuality` so that first bright ring sits
+ * exactly at `auToWorld(10^decade)` — the world radius of a body at
+ * `10^decade` AU. A planet at `10^decade` AU therefore sits on that
+ * bright ring in BOTH modes, by construction. `heightScale` fades the
+ * level-1 ring across the decade (1 at the lower bound, 0 at the
+ * upper) using the effective-AU's position within the decade, exactly
+ * like the base walk — so the decade swap stays smooth.
+ *
+ * **Saturated regime.** When the camera is past the didactic cap,
+ * `worldToAu` returns the fixed saturation AU, so `effectiveAU` stops
+ * advancing and the decade freezes — and `auToWorld(10^decade)` also
+ * caps at 3200, so the ring freezes at the same radius the planets
+ * freeze at. The lock holds; nothing NaNs, freezes mid-curve, or runs
+ * away.
+ */
+export const getGridRecAuLockedScaling = (
+  effectiveAU: number,
+  auToWorld: (au: number) => number,
+  baseRingRadius: number
+): GridRecScalingResult => {
+  // Guard non-finite / non-positive effective-AU (camera at origin,
+  // bad invert). Fall back to the level-1 ring at full fade so the
+  // grid still renders a sane innermost decade.
+  if (!Number.isFinite(effectiveAU) || effectiveAU <= 0) {
+    const fallbackWorld = auToWorld(1);
+    return {
+      tessQuality: fallbackWorld > 0 ? baseRingRadius / fallbackWorld : 1,
+      heightScale: 1,
+    };
+  }
+
+  const decade = Math.floor(Math.log10(effectiveAU));
+  const decadeLowerAU = Math.pow(10, decade);
+  const decadeUpperAU = Math.pow(10, decade + 1);
+
+  // Lock the level-1 ring (k=1) to the world radius of the current
+  // AU-decade boundary — the SAME world radius a body at 10^decade AU
+  // is drawn at. tessQuality = baseRingRadius / lockedWorldRadius.
+  const lockedWorldRadius = auToWorld(decadeLowerAU);
+  const tessQuality =
+    lockedWorldRadius > 0 ? baseRingRadius / lockedWorldRadius : 1;
+
+  // Decade cross-fade: 1 at the decade's lower bound, 0 at its upper
+  // bound, computed in the SAME AU space (mirrors the base walk's
+  // gridRecLint over the enclosing decade).
+  const heightScale = gridRecLint(
+    effectiveAU,
+    decadeLowerAU,
+    decadeUpperAU,
+    1,
+    0
+  );
+
+  return { tessQuality, heightScale };
+};
