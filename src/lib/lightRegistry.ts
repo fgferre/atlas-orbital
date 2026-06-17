@@ -269,6 +269,55 @@ const pickTopHygByBrightness = (
   return heap;
 };
 
+// ── Candidate cache ──────────────────────────────────────────────────
+// pickTopHygByBrightness scans the whole catalog (~109k stars) with
+// transcendental brightness math. Its result depends ONLY on inputs that
+// are static frame-to-frame in steady state (catalog, oversample,
+// backbuffer height, fovFactor, obliquity) — NOT on the camera. The
+// per-frame camera dependency lives entirely in the cheap NDC projection
+// in updateLightRegistry. Caching the candidate list collapses the
+// per-frame cost from O(catalog) to O(slots) whenever the user is not
+// actively zooming / resizing / changing quality tier.
+let cachedCandidates: HygCandidate[] | null = null;
+let cachedCatalog: HygCatalogData | null = null;
+let cachedOversample = -1;
+let cachedBackBufferHeight = -1;
+let cachedFovFactor = -1;
+let cachedObliquity: THREE.Matrix3 | null = null;
+
+const getTopHygCandidates = (
+  catalog: HygCatalogData,
+  oversample: number,
+  backBufferHeight: number,
+  fovFactor: number,
+  obliquityMatrix: THREE.Matrix3 | null
+): HygCandidate[] => {
+  if (
+    cachedCandidates !== null &&
+    cachedCatalog === catalog &&
+    cachedOversample === oversample &&
+    cachedBackBufferHeight === backBufferHeight &&
+    cachedFovFactor === fovFactor &&
+    cachedObliquity === obliquityMatrix
+  ) {
+    return cachedCandidates;
+  }
+  const candidates = pickTopHygByBrightness(
+    catalog,
+    oversample,
+    backBufferHeight,
+    fovFactor,
+    obliquityMatrix
+  );
+  cachedCandidates = candidates;
+  cachedCatalog = catalog;
+  cachedOversample = oversample;
+  cachedBackBufferHeight = backBufferHeight;
+  cachedFovFactor = fovFactor;
+  cachedObliquity = obliquityMatrix;
+  return candidates;
+};
+
 export interface UpdateLightRegistryParams {
   /** HYG catalog (already loaded). */
   catalog: HygCatalogData | null;
@@ -346,7 +395,7 @@ export const updateLightRegistry = (
     // any candidate outside the frustum still leaves us enough to
     // fill the slots from in-frustum stars.
     const oversample = Math.min(MAX_LIGHTS * 2, remaining * 3);
-    const candidates = pickTopHygByBrightness(
+    const candidates = getTopHygCandidates(
       catalog,
       oversample,
       backBufferHeight,
