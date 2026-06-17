@@ -15,7 +15,7 @@
  */
 
 import * as THREE from "three";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   getCachedNASAStarCatalog,
@@ -134,6 +134,17 @@ export const NASAStarfield = ({ particleSize = 1.0 }: NASAStarfieldProps) => {
     material.uniforms.particleSize.value = particleSize * getViewportScale();
     material.uniforms.vfxHdrGain.value = qualityProfile.vfxHdrGain;
   });
+
+  // Dispose the memoised geometry + material when rebuilt (catalog
+  // change) or on unmount. R3F does not auto-dispose objects created in
+  // useMemo and attached via prop, so without this the BufferGeometry +
+  // ShaderMaterial leak VRAM on every source toggle / catalog reload.
+  useEffect(() => {
+    return () => {
+      geometry?.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
 
   if (!geometry) {
     return null;

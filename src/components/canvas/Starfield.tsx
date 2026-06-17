@@ -34,7 +34,7 @@
  */
 
 import * as THREE from "three";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { simulationClock } from "../../lib/simulationClock";
@@ -591,6 +591,21 @@ export const Starfield = () => {
     matUniforms.u_minQuadSolidAngle.value = computeMinQuadSolidAngle(vHeight);
   });
   /* eslint-enable react-hooks/immutability */
+
+  // Own the GPU lifecycle of the memoised geometry + material. These
+  // are the heaviest objects in the scene (~109k-instance buffer); R3F
+  // only auto-disposes objects it instantiates from JSX, NOT ones
+  // created in useMemo and attached via prop, so without this they leak
+  // VRAM on every quality-tier / catalog rebuild and on unmount
+  // (mirrors the dispose pattern already used in ProceduralSun3D /
+  // GridRecursive). The cleanup runs against the PREVIOUS values when
+  // either identity changes, then once more on unmount.
+  useEffect(() => {
+    return () => {
+      geometry?.dispose();
+      material?.dispose();
+    };
+  }, [geometry, material]);
 
   if (!geometry) return null;
 
