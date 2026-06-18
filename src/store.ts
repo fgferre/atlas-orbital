@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
-import type { GridOrientation } from "./lib/gridOrientation";
 import { DEFAULT_LABEL_MODE, type LabelMode } from "./lib/labelMode";
 import type { QualityMode } from "./lib/qualityProfile";
 import { simulationClock } from "./lib/simulationClock";
@@ -69,29 +68,16 @@ interface AppState {
   showCredits: boolean;
   showOrbits: boolean;
   declutterOrbits: boolean;
+  /**
+   * Master toggle for the single square ecliptic floor grid (Workflow
+   * #2b redesign, 2026-06-17). The store key is kept verbatim for
+   * persist-migration safety; the UI copy reads "Grid". The grid renders
+   * one ecliptic floor — the 3 switchable orientation frames (ecliptic /
+   * equatorial / galactic) and the standing projection-line layer were
+   * removed in the redesign (the decade scale label + extent disk ride
+   * this same toggle).
+   */
   showEclipticGrid: boolean;
-  /**
-   * T4.4d — which coordinate frame the recursive grid renders on.
-   * "ecliptic" is atlas's implicit default (matches the XZ plane
-   * planets orbit on); "equatorial" re-tilts by obliquity;
-   * "galactic" applies the ICRS→galactic rotation. The visibility
-   * flag above continues to gate the grid on/off regardless of
-   * orientation (atlas-native UX; Gaia uses three independent
-   * ComponentType visibility flags internally but exposes the same
-   * "grid on/off" affordance).
-   */
-  gridOrientation: GridOrientation;
-  /**
-   * T4.4e — whether to draw the L-polyline connecting the Sun (grid
-   * origin) to the focused body's XZ projection on the plane, then
-   * vertically up to the focus itself. Gaia toggles this via
-   * `config.yaml:381 projectionLines: true` (default) inside
-   * `program.recursiveGrid`; atlas exposes the same flag so users can
-   * hide the callout when it occludes the focused body view.
-   * Hidden automatically when no focus is active or focus === Sun
-   * (no meaningful projection to draw).
-   */
-  gridProjectionLines: boolean;
   /**
    * T4.2-β — read-only signal flipped to `true` when the camera
    * crosses Gaia's surface-mode threshold (`distFromFocus <
@@ -171,8 +157,6 @@ interface AppState {
   toggleOrbits: () => void;
   toggleDeclutterOrbits: () => void;
   toggleEclipticGrid: () => void;
-  setGridOrientation: (orientation: GridOrientation) => void;
-  toggleGridProjectionLines: () => void;
   setSurfaceModeActive: (active: boolean) => void;
   toggleProgradeVector: () => void;
   toggleScaleMode: () => void;
@@ -268,8 +252,6 @@ export const useStore = create<AppState>()(
       showOrbits: true,
       declutterOrbits: true,
       showEclipticGrid: true,
-      gridOrientation: "ecliptic",
-      gridProjectionLines: true,
       surfaceModeActive: false,
       showProgradeVector: true,
       scaleMode: "didactic",
@@ -377,9 +359,6 @@ export const useStore = create<AppState>()(
         set((state) => ({ declutterOrbits: !state.declutterOrbits })),
       toggleEclipticGrid: () =>
         set((state) => ({ showEclipticGrid: !state.showEclipticGrid })),
-      setGridOrientation: (gridOrientation) => set({ gridOrientation }),
-      toggleGridProjectionLines: () =>
-        set((state) => ({ gridProjectionLines: !state.gridProjectionLines })),
       setSurfaceModeActive: (surfaceModeActive) =>
         set((state) =>
           state.surfaceModeActive === surfaceModeActive

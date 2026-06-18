@@ -1,314 +1,345 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 
+import { AstroPhysics } from "../../../lib/astrophysics";
 import {
-  getGridRecAuLockedScaling,
-  getGridRecScaling,
-  gridRecBaseRingWorldRadius,
-  gridRecLint,
-  GRID_REC_DECADE_MAX,
-  GRID_REC_DECADE_MIN,
+  AU_PER_LY,
+  computeViewExtentWorld,
+  formatDecadeScaleLabel,
+  GRID_DECADE_MAX,
+  GRID_DECADE_MIN,
+  RING_MANTISSAS,
+  resolveGridDecade,
+  resolveGridRingSet,
 } from "./gridRecScaling";
-import { gridRecCircleGridFunc } from "./gridRecMath";
 
-// Citations under /tmp/gaiasky/core/src/gaiasky/scene/system/update/
-// unless otherwise noted.
+// ── Framing: the rings are a Sun-centered POLAR distance grid ────────
+//
+// Each ring for AU value `v` is drawn at world radius `auToWorld(v,
+// scaleMode)`. Because the body positioner places a body at world radius
+// `auToWorld(distanceAU, scaleMode)`, a planet at D AU sits EXACTLY on the
+// ring for D — in BOTH scale modes. That radial-alignment identity is the
+// whole point, and these tests assert it directly (the thing the old
+// square grid could not provide).
 
-describe("gridRecLint — GridRecUpdater mirrors MathUtilsDouble.lint", () => {
-  it("interpolates linearly between startOut and endOut", () => {
-    expect(gridRecLint(0.5, 0, 1, 0, 10)).toBeCloseTo(5, 10);
-  });
+describe("ring radii align with body world radii (the alignment identity)", () => {
+  for (const mode of ["realistic", "didactic"] as const) {
+    it(`a ring for v AU is drawn at auToWorld(v, "${mode}") — body at v AU lands on it`, () => {
+      // Pick a view extent that surfaces the 1-AU decade, then find the
+      // 1-AU ring in the set and assert its radius equals where a body at
+      // 1 AU is positioned.
+      const extent = AstroPhysics.auToWorld(6, mode); // ~few-AU framing
+      const { rings } = resolveGridRingSet(extent, mode);
+      const oneAuRing = rings.find((r) => Math.abs(r.au - 1) < 1e-9);
+      expect(oneAuRing).toBeDefined();
+      const bodyRadius = AstroPhysics.auToWorld(1, mode);
+      expect(oneAuRing!.radius).toBeCloseTo(bodyRadius, 4);
+    });
+  }
 
-  it("returns startOut at val=min", () => {
-    expect(gridRecLint(0, 0, 1, 7, 42)).toBe(7);
-  });
-
-  it("returns endOut at val=max", () => {
-    expect(gridRecLint(1, 0, 1, 7, 42)).toBe(42);
-  });
-
-  it("handles inverted output range (startOut > endOut)", () => {
-    // getGridScaling calls lint with (1, 0) so the fade descends.
-    expect(gridRecLint(0.5, 0, 1, 1, 0)).toBeCloseTo(0.5, 10);
-    expect(gridRecLint(0.1, 0.1, 1.0, 1, 0)).toBe(1);
-    expect(gridRecLint(1.0, 0.1, 1.0, 1, 0)).toBe(0);
-  });
-
-  it("handles negative-exponent decade ranges (val=5e-3 in [1e-3, 1e-2])", () => {
-    expect(gridRecLint(5e-3, 1e-3, 1e-2, 1, 0)).toBeCloseTo(
-      0.5555555555555556,
-      10
-    );
-  });
-});
-
-describe("getGridRecScaling — decade-bracket algorithm", () => {
-  it("decade range covers -25 to 25 (GridRecUpdater.java:152)", () => {
-    expect(GRID_REC_DECADE_MIN).toBe(-25);
-    expect(GRID_REC_DECADE_MAX).toBe(25);
-  });
-
-  it("cameraDistance=1 sits at the upper bound of decade i=0 → loop advances to i=1, tessQuality=0.1, heightScale=1", () => {
-    // 1 < 10^0 is false (1 < 1 false), so i=0 skipped. At i=1,
-    // 1 < 10^1 = 10 is true. lower = 10^0 = 1.
-    // lint(1, 1, 10, 1, 0) = 1.
-    // tessQuality = 1 * 10^-1 = 0.1.
-    const r = getGridRecScaling(1);
-    expect(r.heightScale).toBe(1);
-    expect(r.tessQuality).toBeCloseTo(0.1, 10);
-  });
-
-  it("cameraDistance=0.5 lands in decade i=0 (between 0.1 and 1)", () => {
-    // 0.5 < 10^0 = 1 is true. lower = 10^-1 = 0.1.
-    // lint(0.5, 0.1, 1.0, 1, 0) ≈ 1 - (0.5-0.1)/0.9 ≈ 0.5556.
-    // tessQuality = 0.5 * 10^0 = 0.5.
-    const r = getGridRecScaling(0.5);
-    expect(r.tessQuality).toBeCloseTo(0.5, 10);
-    expect(r.heightScale).toBeCloseTo(0.5555555555555556, 10);
-  });
-
-  it("cameraDistance=5 lands in decade i=1 (between 1 and 10)", () => {
-    // lint(5, 1, 10, 1, 0) = 1 - (5-1)/9 ≈ 0.5556.
-    // tessQuality = 5 * 10^-1 = 0.5.
-    const r = getGridRecScaling(5);
-    expect(r.tessQuality).toBeCloseTo(0.5, 10);
-    expect(r.heightScale).toBeCloseTo(0.5555555555555556, 10);
-  });
-
-  it("cameraDistance=50 lands in decade i=2 (between 10 and 100) — same normalized output as 5 and 0.5 (scale invariance)", () => {
-    const r = getGridRecScaling(50);
-    expect(r.tessQuality).toBeCloseTo(0.5, 10);
-    expect(r.heightScale).toBeCloseTo(0.5555555555555556, 10);
-  });
-
-  it("cameraDistance near decade lower bound yields heightScale ≈ 1", () => {
-    const r = getGridRecScaling(1.01);
-    expect(r.heightScale).toBeGreaterThan(0.99);
-  });
-
-  it("cameraDistance near decade upper bound yields heightScale ≈ 0", () => {
-    const r = getGridRecScaling(9.99);
-    expect(r.heightScale).toBeLessThan(0.002);
-  });
-
-  it("cameraDistance=0.05 lands in decade i=-1 (between 0.01 and 0.1)", () => {
-    const r = getGridRecScaling(0.05);
-    // lint(0.05, 0.01, 0.1, 1, 0) = 1 - (0.05-0.01)/0.09 ≈ 0.5556
-    expect(r.tessQuality).toBeCloseTo(0.5, 10);
-    expect(r.heightScale).toBeCloseTo(0.5555555555555556, 10);
-  });
-
-  it("cameraDistance=0 falls past the loop without matching any upper bound", () => {
-    // 0 is NOT less than pow(10, -25) (which is ~1e-25, positive).
-    // Actually 0 < 1e-25 is true, so the first iteration at i=-25
-    // DOES match. lower = 10^-26 (tiny), upper = 10^-25.
-    // lint(0, 1e-26, 1e-25, 1, 0) ≈ 1 (since 0 is below lower).
-    // tessQuality = 0 * 10^25 = 0.
-    const r = getGridRecScaling(0);
-    expect(r.tessQuality).toBe(0);
-    // heightScale may be slightly > 1 when val < lower (no clamp in Gaia) — trust the math.
-    expect(r.heightScale).toBeGreaterThanOrEqual(1);
-  });
-
-  it("cameraDistance above every decade (>= 10^25) hits the fallback: tessQuality=cameraDistance, heightScale=0", () => {
-    // Gaia's res.set(au, 0d) default at line 150.
-    const huge = Math.pow(10, 26);
-    const r = getGridRecScaling(huge);
-    expect(r.tessQuality).toBe(huge);
-    expect(r.heightScale).toBe(0);
-  });
-
-  it("cameraDistance=1000 lands in decade i=3 (typical atlas PLANET_ORBIT range)", () => {
-    // 1000 < 10^4 = 10000 true. lower = 10^3 = 1000.
-    // lint(1000, 1000, 10000, 1, 0) = 1.
-    // tessQuality = 1000 * 10^-4 = 0.1.
-    const r = getGridRecScaling(1000);
-    expect(r.tessQuality).toBeCloseTo(0.1, 10);
-    expect(r.heightScale).toBe(1);
-  });
-
-  it("tessQuality output always stays in [0.1, 1.0] within a decade (shader branch relies on this)", () => {
-    // gridrec.fragment.glsl:186 uses u_tessQuality as a frequency
-    // multiplier for the level-1 rings; driving it outside [0.1, 1]
-    // would break the "1 AU / 10 AU / 100 AU" spacing visual.
-    for (const d of [0.15, 0.5, 0.99, 1.5, 7, 50, 500, 5000]) {
-      const r = getGridRecScaling(d);
-      expect(r.tessQuality).toBeGreaterThanOrEqual(0.1 - 1e-12);
-      expect(r.tessQuality).toBeLessThanOrEqual(1.0 + 1e-12);
-    }
-  });
-
-  it("heightScale output always stays in [0, 1] within a decade", () => {
-    for (const d of [0.15, 0.5, 0.99, 1.5, 7, 50, 500, 5000]) {
-      const r = getGridRecScaling(d);
-      expect(r.heightScale).toBeGreaterThanOrEqual(0);
-      expect(r.heightScale).toBeLessThanOrEqual(1);
+  it("EVERY emitted ring's radius equals auToWorld(au) for its AU (both modes)", () => {
+    for (const mode of ["realistic", "didactic"] as const) {
+      for (const extent of [2_000, 20_000, 200_000]) {
+        const { rings } = resolveGridRingSet(extent, mode);
+        for (const ring of rings) {
+          expect(ring.radius).toBeCloseTo(
+            AstroPhysics.auToWorld(ring.au, mode),
+            4
+          );
+        }
+      }
     }
   });
 });
 
-// Atlas grid plane + shader ring constants (gridRecursiveConfig.ts:10,
-// gridRecMath.ts:46,31). Pinned here so the lock math is verified
-// against the real geometry the shader renders.
-const WORLD_SIZE = 40000;
-const LEVEL1_F = 10.0;
-const GRID_N = 10.0;
+describe("computeViewExtentWorld — view scale, not heliocentric distance", () => {
+  const makeCam = (pos: THREE.Vector3, fovDeg = 45) => {
+    const cam = new THREE.PerspectiveCamera(fovDeg, 1, 0.1, 1e15);
+    cam.position.copy(pos);
+    cam.updateMatrixWorld();
+    return cam;
+  };
 
-describe("gridRecBaseRingWorldRadius — level-1 ring world radius at tessQuality=1", () => {
-  it("derives 200 world units (first BRIGHT ring at dist=2) for atlas's 40k plane + Gaia ring constants", () => {
-    // Bright rings are at cos(π·dist)=1 → even dist (2,4,…); dist=1 is a
-    // dark trough. R at the first bright ring (dist=2), tessQuality=1:
-    // R = (worldSize/2) / (LEVEL1_F · N) = 20000 / 100 = 200.
-    // (Anchoring to dist=1 → 100 would pin bodies into the dark gap.)
-    expect(gridRecBaseRingWorldRadius(WORLD_SIZE, LEVEL1_F, GRID_N)).toBe(200);
+  it("extent = 2·camToTarget·tan(fov/2) for a focused (non-Sun) target", () => {
+    const target = new THREE.Vector3(1000, 0, 0);
+    const cam = makeCam(new THREE.Vector3(1000, 0, 500), 45);
+    const extent = computeViewExtentWorld(cam, target);
+    const expected = 2 * 500 * Math.tan(THREE.MathUtils.degToRad(45) / 2);
+    expect(extent).toBeCloseTo(expected, 6);
+  });
+
+  it("REFINES as the learner dollies in on a distant focused body", () => {
+    const body = new THREE.Vector3(1_000_000, 0, 0);
+    const far = makeCam(new THREE.Vector3(1_000_000, 0, 500_000));
+    const near = makeCam(new THREE.Vector3(1_000_000, 0, 2_000));
+    // Heliocentric distance ~unchanged (dominated by the 1e6 offset)...
+    expect(
+      Math.abs(far.position.length() - near.position.length()) /
+        far.position.length()
+    ).toBeLessThan(0.2);
+    // ...but the view extent shrinks sharply as we dolly in.
+    const extentFar = computeViewExtentWorld(far, body);
+    const extentNear = computeViewExtentWorld(near, body);
+    expect(extentNear).toBeLessThan(extentFar);
+    // And the realistic decade refines (gets smaller) on zoom-in.
+    const decFar = resolveGridRingSet(extentFar, "realistic").decade;
+    const decNear = resolveGridRingSet(extentNear, "realistic").decade;
+    expect(decNear).toBeLessThan(decFar);
+  });
+
+  it("reduces to heliocentric framing when the target is the Sun/origin", () => {
+    const cam = makeCam(new THREE.Vector3(0, 0, 4000));
+    const atOrigin = computeViewExtentWorld(cam, new THREE.Vector3(0, 0, 0));
+    const nullTarget = computeViewExtentWorld(cam, null);
+    expect(atOrigin).toBeCloseTo(nullTarget, 6);
+    expect(atOrigin).toBeCloseTo(
+      2 * 4000 * Math.tan(THREE.MathUtils.degToRad(45) / 2),
+      6
+    );
+  });
+
+  it("uses the live camera FOV (a wider lens shows a wider extent)", () => {
+    const target = new THREE.Vector3(0, 0, 0);
+    const narrow = computeViewExtentWorld(
+      makeCam(new THREE.Vector3(0, 0, 1000), 30),
+      target
+    );
+    const wide = computeViewExtentWorld(
+      makeCam(new THREE.Vector3(0, 0, 1000), 60),
+      target
+    );
+    expect(wide).toBeGreaterThan(narrow);
   });
 });
 
-describe("getGridRecAuLockedScaling — pins the level-1 ring to the AU-decade world radius", () => {
-  const baseRingRadius = gridRecBaseRingWorldRadius(
-    WORLD_SIZE,
-    LEVEL1_F,
-    GRID_N
-  );
-  // baseRingRadius / tessQuality is the world radius of the first bright
-  // ring (shader dist=2). Locking is correct iff that equals
-  // auToWorld(10^decade) — i.e. a body at 10^decade AU sits on the ring.
-  const lockedRingWorldRadius = (tessQuality: number) =>
-    baseRingRadius / tessQuality;
-
-  // Realistic transform: linear au × 1000 (AU_TO_3D_UNITS).
-  const realisticAuToWorld = (au: number) => au * 1000;
-
-  it("realistic: ring k=1 lands exactly on the AU-decade world radius", () => {
-    // effectiveAU within decade 0 ([1,10) AU) → lock to auToWorld(1)=1000.
-    for (const effAU of [1, 3, 9.9]) {
-      const r = getGridRecAuLockedScaling(
-        effAU,
-        realisticAuToWorld,
-        baseRingRadius
-      );
-      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(1000, 6);
-    }
-    // decade 1 ([10,100) AU) → lock to auToWorld(10)=10000.
-    const r2 = getGridRecAuLockedScaling(
-      40,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    expect(lockedRingWorldRadius(r2.tessQuality)).toBeCloseTo(10000, 6);
+describe("resolveGridDecade — view-AU decade selection", () => {
+  it("bounds are [-1, 10] (0.1 AU .. 10^10 AU ≈ 158 000 LY, galactic)", () => {
+    expect(GRID_DECADE_MIN).toBe(-1);
+    expect(GRID_DECADE_MAX).toBe(10);
   });
 
-  it("a body at 10^decade AU lands on a BRIGHT ring (cos(π·dist)=1), not a trough — guards the dist=2 anchor", () => {
-    // The shader lights rings where cos(π·dist)=1 (dist = 2,4,6…); dist=1
-    // is a dark trough. A body at 10^decade AU sits at world radius
-    // auToWorld(10^decade); that radius MUST coincide with a bright ring.
-    // This is exactly what the algebraic baseRingRadius/tessQuality
-    // identity could NOT catch — it holds for both the dist=1 trough and
-    // the dist=2 ring; only the shader func distinguishes them. (Fails
-    // with the old dist=1 anchor: gridFunc would read ≈ −1.)
-    const halfPlane = WORLD_SIZE / 2;
-    for (const effAU of [1, 3, 9.9, 40, 250]) {
-      const r = getGridRecAuLockedScaling(
-        effAU,
-        realisticAuToWorld,
-        baseRingRadius
-      );
-      const decadeLowerAU = Math.pow(10, Math.floor(Math.log10(effAU)));
-      const bodyRadius = realisticAuToWorld(decadeLowerAU);
-      const tcX = bodyRadius / halfPlane; // radial sample on the +x axis
-      const gridFunc = gridRecCircleGridFunc(tcX, 0, r.tessQuality, LEVEL1_F);
-      expect(gridFunc).toBeCloseTo(1, 6); // bright ring, NOT a trough (−1)
-    }
+  it("zooming IN (smaller viewAU) chooses a smaller decade → finer rings", () => {
+    const coarse = resolveGridDecade(50_000);
+    const fine = resolveGridDecade(50);
+    expect(fine).toBeLessThan(coarse);
   });
 
-  it("locked ring radius is INDEPENDENT of fine camera position within a decade (no drift)", () => {
-    // The core scale-lock property the old walk lacked: moving the
-    // camera within a decade must NOT move the ring.
-    const a = getGridRecAuLockedScaling(
-      1.1,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    const b = getGridRecAuLockedScaling(
-      9.8,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    expect(a.tessQuality).toBe(b.tessQuality);
-    expect(lockedRingWorldRadius(a.tessQuality)).toBeCloseTo(1000, 6);
+  it("clamps below the min and above the max", () => {
+    expect(resolveGridDecade(0.0001)).toBe(GRID_DECADE_MIN);
+    expect(resolveGridDecade(1e12)).toBe(GRID_DECADE_MAX);
   });
 
-  it("didactic: ring k=1 lands on the compressed AU-decade world radius (so a planet at 10^decade AU sits on it)", () => {
-    // Representative compressed transform: decade boundaries map to
-    // distinct compressed world radii (NOT linear). The lock must use
-    // whatever auToWorld returns, so the ring follows the compression.
-    const didacticAuToWorld = (au: number) => {
-      if (au <= 0.1) return 50;
-      if (au <= 1) return 440;
-      if (au <= 10) return 1200;
-      return 2485;
-    };
-    // effectiveAU in [1,10) → decade 0 → lock to auToWorld(1)=440.
-    const r = getGridRecAuLockedScaling(5.2, didacticAuToWorld, baseRingRadius);
-    expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(440, 6);
-    // effectiveAU in [10,100) → decade 1 → lock to auToWorld(10)=1200.
-    const r2 = getGridRecAuLockedScaling(30, didacticAuToWorld, baseRingRadius);
-    expect(lockedRingWorldRadius(r2.tessQuality)).toBeCloseTo(1200, 6);
-  });
-
-  it("heightScale fades 1 → 0 across the decade in AU space", () => {
-    // Near the decade lower bound → heightScale ≈ 1.
-    const lower = getGridRecAuLockedScaling(
-      1.001,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    expect(lower.heightScale).toBeGreaterThan(0.99);
-    // Near the decade upper bound → heightScale ≈ 0.
-    const upper = getGridRecAuLockedScaling(
-      9.99,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    expect(upper.heightScale).toBeLessThan(0.01);
-    // Mid-decade is between.
-    const mid = getGridRecAuLockedScaling(
-      5,
-      realisticAuToWorld,
-      baseRingRadius
-    );
-    expect(mid.heightScale).toBeGreaterThan(0);
-    expect(mid.heightScale).toBeLessThan(1);
-  });
-
-  it("handles the saturated regime (capped auToWorld) without NaN / runaway", () => {
-    // Past the didactic cap, auToWorld returns the SAME capped world
-    // radius for every farther decade, so the ring freezes at the cap
-    // exactly as the (also-capped) planet positions do.
-    const cappedAuToWorld = (au: number) => Math.min(au * 100, 3200);
-    for (const effAU of [400, 5000, 1e6]) {
-      const r = getGridRecAuLockedScaling(
-        effAU,
-        cappedAuToWorld,
-        baseRingRadius
-      );
-      expect(Number.isFinite(r.tessQuality)).toBe(true);
-      expect(Number.isFinite(r.heightScale)).toBe(true);
-      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(3200, 6);
-    }
-  });
-
-  it("falls back to a sane innermost decade for degenerate effective-AU", () => {
+  it("returns the min for degenerate input (0, negative, NaN, Infinity)", () => {
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const r = getGridRecAuLockedScaling(
-        bad,
-        realisticAuToWorld,
-        baseRingRadius
-      );
-      expect(Number.isFinite(r.tessQuality)).toBe(true);
-      expect(r.tessQuality).toBeGreaterThan(0);
-      expect(r.heightScale).toBe(1);
-      // Fallback locks to auToWorld(1) = 1000.
-      expect(lockedRingWorldRadius(r.tessQuality)).toBeCloseTo(1000, 6);
+      expect(resolveGridDecade(bad)).toBe(GRID_DECADE_MIN);
     }
+  });
+});
+
+describe("resolveGridRingSet — the concentric ring set", () => {
+  it("never returns an empty ring set at any normal zoom (fixes 'only when close')", () => {
+    for (const mode of ["didactic", "realistic"] as const) {
+      // Sweep from tight planetary framing out to the outer system.
+      for (const extent of [500, 5_000, 50_000, 500_000, 5_000_000]) {
+        const { rings } = resolveGridRingSet(extent, mode);
+        expect(rings.length).toBeGreaterThan(0);
+        for (const ring of rings) {
+          expect(Number.isFinite(ring.radius)).toBe(true);
+          expect(ring.radius).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("rings ascend by AU and by radius (sorted, monotone)", () => {
+    const { rings } = resolveGridRingSet(20_000, "realistic");
+    for (let i = 1; i < rings.length; i++) {
+      expect(rings[i].au).toBeGreaterThan(rings[i - 1].au);
+      expect(rings[i].radius).toBeGreaterThanOrEqual(rings[i - 1].radius);
+    }
+  });
+
+  it("every ring AU is a 1-2-5 mantissa × 10^k", () => {
+    expect([...RING_MANTISSAS]).toEqual([1, 2, 5]);
+    const { rings } = resolveGridRingSet(20_000, "realistic");
+    for (const ring of rings) {
+      const k = Math.floor(Math.log10(ring.au) + 1e-9);
+      const mantissa = ring.au / Math.pow(10, k);
+      expect([1, 2, 5].some((m) => Math.abs(m - mantissa) < 1e-6)).toBe(true);
+    }
+  });
+
+  it("MAJOR rings are the pure power-of-ten ladder (no 2×/5× majors)", () => {
+    const { rings } = resolveGridRingSet(20_000, "realistic");
+    for (const ring of rings.filter((r) => r.major)) {
+      const k = Math.round(Math.log10(ring.au));
+      // Major AU must be exactly 10^k (mantissa 1).
+      expect(ring.au).toBeCloseTo(Math.pow(10, k), 6);
+    }
+    // A power of ten is major...
+    expect(rings.find((r) => Math.abs(r.au - 10) < 1e-9)?.major).toBe(true);
+  });
+
+  it("MINOR (2×/5×) rings appear ONLY within the in-view decade", () => {
+    const set = resolveGridRingSet(20_000, "realistic");
+    const minors = set.rings.filter((r) => !r.major);
+    for (const m of minors) {
+      const k = Math.floor(Math.log10(m.au) + 1e-9);
+      expect(k).toBe(set.decade); // minor's decade === in-view decade
+      const mantissa = m.au / Math.pow(10, k);
+      expect([2, 5].some((x) => Math.abs(x - mantissa) < 1e-6)).toBe(true);
+    }
+  });
+
+  it("LABELED major rings follow a continuous ×10 ladder out to galactic (realistic)", () => {
+    // Frame far out so the ladder spans many decades; the major AU values
+    // must be consecutive powers of ten with no gaps.
+    const { rings } = resolveGridRingSet(
+      AstroPhysics.auToWorld(1e6, "realistic"),
+      "realistic"
+    );
+    const majorExps = rings
+      .filter((r) => r.major)
+      .map((r) => Math.round(Math.log10(r.au)))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < majorExps.length; i++) {
+      expect(majorExps[i] - majorExps[i - 1]).toBe(1); // consecutive decades
+    }
+    expect(majorExps.length).toBeGreaterThan(3);
+  });
+
+  it("realistic far-out rings carry LY-formatted labels at galactic scale", () => {
+    // 10^7 AU ≈ 158 LY, 10^10 AU ≈ 158 000 LY — these read in LY, not AU.
+    expect(formatDecadeScaleLabel(1e7, true)).toContain("LY");
+    expect(formatDecadeScaleLabel(1e10, true)).toContain("LY");
+    // And no raw fractional garbage — clean rounded integers (grouped).
+    expect(formatDecadeScaleLabel(1e10, true)).toMatch(/^[\d ]+ LY$/);
+  });
+
+  it("labelAU is a major ring and labelRadius is auToWorld(labelAU)", () => {
+    for (const mode of ["didactic", "realistic"] as const) {
+      const set = resolveGridRingSet(20_000, mode);
+      const labelRing = set.rings.find(
+        (r) => Math.abs(r.au - set.labelAU) < 1e-9
+      );
+      expect(labelRing?.major).toBe(true);
+      expect(set.labelRadius).toBeCloseTo(
+        AstroPhysics.auToWorld(set.labelAU, mode),
+        4
+      );
+    }
+  });
+
+  it("realistic decade-0 ring is the linear 1-AU world radius (1000)", () => {
+    const extent = AstroPhysics.auToWorld(6, "realistic"); // ~few-AU
+    const { rings } = resolveGridRingSet(extent, "realistic");
+    const oneAu = rings.find((r) => Math.abs(r.au - 1) < 1e-9);
+    expect(oneAu?.radius).toBeCloseTo(1000, 6);
+  });
+
+  it("didactic 1-AU ring is the COMPRESSED world radius (440), not 1000", () => {
+    const extent = AstroPhysics.auToWorld(6, "didactic");
+    const { rings } = resolveGridRingSet(extent, "didactic");
+    const oneAu = rings.find((r) => Math.abs(r.au - 1) < 1e-9);
+    expect(oneAu?.radius).toBeCloseTo(440, 3);
+  });
+});
+
+describe("resolveGridRingSet — didactic cap honesty", () => {
+  it("flags atDidacticCap once the compression saturates", () => {
+    const deep = resolveGridRingSet(1e9, "didactic");
+    expect(deep.atDidacticCap).toBe(true);
+    expect(deep.rings.length).toBeGreaterThan(0);
+  });
+
+  it("does NOT flag atDidacticCap below saturation", () => {
+    const shallow = resolveGridRingSet(
+      AstroPhysics.auToWorld(5, "didactic"),
+      "didactic"
+    );
+    expect(shallow.atDidacticCap).toBe(false);
+  });
+
+  it("realistic mode never flags atDidacticCap (no compression cap)", () => {
+    expect(resolveGridRingSet(1e9, "realistic").atDidacticCap).toBe(false);
+  });
+
+  it("does not stack coincident rings when didactic radii saturate", () => {
+    // Past the cap, distinct AU values map to the same world radius; the
+    // de-dup guard must drop the coincident ones.
+    const { rings } = resolveGridRingSet(1e9, "didactic");
+    for (let i = 1; i < rings.length; i++) {
+      expect(rings[i].radius - rings[i - 1].radius).toBeGreaterThan(1e-3);
+    }
+  });
+});
+
+describe("resolveGridRingSet — robustness", () => {
+  it("never returns a zero / non-finite radius", () => {
+    for (const extent of [0, -10, Number.NaN, Number.POSITIVE_INFINITY, 1e15]) {
+      for (const mode of ["didactic", "realistic"] as const) {
+        const { rings, decadeRadius, labelRadius } = resolveGridRingSet(
+          extent,
+          mode
+        );
+        expect(rings.length).toBeGreaterThan(0);
+        expect(Number.isFinite(decadeRadius)).toBe(true);
+        expect(decadeRadius).toBeGreaterThan(0);
+        expect(Number.isFinite(labelRadius)).toBe(true);
+        expect(labelRadius).toBeGreaterThan(0);
+        for (const ring of rings) {
+          expect(Number.isFinite(ring.radius)).toBe(true);
+          expect(ring.radius).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("a degenerate (zero) view extent falls back to the inner decade", () => {
+    for (const mode of ["didactic", "realistic"] as const) {
+      const { decade, rings } = resolveGridRingSet(0, mode);
+      expect(decade).toBe(GRID_DECADE_MIN);
+      expect(rings.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("memo coalesces two identical-input calls (the shared per-frame result)", () => {
+    const a1 = resolveGridRingSet(12_345, "didactic");
+    const a2 = resolveGridRingSet(12_345, "didactic");
+    expect(a2).toBe(a1); // same reference → cached
+    const b = resolveGridRingSet(99_999, "didactic");
+    expect(b).not.toBe(a1);
+  });
+});
+
+describe("formatDecadeScaleLabel — AU/LY formatting + didactic honesty", () => {
+  it("formats AU values with grouped thousands (below 1 LY)", () => {
+    expect(formatDecadeScaleLabel(1)).toBe("1 AU");
+    expect(formatDecadeScaleLabel(10)).toBe("10 AU");
+    expect(formatDecadeScaleLabel(1000)).toBe("1 000 AU");
+    expect(formatDecadeScaleLabel(50000)).toBe("50 000 AU");
+  });
+
+  it("formats sub-AU rings (inner-planet decade) with a fractional digit", () => {
+    expect(formatDecadeScaleLabel(0.5)).toBe("0.5 AU");
+    expect(formatDecadeScaleLabel(0.2)).toBe("0.2 AU");
+  });
+
+  it("auto-switches AU→LY at 1 LY when LY is allowed (realistic regime)", () => {
+    expect(formatDecadeScaleLabel(AU_PER_LY)).toBe("1 LY");
+    expect(formatDecadeScaleLabel(AU_PER_LY * 10)).toBe("10 LY");
+    expect(formatDecadeScaleLabel(AU_PER_LY * 1.58)).toBe("1.6 LY");
+  });
+
+  it("SUPPRESSES the LY switch when allowLY=false (didactic regime)", () => {
+    expect(formatDecadeScaleLabel(AU_PER_LY, false)).toBe("63 241 AU");
+    expect(formatDecadeScaleLabel(AU_PER_LY * 10, false)).toContain("AU");
+    expect(formatDecadeScaleLabel(AU_PER_LY * 10, false)).not.toContain("LY");
+  });
+
+  it("guards degenerate AU input", () => {
+    expect(formatDecadeScaleLabel(0)).toBe("1 AU");
+    expect(formatDecadeScaleLabel(Number.NaN)).toBe("1 AU");
+    expect(formatDecadeScaleLabel(-5)).toBe("1 AU");
   });
 });

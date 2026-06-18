@@ -1,202 +1,252 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
+import { Line } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
+import type { Line2 } from "three-stdlib";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
 import { VISUAL_PRESETS } from "../../config/visualPresets";
-import { AstroPhysics } from "../../lib/astrophysics";
-import {
-  GRID_ORIENTATION_COLORS,
-  getGridOrientationMatrix,
-} from "../../lib/gridOrientation";
 import { useStore } from "../../store";
 import { GRID_RECURSIVE_CONFIG } from "./gridRecursiveConfig";
-import { GRIDREC_CIRCLE_LEVEL1_F, GRIDREC_N } from "./shaders/gridRecMath";
 import {
-  getGridRecAuLockedScaling,
-  gridRecBaseRingWorldRadius,
+  computeViewExtentWorld,
+  resolveGridRingSet,
 } from "./shaders/gridRecScaling";
-import { buildGridRecShaderMaterial } from "./shaders/gridRecShader";
 
 /**
- * World radius the level-1 ring (k=1) lands at when `u_tessQuality
- * = 1`, derived from the plane size + shader ring constants. Locking
- * `u_tessQuality = baseRingRadius / auToWorld(10^decade)` pins that
- * ring to the AU-decade's world radius — the same radius the body
- * positioner draws a body at `10^decade` AU. Constant per build (mesh
- * size + shader constants are fixed).
- */
-const GRID_REC_BASE_RING_WORLD_RADIUS = gridRecBaseRingWorldRadius(
-  GRID_RECURSIVE_CONFIG.worldSize,
-  GRIDREC_CIRCLE_LEVEL1_F,
-  GRIDREC_N
-);
-
-/**
- * Atlas port of Gaia's `GridRecursive` entity (MPL-2.0) — replaces
- * the atlas-opinion `EclipticGrid.tsx` under
- * `feedback_no_effect_stacking.md`. The shader itself lives in
- * `shaders/gridRecShader.ts` and is a verbatim port of
- * `/tmp/gaiasky/assets/shader/gridrec.fragment.glsl`; this component
- * owns the mesh + placement + scene-level opacity fade.
+ * The CONCENTRIC AU DISTANCE-RING grid — a Sun-centered polar grid on the
+ * ecliptic (XZ) plane (redesign 2026-06-18).
  *
- * Ship scope by sub-wave:
- *  - **T4.4b** (shipped `94af1b8`): horizontal quad + shader mount
- *    on the ecliptic plane, CIRCULAR style default, static uniforms.
- *  - **T4.4c** (this file, below): per-frame scaling driver pushing
- *    the camera distance → `u_tessQuality` + `u_heightScale`. The
- *    grid zooms through decades as the camera pulls back, matching
- *    Gaia's recursive behavior (`GridRecUpdater.java:80-81`); the
- *    level-1 rings swap smoothly between decades via the
- *    `heightScale` fade.
- *  - **Scale-lock fix** (2026-06-17): the driver now pins the
- *    level-1 ring to the AU-decade world radius the body positioner
- *    uses (`getGridRecAuLockedScaling` + `AstroPhysics.auToWorld` /
- *    `worldToAu`) instead of the original scale-invariant
- *    `getGridRecScaling(camera.position.length())`. The original
- *    walk emitted a camera-relative ratio with no world anchor, so
- *    in didactic mode (where bodies are log-compressed via
- *    `mapDidacticHeliocentricDistance`) the rings drifted free of the
- *    planets under zoom. The grid and bodies now share ONE transform,
- *    so a planet at `10^decade` AU sits on the level-1 ring in both
- *    scale modes by construction. See `getGridRecAuLockedScaling`
- *    JSDoc for the ring-radius derivation and the saturated-cap
- *    handling.
- *  - **T4.4d** (this file, below): orientation toggle (Equatorial /
- *    Ecliptic / Galactic) per `GridRecursiveRadio.java:34-48`
- *    transform-name swap + per-orientation color callouts. Applied
- *    via a `<group>` wrapper whose quaternion comes from
- *    `getGridOrientationMatrix` — identity for ecliptic (atlas's
- *    world frame), `Rz(obliquity)` for equatorial, full ICRS→galactic
- *    composition for galactic. Color swatch pushed into
- *    `u_diffuseColor` whenever orientation flips.
- *  - **T4.4e** (pending): projection lines when `origin=REFSYS` +
- *    camera focus is active (`GridRecUpdater.java:84-102`).
- *  - The AU tick labels `EclipticGrid.tsx` rendered (1/2/5/10/20/
- *    30/40 AU sprite text) are an atlas-opinion feature with no
- *    Gaia equivalent on the grid mesh itself. Removed with the
- *    T4.4b predecessor sweep; a Gaia-native label path returns
- *    with T4.5 (MSDF text + constellations).
+ * **What this replaced.** The square drei `<Grid infiniteGrid
+ * followCamera>` floor (and its predecessor recursive ring shader) is
+ * gone. The owner reported the square grid "completely broken": it did
+ * not relate to the physical solar system in either scale mode, appeared
+ * only when zoomed close, and its distance rings did not align with the
+ * grid. A square Cartesian floor has no radial meaning, and `followCamera`
+ * severed it from the system. This app is HELIOCENTRIC; the meaningful
+ * quantity is distance-from-Sun, which concentric rings show directly.
  *
- * Opacity still follows atlas's camera-distance fade curve so the
- * layer toggle remains useful at close fly-by. Gaia's own opacity
- * curve is driven by `GridRecUpdater.java` through `base.opacity`
- * on the entity at line 74 (`flint` on distToCamera); atlas keeps
- * its linear `clamp((dist - 10k)/(140k - 10k), 0, 1)` curve as a
- * UI-affordance layer on top.
+ * **Rings at physical AU radii (the alignment identity).** Each ring is a
+ * circle centered at the origin (Sun) drawn at world radius
+ * `AstroPhysics.auToWorld(au, scaleMode)`. Because the body positioner
+ * places a body at world radius `auToWorld(distanceAU, scaleMode)`, a
+ * planet at `D` AU sits EXACTLY on the ring for `D` — in BOTH didactic and
+ * realistic modes, by construction (one transform, no second pipeline to
+ * drift). This is the whole point of the redesign.
+ *
+ * **Always visible across zoom (fixes "only appears when close").** Which
+ * rings draw is chosen per frame from the on-screen VIEW EXTENT
+ * (`computeViewExtentWorld` → `resolveGridRingSet`): a 1-2-5 sequence of
+ * AU values spanning a few decades around the in-view decade — finer rings
+ * when zoomed in, coarser decade rings when zoomed out. The set is NEVER
+ * empty. The rings are WORLD-SPACE and Sun-centered (no `followCamera`),
+ * so they stay locked to the system at every zoom.
+ *
+ * **Standard line materials → free log-depth + occlusion.** Each ring is a
+ * drei `<Line>` (three's `Line2` fat line, the same primitive
+ * `PlanetOrbitLine` uses), so it participates in the scene's
+ * `logarithmicDepthBuffer` automatically and planets/orbits occlude it
+ * correctly — no custom-shader log-depth hack. `depthWrite={false}` so the
+ * grid never occludes content in front of it.
+ *
+ * **Style.** Single teal accent on black, minimal/premium. Major rings
+ * (round powers of ten + the in-view decade's 1/2/5 leaders) brighter and
+ * thicker; minor rings dim and thin. Faint radial spokes give the polar
+ * grid its bearing lines. Brightness folds in the preset `guideIntensity`.
+ *
+ * **Toggle.** On/off is the `showEclipticGrid` mount gate in `Scene.tsx`
+ * (`{showEclipticGrid && <GridRecursive />}`). The decade AU label is a
+ * sibling component ({@link GridDecadeLabel}) riding the same toggle.
  */
 
 const noopRaycast: THREE.Object3D["raycast"] = () => null;
 
+/** Number of radial spokes (a true polar grid's bearing lines). */
+const SPOKE_COUNT = 12;
+
+/** Circle tessellation — segments per ring. 128 reads smooth at any zoom. */
+const RING_SEGMENTS = 128;
+
+/**
+ * Unit-circle points (radius 1) on the XZ plane, reused for every ring by
+ * scaling the `<Line>` object. Allocated once. The loop is closed
+ * (last point === first) so the ring has no seam.
+ */
+const buildUnitCirclePoints = (segments: number): THREE.Vector3[] => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const theta = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)));
+  }
+  return pts;
+};
+
+/**
+ * Radial spoke endpoints as a single open polyline that returns to the
+ * origin between spokes (origin → rim → origin → next rim …), drawn at
+ * unit radius and scaled per frame. One `<Line>` draws all spokes.
+ */
+const buildUnitSpokePoints = (count: number): THREE.Vector3[] => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i < count; i++) {
+    const theta = (i / count) * Math.PI * 2;
+    pts.push(new THREE.Vector3(0, 0, 0));
+    pts.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)));
+  }
+  return pts;
+};
+
+/**
+ * Fixed pool of ring slots. We pre-mount a fixed number of `<Line>`
+ * objects and per frame assign each a radius/color/visibility from the
+ * selected ring set — no per-frame remount (which would thrash geometry
+ * allocation and React reconciliation). The selector emits at most
+ * `(DECADES_FINER + DECADES_COARSER + 1) · RING_MANTISSAS.length` rings;
+ * the pool is sized comfortably above that.
+ */
+const RING_POOL_SIZE = 16;
+
 export const GridRecursive = () => {
   const { camera } = useThree();
+  const controls = useThree(
+    (state) => state.controls
+  ) as OrbitControlsImpl | null;
   const visualPreset = useStore((state) => state.visualPreset);
-  const gridOrientation = useStore((state) => state.gridOrientation);
   const scaleMode = useStore((state) => state.scaleMode);
   const guideIntensity = VISUAL_PRESETS[visualPreset]?.guideIntensity ?? 1;
 
-  const material = useMemo(() => buildGridRecShaderMaterial(), []);
-  const materialRef = useRef(material);
+  const unitCircle = useMemo(() => buildUnitCirclePoints(RING_SEGMENTS), []);
+  const unitSpokes = useMemo(() => buildUnitSpokePoints(SPOKE_COUNT), []);
 
-  // Recompose the orientation quaternion whenever the user flips
-  // the radio. The base mesh keeps its `rotation-x = -π/2` to lay
-  // the plane on XZ; this wrapper rotation applies ON TOP of that.
-  const orientationQuaternion = useMemo(() => {
-    const matrix = getGridOrientationMatrix(gridOrientation);
-    return new THREE.Quaternion().setFromRotationMatrix(matrix);
-  }, [gridOrientation]);
+  // Per-slot refs for the ring Line2 objects + their materials, and the
+  // spoke group. Imperative per-frame updates (radius / opacity / color)
+  // keep the per-frame writes out of React's render path.
+  const ringRefs = useRef<(Line2 | null)[]>([]);
+  const spokeRef = useRef<Line2 | null>(null);
+  const spokeGroupRef = useRef<THREE.Group>(null);
 
-  useEffect(() => {
-    materialRef.current = material;
-    return () => {
-      material.dispose();
-    };
-  }, [material]);
-
-  useEffect(() => {
-    // Per-orientation color callout matches `ccEq` / `ccEcl` /
-    // `ccGal` in `GridRecursive.java:21-23`. Mutating the existing
-    // uniform keeps the WebGLProgram bound; rebuilding the
-    // material would drop any per-frame state the shader
-    // accumulated.
-    const [r, g, b, a] = GRID_ORIENTATION_COLORS[gridOrientation];
-    material.uniforms.u_diffuseColor.value.set(r, g, b, a);
-    // Inner color stays atlas-default (lower-alpha variant of the
-    // outer color) so the level-1 fade still reads; if Gaia-parity
-    // requires a per-orientation inner color we'd add it here.
-    material.uniforms.u_emissiveColor.value.set(r, g, b, a * 0.3);
-  }, [material, gridOrientation]);
+  const baseColor = useMemo(
+    () => new THREE.Color(GRID_RECURSIVE_CONFIG.ringColor),
+    []
+  );
 
   useFrame(() => {
-    if (!(camera instanceof THREE.PerspectiveCamera)) return;
-
-    const dist = camera.position.length();
-
-    // Scale-lock fix (2026-06-17): pin the grid rings to the AU-decade
-    // world radii the BODIES use, instead of the raw-camera-distance
-    // scale-invariant walk that floated the rings free of the planets.
-    //
-    // 1. Convert the camera's world distance into the heliocentric AU
-    //    it represents (the SAME space bodies are positioned in), so
-    //    the decade is chosen in AU, not raw world units.
-    // 2. Lock the level-1 ring to `auToWorld(10^decade)` — the world
-    //    radius a body at `10^decade` AU is drawn at — via
-    //    `getGridRecAuLockedScaling`. A planet at `10^decade` AU then
-    //    sits on that ring in BOTH didactic and realistic modes by
-    //    construction (in realistic `auToWorld` is linear `au×1000`,
-    //    so this reduces to the trivially-correct linear lock).
-    //
-    // The old scale-invariant `getGridRecScaling(dist)` could not lock:
-    // its `tessQuality` is a camera-relative ratio with no world anchor
-    // (see `gridRecScaling.ts` JSDoc). Feeding it an effective-AU would
-    // NOT have helped — the fix is to derive `tessQuality` from a fixed
-    // AU-decade world radius.
-    const effectiveAU = AstroPhysics.worldToAu(dist, scaleMode);
-    const scaling = getGridRecAuLockedScaling(
-      effectiveAU,
-      (au) => AstroPhysics.auToWorld(au, scaleMode),
-      GRID_REC_BASE_RING_WORLD_RADIUS
+    const viewExtentWorld = computeViewExtentWorld(
+      camera,
+      controls?.target ?? null
     );
-    const uniforms = materialRef.current.uniforms;
-    uniforms.u_tessQuality.value = scaling.tessQuality;
-    uniforms.u_heightScale.value = scaling.heightScale;
-
-    // Scene-level opacity fade stays atlas-native (UI affordance
-    // on top of the Gaia shader). Mirrors `base.opacity` role in
-    // `GridRecUpdater.java:74` but uses atlas's linear curve.
-    const t = THREE.MathUtils.clamp(
-      (dist - GRID_RECURSIVE_CONFIG.opacityFadeStart) /
-        (GRID_RECURSIVE_CONFIG.opacityFadeEnd -
-          GRID_RECURSIVE_CONFIG.opacityFadeStart),
-      0,
-      1
+    const { rings, decadeRadius } = resolveGridRingSet(
+      viewExtentWorld,
+      scaleMode
     );
-    const opacity =
-      THREE.MathUtils.lerp(
-        GRID_RECURSIVE_CONFIG.opacityClose,
-        GRID_RECURSIVE_CONFIG.opacityFar,
-        t
-      ) * guideIntensity;
-    uniforms.u_opacity.value = opacity;
+
+    // Drive each pooled ring slot from the selected set. Slots beyond the
+    // selected count are hidden (radius set to 0 / invisible).
+    for (let i = 0; i < RING_POOL_SIZE; i++) {
+      const line = ringRefs.current[i];
+      if (!line) continue;
+      const ring = rings[i];
+      if (!ring) {
+        line.visible = false;
+        continue;
+      }
+      line.visible = true;
+      line.scale.setScalar(ring.radius);
+
+      const mat = line.material as
+        | (THREE.Material & {
+            color?: THREE.Color;
+            opacity?: number;
+            linewidth?: number;
+          })
+        | undefined;
+      if (mat) {
+        const tierOpacity = ring.major
+          ? GRID_RECURSIVE_CONFIG.majorOpacity
+          : GRID_RECURSIVE_CONFIG.minorOpacity;
+        mat.opacity = THREE.MathUtils.clamp(tierOpacity * guideIntensity, 0, 1);
+        // Major rings are thicker; minor rings thin. The Line2 material's
+        // `linewidth` is the fat-line constant-pixel width.
+        mat.linewidth = ring.major
+          ? GRID_RECURSIVE_CONFIG.majorLineWidth
+          : GRID_RECURSIVE_CONFIG.minorLineWidth;
+        if (mat.color) {
+          // One teal hue for both tiers; the opacity + width tier the rings.
+          mat.color.copy(baseColor);
+        }
+      }
+    }
+
+    // Spokes are scaled to the outermost selected ring so they span the
+    // whole visible grid. Hidden if there are no rings (degenerate).
+    const group = spokeGroupRef.current;
+    const outerRadius =
+      rings.length > 0 ? rings[rings.length - 1].radius : decadeRadius;
+    if (group) {
+      group.scale.setScalar(outerRadius);
+      group.visible = outerRadius > 0;
+    }
+    const spoke = spokeRef.current;
+    if (spoke) {
+      const mat = spoke.material as
+        | (THREE.Material & { opacity?: number })
+        | undefined;
+      if (mat) {
+        mat.opacity = THREE.MathUtils.clamp(
+          GRID_RECURSIVE_CONFIG.spokeOpacity * guideIntensity,
+          0,
+          1
+        );
+      }
+    }
   });
 
   return (
-    <group quaternion={orientationQuaternion}>
-      <mesh
-        rotation-x={-Math.PI / 2}
+    <group raycast={noopRaycast}>
+      {/* Radial spokes — the polar grid's bearing lines, drawn at unit
+          radius and scaled per frame to the outermost ring. */}
+      <group
+        ref={spokeGroupRef}
         position-y={GRID_RECURSIVE_CONFIG.planeYOffset}
-        renderOrder={GRID_RECURSIVE_CONFIG.renderOrder}
         raycast={noopRaycast}
       >
-        <planeGeometry
-          args={[
-            GRID_RECURSIVE_CONFIG.worldSize,
-            GRID_RECURSIVE_CONFIG.worldSize,
-            1,
-            1,
-          ]}
+        <Line
+          ref={spokeRef}
+          points={unitSpokes}
+          segments
+          color={GRID_RECURSIVE_CONFIG.ringColor}
+          lineWidth={GRID_RECURSIVE_CONFIG.minorLineWidth}
+          transparent
+          opacity={GRID_RECURSIVE_CONFIG.spokeOpacity}
+          depthTest
+          depthWrite={false}
+          toneMapped={false}
+          renderOrder={GRID_RECURSIVE_CONFIG.renderOrder}
+          raycast={noopRaycast}
         />
-        <primitive object={material} attach="material" />
-      </mesh>
+      </group>
+
+      {/* Concentric AU rings — one pooled <Line> per slot, unit-circle
+          geometry scaled per frame to the ring's world radius. */}
+      {Array.from({ length: RING_POOL_SIZE }, (_, i) => (
+        <Line
+          key={i}
+          ref={(instance: Line2 | null) => {
+            ringRefs.current[i] = instance;
+          }}
+          points={unitCircle}
+          position-y={GRID_RECURSIVE_CONFIG.planeYOffset}
+          color={GRID_RECURSIVE_CONFIG.ringColor}
+          lineWidth={GRID_RECURSIVE_CONFIG.majorLineWidth}
+          transparent
+          opacity={GRID_RECURSIVE_CONFIG.minorOpacity}
+          depthTest
+          depthWrite={false}
+          toneMapped={false}
+          renderOrder={GRID_RECURSIVE_CONFIG.renderOrder}
+          raycast={noopRaycast}
+        />
+      ))}
     </group>
   );
 };
