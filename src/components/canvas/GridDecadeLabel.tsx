@@ -11,6 +11,7 @@ import {
   formatDecadeScaleLabel,
   resolveGridRingSet,
 } from "./shaders/gridRecScaling";
+import { createGridFadeState, stepGridFade } from "./gridFade";
 
 /**
  * The flat-on-plane teal AU DISTANCE LABELS for the concentric ring grid
@@ -120,6 +121,15 @@ export const GridDecadeLabel = () => {
   ) as OrbitControlsImpl | null;
   const scaleMode = useStore((s) => s.scaleMode);
 
+  // ── Unified grid fade (shared with GridRecursive) ──
+  // Same pure target + lerp the rings run, so labels rise/fall in lockstep
+  // with them. Multiplied INTO the existing elevation/declutter fades, not
+  // replacing them. See gridFade.ts.
+  const sceneReady = useStore((s) => s.isSceneReady);
+  const introActive = useStore((s) => s.isIntroAnimating);
+  const showGrid = useStore((s) => s.showEclipticGrid);
+  const reducedMotion = useStore((s) => s.accessibility.reducedMotion);
+
   const slots = useRef<LabelSlot[]>(
     Array.from({ length: LABEL_POOL_SIZE }, () => ({
       group: null,
@@ -128,9 +138,23 @@ export const GridDecadeLabel = () => {
     }))
   );
 
+  // Per-component fade state (mutated only inside useFrame).
+  const fadeStateRef = useRef(createGridFadeState());
+
   const planeY = GRID_RECURSIVE_CONFIG.planeYOffset;
 
-  useFrame(() => {
+  useFrame((_, dt) => {
+    // Unified grid fade — identical step to GridRecursive, so labels and
+    // rings rise/fall together. Combined (multiplied) with the per-label
+    // elevation fade below.
+    const gridFade = stepGridFade(
+      fadeStateRef.current,
+      { sceneReady, introActive, showGrid },
+      scaleMode,
+      dt,
+      reducedMotion
+    );
+
     // Ring set — fed the IDENTICAL view extent the ring mesh uses, so the
     // per-frame memo coalesces both callers into one selection.
     const viewExtentWorld = computeViewExtentWorld(
@@ -176,6 +200,10 @@ export const GridDecadeLabel = () => {
       0,
       1
     );
+
+    // Combined visibility envelope: the unified grid fade gates the whole
+    // element, the elevation fade gates only readability at grazing angles.
+    const effectiveFade = elevationFade * gridFade;
 
     // Build the candidate label list: every MAJOR ring. Priority: the
     // dominant ("current scale") ring first, then nearer rings (smaller
@@ -230,7 +258,7 @@ export const GridDecadeLabel = () => {
       const group = slot.group;
       if (!group) continue;
       const c = assigned[i];
-      if (!c || elevationFade <= 0.01) {
+      if (!c || effectiveFade <= 0.01) {
         group.visible = false;
         continue;
       }
@@ -277,7 +305,7 @@ export const GridDecadeLabel = () => {
         if (single) {
           single.transparent = true;
           single.depthWrite = false;
-          single.opacity = elevationFade * (c.dominant ? 1 : 0.7);
+          single.opacity = effectiveFade * (c.dominant ? 1 : 0.7);
         }
       }
     }

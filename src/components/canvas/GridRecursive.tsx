@@ -12,6 +12,11 @@ import {
   computeViewExtentWorld,
   resolveGridRingSet,
 } from "./shaders/gridRecScaling";
+import {
+  createGridFadeState,
+  radialRevealFactor,
+  stepGridFade,
+} from "./gridFade";
 
 /**
  * The CONCENTRIC AU DISTANCE-RING grid — a Sun-centered polar grid on the
@@ -115,6 +120,16 @@ export const GridRecursive = () => {
   const scaleMode = useStore((state) => state.scaleMode);
   const guideIntensity = VISUAL_PRESETS[visualPreset]?.guideIntensity ?? 1;
 
+  // ── Unified grid fade (shared with GridDecadeLabel) ──
+  // Each component lerps its OWN value toward the SAME pure-computed target
+  // (both read identical store state on the same frame), so the rings,
+  // spokes and labels rise/fall as one coherent element without a shared
+  // context or per-frame Zustand writes. See gridFade.ts.
+  const sceneReady = useStore((state) => state.isSceneReady);
+  const introActive = useStore((state) => state.isIntroAnimating);
+  const showGrid = useStore((state) => state.showEclipticGrid);
+  const reducedMotion = useStore((state) => state.accessibility.reducedMotion);
+
   const unitCircle = useMemo(() => buildUnitCirclePoints(RING_SEGMENTS), []);
   const unitSpokes = useMemo(() => buildUnitSpokePoints(SPOKE_COUNT), []);
 
@@ -125,12 +140,27 @@ export const GridRecursive = () => {
   const spokeRef = useRef<Line2 | null>(null);
   const spokeGroupRef = useRef<THREE.Group>(null);
 
+  // Per-component fade state (mutated only inside useFrame — never read
+  // during render, so it can't trip react-hooks/refs).
+  const fadeStateRef = useRef(createGridFadeState());
+
   const baseColor = useMemo(
     () => new THREE.Color(GRID_RECURSIVE_CONFIG.ringColor),
     []
   );
 
-  useFrame(() => {
+  useFrame((_, dt) => {
+    // Advance the unified grid fade toward its target this frame. Multiplies
+    // every ring/spoke opacity below so the whole grid rises/falls together
+    // with the labels (which run the identical step).
+    const fade = stepGridFade(
+      fadeStateRef.current,
+      { sceneReady, introActive, showGrid },
+      scaleMode,
+      dt,
+      reducedMotion
+    );
+
     const viewExtentWorld = computeViewExtentWorld(
       camera,
       controls?.target ?? null
@@ -150,7 +180,13 @@ export const GridRecursive = () => {
         line.visible = false;
         continue;
       }
-      line.visible = true;
+      // Optional radial reveal blooms rings outward from the Sun on the
+      // initial fade-in (no-op unless GRID_RADIAL_REVEAL_ENABLED). Returns 1
+      // when disabled, so the unified fade is the only multiplier by default.
+      const ringFade = fade * radialRevealFactor(fade, i, rings.length);
+      // Below a hair of opacity the ring is invisible — skip drawing it so
+      // the fully-faded grid costs nothing (and never z-fights at 0).
+      line.visible = ringFade > 0.001;
       line.scale.setScalar(ring.radius);
 
       const mat = line.material as
@@ -164,7 +200,11 @@ export const GridRecursive = () => {
         const tierOpacity = ring.major
           ? GRID_RECURSIVE_CONFIG.majorOpacity
           : GRID_RECURSIVE_CONFIG.minorOpacity;
-        mat.opacity = THREE.MathUtils.clamp(tierOpacity * guideIntensity, 0, 1);
+        mat.opacity = THREE.MathUtils.clamp(
+          tierOpacity * guideIntensity * ringFade,
+          0,
+          1
+        );
         // Major rings are thicker; minor rings thin. The Line2 material's
         // `linewidth` is the fat-line constant-pixel width.
         mat.linewidth = ring.major
@@ -184,7 +224,7 @@ export const GridRecursive = () => {
       rings.length > 0 ? rings[rings.length - 1].radius : decadeRadius;
     if (group) {
       group.scale.setScalar(outerRadius);
-      group.visible = outerRadius > 0;
+      group.visible = outerRadius > 0 && fade > 0.001;
     }
     const spoke = spokeRef.current;
     if (spoke) {
@@ -193,7 +233,7 @@ export const GridRecursive = () => {
         | undefined;
       if (mat) {
         mat.opacity = THREE.MathUtils.clamp(
-          GRID_RECURSIVE_CONFIG.spokeOpacity * guideIntensity,
+          GRID_RECURSIVE_CONFIG.spokeOpacity * guideIntensity * fade,
           0,
           1
         );
