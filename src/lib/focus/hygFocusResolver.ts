@@ -32,6 +32,7 @@
 import * as THREE from "three";
 
 import type { HygCatalogData } from "../../utils/hygBinary";
+import { hygEquatorialToScene } from "../starfield/hygFrame";
 
 /**
  * Prefix for focus IDs targeting HYG catalog stars. Matches the
@@ -72,14 +73,6 @@ export const HYG_FOCUS_DEFAULT_RADIUS_WORLD = 1.0;
  * literal so a refactor moves all three at once.
  */
 const DISTANCE_SCALE = 206_265_000.0;
-
-/**
- * Earth's J2000 obliquity in radians. Mirrors the constant
- * duplicated in `Starfield.tsx:533` (mesh rotation prop) and
- * `StarHoverPicker.tsx:55` (pre-rotation in `buildPickCandidates`).
- * Same M2/DRY note as `DISTANCE_SCALE`.
- */
-const OBLIQUITY_RAD = (23.4 * Math.PI) / 180;
 
 /**
  * Format a HYG star's catalog index as a focus ID string.
@@ -129,9 +122,14 @@ export const parseHygFocusId = (focusId: string | null): number | null => {
  * Mirrors `StarHoverPicker.buildPickCandidates` exactly:
  *   1. Read `catalog.positions[3*K..3*K+3]` (parsec-scale equatorial J2000).
  *   2. Multiply by `DISTANCE_SCALE` (parsec → atlas world unit).
- *   3. Apply `R_x(OBLIQUITY_RAD)` so the result lines up with what
- *      Starfield's mesh renders (the mesh has `rotation={[OBL, 0, 0]}`
- *      at `Starfield.tsx:533`).
+ *   3. Convert equatorial J2000 → scene frame via
+ *      `lib/starfield/hygFrame.ts:hygEquatorialToScene` — the SAME
+ *      helper `Starfield` bakes into its instance buffer and
+ *      `StarHoverPicker` uses to build pick candidates, so render,
+ *      picking and focus cannot drift apart. (Pre-fix this step was a
+ *      bare `R_x(obliquity)` with no ecliptic→three.js remap, which
+ *      put the starfield 136.8° off the scene frame; see the hygFrame
+ *      module docstring.)
  *
  * Float32 throughout — atlas's stellar world units max out at ~1e12
  * which fits float32 comfortably. T4.1-γ would replace this with a
@@ -158,10 +156,7 @@ export const resolveHygWorldPosition = (
   const py = catalog.positions[i + 1] * DISTANCE_SCALE;
   const pz = catalog.positions[i + 2] * DISTANCE_SCALE;
 
-  const cosT = Math.cos(OBLIQUITY_RAD);
-  const sinT = Math.sin(OBLIQUITY_RAD);
-
-  return out.set(px, py * cosT - pz * sinT, py * sinT + pz * cosT);
+  return hygEquatorialToScene(px, py, pz, out);
 };
 
 /**

@@ -29,6 +29,7 @@ import { useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { formatHygFocusId } from "../../lib/focus/hygFocusResolver";
+import { hygEquatorialToScene } from "../../lib/starfield/hygFrame";
 import {
   getCachedHygCatalog,
   getCachedHygNamesSidecar,
@@ -50,10 +51,6 @@ const MOUSE_THROTTLE_MS = 32; // ~30 Hz
 // constant used in `Starfield.tsx` so the world-space projection lines up
 // with the rendered points.
 const DISTANCE_SCALE = 206_265_000.0;
-// The starfield's root billboard mesh is rotated around X by the J2000
-// obliquity; we bake that into the world transform once per mouse move
-// instead of traversing the scene graph.
-const OBLIQUITY_RAD = (23.4 * Math.PI) / 180;
 
 /**
  * Per-named-star pick entry. Pre-computed once the catalog + sidecar both
@@ -76,9 +73,11 @@ function buildPickCandidates(
   sidecar: HygNamesSidecar
 ): PickCandidate[] {
   const out: PickCandidate[] = [];
-  const cosT = Math.cos(OBLIQUITY_RAD);
-  const sinT = Math.sin(OBLIQUITY_RAD);
   const count = catalog.header.count;
+  // One scratch vector for the whole build — `hygEquatorialToScene`
+  // writes into it, so the ~3 000-entry named subset allocates nothing
+  // per star.
+  const scratch = new THREE.Vector3();
 
   for (const entry of sidecar.entries) {
     // The Low tier only carries ~500 stars; named entries referring to
@@ -90,18 +89,19 @@ function buildPickCandidates(
     const py = catalog.positions[i + 1] * DISTANCE_SCALE;
     const pz = catalog.positions[i + 2] * DISTANCE_SCALE;
 
-    // Apply the same R_x(obliquity) the starfield mesh applies in the scene.
-    const rx = px;
-    const ry = py * cosT - pz * sinT;
-    const rz = py * sinT + pz * cosT;
+    // Equatorial J2000 → scene frame, via the same helper `Starfield`
+    // bakes into its instance buffer and `hygFocusResolver` uses for
+    // focus. Keeping the three sites on one helper is what guarantees
+    // the tooltip lands on the pixel the star is drawn at.
+    hygEquatorialToScene(px, py, pz, scratch);
 
     const distParsecs = Math.sqrt(px * px + py * py + pz * pz) / DISTANCE_SCALE;
 
     out.push({
       entry,
-      x: rx,
-      y: ry,
-      z: rz,
+      x: scratch.x,
+      y: scratch.y,
+      z: scratch.z,
       distanceParsecs: Number.isFinite(distParsecs) ? distParsecs : null,
       colorIndex: catalog.colorIndices[entry.index] ?? 0.6,
     });

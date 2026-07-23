@@ -10,9 +10,10 @@ import {
   resolveHygDistanceFromSunPc,
   resolveHygWorldPosition,
 } from "./hygFocusResolver";
+import { HYG_OBLIQUITY_RAD } from "../starfield/hygFrame";
 
 const DISTANCE_SCALE = 206_265_000.0;
-const OBLIQUITY_RAD = (23.4 * Math.PI) / 180;
+const OBLIQUITY_RAD = HYG_OBLIQUITY_RAD;
 
 const buildCatalog = (
   positions: ReadonlyArray<number>,
@@ -125,13 +126,25 @@ describe("parseHygFocusId", () => {
 });
 
 describe("resolveHygWorldPosition", () => {
-  // Build a catalog with two stars at known parsec positions:
-  //   star 0: (1, 0, 0) parsec — pure x axis, no obliquity rotation
-  //   star 1: (0, 1, 0) parsec — pure y axis, rotated by R_x(obliquity)
-  //   star 2: (0, 0, 1) parsec — pure z axis, rotated by R_x(obliquity)
+  // Frame contract (rewritten 2026-07-23). These three cases used to
+  // assert a bare `R_x(obliquity)` on the raw equatorial vector —
+  // i.e. the equatorial→ecliptic step WITHOUT the `ecliptic2ThreeJs`
+  // `(x, z, −y)` remap every other position in the scene goes through
+  // (`lib/orbital/analytical/coordUtils.ts:67`). That is a different
+  // rotation: it put the celestial north pole at (0, −sinε, +cosε)
+  // instead of (0, +cosε, −sinε), leaving the whole starfield 136.8°
+  // off the scene frame. Render / picking / focus all shared the bug,
+  // so it was self-consistent and invisible from inside the starfield.
+  // The assertions below now pin the composed transform (see
+  // `lib/starfield/hygFrame.ts`).
+  //
+  // Catalog: three unit-parsec stars on the equatorial axes:
+  //   star 0: (1, 0, 0) — vernal equinox, invariant under the rotation
+  //   star 1: (0, 1, 0) — equatorial y, 90° east on the equator
+  //   star 2: (0, 0, 1) — celestial north pole
   const catalog = buildCatalog([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
-  it("returns the scaled position for x-axis star (no rotation effect)", () => {
+  it("returns the scaled position for x-axis star (rotation axis, unchanged)", () => {
     const out = resolveHygWorldPosition(0, catalog);
     expect(out).not.toBeNull();
     expect(out!.x).toBeCloseTo(DISTANCE_SCALE, 0);
@@ -139,24 +152,62 @@ describe("resolveHygWorldPosition", () => {
     expect(out!.z).toBeCloseTo(0, 5);
   });
 
-  it("applies R_x(obliquity) rotation to y-axis star", () => {
-    // Pre-rotation: (0, 1, 0) * DISTANCE_SCALE
-    // Post R_x(obliquity): (0, cos·1·DISTANCE_SCALE, sin·1·DISTANCE_SCALE)
+  it("maps the equatorial y axis to (0, -sinε, -cosε)", () => {
+    // Equatorial (0, 1, 0) → ecliptic (0, cosε, −sinε) → three.js
+    // (x, z, −y) = (0, −sinε, −cosε), scaled by DISTANCE_SCALE.
     const out = resolveHygWorldPosition(1, catalog);
     expect(out).not.toBeNull();
     expect(out!.x).toBeCloseTo(0, 5);
-    expect(out!.y).toBeCloseTo(Math.cos(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
-    expect(out!.z).toBeCloseTo(Math.sin(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
+    expect(out!.y).toBeCloseTo(-Math.sin(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
+    expect(out!.z).toBeCloseTo(-Math.cos(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
   });
 
-  it("applies R_x(obliquity) rotation to z-axis star", () => {
-    // Pre-rotation: (0, 0, 1) * DISTANCE_SCALE
-    // Post R_x(obliquity): (0, -sin·1·DISTANCE_SCALE, cos·1·DISTANCE_SCALE)
+  it("maps the celestial north pole to (0, +cosε, -sinε)", () => {
+    // Physical anchor: the north celestial pole sits ε = 23.44° away
+    // from the scene's +Y (ecliptic north), tilted toward −Z. The old
+    // contract asserted (0, −sinε, +cosε), which is 90°−ε from +Y on
+    // the wrong side — the signature of the missing remap.
     const out = resolveHygWorldPosition(2, catalog);
     expect(out).not.toBeNull();
     expect(out!.x).toBeCloseTo(0, 5);
-    expect(out!.y).toBeCloseTo(-Math.sin(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
-    expect(out!.z).toBeCloseTo(Math.cos(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
+    expect(out!.y).toBeCloseTo(Math.cos(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
+    expect(out!.z).toBeCloseTo(-Math.sin(OBLIQUITY_RAD) * DISTANCE_SCALE, 0);
+  });
+
+  it("maps the ecliptic north pole to scene +Y exactly", () => {
+    // Ecliptic north in equatorial cartesian is (0, −sinε, cosε).
+    // Anything else means the starfield's 'up' disagrees with the
+    // ecliptic plane the planets orbit in.
+    const eclipticNorth = buildCatalog([
+      0,
+      -Math.sin(OBLIQUITY_RAD),
+      Math.cos(OBLIQUITY_RAD),
+    ]);
+    const out = resolveHygWorldPosition(0, eclipticNorth)!;
+    expect(out.x).toBeCloseTo(0, 5);
+    expect(out.y / DISTANCE_SCALE).toBeCloseTo(1, 5);
+    expect(out.z / DISTANCE_SCALE).toBeCloseTo(0, 5);
+  });
+
+  it("puts a star on the ecliptic at |Y| ≈ 0 (Regulus)", () => {
+    // Physical anchor: Regulus (α Leo) has ecliptic latitude +0.465°,
+    // i.e. it lies essentially ON the ecliptic. Its equatorial J2000
+    // direction is RA 152.093°, Dec +11.967°, which is nowhere near
+    // the equatorial plane — so this test only passes for a transform
+    // that actually rotates equatorial → ecliptic and remaps to the
+    // scene's Y-up frame. Under the old contract Regulus rendered at
+    // ecliptic latitude ≈ −22.7°.
+    const rad = Math.PI / 180;
+    const ra = 152.09296 * rad;
+    const dec = 11.96721 * rad;
+    const cat = buildCatalog([
+      Math.cos(dec) * Math.cos(ra),
+      Math.cos(dec) * Math.sin(ra),
+      Math.sin(dec),
+    ]);
+    const out = resolveHygWorldPosition(0, cat)!;
+    const latDeg = Math.asin(out.y / out.length()) / rad;
+    expect(latDeg).toBeCloseTo(0.465, 2);
   });
 
   it("returns null for negative index", () => {
@@ -186,7 +237,7 @@ describe("resolveHygWorldPosition", () => {
     expect(a).toBeInstanceOf(THREE.Vector3);
   });
 
-  it("matches StarHoverPicker.buildPickCandidates rotation chain for a Sirius-like position", () => {
+  it("matches the hygFrame equatorial→scene chain for a Sirius-like position", () => {
     // Sirius at ~2.64 pc in the equatorial J2000 frame: roughly
     // (-1.71, +0.08, -2.01) parsec. Verify the resolver returns the
     // same rotated world-units that StarHoverPicker computes.
@@ -206,9 +257,11 @@ describe("resolveHygWorldPosition", () => {
     const pz = positions[2] * DISTANCE_SCALE;
     const expectedX = px;
     const expectedY =
-      py * Math.cos(OBLIQUITY_RAD) - pz * Math.sin(OBLIQUITY_RAD);
-    const expectedZ =
-      py * Math.sin(OBLIQUITY_RAD) + pz * Math.cos(OBLIQUITY_RAD);
+      -py * Math.sin(OBLIQUITY_RAD) + pz * Math.cos(OBLIQUITY_RAD);
+    const expectedZ = -(
+      py * Math.cos(OBLIQUITY_RAD) +
+      pz * Math.sin(OBLIQUITY_RAD)
+    );
 
     expect(out!.x).toBeCloseTo(expectedX, 0);
     expect(out!.y).toBeCloseTo(expectedY, 0);

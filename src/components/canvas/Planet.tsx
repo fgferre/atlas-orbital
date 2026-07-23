@@ -1,4 +1,13 @@
-import { useRef, useMemo, Suspense, useEffect, useState } from "react";
+import {
+  Children,
+  isValidElement,
+  useRef,
+  useMemo,
+  Suspense,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
@@ -27,6 +36,10 @@ import { useOrbitalSalience } from "./planet/useOrbitalSalience";
 import { usePlanetAssets } from "./planet/usePlanetAssets";
 import { usePlanetMaterials } from "./planet/usePlanetMaterials";
 import { PlanetOrbitLine } from "./planet/PlanetOrbitLine";
+import {
+  computePoleOrientationQuaternion,
+  satelliteUsesParentEquatorialFrame,
+} from "./moonSceneFrame";
 import { PlanetMotionOverlays } from "./planet/PlanetMotionOverlays";
 // T5.1 — per-frame atmosphere dynamic-uniform recompute. Mirrors
 // Gaia's `updateAtmosphericScatteringParams` at
@@ -153,27 +166,12 @@ const PlanetVisual = ({
     screenSalience,
   });
 
-  // Calculate orientation quaternion based on IAU pole data
-  const orientationQuaternion = useMemo(() => {
-    if (body.poleRA !== undefined && body.poleDec !== undefined) {
-      // Get pole direction in Ecliptic space
-      const poleDir = AstroPhysics.equatorialToEcliptic(
-        body.poleRA,
-        body.poleDec
-      );
-
-      // Default Up is (0, 1, 0) in our scene (Ecliptic North)
-      const defaultUp = new THREE.Vector3(0, 1, 0);
-
-      // Create quaternion to rotate Up to Pole Direction
-      return new THREE.Quaternion().setFromUnitVectors(defaultUp, poleDir);
-    } else {
-      // Fallback to simple axial tilt (around Z axis)
-      return new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(0, 0, -(body.axialTilt || 0) * (Math.PI / 180))
-      );
-    }
-  }, [body.poleRA, body.poleDec, body.axialTilt]);
+  const orientationQuaternion = useMemo(
+    () => computePoleOrientationQuaternion(body),
+    // Only the pole/tilt fields feed the quaternion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [body.poleRA, body.poleDec, body.axialTilt]
+  );
 
   // T5.1 — pre-resolve the atmosphere dynamic-config primitives
   // once per body. The per-frame `computeDynamicAtmosphereUniforms`
@@ -638,27 +636,36 @@ export const Planet = ({
   const orbitLineRef = useRef<Line2 | null>(null);
   const progradeRef = useRef<THREE.Group>(null);
 
-  // Calculate orientation quaternion based on IAU pole data
-  const orientationQuaternion = useMemo(() => {
-    if (body.poleRA !== undefined && body.poleDec !== undefined) {
-      // Get pole direction in Ecliptic space
-      const poleDir = AstroPhysics.equatorialToEcliptic(
-        body.poleRA,
-        body.poleDec
-      );
+  const orientationQuaternion = useMemo(
+    () => computePoleOrientationQuaternion(body),
+    // Only the pole/tilt fields feed the quaternion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [body.poleRA, body.poleDec, body.axialTilt]
+  );
 
-      // Default Up is (0, 1, 0) in our scene (Ecliptic North)
-      const defaultUp = new THREE.Vector3(0, 1, 0);
+  // Split the satellites by the frame their position source uses, so each
+  // group lands under the right container below. Memoised on the `children`
+  // identity: `Children.toArray` clones every element, so recomputing on a
+  // parent-only re-render (focus change, the 4 Hz clock tick) would defeat
+  // React's element-identity bail-out and re-render every moon subtree.
+  const { eclipticChildren, equatorialChildren } = useMemo(() => {
+    const ecliptic: ReactNode[] = [];
+    const equatorial: ReactNode[] = [];
 
-      // Create quaternion to rotate Up to Pole Direction
-      return new THREE.Quaternion().setFromUnitVectors(defaultUp, poleDir);
-    } else {
-      // Fallback to simple axial tilt (around Z axis)
-      return new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(0, 0, -(body.axialTilt || 0) * (Math.PI / 180))
-      );
+    for (const child of Children.toArray(children)) {
+      const childBodyId = isValidElement<{ body?: CelestialBody }>(child)
+        ? child.props.body?.id
+        : undefined;
+
+      if (childBodyId && satelliteUsesParentEquatorialFrame(childBodyId)) {
+        equatorial.push(child);
+      } else {
+        ecliptic.push(child);
+      }
     }
-  }, [body.poleRA, body.poleDec, body.axialTilt]);
+
+    return { eclipticChildren: ecliptic, equatorialChildren: equatorial };
+  }, [children]);
 
   const scaleMode = useStore((state) => state.scaleMode);
   const showOrbits = useStore((state) => state.showOrbits);
@@ -966,17 +973,18 @@ export const Planet = ({
         />
 
         {/*
-          Moons usually orbit the planet's equatorial plane (which is tilted).
-          We apply the planet's axial tilt to the children container so the moons orbit the equator.
-          EXCEPTION: Earth's Moon orbits the ecliptic (mostly), not Earth's equator.
+          Children are positioned by their OWN provider, so the frame of that
+          provider decides whether this container may rotate them. Analytical
+          satellites already come back in J2000 ecliptic (see
+          `satelliteUsesParentEquatorialFrame`) and must stay unrotated; only
+          the legacy Keplerian satellites, whose elements are parent-equatorial,
+          go under the pole quaternion. The planet's own visual tilt is applied
+          independently in `PlanetVisual` / `PlanetModel` and is unaffected.
         */}
-        <group
-          quaternion={
-            body.id !== "earth" ? orientationQuaternion : new THREE.Quaternion()
-          }
-        >
-          {children}
-        </group>
+        {eclipticChildren.length > 0 && <group>{eclipticChildren}</group>}
+        {equatorialChildren.length > 0 && (
+          <group quaternion={orientationQuaternion}>{equatorialChildren}</group>
+        )}
       </group>
     </>
   );

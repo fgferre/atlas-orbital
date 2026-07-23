@@ -28,9 +28,13 @@
  *     star by `velocity * yearsSinceJ2000` so the sky drifts with the
  *     simulation time — visible when exploring decades or centuries.
  *
- * Star positions are equatorial J2000 parsecs. The scene is ecliptic,
- * so the billboard mesh is tilted by the J2000 obliquity (~23.4°) to keep
- * constellations in their expected places.
+ * Star positions are equatorial J2000 parsecs. The scene is the
+ * three.js Y-up remap of ecliptic J2000, so both the position and the
+ * velocity buffers are converted once at build time via
+ * `lib/starfield/hygFrame.ts` (equatorial→ecliptic followed by
+ * `ecliptic2ThreeJs`). The mesh itself carries no rotation — see that
+ * module for why the previous bare `R_x(23.4°)` mesh tilt left the sky
+ * 136.8° off the scene frame.
  */
 
 import * as THREE from "three";
@@ -48,6 +52,7 @@ import {
   loadHygCatalog,
   type HygCatalogData,
 } from "../../lib/starfield";
+import { transformHygEquatorialTripletsInPlace } from "../../lib/starfield/hygFrame";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 import {
@@ -321,6 +326,10 @@ function getStarSpriteTexture(): THREE.DataTexture {
  *
  * HYG's `pmra` convention already includes cos(δ), so no extra
  * multiplication.
+ *
+ * Output stays in the catalog's equatorial frame; the caller runs it
+ * through `transformHygEquatorialTripletsInPlace` alongside the
+ * positions so both attributes reach the shader in the scene frame.
  */
 function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
   const { positions, pmRA, pmDec } = catalog;
@@ -491,15 +500,21 @@ export const Starfield = () => {
     const { positions } = catalog;
     const count = catalog.header.count;
 
+    // Positions AND proper-motion velocities are baked from the
+    // catalog's equatorial J2000 frame into the scene frame here, once
+    // per catalog load — a single O(N) pass with no per-star
+    // allocation. The mesh therefore carries no rotation prop: what the
+    // buffer holds is already world space, which is what
+    // `hygFocusResolver` / `StarHoverPicker` resolve against.
+    // Velocities are transformed by the same linear map (the shader
+    // adds `velocity × years` to `starPosition`, so both must live in
+    // the same frame or proper motion drifts sideways).
     const scaledPositions = new Float32Array(count * 3);
-    for (let i = 0; i < count * 3; i++) {
-      scaledPositions[i] = positions[i] * DISTANCE_SCALE;
-    }
+    scaledPositions.set(positions.subarray(0, count * 3));
+    transformHygEquatorialTripletsInPlace(scaledPositions, DISTANCE_SCALE);
 
     const velocities = buildVelocityAttribute(catalog);
-    for (let i = 0; i < velocities.length; i++) {
-      velocities[i] *= DISTANCE_SCALE;
-    }
+    transformHygEquatorialTripletsInPlace(velocities, DISTANCE_SCALE);
 
     // `a_size` carries the Gaia-Sky-style pseudo-size (scene units ×
     // STAR_SIZE_FACTOR). The NASA-Eyes-era `mag` attribute was retired
@@ -627,7 +642,6 @@ export const Starfield = () => {
       geometry={geometry}
       material={material}
       frustumCulled={false}
-      rotation={[(23.4 * Math.PI) / 180, 0, 0]}
       raycast={() => null}
       renderOrder={-2}
     />
