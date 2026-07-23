@@ -248,6 +248,19 @@ ported flow, check that the criterion lives in the perceptual
 coordinate the user actually experiences, not the raw numerical
 coordinate the integrator writes to._
 
+- **A rejection is a hypothesis too.** An external review that _dismisses_
+  a finding needs the same runtime proof as one that raises it — and a
+  dismissal is more dangerous, because it closes the investigation. Two
+  concrete anti-patterns, both caught in the 2026-07-23 cross-AI round:
+  (a) **single-point evaluation** — "M=6, e=.999 gives residual zero"
+  and "the white dwarf gives near≈5.12e-4" were each one sample; sweeping
+  the domain showed the solver breaks at e≈0.9936 and that the real
+  minimum near is 4.41e-7 (Deimos), off by ~1160×; (b) **static presence
+  ≠ execution** — grepping the bundle for `WebAssembly.instantiate`
+  "proved" a decoder runs at module scope, but hooking the call showed
+  import → 0 instantiations, invocation → 1. Sweep the domain or hook the
+  call; never close on a grep or a single sample.
+
 **Canonical code markers:** `sanitizeVsopSeries()` in
 `src/lib/orbital/analytical/vsop87Planets.ts`; `provenanceFor()` in
 `analyticalProvider.ts`; `SatelliteEntry.source` discriminant in
@@ -561,6 +574,17 @@ solvers, two rotations = two truths.
 - **One solver, one rotation.** When a helper already exists, consume it
   or factor out the shared core — don't add a second copy "for clarity".
   Clarity is the reader seeing one solver, not two.
+- **Verifying someone else's number? Import the project's converter, do
+  not reimplement it.** The re-derivation is where the new bug enters.
+  2026-07-23: a script written to _check_ the satellite mean-motion claim
+  built its own JD from `Date.parse(...)` — i.e. UT — while the provider
+  evaluates in TDB. The ~77 s bias is invisible for slow moons but worth
+  ~1.0° of phase for Phobos; it inflated every error in the table and led
+  to publicly "correcting" a figure (≤2.61°) that had been right all
+  along. Re-run through `dateToTDB` reproduced the original digit for
+  digit. Same trap for frames: the starfield's hand-rolled
+  `R_x(23.4°)` is 136.8° away from `equatorialToEcliptic` +
+  `ecliptic2ThreeJs`. If the repo exports the conversion, call it.
 
 **Fires when:** writing a numerical value alongside a time/frame field;
 adopting a new tooling contract (tsconfig, test harness, CI); finding

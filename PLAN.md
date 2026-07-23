@@ -19,10 +19,10 @@ and label each result with the model that actually ran.
 | VSOP2013       | `VSOP87D` via `astronomia`                | Meeus-truncated D variant, arcsec-level       |
 | TOP2013        | `VSOP87D` (outer planets) + `Pluto-Meeus` | Pluto uses Meeus Ch. 37 series                |
 | ELP2000        | `ELP-MPP02-trunc` via `astronomia/elp`    | DE-fitted truncated MPP02                     |
-| MARSSAT        | `MartianSatMeanElements`                  | J2000 ecliptic osculating elements            |
-| L1             | `GalileanMeanElements`                    | All 4 moons Horizons-derived at 2025-01       |
-| TASS17         | `SaturnianMeanElements`                   | All 7 major moons Horizons-derived at 2025-01 |
-| GUST86         | `UranianMeanElements`                     | All 5 major moons Horizons-derived at 2025-01 |
+| MARSSAT        | `MartianSatOsculating2Body`               | J2000 ecliptic osculating elements            |
+| L1             | `GalileanOsculating2Body`                 | All 4 moons Horizons-derived at 2025-01       |
+| TASS17         | `SaturnianOsculating2Body`                | All 7 major moons Horizons-derived at 2025-01 |
+| GUST86         | `UranianOsculating2Body`                  | All 5 major moons Horizons-derived at 2025-01 |
 | EPHASTER       | `AsteroidOsculating`                      | All 3 asteroids Horizons-derived at 2025-01   |
 
 Shipped:
@@ -105,11 +105,21 @@ Shipped in `src/lib/orbital/analytical/`:
 1. `VSOP87D` for Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune (supersedes `VSOP2013` / `TOP2013` scope).
 2. `Pluto-Meeus` (Meeus Ch. 37) for Pluto.
 3. `ELP-MPP02-trunc` for the Moon (supersedes `ELP2000` scope).
-4. `MartianSatMeanElements` for Phobos and Deimos (supersedes `MARSSAT` scope).
-5. `GalileanMeanElements` for Io, Europa, Ganymede, Callisto (supersedes `L1` scope).
-6. `SaturnianMeanElements` for Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus (supersedes `TASS17` scope).
-7. `UranianMeanElements` for Miranda, Ariel, Umbriel, Titania, Oberon (supersedes `GUST86` scope).
-8. `AsteroidOsculating` for Ceres, Pallas, Vesta (supersedes `EPHASTER` scope).
+4. `MartianSatOsculating2Body` for Phobos and Deimos (NOT scope-equivalent to `MARSSAT`; see note below).
+5. `GalileanOsculating2Body` for Io, Europa, Ganymede, Callisto (NOT scope-equivalent to `L1`; see note below).
+6. `SaturnianOsculating2Body` for Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus (NOT scope-equivalent to `TASS17`; see note below).
+7. `UranianOsculating2Body` for Miranda, Ariel, Umbriel, Titania, Oberon (NOT scope-equivalent to `GUST86`; see note below).
+8. `AsteroidOsculating` for Ceres, Pallas, Vesta (NOT scope-equivalent to
+   `EPHASTER`; see note below).
+
+> **Scope note (2026-07-23 audit).** Rows 4-8 name the published theory each
+> family was _meant_ to cover, not a theory this repo implements. What ships is
+> two-body Kepler propagation of Horizons-derived osculating elements at a
+> single epoch, with an explicit mean motion per body. MARSSAT / L1 / TASS17 /
+> GUST86 / EPHASTER model perturbations (J2, resonances, mutual terms) and hold
+> tens of km over decades; this does not. Claiming equivalence was the single
+> most false precision statement in the repo and was removed from `README.md`
+> and here in the same pass.
 
 Kepler fallback is retained for:
 
@@ -163,7 +173,7 @@ Baseline (2020-01-01) enforced targets, all GREEN:
   angular `< 0.1°`, distance `< 0.2%`.
 - `ELP-MPP02-trunc` Moon:
   angular `< 0.2°`, distance `< 0.5%`.
-- All 18 `*MeanElements` satellites and `AsteroidOsculating` asteroids
+- All 18 `*Osculating2Body` satellites and `AsteroidOsculating` asteroids
   (including Io, Titan, Oberon, Phobos, Deimos, Europa, Ganymede,
   Callisto, Mimas, Enceladus, Tethys, Dione, Rhea, Iapetus, Miranda,
   Ariel, Umbriel, Titania, Ceres, Pallas, Vesta):
@@ -177,21 +187,24 @@ envelopes:
 
 - Major planets, Moon, Pluto, Ceres, Vesta, Triton: hold their baseline
   tolerance across all three epochs.
-- Io: ±80° envelope (two-body Kepler loses 70°/yr on its 1.77-day
-  resonant orbit — real limitation of the unperturbed propagator).
-- Titan / Oberon: ±2° envelope (J2 + resonance drift ≈ 1–1.5°/yr).
-- The other 16 `*MeanElements` satellites are now also enforced at all
-  three epochs with per-body envelopes sized from observed drift:
-  short-period / resonance-heavy moons span 20°–200° (phobos, enceladus,
-  tethys, mimas, dione, miranda, deimos), mid-period moons span 1°–7°
-  (europa, callisto, umbriel, rhea, ganymede, iapetus, ariel, titania).
-  Pallas sits comfortably inside the 0.5° family default — no override.
+- All 18 satellites now carry an explicit `nDegPerDay` instead of deriving
+  mean motion from the osculating semi-major axis. That single change cut the
+  worst multi-epoch error from 165° (Phobos) to 2.6° (Mimas), so the envelopes
+  below are per-body and tight rather than the 20°–200° band this section used
+  to document:
+  - Mimas 3.5°, Phobos 2.5°, Miranda 1.8°, Tethys 1.3°, Enceladus 1.2°;
+  - every other analytical satellite sits at 0.3°–0.8°.
+- Caveat: 14 of the 18 rates were fitted against the same two off-epoch
+  fixtures the suite asserts on (in-sample); 4 (Mimas, Phobos, Tethys, Io) use
+  the published JPL value. Mimas and Phobos are aliased if derived from the
+  181-day baseline, so they must not be re-derived from fixtures alone.
+- Pallas sits comfortably inside the 0.5° family default — no override.
 
 Drift envelopes are documented in `regression.test.ts >
 MULTI_EPOCH_OVERRIDES` and in `satellites.ts` JSDoc with the physical
-cause (see `tasks/lessons.md` L10).
+cause (see `tasks/lessons.md` M6).
 
-### Phase 5 - Deferred Visual Realism — SHIPPED (see tasks/todo.md)
+### Phase 5 - Deferred Visual Realism — SHIPPED (see tasks/STATUS.md)
 
 Completed tracks:
 
