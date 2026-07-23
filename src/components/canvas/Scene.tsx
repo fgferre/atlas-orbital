@@ -12,6 +12,7 @@ import {
 import {
   OrbitControls as DreiOrbitControls,
   Environment,
+  useProgress,
 } from "@react-three/drei";
 import { StarfieldManager } from "./StarfieldManager";
 import * as THREE from "three";
@@ -19,6 +20,9 @@ import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useEffectiveGraphics } from "../../hooks/useEffectiveGraphics";
 import { shouldMountBloom } from "../../lib/graphics/bloomGate";
+import { detectWebGLSupport } from "../../lib/graphics/webglSupport";
+import { AppCrashCard } from "../utils/AppCrashCard";
+import { WebGLUnavailableCard } from "../ui/WebGLUnavailableCard";
 import {
   resolveDeferredTextureBudget,
   setDeferredTextureBudget,
@@ -339,6 +343,24 @@ const TestCameraProbe = ({
   return null;
 };
 
+/**
+ * Hard boot deadline for the whole scene, enforced OUTSIDE the R3F tree.
+ *
+ * `SceneReadyChecker`'s own 8 s safety hatch only arms once
+ * `criticalAssetsReady` is true — i.e. once a Canvas child actually
+ * mounted and ran its effect. It therefore cannot cover a renderer that
+ * dies before/while being constructed: nothing inside the Canvas ever
+ * runs, the loader stays capped at the "boot"/"render" stage, and the
+ * user waits forever with no error surface.
+ *
+ * The window is re-armed on every asset-loader event (see the effect in
+ * `Scene`), so it measures *silence*, not total boot duration — a slow
+ * machine still streaming assets never trips it. 15 s also sits above
+ * the 8 s hatch, so the normal path always wins the race. Last resort,
+ * not a competing timer.
+ */
+const SCENE_BOOT_WATCHDOG_MS = 15_000;
+
 const isTestFreezeActive =
   typeof window !== "undefined" &&
   Boolean(
@@ -520,6 +542,66 @@ export const Scene = () => {
   // into R3F internals.
   const postProcessingActive = qualityProfile.name !== "constrained";
 
+  // --- Boot failure surfaces (both live OUTSIDE the R3F tree) ---------
+  // (a) explicit probe: no WebGL context at all → never mount <Canvas>.
+  // (b) watchdog: WebGL exists but the scene never reported ready.
+  const [webglSupported] = useState(detectWebGLSupport);
+  const isSceneReady = useStore((state) => state.isSceneReady);
+  const setSceneReady = useStore((state) => state.setSceneReady);
+  const [bootTimedOut, setBootTimedOut] = useState(false);
+
+  // Release the loader in both failure paths: it is gated on
+  // `isSceneReady` (`loaderStages.ts` caps progress until then), so
+  // without this the fallback card renders *behind* a loader that never
+  // exits. `setSceneReady` is a one-way latch, so this is idempotent.
+  useEffect(() => {
+    if (webglSupported) {
+      return;
+    }
+
+    setSceneReady(true);
+  }, [setSceneReady, webglSupported]);
+
+  useEffect(() => {
+    if (!webglSupported || isSceneReady) {
+      return;
+    }
+
+    let timeoutId = 0;
+
+    // Re-armed on every asset-loader event: the deadline measures
+    // "nothing is happening", not "boot is taking a while". A healthy
+    // but slow boot (software rasterizer, cold cache, huge textures)
+    // keeps ticking `useProgress` and therefore keeps pushing the
+    // deadline out — verified in headless SwiftShader, where a naive
+    // fixed 15 s timer false-fired mid-download.
+    const armWatchdog = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        console.error(
+          `[Scene] Boot watchdog fired after ${SCENE_BOOT_WATCHDOG_MS} ms without progress — the scene never reported ready. Surfacing a failure card.`
+        );
+        setBootTimedOut(true);
+        setSceneReady(true);
+      }, SCENE_BOOT_WATCHDOG_MS);
+    };
+
+    // `useProgress` is drei's zustand store; subscribing (instead of
+    // calling the hook) keeps progress churn from re-rendering the
+    // whole Canvas subtree on every loaded asset.
+    const unsubscribe = useProgress.subscribe(armWatchdog);
+    armWatchdog();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+    };
+  }, [isSceneReady, setSceneReady, webglSupported]);
+
+  if (!webglSupported) {
+    return <WebGLUnavailableCard />;
+  }
+
   return (
     <>
       <div
@@ -699,6 +781,16 @@ export const Scene = () => {
       </Canvas>
       <PlanetOverlay />
       <OrbitalEngineDebugReporter />
+      {bootTimedOut && (
+        <AppCrashCard
+          error={
+            new Error(
+              `The 3D scene did not finish loading within ${SCENE_BOOT_WATCHDOG_MS / 1000}s. WebGL is available, so the renderer likely stalled or lost its context. Reload to retry; if it keeps happening, check the browser console and your graphics drivers.`
+            )
+          }
+          reset={() => setBootTimedOut(false)}
+        />
+      )}
     </>
   );
 };

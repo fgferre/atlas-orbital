@@ -37,6 +37,10 @@ export const InitialCameraAnimation = () => {
   const setIsIntroAnimating = useStore((s) => s.setIsIntroAnimating);
   const scaleMode = useStore((s) => s.scaleMode);
   const viewportFraming = useStore((s) => s.viewportFraming);
+  // a11y N-4 — reduced motion governs the intro. Reactive read at
+  // component level (never inside `useFrame`); consumed by the
+  // arming effect below. Policy: `lib/camera/reducedMotionCamera.ts`.
+  const reducedMotion = useStore((s) => s.accessibility.reducedMotion);
 
   const cameraRef = useRef(camera);
   const controlsRef = useRef<OrbitControlsImpl | null>(controls);
@@ -158,6 +162,19 @@ export const InitialCameraAnimation = () => {
     animationRef.current.startPos.copy(INTRO_START_POSITION);
     animationRef.current.endPos.copy(resolveIntroEndPosition());
 
+    // a11y N-4 — reduced motion: no 12 s deep-space sweep. The end
+    // pose is the only essential outcome (WCAG 2.3.3), so apply it
+    // and finish in the same tick. Crucially we never write
+    // `INTRO_START_POSITION` onto the camera, so the 1e12-world-unit
+    // pose (and the `isIntroAnimating` suppression gate it needs)
+    // never happens at all. `isRunning` is flipped first because
+    // `completeAnimation` guards on it.
+    if (reducedMotion) {
+      animationRef.current.isRunning = true;
+      completeAnimation();
+      return;
+    }
+
     // **Intro race-window fix** (2026-04-24 Codex white-canvas audit).
     // Previously this block ran in the order:
     //   1. `camera.position.copy(INTRO_START_POSITION)` → camera at ~1e12
@@ -191,8 +208,10 @@ export const InitialCameraAnimation = () => {
 
     return () => window.clearTimeout(timer);
   }, [
+    completeAnimation,
     hasPlayed,
     isLoaderHidden,
+    reducedMotion,
     resolveIntroEndPosition,
     setIsIntroAnimating,
     syncControlsToSun,
@@ -251,7 +270,10 @@ export const InitialCameraAnimation = () => {
         "[InitialCameraAnimation] useFrame error — aborting intro:",
         err
       );
-      animationRef.current.isRunning = false;
+      // `completeAnimation` clears `isRunning` itself — clearing it
+      // here first made the call a no-op, so the abort path left
+      // `isIntroAnimating` stuck at `true` (suppression gates on,
+      // camera parked mid-sweep). Let the completion path run.
       completeAnimation();
     }
   });

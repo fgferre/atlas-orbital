@@ -32,6 +32,10 @@ export {
   type AtlasFlightTarget,
 } from "./stellarFlightSolidAngle";
 export {
+  resolveCameraTransitionDurationMs,
+  resolveSnapLandingPosition,
+} from "./reducedMotionCamera";
+export {
   createDefaultViewportFramingState,
   resolveViewportFraming,
 } from "./effectiveViewport";

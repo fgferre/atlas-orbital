@@ -95,7 +95,12 @@ export class CameraTransition {
     }
 
     const elapsed = performance.now() - this.startTime;
-    const rawT = Math.min(elapsed / this.duration, 1);
+    // `duration <= 0` is the reduced-motion snap contract
+    // (`resolveCameraTransitionDurationMs`): resolve straight to the
+    // endpoint on the first update. Guarding explicitly also avoids
+    // the `0 / 0 → NaN` case when `update()` runs in the same
+    // millisecond as `start()`.
+    const rawT = this.duration > 0 ? Math.min(elapsed / this.duration, 1) : 1;
 
     // Apply easing - easeOutQuint for very smooth "landing" (slows down even more at the end)
     const t = CameraTransition.easeOutQuint(rawT);
@@ -124,6 +129,7 @@ export class CameraTransition {
    */
   get progress(): number {
     if (!this.isActive) return 1;
+    if (this.duration <= 0) return 1;
     const elapsed = performance.now() - this.startTime;
     return Math.min(elapsed / this.duration, 1);
   }

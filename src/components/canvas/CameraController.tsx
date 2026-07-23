@@ -15,6 +15,8 @@ import {
   createFocusTrackingState,
   resetFocusTrackingState,
   resolveFocusTrackingFrame,
+  resolveCameraTransitionDurationMs,
+  resolveSnapLandingPosition,
   setHygFlightPosProgress,
 } from "../../lib/camera";
 import {
@@ -84,6 +86,11 @@ export const CameraController = () => {
   const qualityMode = useStore((state) => state.qualityMode);
   const isIntroAnimating = useStore((state) => state.isIntroAnimating);
   const viewportFraming = useStore((state) => state.viewportFraming);
+  // a11y N-4 — reduced motion governs the camera. Subscribed here (a
+  // React-reactive read, same pattern as `GridRecursive.tsx:131`) and
+  // consumed only inside the focus-setup effect below, never inside
+  // `useFrame`. Policy + rationale: `lib/camera/reducedMotionCamera.ts`.
+  const reducedMotion = useStore((state) => state.accessibility.reducedMotion);
 
   // T6.3-γ: subscribe to the same tier-bound HYG catalog Starfield +
   // StarHoverPicker + HygStellarMesh use, so the focus-setup useEffect
@@ -353,6 +360,36 @@ export const CameraController = () => {
       // dictate the gate, so M3 spawn invariants hold for free.
       const landing = computeAtlasFlightLanding(radiusWu, distancePc);
 
+      // a11y N-4 — reduced motion: no fly-to. `HygPhysicsFlight` is
+      // gate-driven (no duration to zero out), so the snap branch
+      // applies `landing.distanceWu` directly along the current
+      // bearing and hands over to focus-tracking in the same tick.
+      // Both flight refs stay cancelled (they were cancelled by the
+      // focus-change effect / are overwritten here), so useFrame's
+      // flight branch never engages.
+      if (reducedMotion) {
+        transitionRef.current.stop();
+        hygPhysicsRef.current.cancel();
+        aimLerpRef.current.cancel();
+        setHygFlightPosProgress(null);
+
+        cameraInstance.position.copy(
+          resolveSnapLandingPosition(
+            cameraInstance.position,
+            targetPos,
+            landing.distanceWu
+          )
+        );
+        controlsInstance.target.copy(targetPos);
+        cameraInstance.lookAt(targetPos);
+        controlsInstance.update();
+
+        flyingRef.current.isFlying = false;
+        flyingRef.current.cameraTargetPos.copy(cameraInstance.position);
+        resetFocusTrackingState(focusTrackingRef.current, targetPos);
+        return;
+      }
+
       // **Round-6 user-smoke fix structural rewrite (post R6-H,
       // 2026-05-06)**: aim-lerp duration. The earlier
       // `OrientationLerp` (absolute target lerp) had two failure
@@ -514,19 +551,25 @@ export const CameraController = () => {
         newCamPos = composedCamPos;
       }
 
-      const duration = isLayoutReframe
-        ? 520
-        : isModeSwitch
-          ? 800
-          : Math.min(
-              1500 +
-                Math.min(
-                  cameraInstance.position.distanceTo(newCamPos) / 1000,
-                  2.5
-                ) *
-                  1000,
-              4000
-            );
+      // a11y N-4 — reduced motion collapses the fly-to duration to 0,
+      // which `CameraTransition.update()` resolves straight to the
+      // endpoint on its first frame (see `reducedMotionCamera.ts`).
+      const duration = resolveCameraTransitionDurationMs(
+        isLayoutReframe
+          ? 520
+          : isModeSwitch
+            ? 800
+            : Math.min(
+                1500 +
+                  Math.min(
+                    cameraInstance.position.distanceTo(newCamPos) / 1000,
+                    2.5
+                  ) *
+                    1000,
+                4000
+              ),
+        reducedMotion
+      );
 
       transitionRef.current.start(
         cameraInstance.position.clone(),
@@ -558,6 +601,7 @@ export const CameraController = () => {
     getFocusExtent,
     getFocusMargin,
     isIntroAnimating,
+    reducedMotion,
     scaleMode,
     scene,
     size.height,
