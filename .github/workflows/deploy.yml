@@ -47,8 +47,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm run test:run
+      # `test:coverage` (not `test:run`) so the coverage thresholds declared
+      # in `vitest.config.ts` actually gate the deploy. `test:run` never
+      # measures coverage, so a regression below the ratchet floors would ship
+      # unnoticed. The v8 instrumentation adds only a few seconds over the bare
+      # run on this suite (~100 unit files) — a worthwhile cost for the gate.
+      - name: Unit tests + coverage thresholds
+        run: npm run test:coverage
 
       - name: Docs check
         run: npm run docs:check

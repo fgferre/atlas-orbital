@@ -71,6 +71,26 @@ export const resolveCameraTransitionDurationMs = (
  *   - non-finite `landingDistanceWu` → returns the current position
  *     unchanged (no pose better than the one we have).
  */
+/**
+ * Whether an *already-running* intro sweep must be cut short because
+ * the user turned on reduced motion mid-flight.
+ *
+ * The intro's arming effect (`InitialCameraAnimation`) can only apply
+ * the snap-to-end policy at the moment it decides to *start* the
+ * animation. If the preference flips to `reduce` after the 12 s sweep
+ * is already in flight, that arming branch is gated out by the
+ * `isRunning` guard and the vestibular motion keeps playing — exactly
+ * the WCAG 2.3.3 harm the policy exists to prevent (see module doc).
+ *
+ * This predicate is the single source of truth for "snap the live
+ * intro now": true only when the preference is on *and* a sweep is
+ * actually running (snapping an idle intro would be a wasted no-op).
+ */
+export const shouldSnapRunningIntro = (
+  reducedMotion: boolean,
+  isRunning: boolean
+): boolean => reducedMotion && isRunning;
+
 export const resolveSnapLandingPosition = (
   currentCameraPos: THREE.Vector3,
   targetPos: THREE.Vector3,

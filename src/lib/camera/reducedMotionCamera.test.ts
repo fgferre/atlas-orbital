@@ -5,6 +5,7 @@ import { CameraTransition } from "./CameraTransition";
 import {
   resolveCameraTransitionDurationMs,
   resolveSnapLandingPosition,
+  shouldSnapRunningIntro,
 } from "./reducedMotionCamera";
 
 /**
@@ -80,6 +81,23 @@ describe("CameraTransition under a zero duration", () => {
     // Nowhere near the endpoint one tick into a 4 s transition.
     expect(pos!.distanceTo(end)).toBeGreaterThan(100);
     expect(transition.active).toBe(true);
+  });
+});
+
+describe("shouldSnapRunningIntro", () => {
+  it("snaps when reduced motion flips on during a running sweep", () => {
+    // The bug: preference toggled ON mid-flight while the 12 s intro
+    // is already running. The intro must be cut to its end pose.
+    expect(shouldSnapRunningIntro(true, true)).toBe(true);
+  });
+
+  it("does not snap an idle intro (would be a wasted no-op)", () => {
+    expect(shouldSnapRunningIntro(true, false)).toBe(false);
+  });
+
+  it("does not snap while motion is allowed, running or not", () => {
+    expect(shouldSnapRunningIntro(false, true)).toBe(false);
+    expect(shouldSnapRunningIntro(false, false)).toBe(false);
   });
 });
 

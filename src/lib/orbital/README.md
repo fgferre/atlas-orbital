@@ -40,7 +40,9 @@ static bundle (no network, no ephemeris files at runtime).
   `pluto`, `ceres`, `vesta`, `triton`, `europa`, `ganymede`, `callisto`,
   `mimas`, `enceladus`, `tethys`, `dione`, `rhea`, `iapetus`, `miranda`,
   `ariel`, `umbriel`, `titania`, `phobos`, `deimos`, `pallas`. All 28
-  bodies are checked at 2025-01-01 / 2025-07-01 / 2026-01-01.
+  bodies are checked at 2025-01-01 / 2025-07-01 / 2026-01-01; the 18
+  analytical satellites are additionally checked on the negative side at
+  2024-01-01 / 2024-07-01 for a two-sided, out-of-sample ±1 yr envelope.
 - Tolerances enforce Phase 4 targets **at the baseline epoch (2025-01-01)
   only** — that is the instant the element blocks were inverted from, so it
   is the best case, not a general accuracy claim:
@@ -53,18 +55,26 @@ static bundle (no network, no ephemeris files at runtime).
   - Triton keeps the coarse 150° / 60% envelope because it is Kepler-only,
     not analytical — the regression proves the fallback still reaches the
     right neighbourhood.
-- Multi-epoch drift (±6 mo, ±12 mo) uses per-body `MULTI_EPOCH_OVERRIDES`
-  where two-body Kepler cannot model the real dynamics. Worst observed
-  residuals over epoch ±1 yr are Mimas 2.6°, Phobos 2.0°, Miranda 1.3°,
-  Tethys 0.9°; everything else is under 0.9°. Each override's observed
-  drift is documented in the comment block at the top of
+- Multi-epoch drift uses per-body `MULTI_EPOCH_OVERRIDES` where two-body
+  Kepler cannot model the real dynamics. The ±1 yr envelope is now measured
+  on **both sides** of the 2025-01-01 epoch — Horizons fixtures at
+  2024-01-01 / 2024-07-01 (negative side) and 2025-07-01 / 2026-01-01
+  (positive side), so it is no longer extrapolated across the epoch. Worst
+  observed angular residuals over epoch ±1 yr are **Mimas 5.2°, Phobos 3.6°,
+  Europa 1.6°, Miranda 1.3°, Tethys 1.2°**; everything else is under ~0.9°.
+  The short-period resonant moons (Mimas, Phobos) are the intrinsic worst
+  case: plain two-body Kepler simply cannot hold a full year for them. Each
+  override's observed drift is documented in the comment block at the top of
   `MULTI_EPOCH_OVERRIDES` in `regression.test.ts`, with the physical driver
   (J2, resonance, solar/tidal) named per body.
-- **In-sample caveat**: every satellite mean motion except Phobos' and
-  Mimas' was fitted against the same two off-epoch fixtures the multi-epoch
-  test asserts on. Those residuals are a goodness-of-fit, not an
-  independent accuracy measurement, and must not be quoted as validated
-  accuracy.
+- **Provenance / in-sample caveat**: 4 of the 18 satellite mean motions are
+  **published** (Phobos, Mimas, Tethys, Io — JPL SSD Planetary Satellite
+  Mean Orbital Parameters); the other **14 were fitted** in-sample against
+  the 2025-07-01 / 2026-01-01 fixtures. For those 14 the two 2024 fixtures
+  are a genuine **out-of-sample** cross-check; for the 4 published bodies
+  none of the four epochs is a fit target. The fitted figures are a
+  goodness-of-fit floor plus one out-of-sample check, not fully independent
+  validated accuracy, and must not be quoted as such.
 
 ## Validity Windows
 
@@ -75,7 +85,7 @@ shows the range.
 | Model                                   | Window               | Basis                                                                                                                                |
 | --------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | VSOP87D / Pluto-Meeus / ELP-MPP02-trunc | per published theory | source theory                                                                                                                        |
-| `*Osculating2Body` satellites           | 2020–2030            | epoch ±5 yr; only ±1 yr is measured (≤2.7°), the edges are extrapolated                                                              |
+| `*Osculating2Body` satellites           | 2020–2030            | epoch ±5 yr; ±1 yr measured both sides (worst 5.2°, Mimas), the edges are extrapolated                                               |
 | `AsteroidOsculating`                    | 2000–2050            | epoch ±25 yr; the single out-of-sample check (`ceres-1890-01-01`, −135 yr) shows 7.4°, which extrapolates to ~1° at the window edges |
 
 ## Gaps Still Open

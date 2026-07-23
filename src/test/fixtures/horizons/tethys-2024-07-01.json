@@ -1,0 +1,24 @@
+{
+  "bodyId": "tethys",
+  "horizonsCommand": "603",
+  "name": "Tethys",
+  "date": "2024-07-01T00:00:00Z",
+  "center": "500@699",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": -0.00192443441348059,
+    "y": -0.0002412144022479733,
+    "z": 0.0003451324797288152,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": 0.001231160689761422,
+    "y": -0.005787771061061616,
+    "z": 0.002821156698912921,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:47.973Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27603%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40699%27&START_TIME=%272024-07-01T00%3A00%3A00Z%27&STOP_TIME=%272024-07-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

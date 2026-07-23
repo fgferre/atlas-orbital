@@ -1,0 +1,24 @@
+{
+  "bodyId": "europa",
+  "horizonsCommand": "502",
+  "name": "Europa",
+  "date": "2024-01-01T00:00:00Z",
+  "center": "500@599",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": 0.004038343716461269,
+    "y": -0.001982110827199593,
+    "z": 0.00002277952251286924,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": 0.003545537007885023,
+    "y": 0.007068276043892235,
+    "z": 0.0003209141222529898,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:28.112Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27502%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40599%27&START_TIME=%272024-01-01T00%3A00%3A00Z%27&STOP_TIME=%272024-01-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

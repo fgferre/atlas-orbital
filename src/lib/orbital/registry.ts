@@ -46,39 +46,47 @@ export const VALIDITY_RANGES: Record<string, ValidityRange> = {
     note: "Two-body Kepler from 2025-01-01 osculating elements; ~0.01° near epoch, extrapolated to ~1° at the 2000/2050 edges (only far-epoch check: 7.4° at 1890)",
   },
   // Satellites: same two-body treatment, but i/Ω/ω are frozen at epoch so
-  // nodal and apsidal precession accumulate on top of the phase error.
+  // nodal and apsidal precession accumulate on top of the phase error. For the
+  // short-period resonant moons (Mimas, Phobos) plain two-body Kepler cannot
+  // hold a full ±1 yr — that is an intrinsic limit of the model, not a bug.
   //
-  // Measured span is epoch ±1 yr ONLY (Horizons fixtures at 2025-07-01 and
-  // 2026-01-01); the per-family degree figures below are that measurement and
-  // nothing more. The 2020-2030 window is epoch ±5 yr, chosen to bracket the
-  // "refresh the fixture epoch every few years" cadence documented in
-  // `analytical/satellites.ts` — the error near its edges is *extrapolated*,
-  // not measured, and is expected to reach the ten-degree scale. Crossing the
-  // window makes `engine.ts` route the body to the coarse Kepler fallback.
+  // The ±1 yr span is now measured on BOTH sides of the epoch: Horizons
+  // fixtures exist at 2024-01-01 / 2024-07-01 (negative side) and 2025-07-01 /
+  // 2026-01-01 (positive side). The per-family degree figures below are the
+  // worst residual over those four off-epoch fixtures — real, two-sided, no
+  // longer extrapolated across the epoch. The 2020-2030 window is epoch ±5 yr,
+  // chosen to bracket the "refresh the fixture epoch every few years" cadence
+  // documented in `analytical/satellites.ts` — the error near its edges is
+  // *extrapolated*, not measured, and is expected to reach the ten-degree
+  // scale. Crossing the window makes `engine.ts` route the body to the coarse
+  // Kepler fallback.
   //
-  // CAVEAT: every mean motion except Phobos' and Mimas' was fitted in-sample
-  // against those same two fixtures, so the figures below are a
-  // goodness-of-fit, not an independent accuracy measurement. Treat them as
-  // an optimistic floor, not as validated accuracy.
+  // PROVENANCE: 4 of the 18 mean motions are PUBLISHED (`pub`: Phobos, Mimas,
+  // Tethys, Io — JPL SSD Planetary Satellite Mean Orbital Parameters); the
+  // other 14 are FITTED (`fix`) in-sample against the 2025-07-01 / 2026-01-01
+  // fixtures. For the fitted bodies the two 2024 fixtures are genuinely
+  // out-of-sample; for the published bodies none of the four is a fit target.
+  // Treat the fitted figures as a goodness-of-fit floor plus one out-of-sample
+  // cross-check, not as fully independent validated accuracy.
   martianSat: {
     startYear: 2020,
     endYear: 2030,
-    note: "Two-body Kepler from 2025-01-01 osculating elements; ≤2.0° measured over epoch ±1 yr (worst: Phobos), unvalidated beyond",
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 3.6° over epoch ±1 yr measured both sides (Phobos, pub rate; short-period resonant moon two-body cannot hold ±1 yr), unvalidated beyond",
   },
   galilean: {
     startYear: 2020,
     endYear: 2030,
-    note: "Two-body Kepler from 2025-01-01 osculating elements; ≤0.6° measured over epoch ±1 yr (worst: Io), unvalidated beyond",
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 1.6° over epoch ±1 yr measured both sides (Europa), unvalidated beyond",
   },
   saturnian: {
     startYear: 2020,
     endYear: 2030,
-    note: "Two-body Kepler from 2025-01-01 osculating elements; ≤2.7° measured over epoch ±1 yr (worst: Mimas), unvalidated beyond",
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 5.2° over epoch ±1 yr measured both sides (Mimas, pub rate; short-period resonant moon two-body cannot hold ±1 yr), unvalidated beyond",
   },
   uranian: {
     startYear: 2020,
     endYear: 2030,
-    note: "Two-body Kepler from 2025-01-01 osculating elements; ≤1.3° measured over epoch ±1 yr (worst: Miranda), unvalidated beyond",
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 1.3° over epoch ±1 yr measured both sides (Miranda), unvalidated beyond",
   },
   vsop87: {
     startYear: -2000,

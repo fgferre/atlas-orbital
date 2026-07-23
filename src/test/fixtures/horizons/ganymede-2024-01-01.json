@@ -1,0 +1,24 @@
+{
+  "bodyId": "ganymede",
+  "horizonsCommand": "503",
+  "name": "Ganymede",
+  "date": "2024-01-01T00:00:00Z",
+  "center": "500@599",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": 0.001094757159162395,
+    "y": -0.007061597127938164,
+    "z": -0.0002538408430011012,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": 0.006211916263204388,
+    "y": 0.0009734370630641217,
+    "z": 0.0001244948944351498,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:31.468Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27503%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40599%27&START_TIME=%272024-01-01T00%3A00%3A00Z%27&STOP_TIME=%272024-01-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

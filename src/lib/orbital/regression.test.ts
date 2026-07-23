@@ -80,16 +80,67 @@ const PREFERRED_BASELINE_DATE = "2025-01-01T00:00:00Z";
 const MULTI_EPOCH_BODIES = REPRESENTATIVE_BODIES;
 
 /**
- * Three epochs for multi-epoch drift checks. Pinned to the same reference
- * epoch used by the analytical element blocks (2025-01-01), plus a
- * half-year and a full-year into the future so we watch the drift
- * envelope grow in the direction users will most often scrub.
+ * Universal multi-epoch drift checks. Pinned to the same reference epoch used
+ * by the analytical element blocks (2025-01-01), plus a half-year and a
+ * full-year AFTER it so we watch the drift envelope grow in the direction
+ * users most often scrub. Every representative body has a Horizons fixture at
+ * all three of these instants.
  */
 const MULTI_EPOCH_DATES = [
   "2025-01-01T00:00:00Z",
   "2025-07-01T00:00:00Z",
   "2026-01-01T00:00:00Z",
 ] as const;
+
+/**
+ * Negative-side epochs (a half-year and a full-year BEFORE the 2025-01-01
+ * element epoch). These fixtures were generated only for the 18 analytical
+ * satellites, so the ±1 yr drift envelope for those bodies is measured on
+ * BOTH sides of the epoch instead of extrapolated across it. Crucially the
+ * two 2024 instants are also OUT-OF-SAMPLE for the 14 `fix` satellites, whose
+ * mean motion was fitted only against the 2025-07-01 / 2026-01-01 fixtures
+ * (Phobos, Mimas, Tethys and Io use published rates and were never fitted).
+ */
+const NEGATIVE_SIDE_DATES = [
+  "2024-01-01T00:00:00Z",
+  "2024-07-01T00:00:00Z",
+] as const;
+
+/**
+ * The 18 analytical satellites — the only bodies with negative-side (2024)
+ * fixtures on disk. Planets (VSOP87D, valid over millennia), asteroids and
+ * the Kepler-only bodies keep the universal three-epoch coverage.
+ */
+const NEGATIVE_SIDE_BODIES = new Set<string>([
+  "phobos",
+  "deimos",
+  "io",
+  "europa",
+  "ganymede",
+  "callisto",
+  "mimas",
+  "enceladus",
+  "tethys",
+  "dione",
+  "rhea",
+  "titan",
+  "iapetus",
+  "miranda",
+  "ariel",
+  "umbriel",
+  "titania",
+  "oberon",
+]);
+
+/**
+ * Epochs a given body is checked at: the universal three, plus the 2024
+ * negative-side pair for the analytical satellites that have those fixtures.
+ */
+function epochsForBody(bodyId: string): readonly string[] {
+  return NEGATIVE_SIDE_BODIES.has(bodyId)
+    ? [...NEGATIVE_SIDE_DATES, ...MULTI_EPOCH_DATES]
+    : MULTI_EPOCH_DATES;
+}
 
 /**
  * Per-family regression thresholds (Phase 4 targets from PLAN.md).
@@ -164,55 +215,61 @@ const MULTI_EPOCH_OVERRIDES: Partial<
 > = {
   // Observed drifts from epoch 2025-01-01. The analytical satellites now
   // carry an explicit mean motion (`nDegPerDay` in satellites.ts) instead of
-  // deriving one from the osculating semi-major axis via Kepler III, which
-  // removed the dominant phase error (Phobos went from 165° to 2.0°). What
+  // deriving one from the osculating semi-major axis via Kepler III. What
   // remains is unmodelled perturbation content: element orientation is
-  // frozen at epoch, so nodal / apsidal precession and short-period terms
-  // still accumulate.
+  // frozen at epoch, so nodal / apsidal precession, resonance and J2 short-
+  // period terms accumulate — and for the short-period resonant moons (Mimas,
+  // Phobos) two-body Kepler simply cannot hold ±1 yr. That is an intrinsic
+  // limit of the model, documented here, not a bug.
   //
-  // CAVEAT: the mean motions of every body except Mimas and Phobos were
-  // fitted in-sample against these same two off-epoch fixtures, so the
-  // residuals below are a goodness-of-fit, not an independent accuracy
-  // measurement. The bounds still work as regression gates (they catch a
-  // change in behaviour) but must not be read as validated accuracy.
+  // The envelope is now measured on BOTH sides of the epoch. Fixtures exist at
+  // 2024-01-01 and 2024-07-01 (negative side) and 2025-07-01 / 2026-01-01
+  // (positive side), so the ±1 yr figures below are genuinely two-sided and no
+  // longer extrapolated across the epoch. For the 14 `fix` bodies the two 2024
+  // epochs are also out-of-sample: their mean motions were fitted only against
+  // 2025-07-01 / 2026-01-01. Phobos, Mimas, Tethys and Io use published rates
+  // (`pub`) and were never fitted.
   //
-  // Worst |angular| / |distance| error across the three epochs, measured
-  // 2026-07-23 through `orbitalEngine.calculatePosition`:
-  //   phobos 1.954° / 3.11%   mimas    2.611° / 3.84%   miranda 1.292° / 0.03%
-  //   tethys 0.934° / 0.12%   enceladus 0.874° / 0.45%  io      0.520° / 0.82%
-  //   europa 0.393° / 1.69%   titania  0.213° / 0.09%   deimos  0.154° / 0.01%
-  //   oberon 0.151° / 0.17%   ganymede 0.117° / 0.01%   iapetus 0.083° / 0.09%
-  //   dione  0.077° / 0.07%   rhea     0.056° / 0.02%   umbriel 0.049° / 0.03%
-  //   titan  0.015° / 0.02%   callisto 0.011° / 0.03%   ariel   0.008° / 0.00%
+  // Worst |angular| / |distance| error across the four off-baseline epochs
+  // {2024-01-01, 2024-07-01, 2025-07-01, 2026-01-01}, measured 2026-07-23
+  // through `orbitalEngine.calculatePosition`:
+  //   mimas  5.213° / 3.84%   phobos    3.550° / 3.11%   europa  1.614° / 1.69%
+  //   miranda 1.292° / 0.04%  tethys    1.239° / 0.15%   enceladus 0.874°/0.83%
+  //   io     0.855° / 0.82%   oberon    0.227° / 0.17%   titania 0.213° / 0.09%
+  //   deimos 0.154° / 0.01%   dione     0.129° / 0.07%   iapetus 0.122° / 0.16%
+  //   ganymede 0.117°/0.08%   ariel     0.105° / 0.01%   rhea    0.056° / 0.02%
+  //   umbriel 0.049° / 0.03%  callisto  0.024° / 0.03%   titan   0.024° / 0.02%
   //
-  // Bounds are sized at roughly 1.3–2× the observed residual (never below a
-  // 0.3° / 0.2% floor, which keeps the gates from tripping on rounding).
+  // Bounds are sized at roughly 1.1–1.3× the observed residual (never below a
+  // 0.3° / 0.2% floor, which keeps the gates from tripping on rounding). The
+  // real ±1 yr worst case is Mimas at 5.2°, NOT the sub-3° figure quoted in
+  // earlier revisions of this file.
 
   // Martian
-  phobos: { maxAngularErrorDeg: 2.5, maxDistanceErrorRatio: 0.04 },
-  deimos: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.002 },
+  phobos: { maxAngularErrorDeg: 3.9, maxDistanceErrorRatio: 0.04 },
+  deimos: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
 
   // Galilean
-  io: { maxAngularErrorDeg: 0.8, maxDistanceErrorRatio: 0.012 },
-  europa: { maxAngularErrorDeg: 0.6, maxDistanceErrorRatio: 0.02 },
+  io: { maxAngularErrorDeg: 1.1, maxDistanceErrorRatio: 0.012 },
+  europa: { maxAngularErrorDeg: 2.0, maxDistanceErrorRatio: 0.022 },
   ganymede: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
   callisto: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
 
   // Saturnian
-  mimas: { maxAngularErrorDeg: 3.5, maxDistanceErrorRatio: 0.05 },
-  enceladus: { maxAngularErrorDeg: 1.2, maxDistanceErrorRatio: 0.008 },
-  tethys: { maxAngularErrorDeg: 1.3, maxDistanceErrorRatio: 0.003 },
+  mimas: { maxAngularErrorDeg: 5.6, maxDistanceErrorRatio: 0.05 },
+  enceladus: { maxAngularErrorDeg: 1.2, maxDistanceErrorRatio: 0.012 },
+  tethys: { maxAngularErrorDeg: 1.6, maxDistanceErrorRatio: 0.004 },
   dione: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
   rhea: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
   titan: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
-  iapetus: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
+  iapetus: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.004 },
 
   // Uranian
-  miranda: { maxAngularErrorDeg: 1.8, maxDistanceErrorRatio: 0.002 },
+  miranda: { maxAngularErrorDeg: 1.6, maxDistanceErrorRatio: 0.002 },
   ariel: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
   umbriel: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.002 },
   titania: { maxAngularErrorDeg: 0.4, maxDistanceErrorRatio: 0.002 },
-  oberon: { maxAngularErrorDeg: 0.3, maxDistanceErrorRatio: 0.004 },
+  oberon: { maxAngularErrorDeg: 0.4, maxDistanceErrorRatio: 0.004 },
 
   // Pallas (asteroid) sits comfortably within the 0.5°/1% family default —
   // no override needed.
@@ -456,7 +513,7 @@ describe("Numerical Regression Tests vs Horizons", () => {
     it("has a fixture for every body × every epoch", () => {
       const missing: string[] = [];
       for (const bodyId of MULTI_EPOCH_BODIES) {
-        for (const date of MULTI_EPOCH_DATES) {
+        for (const date of epochsForBody(bodyId)) {
           if (!findFixtureAt(fixtures, bodyId, date)) {
             missing.push(`${bodyId} @ ${date.split("T")[0]}`);
           }
@@ -466,7 +523,7 @@ describe("Numerical Regression Tests vs Horizons", () => {
     });
 
     for (const bodyId of MULTI_EPOCH_BODIES) {
-      for (const date of MULTI_EPOCH_DATES) {
+      for (const date of epochsForBody(bodyId)) {
         it(`keeps ${bodyId} within tolerance at ${date.split("T")[0]}`, () => {
           const fixture = findFixtureAt(fixtures, bodyId, date);
           expect(fixture).not.toBeNull();

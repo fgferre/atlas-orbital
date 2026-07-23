@@ -1,0 +1,24 @@
+{
+  "bodyId": "phobos",
+  "horizonsCommand": "401",
+  "name": "Phobos",
+  "date": "2024-07-01T00:00:00Z",
+  "center": "500@499",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": 0.00001155750421621529,
+    "y": 0.00006134823076692445,
+    "z": -0.000001631602889944227,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": -0.00109185439229781,
+    "y": 0.0002384965909622745,
+    "z": 0.0005347624548966366,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:19.776Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27401%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40499%27&START_TIME=%272024-07-01T00%3A00%3A00Z%27&STOP_TIME=%272024-07-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

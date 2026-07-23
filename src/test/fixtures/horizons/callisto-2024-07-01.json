@@ -1,0 +1,24 @@
+{
+  "bodyId": "callisto",
+  "horizonsCommand": "504",
+  "name": "Callisto",
+  "date": "2024-07-01T00:00:00Z",
+  "center": "500@599",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": -0.00762044672443829,
+    "y": 0.01006699359819778,
+    "z": 0.000213038114177385,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": -0.00378404529233908,
+    "y": -0.002822599146901088,
+    "z": -0.000139031437731497,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:37.415Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27504%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40599%27&START_TIME=%272024-07-01T00%3A00%3A00Z%27&STOP_TIME=%272024-07-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

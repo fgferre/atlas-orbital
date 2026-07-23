@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-17T21:28:09.149Z",
-  "totalFixtures": 85,
+  "generatedAt": "2026-07-23T18:25:21.690Z",
+  "totalFixtures": 121,
   "bodies": [
     "ariel",
     "callisto",
@@ -32,12 +32,24 @@
     "vesta"
   ],
   "dates": [
+    "2024-01-01T00:00:00Z",
+    "2024-07-01T00:00:00Z",
     "2025-01-01T00:00:00Z",
     "2025-07-01T00:00:00Z",
     "2026-01-01T00:00:00Z",
     "1890-01-01T00:00:00Z"
   ],
   "fixtures": [
+    {
+      "bodyId": "ariel",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "ariel-2024-01-01.json"
+    },
+    {
+      "bodyId": "ariel",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "ariel-2024-07-01.json"
+    },
     {
       "bodyId": "ariel",
       "date": "2025-01-01T00:00:00Z",
@@ -52,6 +64,16 @@
       "bodyId": "ariel",
       "date": "2026-01-01T00:00:00Z",
       "file": "ariel-2026-01-01.json"
+    },
+    {
+      "bodyId": "callisto",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "callisto-2024-01-01.json"
+    },
+    {
+      "bodyId": "callisto",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "callisto-2024-07-01.json"
     },
     {
       "bodyId": "callisto",
@@ -90,6 +112,16 @@
     },
     {
       "bodyId": "deimos",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "deimos-2024-01-01.json"
+    },
+    {
+      "bodyId": "deimos",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "deimos-2024-07-01.json"
+    },
+    {
+      "bodyId": "deimos",
       "date": "2025-01-01T00:00:00Z",
       "file": "deimos-2025-01-01.json"
     },
@@ -102,6 +134,16 @@
       "bodyId": "deimos",
       "date": "2026-01-01T00:00:00Z",
       "file": "deimos-2026-01-01.json"
+    },
+    {
+      "bodyId": "dione",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "dione-2024-01-01.json"
+    },
+    {
+      "bodyId": "dione",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "dione-2024-07-01.json"
     },
     {
       "bodyId": "dione",
@@ -135,6 +177,16 @@
     },
     {
       "bodyId": "enceladus",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "enceladus-2024-01-01.json"
+    },
+    {
+      "bodyId": "enceladus",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "enceladus-2024-07-01.json"
+    },
+    {
+      "bodyId": "enceladus",
       "date": "2025-01-01T00:00:00Z",
       "file": "enceladus-2025-01-01.json"
     },
@@ -147,6 +199,16 @@
       "bodyId": "enceladus",
       "date": "2026-01-01T00:00:00Z",
       "file": "enceladus-2026-01-01.json"
+    },
+    {
+      "bodyId": "europa",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "europa-2024-01-01.json"
+    },
+    {
+      "bodyId": "europa",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "europa-2024-07-01.json"
     },
     {
       "bodyId": "europa",
@@ -165,6 +227,16 @@
     },
     {
       "bodyId": "ganymede",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "ganymede-2024-01-01.json"
+    },
+    {
+      "bodyId": "ganymede",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "ganymede-2024-07-01.json"
+    },
+    {
+      "bodyId": "ganymede",
       "date": "2025-01-01T00:00:00Z",
       "file": "ganymede-2025-01-01.json"
     },
@@ -180,6 +252,16 @@
     },
     {
       "bodyId": "iapetus",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "iapetus-2024-01-01.json"
+    },
+    {
+      "bodyId": "iapetus",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "iapetus-2024-07-01.json"
+    },
+    {
+      "bodyId": "iapetus",
       "date": "2025-01-01T00:00:00Z",
       "file": "iapetus-2025-01-01.json"
     },
@@ -192,6 +274,16 @@
       "bodyId": "iapetus",
       "date": "2026-01-01T00:00:00Z",
       "file": "iapetus-2026-01-01.json"
+    },
+    {
+      "bodyId": "io",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "io-2024-01-01.json"
+    },
+    {
+      "bodyId": "io",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "io-2024-07-01.json"
     },
     {
       "bodyId": "io",
@@ -240,6 +332,16 @@
     },
     {
       "bodyId": "mimas",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "mimas-2024-01-01.json"
+    },
+    {
+      "bodyId": "mimas",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "mimas-2024-07-01.json"
+    },
+    {
+      "bodyId": "mimas",
       "date": "2025-01-01T00:00:00Z",
       "file": "mimas-2025-01-01.json"
     },
@@ -252,6 +354,16 @@
       "bodyId": "mimas",
       "date": "2026-01-01T00:00:00Z",
       "file": "mimas-2026-01-01.json"
+    },
+    {
+      "bodyId": "miranda",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "miranda-2024-01-01.json"
+    },
+    {
+      "bodyId": "miranda",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "miranda-2024-07-01.json"
     },
     {
       "bodyId": "miranda",
@@ -300,6 +412,16 @@
     },
     {
       "bodyId": "oberon",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "oberon-2024-01-01.json"
+    },
+    {
+      "bodyId": "oberon",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "oberon-2024-07-01.json"
+    },
+    {
+      "bodyId": "oberon",
       "date": "2025-01-01T00:00:00Z",
       "file": "oberon-2025-01-01.json"
     },
@@ -327,6 +449,16 @@
       "bodyId": "pallas",
       "date": "2026-01-01T00:00:00Z",
       "file": "pallas-2026-01-01.json"
+    },
+    {
+      "bodyId": "phobos",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "phobos-2024-01-01.json"
+    },
+    {
+      "bodyId": "phobos",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "phobos-2024-07-01.json"
     },
     {
       "bodyId": "phobos",
@@ -360,6 +492,16 @@
     },
     {
       "bodyId": "rhea",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "rhea-2024-01-01.json"
+    },
+    {
+      "bodyId": "rhea",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "rhea-2024-07-01.json"
+    },
+    {
+      "bodyId": "rhea",
       "date": "2025-01-01T00:00:00Z",
       "file": "rhea-2025-01-01.json"
     },
@@ -372,6 +514,16 @@
       "bodyId": "rhea",
       "date": "2026-01-01T00:00:00Z",
       "file": "rhea-2026-01-01.json"
+    },
+    {
+      "bodyId": "tethys",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "tethys-2024-01-01.json"
+    },
+    {
+      "bodyId": "tethys",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "tethys-2024-07-01.json"
     },
     {
       "bodyId": "tethys",
@@ -390,6 +542,16 @@
     },
     {
       "bodyId": "titan",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "titan-2024-01-01.json"
+    },
+    {
+      "bodyId": "titan",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "titan-2024-07-01.json"
+    },
+    {
+      "bodyId": "titan",
       "date": "2025-01-01T00:00:00Z",
       "file": "titan-2025-01-01.json"
     },
@@ -402,6 +564,16 @@
       "bodyId": "titan",
       "date": "2026-01-01T00:00:00Z",
       "file": "titan-2026-01-01.json"
+    },
+    {
+      "bodyId": "titania",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "titania-2024-01-01.json"
+    },
+    {
+      "bodyId": "titania",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "titania-2024-07-01.json"
     },
     {
       "bodyId": "titania",
@@ -432,6 +604,16 @@
       "bodyId": "triton",
       "date": "2026-01-01T00:00:00Z",
       "file": "triton-2026-01-01.json"
+    },
+    {
+      "bodyId": "umbriel",
+      "date": "2024-01-01T00:00:00Z",
+      "file": "umbriel-2024-01-01.json"
+    },
+    {
+      "bodyId": "umbriel",
+      "date": "2024-07-01T00:00:00Z",
+      "file": "umbriel-2024-07-01.json"
     },
     {
       "bodyId": "umbriel",

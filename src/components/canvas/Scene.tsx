@@ -781,6 +781,16 @@ export const Scene = () => {
       </Canvas>
       <PlanetOverlay />
       <OrbitalEngineDebugReporter />
+      {/*
+        Watchdog failure card. Unlike the app-shell ErrorBoundary
+        consumers (App.tsx / main.tsx), this path cannot cheap-retry:
+        the watchdog latches `setSceneReady(true)` (see ~line 585), so
+        the Canvas is already dead and its loader released. Merely
+        hiding the card (`setBootTimedOut(false)`) would remount nothing
+        and re-arm no watchdog — "Try again" would no-op. A hard reload
+        is the only honest retry here, matching the card's own
+        "Reload to retry" copy.
+      */}
       {bootTimedOut && (
         <AppCrashCard
           error={
@@ -788,7 +798,7 @@ export const Scene = () => {
               `The 3D scene did not finish loading within ${SCENE_BOOT_WATCHDOG_MS / 1000}s. WebGL is available, so the renderer likely stalled or lost its context. Reload to retry; if it keeps happening, check the browser console and your graphics drivers.`
             )
           }
-          reset={() => setBootTimedOut(false)}
+          reset={() => window.location.reload()}
         />
       )}
     </>

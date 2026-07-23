@@ -1,0 +1,24 @@
+{
+  "bodyId": "mimas",
+  "horizonsCommand": "601",
+  "name": "Mimas",
+  "date": "2024-01-01T00:00:00Z",
+  "center": "500@699",
+  "timeScale": "UT",
+  "referenceFrame": "J2000_ECLIPTIC",
+  "position": {
+    "x": -0.0002054054703809163,
+    "y": -0.001077147580754833,
+    "z": 0.0006226032910403354,
+    "unit": "AU"
+  },
+  "velocity": {
+    "x": 0.008006517444470965,
+    "y": -0.001420084043312247,
+    "z": 0.00002038959887094945,
+    "unit": "AU/day"
+  },
+  "generatedAt": "2026-07-23T18:24:39.038Z",
+  "source": "NASA JPL Horizons API",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND=%27601%27&OBJ_DATA=%27YES%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27VECTORS%27&CENTER=%27500%40699%27&START_TIME=%272024-01-01T00%3A00%3A00Z%27&STOP_TIME=%272024-01-02T00%3A00%3A00.000Z%27&STEP_SIZE=%271d%27&OUT_UNITS=%27AU-D%27&VEC_TABLE=%272%27&VEC_CORR=%27NONE%27&REF_SYSTEM=%27ICRF%27&REF_PLANE=%27ECLIPTIC%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

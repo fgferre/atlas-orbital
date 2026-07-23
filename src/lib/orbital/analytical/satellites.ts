@@ -29,9 +29,14 @@
  *   - All bodies match their Horizons fixture within sub-degree at the
  *     reference epoch 2025-01-01 (two-body Kepler; no secular perturbations
  *     like J2 / resonance / tidal drag are modelled).
- *   - With explicit mean motions the ±1-year phase error stays below ~2.7°
- *     for every body (worst: Mimas). The remaining error is the unmodelled
- *     secular/periodic perturbation content, not a mean-motion offset.
+ *   - Away from the epoch the two-body phase error grows. Measured on both
+ *     sides of the epoch (Horizons fixtures at 2024-01-01 / 2024-07-01 and
+ *     2025-07-01 / 2026-01-01), the worst ±1-year angular error is 5.2°
+ *     (Mimas), then 3.6° (Phobos), 1.6° (Europa), 1.3° (Miranda / Tethys);
+ *     every other body stays under ~0.9°. The short-period resonant moons
+ *     (Mimas, Phobos) are the intrinsic worst case — plain two-body Kepler
+ *     cannot hold them over a full year. See regression.test.ts
+ *     MULTI_EPOCH_OVERRIDES for the full per-body table.
  *   - Element *orientation* (i, Ω, ω) is still frozen at epoch, so nodal and
  *     apsidal precession accumulate. Plan to refresh the epoch periodically.
  */
@@ -125,7 +130,7 @@ const EPOCH_2025_JD = 2460676.5008931975;
 const SATELLITES: Record<string, SatelliteEntry> = {
   // --- Martian ---
   // Phobos: P=0.32 d. Mars J2 + tidal-decay drift; multi-epoch envelope
-  // 2.5° (see regression.test.ts MULTI_EPOCH_OVERRIDES).
+  // 3.9° (worst observed 3.6°; see regression.test.ts MULTI_EPOCH_OVERRIDES).
   phobos: {
     parent: "mars",
     elements: {
@@ -141,7 +146,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       nDegPerDay: 1128.8446,
     },
   },
-  // Deimos: P=1.26 d. Mars J2 drift; multi-epoch envelope 0.5°.
+  // Deimos: P=1.26 d. Mars J2 drift; multi-epoch envelope 0.3°.
   deimos: {
     parent: "mars",
     elements: {
@@ -158,7 +163,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Galilean ---
-  // Io: P=1.77 d. Laplace resonance + Jupiter J2; envelope 0.8°.
+  // Io: P=1.77 d. Laplace resonance + Jupiter J2; envelope 1.1°.
   io: {
     parent: "jupiter",
     elements: {
@@ -173,7 +178,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       nDegPerDay: 203.489,
     },
   },
-  // Europa: P=3.55 d. Laplace resonance + Jupiter J2; envelope 0.6°.
+  // Europa: P=3.55 d. Laplace resonance + Jupiter J2; envelope 2.0°.
   europa: {
     parent: "jupiter",
     elements: {
@@ -221,7 +226,8 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Major Saturnian ---
-  // Mimas: P=0.94 d. Tethys 2:4 mean-motion resonance; envelope 3.5°.
+  // Mimas: P=0.94 d. Tethys 2:4 mean-motion resonance; envelope 5.6°
+  // (worst observed 5.2°; short-period resonant moon two-body cannot hold ±1 yr).
   mimas: {
     parent: "saturn",
     elements: {
@@ -253,7 +259,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       nDegPerDay: 262.730539,
     },
   },
-  // Tethys: P=1.89 d. Mimas 2:4 mean-motion resonance; envelope 1.3°.
+  // Tethys: P=1.89 d. Mimas 2:4 mean-motion resonance; envelope 1.6°.
   tethys: {
     parent: "saturn",
     elements: {
@@ -332,7 +338,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
   },
 
   // --- Major Uranian ---
-  // Miranda: P=1.41 d. Uranus J2 at small semi-major axis; envelope 1.8°.
+  // Miranda: P=1.41 d. Uranus J2 at small semi-major axis; envelope 1.6°.
   miranda: {
     parent: "uranus",
     elements: {
@@ -392,7 +398,7 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       nDegPerDay: 41.35143,
     },
   },
-  // Oberon: P=13.46 d. Uranus J2; envelope 0.3°.
+  // Oberon: P=13.46 d. Uranus J2; envelope 0.4°.
   oberon: {
     parent: "uranus",
     elements: {

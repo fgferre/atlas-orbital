@@ -5,6 +5,7 @@ import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import { PrivilegedPosition } from "../../lib/camera";
+import { shouldSnapRunningIntro } from "../../lib/camera/reducedMotionCamera";
 import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
 
@@ -216,6 +217,23 @@ export const InitialCameraAnimation = () => {
     setIsIntroAnimating,
     syncControlsToSun,
   ]);
+
+  // a11y N-4 — reduced motion flipped ON *during* the sweep. The
+  // arming effect above only applies the snap policy when it decides
+  // to START the intro; once `isRunning` is true its early `return`
+  // fires before the `reducedMotion` branch, so a mid-flight
+  // preference change would otherwise let the 12 s vestibular sweep
+  // play out. Mirror the `stopIntro` listener below: when the policy
+  // says a running sweep must be cut, jump to the end pose via the
+  // shared completion path (which applies `endPos` and clears
+  // `isIntroAnimating`). Guarded by `shouldSnapRunningIntro` so an
+  // idle intro is a no-op and there is no re-entrant loop
+  // (`completeAnimation` clears `isRunning` first).
+  useEffect(() => {
+    if (shouldSnapRunningIntro(reducedMotion, animationRef.current.isRunning)) {
+      completeAnimation();
+    }
+  }, [completeAnimation, reducedMotion]);
 
   useEffect(() => {
     if (!controls) return;
