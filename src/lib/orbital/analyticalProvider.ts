@@ -74,14 +74,14 @@ function provenanceFor(model: AnalyticalModel): string {
       return "Pluto analytical theory (Meeus Ch. 37)";
     case "ELP-MPP02-trunc":
       return "ELP/MPP02 truncated lunar theory";
-    case "GalileanMeanElements":
-      return "Two-body propagation of J2000 ecliptic elements (Galilean moons)";
-    case "SaturnianMeanElements":
-      return "Two-body propagation of J2000 ecliptic elements (major Saturn moons)";
-    case "UranianMeanElements":
-      return "Two-body propagation of J2000 ecliptic elements (major Uranus moons)";
-    case "MartianSatMeanElements":
-      return "Two-body propagation of J2000 ecliptic elements (Phobos / Deimos)";
+    case "GalileanOsculating2Body":
+      return "Two-body propagation of J2000 ecliptic osculating elements (Galilean moons)";
+    case "SaturnianOsculating2Body":
+      return "Two-body propagation of J2000 ecliptic osculating elements (major Saturn moons)";
+    case "UranianOsculating2Body":
+      return "Two-body propagation of J2000 ecliptic osculating elements (major Uranus moons)";
+    case "MartianSatOsculating2Body":
+      return "Two-body propagation of J2000 ecliptic osculating elements (Phobos / Deimos)";
     case "AsteroidOsculating":
       return "Two-body propagation of J2000 ecliptic osculating elements";
     default:

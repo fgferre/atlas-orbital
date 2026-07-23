@@ -17,11 +17,16 @@ export type AnalyticalModel =
   | "VSOP87D" // Meeus truncated planetary theory (Mercury through Neptune)
   | "Pluto-Meeus" // Meeus Ch. 37 Pluto heliocentric series
   | "ELP-MPP02-trunc" // Truncated ELP/MPP02 lunar theory
-  | "GalileanMeanElements" // Two-body propagation of J2000 ecliptic elements
-  | "SaturnianMeanElements" // Two-body propagation of J2000 ecliptic elements
-  | "UranianMeanElements" // Two-body propagation of J2000 ecliptic elements
-  | "MartianSatMeanElements" // Two-body propagation of J2000 ecliptic elements
-  | "AsteroidOsculating" // Two-body propagation of J2000 ecliptic osculating elements (1900–2050 window)
+  // The satellite labels below say "Osculating2Body" and not "MeanElements"
+  // on purpose: the element blocks in `analytical/satellites.ts` are
+  // *osculating* elements inverted from a single Horizons state vector at
+  // 2025-01-01, not mean elements of a perturbation theory. Only the mean
+  // anomaly advances; i/Ω/ω stay frozen at epoch.
+  | "GalileanOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "SaturnianOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "UranianOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "MartianSatOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "AsteroidOsculating" // Two-body propagation of J2000 ecliptic osculating elements (2000–2050 window)
   | "Kepler"; // Fallback Keplerian solver
 
 /**

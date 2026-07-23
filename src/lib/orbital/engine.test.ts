@@ -141,7 +141,7 @@ describe("OrbitalEngine.getOsculatingElements validity gating", () => {
     // out-of-validity fallback path exists (idempotent).
     initializeOrbitalEngine();
     const engine = new OrbitalEngine();
-    // Ceres' asteroid-osculating theory is valid 1900–2050; 1890 is
+    // Ceres' asteroid-osculating theory is valid 2000–2050; 1890 is
     // outside it, where the position drops to the Kepler fallback.
     const outOfRange = new Date("1890-01-01T00:00:00Z");
 

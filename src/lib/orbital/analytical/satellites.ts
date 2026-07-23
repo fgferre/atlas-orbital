@@ -76,6 +76,13 @@ interface EclipticElements {
    * Provenance is tagged per entry:
    *   - `pub`  — JPL SSD "Planetary Satellite Mean Orbital Parameters"
    *              (published mean motion, independent of this repo's data).
+   *              SOURCE CAVEAT: JPL states that table is a summary of
+   *              orbital properties and is *not intended for ephemeris
+   *              computation*. We use only the mean motion from it — a
+   *              long-term average rate — and pair it with a locally
+   *              derived osculating element set, so this is a calibrated
+   *              constant borrowed from a descriptive table, not an
+   *              endorsement of the table as an ephemeris source.
    *   - `fix`  — fitted to the local Horizons fixtures by minimising the
    *              angular error at 2025-07-01 and 2026-01-01.
    *

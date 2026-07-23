@@ -480,6 +480,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       map:
         TEXTURE_PATH + "uranus_texture_map_8k_by_floridaemojicat_dj4s9vd.jpg",
     },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Uranus is rendered from a community-authored 8k map. Voyager 2 saw an almost featureless disc, so the banding and pole detail in this map are artistic extrapolation, not measured cloud structure.",
+      limitationReason:
+        "No public spacecraft or telescope global mosaic of Uranus exists at this resolution; the shipped file's licence is recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (uranus-map-active).",
+      sources: [
+        {
+          label: "NASA Science - Uranus (Voyager 2 imagery)",
+          url: "https://science.nasa.gov/uranus/",
+        },
+      ],
+    },
   },
   {
     id: "neptune",
@@ -1125,7 +1138,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     axialTilt: 0,
     classification: "Natural Satellite",
     mass: "1.17 × 10²¹ kg",
-    gravity: "0.203 m/s²",
+    // Derived from the catalog GM/R²; the mass + mean radius pair here
+    // reproduces the published 1.39 g/cm³ density, so gravity was the
+    // stale field (was 0.203, an older rounded value). 2026-07-23.
+    gravity: "0.228 m/s²",
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "4.14 days",
@@ -1309,7 +1325,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       O: 121.9,
       w: 240.2,
       M0: 217.7,
-      n: 0.003,
+      // Kepler-routed: n must be the two-body mean motion for a = 43.218 AU
+      // (360 / (365.256 · a^1.5)). The old 0.003 ran the orbit ~16% fast.
+      n: 0.0034689,
     },
     rotationPeriodHours: 3.9,
     axialTilt: 28,
@@ -1341,6 +1359,23 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       path: MODEL_PATH + "Haumea_1_1000.glb",
       scale: 1.2, // Adjusted for ellipsoid shape (1960km max vs 816km mean)
     },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Geometry is the NASA Science Haumea shape model, but the diffuse map is Solar System Scope's explicitly fictional Haumea texture — the mottled surface detail is invented, not observed.",
+      limitationReason:
+        "Haumea has never been resolved into a surface map; only its elongated shape, fast spin and crystalline-water-ice spectrum are measured.",
+      sources: [
+        {
+          label: "NASA Science Haumea 3D model",
+          url: "https://science.nasa.gov/resource/haumea-3d-model/",
+        },
+        {
+          label: "Solar System Scope textures (CC BY 4.0, fictional set)",
+          url: "https://www.solarsystemscope.com/textures/",
+        },
+      ],
+    },
   },
   {
     id: "makemake",
@@ -1356,13 +1391,17 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       O: 79.4,
       w: 298.4,
       M0: 165.5,
-      n: 0.003,
+      // Kepler-routed: two-body mean motion for a = 45.715 AU.
+      n: 0.0031891,
     },
     rotationPeriodHours: 7.77,
     axialTilt: 0,
     classification: "Dwarf Planet",
     mass: "~3.1 × 10²¹ kg",
-    gravity: "~0.5 m/s²",
+    // Mass (from MK 2's orbit) and radius (2011 occultation) are both
+    // measured, so gravity is the derived field: GM/R² = 0.405 m/s².
+    // Was 0.5 (+24%). 2026-07-23.
+    gravity: "~0.4 m/s²",
     composition: "Methane ice, rocks",
     atmosphere: "Possible temporary methane exosphere",
     dayLength: "~7.7 hours",
@@ -1385,6 +1424,23 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "6,850,000,000 km",
     info: "Dwarf planet.",
     textures: { map: TEXTURE_PATH + "4k_makemake_fictional.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "The diffuse map is Solar System Scope's explicitly fictional Makemake texture; only the reddish methane-ice tone is observationally grounded.",
+      limitationReason:
+        "Makemake has never been resolved beyond a point source, so every surface feature in the shipped map is invented.",
+      sources: [
+        {
+          label: "Solar System Scope textures (CC BY 4.0, fictional set)",
+          url: "https://www.solarsystemscope.com/textures/",
+        },
+        {
+          label: "NASA Science - Makemake",
+          url: "https://science.nasa.gov/dwarf-planets/makemake/",
+        },
+      ],
+    },
   },
   {
     id: "eris",
@@ -1400,7 +1456,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       O: 35.8,
       w: 151.4,
       M0: 205.9,
-      n: 0.001,
+      // Kepler-routed: two-body mean motion for a = 67.781 AU.
+      // The old 0.001 ran the orbit 1.77x too slow.
+      n: 0.0017663,
     },
     rotationPeriodHours: 25.9,
     axialTilt: 0,
@@ -1429,6 +1487,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "10,120,000,000 km",
     info: "Massive dwarf.",
     textures: { map: TEXTURE_PATH + "2k_eris.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "The shipped map is a community-authored artist rendering of Eris; only the very high albedo and methane-ice colour are observationally grounded.",
+      limitationReason:
+        "Eris has only ever been observed as a point source plus stellar occultations, so no measured global surface map exists; the file's licence is recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (eris-map-active).",
+      sources: [
+        {
+          label: "NASA Science - Eris",
+          url: "https://science.nasa.gov/dwarf-planets/eris/",
+        },
+      ],
+    },
   },
   // Dwarf Planets & TNOs
   {
@@ -1443,7 +1514,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     axialTilt: 0,
     classification: "Trans-Neptunian Object (candidate Dwarf Planet)",
     mass: "~1.75 × 10²¹ kg",
-    gravity: "~0.24 m/s² (estimated)",
+    // Mass comes from Xiangliu's orbit and the radius from the 2016
+    // occultation; both are measured, so gravity is derived: GM/R².
+    // Was 0.24 (-22%). 2026-07-23.
+    gravity: "~0.31 m/s² (estimated)",
     composition: "Water ice, methane, rocks",
     atmosphere: "Not detected",
     dayLength: "~22 hours",
@@ -1487,11 +1561,17 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 555,
     color: "#806050",
     orbit: { a: 43.7, e: 0.038, i: 8.0, O: 0, w: 0, M0: 0, n: 0.0035 },
-    rotationPeriodHours: 8.84,
+    // Double-peaked lightcurve solution (17.6788 h), which is the one
+    // Kiss et al. 2024 adopt and the one `dayLength` already quotes.
+    // The old 8.84 h was the single-peaked half-period. 2026-07-23.
+    rotationPeriodHours: 17.68,
     axialTilt: 0,
     classification: "Trans-Neptunian Object",
-    mass: "~1.4 × 10²¹ kg",
-    gravity: "~0.19 m/s²",
+    // Kiss et al. 2024 system mass from Weywot's orbit. Replaces the
+    // older 1.4 × 10²¹ estimate; also what makes Weywot's 12.43 d
+    // period come out right under two-body propagation.
+    mass: "~1.2 × 10²¹ kg",
+    gravity: "~0.26 m/s²",
     composition: "Water ice, rocks, methane",
     atmosphere: "Not detected",
     dayLength: "~17.7 hours",
@@ -1535,14 +1615,22 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 458,
     color: "#909090",
     orbit: { a: 39.4, e: 0.22, i: 20.6, O: 0, w: 0, M0: 0, n: 0.004 },
-    rotationPeriodHours: 10,
+    // Double-peaked solution (13.19 h, Thirouin et al. 2010), matching
+    // what `dayLength` already quotes. The old 10 h was the
+    // single-peaked half-period from Ortiz et al. 2006. 2026-07-23.
+    rotationPeriodHours: 13.19,
     axialTilt: 0,
     classification: "Trans-Neptunian Object",
-    mass: "~6.3 × 10²⁰ kg",
-    gravity: "~0.13 m/s²",
+    // The 6.32 × 10²⁰ kg figure measured from Vanth's orbit is the
+    // SYSTEM mass. Split here on the 1:12 Orcus:Vanth mass ratio the
+    // description quotes, so primary + moon sum back to the measured
+    // system mass and both bodies land at sane densities
+    // (Orcus 1.45 g/cm³, Vanth 1.08 g/cm³). 2026-07-23.
+    mass: "~5.84 × 10²⁰ kg",
+    gravity: "~0.186 m/s²",
     composition: "Water ice, rocks, ammonia",
     atmosphere: "Not detected",
-    dayLength: "~13 hours",
+    dayLength: "~13.2 hours",
     yearLength: "~247 Earth years",
     curiosity:
       "Orcus is often called the 'anti-Pluto' because its orbit is almost a mirror image of Pluto's. When Pluto is at perihelion (closest to Sun), Orcus is at aphelion (farthest).",
@@ -1587,7 +1675,9 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     axialTilt: 0,
     classification: "Trans-Neptunian Object (Scattered Disk region)",
     mass: "~1.0 × 10²¹ kg (estimated)",
-    gravity: "~0.18 m/s² (estimated)",
+    // Both mass and radius are estimates, but they must at least be
+    // mutually consistent: GM/R² = 0.267. Was 0.18 (-33%). 2026-07-23.
+    gravity: "~0.267 m/s² (estimated)",
     composition: "Methane ice, rocks, organic compounds",
     atmosphere: "Not detected",
     dayLength: "~10 hours",
@@ -1636,7 +1726,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     axialTilt: 0,
     classification: "Trans-Neptunian Object",
     mass: "~4.38 × 10²⁰ kg",
-    gravity: "~0.12 m/s² (estimated)",
+    // Mass from Actaea's orbit and radius from the 2022 occultation are
+    // the measured pair (density 1.38 g/cm³ matches the published
+    // value); gravity is derived. Was 0.12 (-27%). 2026-07-23.
+    gravity: "~0.163 m/s² (estimated)",
     composition: "Water ice, rocks",
     atmosphere: "Not detected",
     dayLength: "~6.09 hours",
@@ -1715,15 +1808,25 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "VANTH", pt: "VANTH" },
     radiusKm: 221,
     color: "#808080",
-    orbit: { a: 0.00006, e: 0.0, i: 0.0, O: 0, w: 0, M0: 0, n: 90 },
-    rotationPeriodHours: 9.5,
+    // Measured orbit: a = 9030 km (6.04e-5 AU), P = 9.5393 d
+    // (Brown & Butler 2018 / Sickafoose et al. 2019 occultation).
+    // n was 90 deg/day (P = 4 d), i.e. 2.4x too fast on screen.
+    orbit: { a: 0.0000604, e: 0.0, i: 0.0, O: 0, w: 0, M0: 0, n: 37.74 },
+    // Tidally locked, so the rotation period IS the 9.5393 d orbital
+    // period. The old 9.5 was the day count entered into an HOURS
+    // field, spinning Vanth 24x too fast. 2026-07-23.
+    rotationPeriodHours: 228.94,
     axialTilt: 0,
     classification: "Natural Satellite",
-    mass: "~7.5 × 10²⁰ kg (estimate)",
-    gravity: "~0.13 m/s² (estimated)",
+    // Vanth's share of the 6.32 × 10²⁰ kg Orcus-Vanth system mass under
+    // the 1:12 ratio quoted in `description`. The old 7.5 × 10²⁰ made
+    // the moon heavier than its primary and implied a 16.6 g/cm³
+    // density — denser than any known Solar System body. 2026-07-23.
+    mass: "~4.87 × 10¹⁹ kg (estimated)",
+    gravity: "~0.067 m/s² (estimated)",
     composition: "Ice, rocks",
     atmosphere: "Not detected",
-    dayLength: "Synchronized (~9.5 days)",
+    dayLength: "Synchronized (~9.54 days)",
     yearLength: "Unknown",
     curiosity:
       "Vanth is remarkably large compared to Orcus; if Orcus were a planet, Vanth would be the third largest moon relative to its planet in the Solar System.",
@@ -1762,15 +1865,22 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "WEYWOT", pt: "WEYWOT" },
     radiusKm: 85,
     color: "#706050",
-    orbit: { a: 0.0001, e: 0.14, i: 0.0, O: 0, w: 0, M0: 0, n: 28 },
-    rotationPeriodHours: 0,
+    // Measured orbit: a = 13,289 km (8.88e-5 AU), P = 12.431 d
+    // (Vachier et al. 2012 / Kiss et al. 2024).
+    orbit: { a: 0.0000888, e: 0.14, i: 0.0, O: 0, w: 0, M0: 0, n: 28.96 },
+    // Tidally locked, so rotation = the 12.431 d orbital period. A
+    // literal 0 was falsy at `Planet.tsx`'s `if (body.rotationPeriodHours)`
+    // guard, so Weywot never rotated at all. 2026-07-23.
+    rotationPeriodHours: 298.34,
     axialTilt: 0,
     classification: "Natural Satellite",
-    mass: "~3.3 × 10¹8 kg (estimated)",
-    gravity: "~0.008 m/s² (estimated)",
+    // Exponent was written "10¹8" (superscript 1 + ASCII 8), which
+    // `parseScientificValue` salvages but no renderer should have to.
+    mass: "~3.3 × 10¹⁸ kg (estimated)",
+    gravity: "~0.0305 m/s² (estimated)",
     composition: "Ice, rocks",
     atmosphere: "Not detected",
-    dayLength: "Synchronized (~12 days)",
+    dayLength: "Synchronized (~12.43 days)",
     yearLength: "Unknown",
     curiosity:
       "Weywot is named after the Tongva sky father, the son of Quaoar. It was discovered in images taken to search for a ring system around Quaoar.",
@@ -1786,7 +1896,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     description:
       "Weywot is the only known moon of the trans-Neptunian object Quaoar. It was discovered by Michael Brown in images acquired on February 14, 2006, by the Hubble Space Telescope. Weywot is estimated to be about 81 km in diameter.",
-    distanceFromParent: "~14,500 km",
+    distanceFromParent: "~13,300 km",
     info: "Moon of Quaoar.",
     visualProvenance: {
       fidelity: "interpretive",

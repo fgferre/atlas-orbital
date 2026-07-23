@@ -113,7 +113,7 @@ const TOLERANCES: Record<
   pluto: { maxAngularErrorDeg: 0.2, maxDistanceErrorRatio: 0.005 },
   // ELP/MPP02-trunc Moon
   moon: { maxAngularErrorDeg: 0.2, maxDistanceErrorRatio: 0.005 },
-  // All *MeanElements satellites and all AsteroidOsculating bodies are now
+  // All *Osculating2Body satellites and all AsteroidOsculating bodies are now
   // fixture-derived from Horizons at 2025-01-01 (see
   // scripts/derive-elements-from-fixtures.js and satellites.ts /
   // asteroids.ts). They match the fixture to sub-arcsecond at epoch, so we
@@ -420,7 +420,7 @@ describe("Numerical Regression Tests vs Horizons", () => {
   });
 
   describe("Validity-Window Routing (Priority C)", () => {
-    it("routes Ceres to Kepler fallback outside 1900–2050 validity window", () => {
+    it("routes Ceres to Kepler fallback outside 2000–2050 validity window", () => {
       const outOfWindowDate = new Date("1890-01-01T00:00:00Z");
       const result = orbitalEngine.calculatePosition("ceres", outOfWindowDate);
       // The engine must fall back to Kepler for dates outside the asteroid window.

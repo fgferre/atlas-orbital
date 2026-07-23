@@ -88,7 +88,7 @@ describe("Orbital Registry", () => {
   });
 
   describe("isWithinValidityRange", () => {
-    it("should return true for dates within asteroid range (1900-2050)", () => {
+    it("should return true for dates within asteroid range (2000-2050)", () => {
       const testDate = new Date("2020-06-15");
       expect(isWithinValidityRange("ceres", testDate)).toBe(true);
       expect(isWithinValidityRange("pallas", testDate)).toBe(true);
@@ -101,6 +101,21 @@ describe("Orbital Registry", () => {
 
       expect(isWithinValidityRange("ceres", before1900)).toBe(false);
       expect(isWithinValidityRange("ceres", after2050)).toBe(false);
+    });
+
+    it("should gate analytical satellites to the 2020-2030 window", () => {
+      // The satellite element blocks are osculating elements frozen at
+      // 2025-01-01 and advanced by a two-body step, so they must advertise a
+      // window rather than silently claiming validity forever.
+      const inWindow = new Date("2025-06-15");
+      const beforeWindow = new Date("2019-06-15");
+      const afterWindow = new Date("2031-06-15");
+
+      for (const bodyId of ["phobos", "io", "mimas", "miranda"]) {
+        expect(isWithinValidityRange(bodyId, inWindow)).toBe(true);
+        expect(isWithinValidityRange(bodyId, beforeWindow)).toBe(false);
+        expect(isWithinValidityRange(bodyId, afterWindow)).toBe(false);
+      }
     });
 
     it("should return true for bodies without validity restrictions", () => {

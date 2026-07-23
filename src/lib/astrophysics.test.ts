@@ -20,13 +20,35 @@ describe("AstroPhysics.parseScientificValue", () => {
     expect(AstroPhysics.parseScientificValue("2.59 × 10²⁰ kg")).toBe(2.59e20);
   });
 
-  it("parses approximate values with estimates and mixed exponent glyphs", () => {
+  it("parses approximate values with estimates", () => {
     expect(
-      AstroPhysics.parseScientificValue("~3.3 × 10¹8 kg (estimated)")
+      AstroPhysics.parseScientificValue("~3.3 × 10¹⁸ kg (estimated)")
     ).toBe(3.3e18);
     expect(
       AstroPhysics.parseScientificValue("~0.13 m/s² (estimated)")
     ).toBeCloseTo(0.13);
+  });
+
+  it("stays tolerant of mixed superscript/ASCII exponent glyphs", () => {
+    // The parser must keep salvaging dirty input coming from external
+    // sources, but the catalog itself is no longer allowed to contain
+    // such a string — see the negative guard below and the
+    // "no ASCII digit glued to a superscript exponent" invariant in
+    // src/data/celestialBodies.test.ts.
+    expect(
+      AstroPhysics.parseScientificValue("~3.3 × 10¹8 kg (estimated)")
+    ).toBe(3.3e18);
+  });
+
+  it("no longer ships a body whose mass or gravity has a broken exponent", () => {
+    const brokenExponent = /[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺][0-9]/;
+
+    for (const body of SOLAR_SYSTEM_BODIES) {
+      expect(body.mass ?? "", `${body.id}.mass`).not.toMatch(brokenExponent);
+      expect(body.gravity ?? "", `${body.id}.gravity`).not.toMatch(
+        brokenExponent
+      );
+    }
   });
 
   it("returns NaN when no numeric payload exists", () => {
