@@ -33,6 +33,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Quality gates run in the same job (and therefore reuse the single
+      # `npm ci` above) and BEFORE `Build` / `Upload artifact`, so a failing
+      # gate aborts the job with nothing published — the previously deployed
+      # Pages version stays live.
+      #
+      # E2E (`npm run test:e2e`) is deliberately NOT part of this gate:
+      # `e2e/boot.spec.ts` ("boot visual identity (frozen sim)") currently
+      # fails because the `atlas-loader` overlay is still mounted after the
+      # 55 s ceiling, for reasons unrelated to CI. Add the step here once
+      # that spec passes locally on `main` and a Playwright browser-install
+      # step (`npx playwright install --with-deps chromium`) is wired in.
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Docs check
+        run: npm run docs:check
+
       - name: Build
         run: npm run build
 
