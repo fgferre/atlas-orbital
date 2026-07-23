@@ -21,6 +21,7 @@ import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useEffectiveGraphics } from "../../hooks/useEffectiveGraphics";
 import { shouldMountBloom } from "../../lib/graphics/bloomGate";
 import { detectWebGLSupport } from "../../lib/graphics/webglSupport";
+import { registerWebglContextLossHandlers } from "../../lib/graphics/webglContextLoss";
 import { AppCrashCard } from "../utils/AppCrashCard";
 import { WebGLUnavailableCard } from "../ui/WebGLUnavailableCard";
 import {
@@ -355,11 +356,25 @@ const TestCameraProbe = ({
  *
  * The window is re-armed on every asset-loader event (see the effect in
  * `Scene`), so it measures *silence*, not total boot duration — a slow
- * machine still streaming assets never trips it. 15 s also sits above
- * the 8 s hatch, so the normal path always wins the race. Last resort,
- * not a competing timer.
+ * machine still streaming assets never trips it. It also sits above the
+ * 8 s hatch, so the normal path always wins the race. Last resort, not a
+ * competing timer.
+ *
+ * 2026-07-23 — raised 15 s → 30 s. The watchdog is now a pure BACKSTOP:
+ * the honest failure signal for the user's real symptom (GPU VRAM
+ * exhaustion killing the WebGL context → white canvas) is the direct
+ * `webglcontextlost` listener wired in `handleCanvasCreated`, not this
+ * blind timer. Two reasons the old 15 s was too aggressive as a backstop:
+ * (1) `useProgress` (drei's loader store) does NOT observe atlas's custom
+ * `deferredTextureCache` pipeline, so "no progress event" is a weak proxy
+ * — a healthy boot can legitimately go silent for >15 s while custom
+ * textures stream. (2) Real-hardware boots here measured 55–59 s wall
+ * time. 30 s of *silence* (not total duration — the window re-arms on
+ * every loader event) only trips on a genuine hang, keeping the honest
+ * criterion: the card appears on real failure (context-lost, detected
+ * directly) or a true stall, never on a slow-but-healthy boot.
  */
-const SCENE_BOOT_WATCHDOG_MS = 15_000;
+const SCENE_BOOT_WATCHDOG_MS = 30_000;
 
 const isTestFreezeActive =
   typeof window !== "undefined" &&
@@ -443,6 +458,18 @@ export const Scene = () => {
     }),
     [rendererAntialias]
   );
+  // (c) direct context-loss surface. The user's real symptom is GPU VRAM
+  // exhaustion during the heavy boot: the driver kills the WebGL context,
+  // the canvas goes white, but the HTML overlay/labels survive — so a
+  // white 3D view with a live UI is the tell. Before this state there was
+  // NO detection of that event; the only mechanism was the blind
+  // "no-progress" boot watchdog, which let the white canvas sit silently
+  // until its timeout. This latches from the `webglcontextlost` listener
+  // registered in `handleCanvasCreated` below, and clears if the browser
+  // restores the context (`webglcontextrestored`), so an auto-recovered
+  // context dismisses the card instead of stranding the user on it.
+  const [contextLost, setContextLost] = useState(false);
+
   const handleCanvasCreated = useCallback(
     ({ gl }: { gl: THREE.WebGLRenderer }) => {
       // R1 #1A (Wave α Commit 2): the postprocessing composer is the
@@ -485,30 +512,38 @@ export const Scene = () => {
         console.warn("[atlas] WebGL diagnostic probe failed:", err);
       }
 
-      // WebGL context-loss recovery (added 2026-04-23 after a user
-      // report showed `THREE.WebGLRenderer: Context Lost.` followed by
-      // the SceneReadyChecker safety hatch firing — frame loop dead).
-      // Common causes: tab backgrounding triggering Chrome to reclaim
-      // GPU resources; GPU driver crash; integrated-GPU memory
-      // pressure. Calling `event.preventDefault()` on `webglcontextlost`
-      // signals the browser that we want the context back; without it
-      // the canvas stays permanently dead. On `webglcontextrestored`
-      // Three.js auto-reinits its WebGL programs / textures on the
-      // next render, so we just unblock the frame loop and log.
+      // WebGL context-loss recovery + honest failure surface (listener
+      // added 2026-04-23 after a user report showed `THREE.WebGLRenderer:
+      // Context Lost.` followed by the SceneReadyChecker safety hatch
+      // firing — frame loop dead; wired to a user-visible card 2026-07-23).
+      // Common causes: GPU VRAM exhaustion during the heavy boot (the
+      // user's real symptom); GPU driver crash; tab backgrounding
+      // triggering Chrome to reclaim GPU resources; integrated-GPU memory
+      // pressure. The helper calls `event.preventDefault()` on
+      // `webglcontextlost` (the browser contract for "give the context
+      // back" — without it the canvas stays permanently dead); here we
+      // ALSO latch `contextLost` so the user gets an honest card instead
+      // of a silently white canvas whose HTML overlay is still alive. On
+      // `webglcontextrestored` Three.js auto-reinits its WebGL programs /
+      // textures on the next render, so we clear the card and log.
       const canvasEl = gl.domElement;
-      const handleLost = (e: Event) => {
-        e.preventDefault();
-        console.warn(
-          "[atlas] WebGL context lost — preventing default so the browser can attempt recovery."
-        );
-      };
-      const handleRestored = () => {
-        console.warn(
-          "[atlas] WebGL context restored — Three.js will reinit GPU resources on next render."
-        );
-      };
-      canvasEl.addEventListener("webglcontextlost", handleLost);
-      canvasEl.addEventListener("webglcontextrestored", handleRestored);
+      const detachContextLossHandlers = registerWebglContextLossHandlers(
+        canvasEl,
+        {
+          onLost: () => {
+            console.warn(
+              "[atlas] WebGL context lost — preventing default so the browser can attempt recovery; surfacing the context-lost card."
+            );
+            setContextLost(true);
+          },
+          onRestored: () => {
+            console.warn(
+              "[atlas] WebGL context restored — Three.js will reinit GPU resources on next render; dismissing the context-lost card."
+            );
+            setContextLost(false);
+          },
+        }
+      );
 
       // HMR hygiene (2026-04-24 white-canvas audit — Codex P3). The
       // listeners above attach inside `onCreated` which fires once
@@ -518,13 +553,10 @@ export const Scene = () => {
       // `webglcontextlost` doesn't log N times (where N = number of
       // in-session hot updates).
       if (import.meta.hot) {
-        import.meta.hot.dispose(() => {
-          canvasEl.removeEventListener("webglcontextlost", handleLost);
-          canvasEl.removeEventListener("webglcontextrestored", handleRestored);
-        });
+        import.meta.hot.dispose(detachContextLossHandlers);
       }
     },
-    []
+    [setContextLost]
   );
 
   const bloomRef = useRef<BloomController | null>(null);
@@ -791,7 +823,28 @@ export const Scene = () => {
         is the only honest retry here, matching the card's own
         "Reload to retry" copy.
       */}
-      {bootTimedOut && (
+      {/*
+        Context-lost failure card. This is the HONEST surface for the
+        user's real symptom (white 3D canvas while the HTML overlay stays
+        alive): the `webglcontextlost` listener in `handleCanvasCreated`
+        latches `contextLost`. It takes precedence over the blind watchdog
+        card below (rendered only when `!contextLost`) because it names the
+        actual cause instead of guessing "stalled or lost its context". A
+        hard reload is the only honest retry — the killed context can't be
+        cheap-remounted from here; if the browser auto-restores it,
+        `webglcontextrestored` clears this flag and the card self-dismisses.
+      */}
+      {contextLost && (
+        <AppCrashCard
+          error={
+            new Error(
+              "The 3D graphics context was lost — most often the GPU ran out of memory during load. The interface is still running, but the 3D view can't continue. Reload to retry; if it keeps happening, close other GPU-heavy tabs or lower the graphics quality."
+            )
+          }
+          reset={() => window.location.reload()}
+        />
+      )}
+      {bootTimedOut && !contextLost && (
         <AppCrashCard
           error={
             new Error(

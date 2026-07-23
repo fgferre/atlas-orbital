@@ -931,7 +931,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Tethys is the fifth-largest moon of Saturn. It is a mid-sized moon composed almost entirely of water ice, as indicated by its low density. Tethys is heavily cratered and cut by a number of large faults/grabens. The largest impact crater, Odysseus, is about 400 km in diameter, nearly 2/5 of Tethys's diameter.",
     distanceFromParent: "294,670 km",
     info: "Huge canyon.",
-    textures: { map: TEXTURE_PATH + "2k_tethys.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_tethys.jpg" },
   },
   {
     id: "enceladus",

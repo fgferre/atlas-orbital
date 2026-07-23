@@ -241,6 +241,94 @@ describe("resolveTextureRequest", () => {
       }
     }
   });
+
+  it("serves 2k in the overview for EVERY profile — ultra included — when a 2k variant exists", () => {
+    // N-9 root fix: overview salience (0.72 planet, 0.38 moon) must never
+    // promote full-res. Previously ultra ignored salience and grabbed 8k for
+    // every body, so boot re-allocated ~3.9 GB of VRAM → GL context loss
+    // (white screen) on real GPUs. Ultra must now honour the overview band.
+    const cases = [
+      {
+        id: "mars",
+        canonical: "textures/8k_mars.jpg",
+        expected2k: "/textures/2k_mars.jpg",
+      },
+      {
+        id: "enceladus",
+        canonical: "textures/8k_enceladus.jpg",
+        expected2k: "/textures/2k_enceladus.jpg",
+      },
+    ];
+
+    for (const { id, canonical, expected2k } of cases) {
+      const body = makeBody({ id, textures: { map: canonical } });
+
+      for (const profile of [
+        "ultra",
+        "high",
+        "balanced",
+        "constrained",
+      ] as const) {
+        for (const overviewSalience of [0.72, 0.38]) {
+          const resolved = resolveTextureRequest(
+            body,
+            "map",
+            profile,
+            overviewSalience,
+            TEXTURE_VARIANT_MANIFEST
+          );
+          expect(resolved.selectedPath).toBe(expected2k);
+          expect(resolved.selectedTier).toBe("2k");
+          expect(resolved.source).toBe("manifest");
+        }
+      }
+    }
+  });
+
+  it("promotes to full-res (8k canonical) under ultra when the body is focused", () => {
+    // Salience 1.0 is the focused body (assetPriority 0). Fidelity pillar:
+    // focus must restore full-res, so ultra returns the 8k canonical.
+    const cases = [
+      { id: "mars", canonical: "textures/8k_mars.jpg" },
+      { id: "enceladus", canonical: "textures/8k_enceladus.jpg" },
+    ];
+
+    for (const { id, canonical } of cases) {
+      const body = makeBody({ id, textures: { map: canonical } });
+      const focused = resolveTextureRequest(
+        body,
+        "map",
+        "ultra",
+        1,
+        TEXTURE_VARIANT_MANIFEST
+      );
+      expect(focused.selectedPath).toBe(canonical);
+      expect(focused.selectedTier).toBe("8k");
+      expect(focused.source).toBe("canonical");
+    }
+  });
+
+  it("keeps the canonical for a body with no 2k variant, in overview and focus alike", () => {
+    // Rhea has no manifest entry: the overview must not invent a lighter tier,
+    // it just serves the only asset there is. Behaviour is unchanged.
+    const body = makeBody({
+      id: "rhea",
+      textures: { map: "textures/8k_rhea.jpg" },
+    });
+
+    for (const salience of [0.38, 1]) {
+      const resolved = resolveTextureRequest(
+        body,
+        "map",
+        "ultra",
+        salience,
+        TEXTURE_VARIANT_MANIFEST
+      );
+      expect(resolved.selectedPath).toBe("textures/8k_rhea.jpg");
+      expect(resolved.selectedTier).toBe("8k");
+      expect(resolved.source).toBe("canonical");
+    }
+  });
 });
 
 describe("preferWebPAsset", () => {

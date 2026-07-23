@@ -120,6 +120,27 @@ const PROFILE_PREFERENCES: Record<TextureQualityProfile, TextureTier[]> = {
   constrained: ["boot", "2k", "4k", "8k"],
 };
 
+/**
+ * Salience below this is treated as OVERVIEW: the body is neither focused
+ * (baseTextureSalience 1.0 at assetPriority 0) nor blown up on screen
+ * (screenSalience). At/above it the body is focused or zoomed and earns the
+ * full-resolution promotion its profile allows.
+ *
+ * The overview band caps VRAM at boot: with every body drawing its heaviest
+ * 8k canonical up front, an ultra profile allocated ~3.9 GB and lost the GL
+ * context on real GPUs (white screen, N-9). Serving small tiers in the
+ * overview and only promoting full-res on focus is the root fix.
+ */
+const OVERVIEW_SALIENCE_THRESHOLD = 0.9;
+
+/**
+ * Overview tier order — prioritise the smallest tiers regardless of profile
+ * (ultra included). 2k is served whenever a 2k variant exists; boot is the
+ * next-lightest fallback; 4k/8k only appear when nothing lighter is available
+ * (a body with no 2k variant keeps its canonical, unchanged).
+ */
+const OVERVIEW_PREFERENCE_ORDER = ["2k", "boot", "4k", "8k"] as const;
+
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 const getCanonicalTexturePath = (
@@ -181,10 +202,20 @@ const getPreferenceOrder = (
 ) => {
   const normalizedSalience = clamp01(salience);
 
+  // Special case preserved: for the balanced profile with a manifest boot
+  // asset and a near-invisible body, boot (< 2k) is the leanest first paint.
   if (profile === "balanced" && hasBootAsset && normalizedSalience <= 0.2) {
     return ["boot", "2k", "4k", "8k"] as const;
   }
 
+  // OVERVIEW: body is neither focused nor zoomed. Serve small tiers for every
+  // profile (ultra included) so boot no longer allocates full-res everywhere.
+  // Salience already encodes focus/zoom, so no separate focusId is needed.
+  if (normalizedSalience < OVERVIEW_SALIENCE_THRESHOLD) {
+    return OVERVIEW_PREFERENCE_ORDER;
+  }
+
+  // FOCUS/zoom: promote full-res per the profile (ultra → 8k/full).
   return PROFILE_PREFERENCES[profile];
 };
 
