@@ -13,13 +13,15 @@
       "distance": "Distance",
       "apparentMagnitude": "Apparent magnitude",
       "absoluteMagnitude": "Absolute magnitude",
-      "constellation": "Constellation"
+      "constellation": "Constellation",
+      "lightTravelTime": "Light travel time"
     },
     "units": {
       "solarRadii": "× Sun",
       "solarMasses": "M☉",
       "parsec": "pc",
       "lightYear": "ly",
+      "yearsAgo": "years ago",
       "kelvin": "K"
     },
     "wikipedia": {
@@ -30,5 +32,14 @@
       "retry": "Retry",
       "readMore": "Read more on Wikipedia"
     }
+  },
+  "scalePill": {
+    "didacticTitle": "NOT TO SCALE",
+    "didacticDesc": "sizes & gaps exaggerated",
+    "realisticTitle": "TRUE SCALE",
+    "realisticDesc": "physical proportions",
+    "toggleHint": "Click to toggle scale mode",
+    "collapse": "Collapse badge",
+    "expand": "Expand badge"
   }
 }

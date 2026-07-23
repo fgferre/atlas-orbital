@@ -4,11 +4,12 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
 import { HygStarPanel } from "./HygStarPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
-import { Sidebar } from "./Sidebar";
 import { LayersPanel } from "./LayersPanel";
+import { ScalePill } from "./ScalePill";
+import { SearchBar } from "./SearchBar";
+import { Sidebar } from "./Sidebar";
 import { Timeline } from "./Timeline";
 import { TopBar } from "./TopBar";
-import { SearchBar } from "./SearchBar";
 import { ViewportFramingTracker } from "./ViewportFramingTracker";
 import {
   RIGHT_CONTROL_DESKTOP_TAB_OVERLAP_CLASS,
@@ -87,6 +88,10 @@ export const Overlay = () => {
       <Sidebar />
       <HygStarPanel />
       <Timeline />
+
+      <div className="absolute top-[calc(env(safe-area-inset-top)+4rem)] left-[max(1rem,env(safe-area-inset-left))] z-30 pointer-events-none">
+        <ScalePill />
+      </div>
 
       <div
         className={`pointer-events-none absolute z-40 ${

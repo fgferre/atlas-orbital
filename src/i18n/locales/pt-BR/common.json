@@ -13,13 +13,15 @@
       "distance": "Distância",
       "apparentMagnitude": "Magnitude aparente",
       "absoluteMagnitude": "Magnitude absoluta",
-      "constellation": "Constelação"
+      "constellation": "Constelação",
+      "lightTravelTime": "Tempo de viagem da luz"
     },
     "units": {
       "solarRadii": "× Sol",
       "solarMasses": "M☉",
       "parsec": "pc",
       "lightYear": "al",
+      "yearsAgo": "anos atrás",
       "kelvin": "K"
     },
     "wikipedia": {
@@ -30,5 +32,14 @@
       "retry": "Tentar novamente",
       "readMore": "Ler mais na Wikipédia"
     }
+  },
+  "scalePill": {
+    "didacticTitle": "FORA DE ESCALA",
+    "didacticDesc": "tamanhos e distâncias exagerados",
+    "realisticTitle": "ESCALA REAL",
+    "realisticDesc": "proporções físicas",
+    "toggleHint": "Clique para alternar o modo de escala",
+    "collapse": "Recolher selo",
+    "expand": "Expandir selo"
   }
 }

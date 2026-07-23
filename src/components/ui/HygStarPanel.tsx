@@ -227,14 +227,24 @@ export const HygStarPanel = () => {
               />
             )}
             {starInfo.distancePc > 0 && (
-              <StatRow
-                label={t("hygStarPanel.fields.distance")}
-                value={`${starInfo.distancePc.toFixed(2)} ${t(
-                  "hygStarPanel.units.parsec"
-                )} · ${distanceLy.toFixed(2)} ${t(
-                  "hygStarPanel.units.lightYear"
-                )}`}
-              />
+              <>
+                <StatRow
+                  label={t("hygStarPanel.fields.distance")}
+                  value={`${starInfo.distancePc.toFixed(2)} ${t(
+                    "hygStarPanel.units.parsec"
+                  )} · ${distanceLy.toFixed(2)} ${t(
+                    "hygStarPanel.units.lightYear"
+                  )}`}
+                />
+                <StatRow
+                  label={t("hygStarPanel.fields.lightTravelTime")}
+                  value={`~${
+                    distanceLy >= 1000
+                      ? Math.round(distanceLy).toLocaleString(i18n.language)
+                      : distanceLy.toFixed(1)
+                  } ${t("hygStarPanel.units.yearsAgo")}`}
+                />
+              </>
             )}
             {Number.isFinite(starInfo.mag) && (
               <StatRow

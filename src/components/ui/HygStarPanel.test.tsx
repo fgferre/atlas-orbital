@@ -200,6 +200,9 @@ describe("HygStarPanel — focused HYG star", () => {
     expect(
       screen.getByText(/\d\.\d{2} pc · \d\.\d{2} ly/i)
     ).toBeInTheDocument();
+    // Light travel time
+    expect(screen.getByText(/light travel time/i)).toBeInTheDocument();
+    expect(screen.getByText(/~\d+\.\d years ago/i)).toBeInTheDocument();
     // Constellation
     expect(screen.getByText("CMa")).toBeInTheDocument();
   });
