@@ -90,7 +90,15 @@ const StudyGlbBody = ({
     throw new Error(`Unknown model asset "${modelAssetId}".`);
   }
 
-  const { scene } = useGLTF(toPublicAssetUrl(modelAsset.filePath));
+  // Draco + meshopt decoders are explicitly disabled: the study GLBs are
+  // uncompressed (`extensionsUsed: []`), and drei's default `useMeshopt=true`
+  // instantiates MeshoptDecoder, which runs `WebAssembly.instantiate` and is
+  // rejected by the production CSP (`script-src 'self' blob:`).
+  const { scene } = useGLTF(
+    toPublicAssetUrl(modelAsset.filePath),
+    false,
+    false
+  );
 
   const { cloned, normalizationScale } = useMemo(
     () =>

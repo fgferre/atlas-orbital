@@ -187,6 +187,60 @@ describe("resolveTextureRequest", () => {
       expect(resolved.isBootAsset).toBe(true);
     }
   });
+
+  it("serves the on-disk 2k downscales below the ultra profile", () => {
+    const cases = [
+      {
+        id: "mercury",
+        canonical: "textures/8k_mercury.jpg",
+        expected2k: "/textures/2k_mercury.jpg",
+      },
+      {
+        id: "venus",
+        canonical: "textures/8k_venus_surface.jpg",
+        expected2k: "/textures/2k_venus_surface.jpg",
+      },
+      {
+        id: "moon",
+        canonical: "textures/8k_moon.jpg",
+        expected2k: "/textures/2k_moon.jpg",
+      },
+      {
+        id: "sun",
+        canonical: "textures/8k_sun.jpg",
+        expected2k: "/textures/2k_sun.jpg",
+      },
+    ];
+
+    for (const { id, canonical, expected2k } of cases) {
+      const body = makeBody({ id, textures: { map: canonical } });
+
+      // Ultra keeps the full-resolution canonical asset.
+      const ultra = resolveTextureRequest(
+        body,
+        "map",
+        "ultra",
+        1,
+        TEXTURE_VARIANT_MANIFEST
+      );
+      expect(ultra.selectedPath).toBe(canonical);
+      expect(ultra.selectedTier).toBe("8k");
+
+      // Every lighter profile now drops to the 2k downscale.
+      for (const profile of ["high", "balanced"] as const) {
+        const resolved = resolveTextureRequest(
+          body,
+          "map",
+          profile,
+          1,
+          TEXTURE_VARIANT_MANIFEST
+        );
+        expect(resolved.selectedPath).toBe(expected2k);
+        expect(resolved.selectedTier).toBe("2k");
+        expect(resolved.source).toBe("manifest");
+      }
+    }
+  });
 });
 
 describe("preferWebPAsset", () => {

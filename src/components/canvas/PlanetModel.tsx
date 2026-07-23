@@ -47,7 +47,11 @@ const GLBModel = ({
   roughness?: number;
   metalness?: number;
 }) => {
-  const { scene } = useGLTF(path);
+  // Draco + meshopt decoders are explicitly disabled: every shipped GLB is
+  // uncompressed (`extensionsUsed: []`), and drei's default `useMeshopt=true`
+  // instantiates MeshoptDecoder, which runs `WebAssembly.instantiate` and is
+  // rejected by the production CSP (`script-src 'self' blob:`).
+  const { scene } = useGLTF(path, false, false);
 
   const { cloned, normalizationScale } = useMemo(
     () =>

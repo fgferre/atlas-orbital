@@ -7,6 +7,23 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
   sun: {
     map: {
       boot: `${TEXTURE_PATH}boot_sun.jpg`,
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_sun.jpg`,
+      },
+    },
+  },
+  mercury: {
+    map: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_mercury.jpg`,
+      },
+    },
+  },
+  venus: {
+    map: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_venus_surface.jpg`,
+      },
     },
   },
   earth: {
@@ -21,6 +38,13 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     roughness: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_earth_roughness_map.jpg`,
+      },
+    },
+  },
+  moon: {
+    map: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_moon.jpg`,
       },
     },
   },

@@ -36,6 +36,7 @@ import {
 import { SUN_RADIUS_WORLD_UNITS } from "../../lib/stellarMeshGate";
 import { radiusFromSpect } from "../../lib/stellarPhysics";
 import type { HygCatalogData } from "../../utils/hygBinary";
+import { resolveFocusNearPlane } from "./cameraNearPlane";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 
 // Module-level scratch vectors for the focus-tracking useFrame. Safe
@@ -604,9 +605,8 @@ export const CameraController = () => {
   useEffect(() => {
     const cameraInstance = cameraRef.current;
     const controlsInstance = controlsRef.current;
-    if (!focusId || !cameraInstance || !controlsInstance) return;
+    if (!cameraInstance || !controlsInstance) return;
 
-    const bodyData = BODIES_BY_ID.get(focusId);
     // T6.4-M2.5 S4 — wire the REAL per-star physical radius for
     // HYG focus. Pre-M2.5 used `HYG_FOCUS_DEFAULT_RADIUS_WORLD = 1.0`
     // wu placeholder, which collapsed `near`-plane precision for
@@ -618,31 +618,39 @@ export const CameraController = () => {
     // Catalog dependency: HYG focus paths early-return when
     // `hygCatalog` is null; the effect re-fires on `hygCatalog`
     // load thanks to the dep array.
+    //
+    // `null` here is the "no focus" case — it does NOT early-return
+    // any more, it restores the Scene defaults (see
+    // `resolveFocusNearPlane`). The pre-fix `!focusId` early-return
+    // leaked the last focused body's near plane to the whole scene.
     let targetRadius: number | null = null;
-    if (bodyData) {
-      targetRadius = getBodyRadius(bodyData);
-    } else {
-      const hygIndex = parseHygFocusId(focusId);
-      if (
-        hygIndex !== null &&
-        hygCatalog &&
-        hygIndex < hygCatalog.header.count
-      ) {
-        targetRadius = resolveHygRadiusWu(hygIndex, hygCatalog);
-      } else if (hygIndex !== null) {
-        // Catalog not loaded yet (or out-of-range post quality
-        // downgrade — sister branch in setupCamera handles defocus).
-        // Wait for hygCatalog to flip; this effect re-runs.
-        return;
+    if (focusId) {
+      const bodyData = BODIES_BY_ID.get(focusId);
+      if (bodyData) {
+        targetRadius = getBodyRadius(bodyData);
+      } else {
+        const hygIndex = parseHygFocusId(focusId);
+        if (
+          hygIndex !== null &&
+          hygCatalog &&
+          hygIndex < hygCatalog.header.count
+        ) {
+          targetRadius = resolveHygRadiusWu(hygIndex, hygCatalog);
+        } else {
+          // Either the catalog hasn't loaded yet / the index went
+          // out of range post quality-downgrade (sister branch in
+          // setupCamera handles the defocus), or `focusId` isn't a
+          // resolvable id at all. Leave the current near plane
+          // alone — this effect re-runs when `hygCatalog` flips.
+          return;
+        }
       }
     }
-    if (targetRadius == null) return;
 
-    controlsInstance.minDistance = targetRadius * 1.1;
-
-    const newNear = Math.max(1e-7, controlsInstance.minDistance * 0.01);
-    if (Math.abs(cameraInstance.near - newNear) > 1e-8) {
-      cameraInstance.near = newNear;
+    const { minDistance, near } = resolveFocusNearPlane(targetRadius);
+    controlsInstance.minDistance = minDistance;
+    if (Math.abs(cameraInstance.near - near) > 1e-8) {
+      cameraInstance.near = near;
       cameraInstance.updateProjectionMatrix();
     }
   }, [focusId, getBodyRadius, hygCatalog]);

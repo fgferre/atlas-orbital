@@ -92,10 +92,26 @@ export const Sidebar = () => {
           : "-translate-x-[120%] opacity-0 pointer-events-none"
       }`;
 
+  // The mobile chrome (`command-shell` / `panel-scan` / `tech-corners`)
+  // declares `position: relative` in `src/index.css` outside any
+  // `@layer`, so it outranks Tailwind v4's `fixed` utility (which lives
+  // in `@layer utilities`) no matter the specificity. Applied to the
+  // framing element itself it silently downgraded the sheet to
+  // `position: relative`, and `bottom-[…]` then pushed the header —
+  // body name included — above the top edge of the viewport.
+  // The chrome therefore rides on a child that fills the framing box,
+  // the same split SearchBar/GearPopover/LayersPanel already use.
+  // Desktop keeps its exact box: `glass-panel` declares no `position`,
+  // so it stays on the framing element and the child collapses to
+  // `display: contents`, leaving that layout untouched.
+  const surfaceClassName = isMobile
+    ? "command-shell panel-scan tech-corners ghost-border flex h-full min-h-0 flex-col overflow-hidden"
+    : "contents";
+
   return (
     <div
       data-ui-framing="sidebar"
-      className={`${isMobile ? "command-shell panel-scan tech-corners ghost-border" : "glass-panel"} z-30 flex flex-col overflow-hidden transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] ${panelClassName}`}
+      className={`${isMobile ? "" : "glass-panel"} z-30 flex flex-col overflow-hidden transition-[opacity,transform] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] ${panelClassName}`}
       data-tutorial-target="info-panel"
       style={
         isMobile
@@ -108,323 +124,329 @@ export const Sidebar = () => {
       }
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {/* Tech Border Decoration */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-nasa-accent to-transparent opacity-50"></div>
+      <div className={surfaceClassName}>
+        {/* Tech Border Decoration */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-nasa-accent to-transparent opacity-50"></div>
 
-      {/* Close Button */}
-      <button
-        onClick={() => setSelectedId(null)}
-        aria-label="Close selected body panel"
-        className="absolute right-3 top-3 z-10 rounded border border-white/10 p-1.5 text-nasa-dim transition-colors hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          aria-hidden="true"
+        {/* Close Button */}
+        <button
+          onClick={() => setSelectedId(null)}
+          aria-label="Close selected body panel"
+          className="absolute right-3 top-3 z-10 rounded border border-white/10 p-1.5 text-nasa-dim transition-colors hover:text-nasa-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent touch-manipulation"
         >
-          <path
-            fillRule="evenodd"
-            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
 
-      {b && (
-        <div className="flex flex-col h-full min-h-0">
-          {/* Header Section (Fixed) */}
-          <div className="shrink-0 border-b border-white/10 p-5 pb-4">
-            <div className="min-w-0">
-              <div className="mb-1 text-[10px] font-rajdhani font-bold uppercase tracking-[0.2em] text-nasa-accent">
-                Selected Body
-              </div>
-              <h1 className="mb-1 text-2xl font-orbitron uppercase tracking-wide text-white">
-                {b.name.en}
-              </h1>
-              {b.name.pt !== b.name.en && (
-                <div className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
-                  {b.name.pt}
+        {b && (
+          <div className="flex flex-col h-full min-h-0">
+            {/* Header Section (Fixed) */}
+            <div className="shrink-0 border-b border-white/10 p-5 pb-4">
+              <div className="min-w-0">
+                <div className="mb-1 text-[10px] font-rajdhani font-bold uppercase tracking-[0.2em] text-nasa-accent">
+                  Selected Body
                 </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]`}
-                  style={{ background: b.color }}
-                ></span>
-                <span className="text-[10px] font-rajdhani uppercase tracking-wider text-nasa-dim">
-                  {b.classification || b.type}
-                </span>
-                <span className="text-[10px] font-rajdhani uppercase tracking-wider text-white/35">
-                  {b.id.toUpperCase()}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <HeaderChip label={b.type.toUpperCase()} />
-              {parentBody && (
-                <HeaderChip label={`ORBITING ${parentBody.name.en}`} />
-              )}
-              {b.group && (
-                <HeaderChip label={`${b.group.toUpperCase()} SYSTEM`} />
-              )}
-            </div>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
-            {/* Description */}
-            <div className="space-y-2">
-              <h2 className="text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
-                Quick Context
-              </h2>
-              <p className="text-sm leading-relaxed text-gray-300">
-                {b.description || b.info}
-              </p>
-            </div>
-
-            {b.visualProvenance && (
-              <div>
-                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                  Visual Fidelity
-                </h3>
-                <div className="bg-black/20 p-3 rounded border border-white/5 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[9px] text-nasa-dim uppercase tracking-wider">
-                      Source Type
-                    </span>
-                    <span className="text-[9px] bg-white/10 px-2 py-1 rounded text-nasa-accent font-mono uppercase tracking-wide">
-                      {VISUAL_FIDELITY_LABELS[b.visualProvenance.fidelity]}
-                    </span>
+                <h1 className="mb-1 text-2xl font-orbitron uppercase tracking-wide text-white">
+                  {b.name.en}
+                </h1>
+                {b.name.pt !== b.name.en && (
+                  <div className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
+                    {b.name.pt}
                   </div>
-                  <p className="text-xs text-gray-300 font-rajdhani">
-                    {b.visualProvenance.summary}
-                  </p>
-                  {b.visualProvenance.limitationReason && (
-                    <p className="text-xs text-gray-400 font-rajdhani">
-                      {b.visualProvenance.limitationReason}
-                    </p>
-                  )}
-                  {b.visualProvenance.sources &&
-                    b.visualProvenance.sources.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {b.visualProvenance.sources
-                          .slice(0, 2)
-                          .map((source) => (
-                            <a
-                              key={source.url}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] text-nasa-accent underline underline-offset-2 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
-                            >
-                              {source.label}
-                            </a>
-                          ))}
-                      </div>
-                    )}
+                )}
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]`}
+                    style={{ background: b.color }}
+                  ></span>
+                  <span className="text-[10px] font-rajdhani uppercase tracking-wider text-nasa-dim">
+                    {b.classification || b.type}
+                  </span>
+                  <span className="text-[10px] font-rajdhani uppercase tracking-wider text-white/35">
+                    {b.id.toUpperCase()}
+                  </span>
                 </div>
               </div>
-            )}
 
-            {/* Live Data Grid */}
-            {stats && b.id !== "sun" && (
-              <div>
-                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  Real-time Telemetry
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <StatBox
-                    label="Orbital Speed"
-                    value={formatTelemetryValue(stats.velocity, "km/s")}
-                  />
-                  <StatBox
-                    label="Current Dist."
-                    value={
-                      stats.distAU < 0.1
-                        ? `${stats.distKm.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })} km`
-                        : `${stats.distAU.toFixed(3)} AU`
-                    }
-                    subLabel={`From ${
-                      b.parentId
-                        ? b.parentId.charAt(0).toUpperCase() +
-                          b.parentId.slice(1)
-                        : "Sun"
-                    }`}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Physical Stats Grid */}
-            <div>
-              <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                Physical Data
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <StatBox
-                  label="Radius"
-                  value={`${b.radiusKm.toLocaleString()} km`}
-                  badge={getEarthComparison(b.radiusKm, 6371)}
-                />
-                <StatBox
-                  label="Gravity"
-                  value={b.gravity}
-                  badge={
-                    b.gravity
-                      ? getEarthComparison(
-                          AstroPhysics.parseScientificValue(b.gravity),
-                          9.8,
-                          "g"
-                        )
-                      : undefined
-                  }
-                />
-                <StatBox
-                  label="Escape Vel."
-                  value={formatTelemetryValue(
-                    stats?.escape ?? Number.NaN,
-                    "km/s"
-                  )}
-                />
-                <StatBox label="Mass" value={b.mass} fullWidth />
-                <StatBox label="Composition" value={b.composition} fullWidth />
-                {b.spectralClass && (
-                  <StatBox
-                    label="Spectral Class"
-                    value={b.spectralClass}
-                    fullWidth
-                  />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <HeaderChip label={b.type.toUpperCase()} />
+                {parentBody && (
+                  <HeaderChip label={`ORBITING ${parentBody.name.en}`} />
+                )}
+                {b.group && (
+                  <HeaderChip label={`${b.group.toUpperCase()} SYSTEM`} />
                 )}
               </div>
             </div>
 
-            {/* Records Section */}
-            {b.records && b.records.length > 0 && (
-              <div>
-                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                  Records
-                </h3>
-                <div className="space-y-1">
-                  {b.records.map((rec, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 p-2"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]"
-                      ></span>
-                      <p className="text-xs text-gray-300 font-rajdhani">
-                        {rec}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+            {/* Scrollable Content */}
+            <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
+              {/* Description */}
+              <div className="space-y-2">
+                <h2 className="text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
+                  Quick Context
+                </h2>
+                <p className="text-sm leading-relaxed text-gray-300">
+                  {b.description || b.info}
+                </p>
               </div>
-            )}
 
-            {/* Exploration Milestone */}
-            {b.explorationMilestone && (
-              <div>
-                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                  Exploration
-                </h3>
-                <div className="bg-purple-500/10 p-2 rounded border border-purple-500/20">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] text-purple-400 uppercase font-bold">
-                      Major Milestone
-                    </span>
-                    <span className="text-[9px] text-purple-300 font-mono">
-                      {b.explorationMilestone.year}
-                    </span>
+              {b.visualProvenance && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Visual Fidelity
+                  </h3>
+                  <div className="bg-black/20 p-3 rounded border border-white/5 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[9px] text-nasa-dim uppercase tracking-wider">
+                        Source Type
+                      </span>
+                      <span className="text-[9px] bg-white/10 px-2 py-1 rounded text-nasa-accent font-mono uppercase tracking-wide">
+                        {VISUAL_FIDELITY_LABELS[b.visualProvenance.fidelity]}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 font-rajdhani">
+                      {b.visualProvenance.summary}
+                    </p>
+                    {b.visualProvenance.limitationReason && (
+                      <p className="text-xs text-gray-400 font-rajdhani">
+                        {b.visualProvenance.limitationReason}
+                      </p>
+                    )}
+                    {b.visualProvenance.sources &&
+                      b.visualProvenance.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {b.visualProvenance.sources
+                            .slice(0, 2)
+                            .map((source) => (
+                              <a
+                                key={source.url}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-nasa-accent underline underline-offset-2 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
+                              >
+                                {source.label}
+                              </a>
+                            ))}
+                        </div>
+                      )}
                   </div>
-                  <p className="text-xs text-gray-300 font-rajdhani">
-                    {b.explorationMilestone.description}
-                  </p>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Orbital Stats Grid */}
-            <div>
-              <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                Orbital Data
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <StatBox label="Day Length" value={b.dayLength} />
-                <StatBox label="Year Length" value={b.yearLength} />
-                <StatBox
-                  label="Distance"
-                  value={b.distanceFromParent || `${b.orbit.a} AU`}
-                  subLabel={
-                    !b.distanceFromParent ? "(Avg from Sun)" : undefined
-                  }
-                />
-                <StatBox label="Axial Tilt" value={`${b.axialTilt}°`} />
-              </div>
-            </div>
+              {/* Live Data Grid */}
+              {stats && b.id !== "sun" && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                    Real-time Telemetry
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatBox
+                      label="Orbital Speed"
+                      value={formatTelemetryValue(stats.velocity, "km/s")}
+                    />
+                    <StatBox
+                      label="Current Dist."
+                      value={
+                        stats.distAU < 0.1
+                          ? `${stats.distKm.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })} km`
+                          : `${stats.distAU.toFixed(3)} AU`
+                      }
+                      subLabel={`From ${
+                        b.parentId
+                          ? b.parentId.charAt(0).toUpperCase() +
+                            b.parentId.slice(1)
+                          : "Sun"
+                      }`}
+                    />
+                  </div>
+                </div>
+              )}
 
-            {/* Orbital Model */}
-            <OrbitalProvenanceDisplay bodyId={b.id} />
-
-            {/* Atmosphere */}
-            {b.atmosphere && b.atmosphere !== "Not detected" && (
+              {/* Physical Stats Grid */}
               <div>
                 <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                  Atmosphere
+                  Physical Data
                 </h3>
-                <div className="bg-black/20 p-2 rounded border border-white/5">
-                  <p className="text-xs text-gray-300 font-rajdhani">
-                    {b.atmosphere}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Intel / Trivia */}
-            {(b.curiosity || (b.facts && b.facts.length > 0)) && (
-              <div>
-                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                  Intel
-                </h3>
-                <div className="space-y-2">
-                  {b.curiosity && (
-                    <div className="bg-nasa-accent/10 p-2 rounded border-l-2 border-nasa-accent">
-                      <div className="text-[9px] text-nasa-accent uppercase mb-0.5 font-bold">
-                        Curiosity
-                      </div>
-                      <p className="text-xs text-gray-300 font-rajdhani italic">
-                        "{b.curiosity}"
-                      </p>
-                    </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatBox
+                    label="Radius"
+                    value={`${b.radiusKm.toLocaleString()} km`}
+                    badge={getEarthComparison(b.radiusKm, 6371)}
+                  />
+                  <StatBox
+                    label="Gravity"
+                    value={b.gravity}
+                    badge={
+                      b.gravity
+                        ? getEarthComparison(
+                            AstroPhysics.parseScientificValue(b.gravity),
+                            9.8,
+                            "g"
+                          )
+                        : undefined
+                    }
+                  />
+                  <StatBox
+                    label="Escape Vel."
+                    value={formatTelemetryValue(
+                      stats?.escape ?? Number.NaN,
+                      "km/s"
+                    )}
+                  />
+                  <StatBox label="Mass" value={b.mass} fullWidth />
+                  <StatBox
+                    label="Composition"
+                    value={b.composition}
+                    fullWidth
+                  />
+                  {b.spectralClass && (
+                    <StatBox
+                      label="Spectral Class"
+                      value={b.spectralClass}
+                      fullWidth
+                    />
                   )}
-                  {b.facts &&
-                    b.facts.map((fact, i) => (
+                </div>
+              </div>
+
+              {/* Records Section */}
+              {b.records && b.records.length > 0 && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Records
+                  </h3>
+                  <div className="space-y-1">
+                    {b.records.map((rec, i) => (
                       <div
                         key={i}
-                        className="bg-blue-500/10 p-2 rounded border-l-2 border-blue-400"
+                        className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 p-2"
                       >
-                        <div className="text-[9px] text-blue-400 uppercase mb-0.5 font-bold">
-                          Fact {b.facts!.length > 1 ? i + 1 : ""}
-                        </div>
+                        <span
+                          aria-hidden="true"
+                          className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]"
+                        ></span>
                         <p className="text-xs text-gray-300 font-rajdhani">
-                          {fact}
+                          {rec}
                         </p>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Exploration Milestone */}
+              {b.explorationMilestone && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Exploration
+                  </h3>
+                  <div className="bg-purple-500/10 p-2 rounded border border-purple-500/20">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[9px] text-purple-400 uppercase font-bold">
+                        Major Milestone
+                      </span>
+                      <span className="text-[9px] text-purple-300 font-mono">
+                        {b.explorationMilestone.year}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 font-rajdhani">
+                      {b.explorationMilestone.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Orbital Stats Grid */}
+              <div>
+                <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                  Orbital Data
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <StatBox label="Day Length" value={b.dayLength} />
+                  <StatBox label="Year Length" value={b.yearLength} />
+                  <StatBox
+                    label="Distance"
+                    value={b.distanceFromParent || `${b.orbit.a} AU`}
+                    subLabel={
+                      !b.distanceFromParent ? "(Avg from Sun)" : undefined
+                    }
+                  />
+                  <StatBox label="Axial Tilt" value={`${b.axialTilt}°`} />
                 </div>
               </div>
-            )}
+
+              {/* Orbital Model */}
+              <OrbitalProvenanceDisplay bodyId={b.id} />
+
+              {/* Atmosphere */}
+              {b.atmosphere && b.atmosphere !== "Not detected" && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Atmosphere
+                  </h3>
+                  <div className="bg-black/20 p-2 rounded border border-white/5">
+                    <p className="text-xs text-gray-300 font-rajdhani">
+                      {b.atmosphere}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Intel / Trivia */}
+              {(b.curiosity || (b.facts && b.facts.length > 0)) && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Intel
+                  </h3>
+                  <div className="space-y-2">
+                    {b.curiosity && (
+                      <div className="bg-nasa-accent/10 p-2 rounded border-l-2 border-nasa-accent">
+                        <div className="text-[9px] text-nasa-accent uppercase mb-0.5 font-bold">
+                          Curiosity
+                        </div>
+                        <p className="text-xs text-gray-300 font-rajdhani italic">
+                          "{b.curiosity}"
+                        </p>
+                      </div>
+                    )}
+                    {b.facts &&
+                      b.facts.map((fact, i) => (
+                        <div
+                          key={i}
+                          className="bg-blue-500/10 p-2 rounded border-l-2 border-blue-400"
+                        >
+                          <div className="text-[9px] text-blue-400 uppercase mb-0.5 font-bold">
+                            Fact {b.facts!.length > 1 ? i + 1 : ""}
+                          </div>
+                          <p className="text-xs text-gray-300 font-rajdhani">
+                            {fact}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
