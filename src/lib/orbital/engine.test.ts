@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import * as THREE from "three";
 import { OrbitalEngine } from "./engine";
 import { keplerProvider } from "./keplerProvider";
 import { initializeOrbitalEngine } from "./setup";
+import type { OrbitalProvider } from "./types";
 
 describe("OrbitalEngine cache stats", () => {
   let engine: OrbitalEngine;
@@ -116,6 +118,63 @@ describe("OrbitalEngine cache stats", () => {
     engine.calculatePosition("mars", date);
     expect(engine.getCacheStats().hits).toBe(2);
     expect(engine.getCacheStats().misses).toBe(2);
+  });
+
+  it("clears cached positions when a provider is registered or replaced", () => {
+    engine.calculatePosition("earth", date);
+    expect(engine.getCacheStats().size).toBe(1);
+
+    const provider: OrbitalProvider = {
+      id: "test-provider",
+      name: "Test provider",
+      model: "Kepler",
+      timeScale: "TDB",
+      outputFrame: "J2000_ECLIPTIC",
+      supportedBodies: [],
+      canCalculate: () => false,
+      calculatePosition: (context) => ({
+        position: new THREE.Vector3(),
+        distanceAU: 0,
+        provenance: "test",
+        model: "Kepler",
+        isFallback: false,
+        jdTDB: context.jdTDB,
+      }),
+    };
+
+    engine.registerProvider(provider);
+    expect(engine.getCacheStats().size).toBe(0);
+  });
+
+  it("invalidates only the body whose Keplerian elements changed", () => {
+    const bodyId = "cache-invalidation-test-body";
+    const baseElements = {
+      a: 1,
+      e: 0,
+      i: 0,
+      O: 0,
+      w: 0,
+      M0: 0,
+      n: 1,
+    };
+
+    engine.registerBodyElements(bodyId, baseElements);
+    const first = engine.calculatePosition(bodyId, date);
+    engine.calculatePosition("earth", date);
+    expect(engine.getCacheStats().size).toBe(2);
+
+    engine.registerBodyElements(bodyId, {
+      ...baseElements,
+      M0: 90,
+    });
+
+    const survivingKeys = engine.getCacheEntries().map(({ key }) => key);
+    expect(survivingKeys).toHaveLength(1);
+    expect(survivingKeys[0]).toMatch(/^earth@/);
+
+    const second = engine.calculatePosition(bodyId, date);
+    expect(second.position.distanceTo(first.position)).toBeGreaterThan(1);
+    expect(engine.getCacheStats().size).toBe(2);
   });
 });
 

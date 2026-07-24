@@ -1,44 +1,25 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { BODIES_BY_ID, SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { AstroPhysics } from "../../lib/astrophysics";
 import { simulationClock } from "../../lib/simulationClock";
 import { useStore } from "../../store";
-import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
-
-const SMART_SUN_LIGHT_LAYER = 1;
-
-const disableSmartSunLayer = (root: THREE.Object3D) => {
-  root.traverse((object) => {
-    object.layers.disable(SMART_SUN_LIGHT_LAYER);
-  });
-};
-
-const enableSmartSunLayerForBody = (root: THREE.Object3D, bodyId: string) => {
-  root.traverse((object) => {
-    object.layers.enable(SMART_SUN_LIGHT_LAYER);
-  });
-
-  // Planet groups contain their moons as nested child bodies. Keep the
-  // focused body's visual subtree on the smart-shadow layer, but remove
-  // nested bodies so they do not inherit the focused body's solar vector.
-  root.traverse((object) => {
-    if (
-      object !== root &&
-      object.name !== bodyId &&
-      BODIES_BY_ID.has(object.name)
-    ) {
-      disableSmartSunLayer(object);
-    }
-  });
-};
+import {
+  type SmartSunLightFrame,
+  updateSmartSunLightFrame,
+} from "./smartSunLightFrame";
+import {
+  bindSmartSunLayer,
+  SMART_SUN_LIGHT_LAYER,
+} from "./smartSunLightLayers";
 
 export const SmartSunLight = forwardRef<
   THREE.DirectionalLight,
@@ -46,11 +27,41 @@ export const SmartSunLight = forwardRef<
 >(({ intensity = 0.4, shadowMapSize = 4096 }, ref) => {
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
+  const scene = useThree((state) => state.scene);
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const shadowCameraRef = useRef<THREE.OrthographicCamera>(null);
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
   const targetPosRef = useRef(new THREE.Vector3());
-  const layeredTargetRef = useRef<THREE.Object3D | null>(null);
+  const targetObjectRef = useRef<THREE.Object3D | null>(null);
+  const releaseLayerBindingRef = useRef<(() => void) | null>(null);
+  const frameRef = useRef<SmartSunLightFrame>({
+    lightPosition: new THREE.Vector3(),
+    shadowBounds: {
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      near: 0,
+      far: 0,
+    },
+  });
+  const trackedBodyId = !focusId || focusId === "sun" ? "earth" : focusId;
+  const trackedBody = BODIES_BY_ID.get(trackedBodyId) ?? null;
+  const shadowExtent = useMemo(
+    () =>
+      trackedBody
+        ? AstroPhysics.resolveShadowExtent({
+            body: trackedBody,
+            bodies: SOLAR_SYSTEM_BODIES,
+            // The current implementation derives conservative orbital bounds,
+            // not an instantaneous child position; the date is retained for
+            // the API contract but the result is stable for body + scale mode.
+            date: simulationClock.getNow(),
+            scaleMode,
+          })
+        : null,
+    [scaleMode, trackedBody]
+  );
 
   useImperativeHandle(ref, () => lightRef.current!);
 
@@ -64,52 +75,67 @@ export const SmartSunLight = forwardRef<
     }
   }, [lightTarget]);
 
-  useEffect(() => {
-    return () => {
-      if (layeredTargetRef.current) {
-        disableSmartSunLayer(layeredTargetRef.current);
-      }
-      layeredTargetRef.current = null;
-    };
+  const releaseTrackedTarget = useCallback(() => {
+    releaseLayerBindingRef.current?.();
+    releaseLayerBindingRef.current = null;
+    targetObjectRef.current = null;
   }, []);
 
-  useFrame(({ scene }) => {
-    if (!lightRef.current || !shadowCameraRef.current) return;
-
-    // 1. Identify Target
-    const trackedBodyId = !focusId || focusId === "sun" ? "earth" : focusId;
-    const trackedBody = BODIES_BY_ID.get(trackedBodyId) ?? null;
-    const targetObj = scene.getObjectByName(trackedBodyId);
-
-    if (!targetObj || !trackedBody) {
-      if (layeredTargetRef.current) {
-        disableSmartSunLayer(layeredTargetRef.current);
+  const bindTrackedTarget = useCallback(
+    (target: THREE.Object3D | null) => {
+      if (targetObjectRef.current === target) {
+        return;
       }
-      layeredTargetRef.current = null;
+
+      releaseTrackedTarget();
+      if (target) {
+        targetObjectRef.current = target;
+        releaseLayerBindingRef.current = bindSmartSunLayer(
+          target,
+          trackedBodyId
+        );
+      }
+    },
+    [releaseTrackedTarget, trackedBodyId]
+  );
+
+  useEffect(() => {
+    bindTrackedTarget(
+      trackedBody ? (scene.getObjectByName(trackedBodyId) ?? null) : null
+    );
+    return releaseTrackedTarget;
+  }, [
+    bindTrackedTarget,
+    releaseTrackedTarget,
+    scene,
+    trackedBody,
+    trackedBodyId,
+  ]);
+
+  useFrame(() => {
+    if (!lightRef.current || !shadowCameraRef.current) return;
+    if (shadowExtent === null) return;
+
+    // The effect resolves this once per focus change. The fallback lookup only
+    // runs while the R3F object is not mounted (or was replaced), never during
+    // the steady-state frame loop.
+    let targetObj = targetObjectRef.current;
+    if (!targetObj || targetObj.parent === null) {
+      targetObj = scene.getObjectByName(trackedBodyId) ?? null;
+      bindTrackedTarget(targetObj);
+    }
+
+    if (!targetObj) {
       return;
     }
 
-    if (layeredTargetRef.current !== targetObj) {
-      if (layeredTargetRef.current) {
-        disableSmartSunLayer(layeredTargetRef.current);
-      }
-      layeredTargetRef.current = targetObj;
-    }
-    enableSmartSunLayerForBody(targetObj, trackedBodyId);
-
-    // 2. Calculate Positions
     const targetPos = targetPosRef.current;
     targetObj.getWorldPosition(targetPos);
-    const shadowExtent = AstroPhysics.resolveShadowExtent({
-      body: trackedBody,
-      bodies: SOLAR_SYSTEM_BODIES,
-      date: simulationClock.getNow(),
-      scaleMode,
-    });
-    const frame = resolveSmartSunLightFrame({
-      targetPosition: targetPos,
+    const frame = updateSmartSunLightFrame(
+      targetPos,
       shadowExtent,
-    });
+      frameRef.current
+    );
 
     lightRef.current.position.copy(frame.lightPosition);
 

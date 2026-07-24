@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
-import { resolveSmartSunLightFrame } from "./smartSunLightFrame";
+import {
+  resolveSmartSunLightFrame,
+  updateSmartSunLightFrame,
+} from "./smartSunLightFrame";
 
 describe("resolveSmartSunLightFrame", () => {
   it("keeps the directional light aligned with the solar direction", () => {
@@ -52,5 +55,26 @@ describe("resolveSmartSunLightFrame", () => {
 
     expect(frame.shadowBounds.right).toBeLessThan(0.1);
     expect(targetPosition.distanceTo(frame.lightPosition)).toBeCloseTo(10, 8);
+  });
+
+  it("reuses the same frame objects across a 120-frame hot-path sample", () => {
+    const targetPosition = new THREE.Vector3(300, 400, 500);
+    const output = resolveSmartSunLightFrame({
+      targetPosition,
+      shadowExtent: 40,
+    });
+    const lightPositions = new Set<THREE.Vector3>();
+    const shadowBounds = new Set<typeof output.shadowBounds>();
+
+    for (let frameIndex = 0; frameIndex < 120; frameIndex++) {
+      targetPosition.x += 0.25;
+      const result = updateSmartSunLightFrame(targetPosition, 40, output);
+      lightPositions.add(result.lightPosition);
+      shadowBounds.add(result.shadowBounds);
+    }
+
+    expect(lightPositions.size).toBe(1);
+    expect(shadowBounds.size).toBe(1);
+    expect(output.lightPosition.equals(targetPosition)).toBe(false);
   });
 });

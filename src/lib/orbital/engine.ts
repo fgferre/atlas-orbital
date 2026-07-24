@@ -79,6 +79,11 @@ export class OrbitalEngine {
    */
   registerProvider(provider: OrbitalProvider): void {
     this.providers.set(provider.id, provider);
+    // A replacement provider may return a different result for every body it
+    // supports. Registrations are rare control-plane operations, so clearing
+    // the bounded cache is safer than retaining values produced by the old
+    // implementation.
+    this.clearCache();
   }
 
   /**
@@ -104,6 +109,16 @@ export class OrbitalEngine {
     }
   ): void {
     registerKeplerBody(bodyId, elements);
+    this.clearBodyCache(bodyId);
+  }
+
+  private clearBodyCache(bodyId: string): void {
+    const prefix = `${bodyId}@`;
+    for (const cacheKey of this.positionCache.keys()) {
+      if (cacheKey.startsWith(prefix)) {
+        this.positionCache.delete(cacheKey);
+      }
+    }
   }
 
   /**
