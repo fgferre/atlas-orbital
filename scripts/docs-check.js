@@ -35,15 +35,15 @@ const REPO_ROOT = resolve(__dirname, "..");
  * Files in scope for the consistency check.
  */
 const HOT_PATH_FILES = [
+  // Product constitution + engineering rules — multi-agent authority.
+  "AGENTS.md",
   "tasks/STATUS.md",
-  "tasks/ROADMAP.md",
-  // HANDOFF.md is the fresh-conversation entry point per the
-  // 2026-05-05 stub rewrite — agent reads it before STATUS, so
-  // stale claims here directly mislead loop kickoff.
+  "tasks/ROADMAP.md", // short index only; history is archive/ROADMAP-gaia-port-era.md
+  "tasks/README.md", // map: hot vs archive — keep free of stale product claims
+  // HANDOFF.md is the fresh-conversation entry point — agent reads it
+  // before STATUS, so stale claims here directly mislead kickoff.
   "HANDOFF.md",
-  // CLAUDE.md is read by Claude Code at session start; instructions
-  // there influence agent behavior across all conversations. Stale
-  // doc-management rules can recreate the inflation L38 prevents.
+  // CLAUDE.md is read by Claude Code at session start.
   "CLAUDE.md",
 ];
 
@@ -114,7 +114,10 @@ const STALE_TERMS = [
     why: "T6.4 estimate is now ~8-13h core + ~14h M6 forward-port; the ~11-17 h band predates the M6 promotion.",
     // Wave file's own "Audit history" section legitimately quotes
     // the prior estimate as it lists what each Codex round caught.
-    except: ["tasks/waves/T6.4-visual-recovery.md"],
+    except: [
+      "tasks/waves/T6.4-visual-recovery.md",
+      "tasks/archive/waves/T6.4-visual-recovery.md",
+    ],
   },
   {
     // Positive-assertion form only. Negation contexts ("NOT
@@ -200,14 +203,23 @@ const STRUCTURAL_INVARIANTS = [
     },
   },
   {
-    name: "Active wave file exists for current Active wave",
+    name: "Active wave file exists when STATUS claims an active wave",
     check: () => {
       const status = readFileSafe("tasks/STATUS.md");
-      // Look for Active wave file pointer of form
-      // `tasks/waves/<X>.md` and verify the file exists.
-      const matches = [...status.matchAll(/tasks\/waves\/([\w.+-]+\.md)/g)];
+      // Explicit idle queue: no wave file required.
+      if (
+        /\*\*None\.\*\*/.test(status) ||
+        /No `tasks\/waves\/\*\.md` is active/i.test(status) ||
+        /## Active wave\s*\n+\s*\*\*None\.\*\*/i.test(status)
+      ) {
+        return null;
+      }
+      // Live pointers only under tasks/waves/ (not archive/waves/).
+      const matches = [
+        ...status.matchAll(/(?<!archive\/)tasks\/waves\/([\w.+-]+\.md)/g),
+      ];
       if (matches.length === 0) {
-        return "STATUS.md does not reference any Active wave file under tasks/waves/. Hot path must point to current wave.";
+        return "STATUS.md has no active wave and does not say Active wave is None. Either point to tasks/waves/<file>.md or state **None.**";
       }
       for (const m of matches) {
         const filePath = `tasks/waves/${m[1]}`;

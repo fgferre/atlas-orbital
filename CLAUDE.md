@@ -1,8 +1,13 @@
 ## Foundation & Principles
 
-- **Engineering Standards**: All code quality, security, and architectural principles are defined in **@AGENTS.md**.
-- **Precedence**: Guidelines in AGENTS.md take absolute precedence for any code modification or system interaction.
-- **Context**: Always read AGENTS.md at the start of every session to align with the project's engineering standards.
+- **Engineering + product constitution**: defined in **@AGENTS.md**
+  (fidelity, honesty, AAA wow, adaptive tiers; Gaia is **not** a product
+  rule; tests are a quality ratchet, not an implementation freeze).
+- **Precedence**: `AGENTS.md` wins over `tasks/STATUS.md`,
+  `tasks/lessons.md`, wave files, and any "match Gaia" / DIFF GATE
+  language left in historical docs.
+- **Context**: Read `AGENTS.md` at the start of every session. Use
+  `tasks/STATUS.md` for _what wave is active_, not for product law.
 
 ## Workflow Orchestration
 
@@ -32,13 +37,17 @@
   the inflation L38 prevents.
 - Consult lessons.md on-demand (referenced by ID from STATUS or
   the active wave file), not as session-start mandatory read.
+- Lessons that assume "Gaia is the decision rule" or "port 1:1 is
+  mandatory" are **historical**; apply only as optional technique
+  when useful, never as a veto on Atlas improvements.
 
 ### 4. Verification Before Done
 
 - Never mark a task complete without proving it works
 - Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
+- Ask: "Did fidelity / honesty / wow improve or hold? Did anything worsen?"
+- Run the **smallest** meaningful check (targeted tests, not a new suite)
+- Do **not** bulk-add tests "because the feature changed" — see AGENTS.md §6
 
 ### 5. Demand Elegance (Balanced)
 
@@ -53,21 +62,19 @@
 - Point at logs, errors, failing tests -- then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
+- If a test fails only because it pins old implementation / Gaia parity
+  and the change **improves** product quality, update or **delete** that
+  test — do not abandon the improvement to keep a bad pin green
 
-## Task Management (post-L38 restructure 2026-05-05)
+## Task Management
 
-1. **Hot path**: `tasks/STATUS.md` (Active wave + Carryover +
-   Loop protocol). Single source of truth for "what's next."
-2. **Active wave plan**: `tasks/waves/<wave>.md` is canonical
-   for the current wave; ROADMAP/STATUS only pointer.
-3. **Tracking progress within a session**: use the in-conversation
-   `TodoWrite` tool, NOT a `tasks/todo.md` file. The doc tree
-   layer is for cross-session canonical state, not session
-   scratchpad.
-4. **Documentation rule (L38)**: same fact lives in ONE canonical
-   place; other docs link. Update wave-file milestone status when
-   landing M; STATUS hot path only when Active wave changes or
-   new Carryover findings emerge; lessons.md only for new
-   reusable failure-mode rules.
-5. **Final gate before commit**: `npm run docs:check` (catches
-   doc drift mechanically).
+1. **Entry**: `HANDOFF.md` → `AGENTS.md` → `tasks/STATUS.md`.
+   Folder map: `tasks/README.md`. **Do not browse `tasks/archive/`.**
+2. **Hot path**: `tasks/STATUS.md` = work queue only. Constitution =
+   `AGENTS.md`.
+3. **Active wave**: only if STATUS names `tasks/waves/<file>.md`.
+   No active wave → do not invent one from archive/ROADMAP history.
+4. **Session tracking**: in-conversation todos, not a `tasks/todo.md`.
+5. **L38**: one fact, one place. lessons.md only for new failure-mode
+   rules (short). Archive holds history.
+6. **Before commit**: `npm run docs:check` if docs changed.

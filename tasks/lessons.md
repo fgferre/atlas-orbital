@@ -21,6 +21,26 @@ markers.
 
 ---
 
+## L41 — Atlas constitution supersedes Gaia-as-law
+
+**Trigger**: agent or doc says "match Gaia", "DIFF GATE required",
+"pick Gaia over Atlas opinion", or blocks cinematic/default
+changes because Gaia `config.yaml` differed.
+
+**Rule**: Gaia Sky was an early north star, not product law.
+Quality ratchet = astronomical/scientific/physical fidelity +
+honesty + AAA wow (adaptive). Implementation may change when
+quality does not worsen. `AGENTS.md` wins over STATUS/lessons/
+wave historical language.
+
+**Action**: do not re-impose Gaia parity gates; optional reference
+only. Do not spam tests that freeze old ports. See AGENTS.md
+Product constitution + §6.
+
+**Source**: product direction 2026-07-24 (multi-agent doc pass).
+
+---
+
 ## M1. Ground truth is the wired runtime, not prose
 
 Any claim about what the code / data / scene does — docstring, ROADMAP
@@ -144,15 +164,15 @@ ripple to STATUS unless Active wave changes.
 the 4-commit doc-correction cycle (`68b1d9f` → `1f20e36` →
 `0b4c648` → `3b011d5`) that this rule prevents.
 
-### L39 — Adapt Gaia's solved patterns; don't reinvent
+### L39 — Reuse solved patterns; don't reinvent (optional Gaia)
 
 **Trigger**: atlas hits a precision/scale problem at a layer
-where Gaia already has a working strategy.
+where a known strategy (Gaia, Three.js, literature) already works.
 
-**Rule**: read Gaia's source first; map atlas's problem to
-Gaia's pattern; use atlas's existing helpers OR Three.js's
-built-in equivalents; only invent new infrastructure if
-neither fits.
+**Rule**: prefer existing Atlas helpers and engine patterns first.
+External sources (including Gaia) are **optional libraries**, not
+mandatory ports (L41). Map the problem to a proven pattern; only
+invent new infrastructure if nothing fits.
 
 **Action**: for non-origin-world-position rendering, prefer
 Three.js's `modelViewMatrix * pos` (camera-relative subtract

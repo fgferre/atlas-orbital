@@ -2,6 +2,8 @@
 
 A 3D solar system visualization built with React 19, Three.js, and TypeScript. Orbital positions come from analytical theories per family (VSOP87D, Pluto-Meeus, ELP/MPP02-trunc, Kepler osculating-elements), all validated against JPL Horizons fixtures. The star field uses the HYG v4.2 catalog in adaptive tiers; an optional NASA Eyes reference renderer is bundled for visual comparison.
 
+**Agents / AI tools:** read [`AGENTS.md`](./AGENTS.md) then [`tasks/STATUS.md`](./tasks/STATUS.md). Map of task docs: [`tasks/README.md`](./tasks/README.md). Do not treat `tasks/archive/` as current backlog.
+
 ## Development
 
 ```bash
