@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { type CelestialBody } from "../../../lib/astrophysics";
-import { useDeferredTexture } from "../../../hooks/useDeferredTexture";
-import { preloadDeferredTexture } from "../../../lib/deferredTextureCache";
+import { useProgressiveDeferredTexture } from "../../../hooks/useProgressiveDeferredTexture";
 import { resolveTextureRequest } from "../../../lib/textureVariants";
 import { TEXTURE_VARIANT_MANIFEST } from "../../../lib/textureVariantManifest";
 import type { ResolvedQualityName } from "../../../lib/qualityProfile";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
+import type { CameraAssetInterest } from "../../../lib/cameraAssetInterest";
 import {
   createProceduralSurfaceTexture,
   getSurfaceFillLight,
@@ -18,33 +18,42 @@ interface UsePlanetAssetsParams {
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
   assetPriority: number;
-  baseTextureSalience: number;
   focusId: string | null;
-  screenSalience: number;
+  cameraInterest: CameraAssetInterest;
 }
+
+const MIN_TEXTURED_RADIUS_PX = 18;
 
 export function usePlanetAssets({
   body,
   qualityProfileName,
   sunRenderMode,
   assetPriority,
-  baseTextureSalience,
   focusId,
-  screenSalience,
+  cameraInterest,
 }: UsePlanetAssetsParams) {
   const directSurfaceMapEnabled =
     Boolean(body.textures?.map) &&
     shouldRenderDirectSurfaceMap(body) &&
     !(body.id === "sun" && sunRenderMode === "procedural");
-  const mapSalience = Math.max(baseTextureSalience, screenSalience);
-  const shouldPinMap =
-    assetPriority <= 1 || body.id === "sun" || focusId === body.id;
+  const isFocused = focusId === body.id;
+  const isCameraRelevant = cameraInterest.visibility !== "hidden";
+  const isVisible = cameraInterest.visibility === "visible";
+  const isLargeEnoughForTexture =
+    cameraInterest.projectedRadiusPx >= MIN_TEXTURED_RADIUS_PX;
+  const mapSalience = cameraInterest.salience;
+  const shouldPinMap = body.id === "sun" || isFocused;
   const shouldLoadMap =
-    body.id === "sun"
-      ? sunRenderMode !== "procedural"
-      : assetPriority <= 2 || mapSalience >= 0.35;
-  const shouldLoadSecondary =
-    assetPriority <= 1 || focusId === body.id || mapSalience >= 0.78;
+    (isFocused || (isCameraRelevant && isLargeEnoughForTexture)) &&
+    (body.id !== "sun" || sunRenderMode !== "procedural");
+  const shouldLoadRing =
+    isFocused || (isCameraRelevant && isLargeEnoughForTexture);
+  const shouldLoadSecondary = isVisible && mapSalience >= 0.78;
+  const primaryLoadPriority = isFocused
+    ? 0
+    : isVisible && assetPriority <= 1
+      ? 1
+      : 2;
 
   const mapRequest = useMemo(() => {
     if (!directSurfaceMapEnabled) {
@@ -120,22 +129,38 @@ export function usePlanetAssets({
     [body, mapSalience, qualityProfileName]
   );
 
-  const ringTextureLoaded = useDeferredTexture(ringRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-  });
-  const cloudTextureLoaded = useDeferredTexture(cloudRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-  });
-  const bodyTextureLoaded = useDeferredTexture(mapRequest?.selectedPath, {
-    enabled: shouldLoadMap,
-    pin: shouldPinMap,
-  });
-  const nightTextureLoaded = useDeferredTexture(nightRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-  });
+  const ringTextureLoaded = useProgressiveDeferredTexture(
+    ringRequest.selectedPath,
+    {
+      enabled: shouldLoadRing,
+      pin: shouldPinMap,
+      priority: primaryLoadPriority,
+    }
+  );
+  const cloudTextureLoaded = useProgressiveDeferredTexture(
+    cloudRequest.selectedPath,
+    {
+      enabled: shouldLoadSecondary,
+      pin: shouldPinMap,
+      priority: 3,
+    }
+  );
+  const bodyTextureLoaded = useProgressiveDeferredTexture(
+    mapRequest?.selectedPath,
+    {
+      enabled: shouldLoadMap,
+      pin: shouldPinMap,
+      priority: primaryLoadPriority,
+    }
+  );
+  const nightTextureLoaded = useProgressiveDeferredTexture(
+    nightRequest.selectedPath,
+    {
+      enabled: shouldLoadSecondary,
+      pin: shouldPinMap,
+      priority: 3,
+    }
+  );
   // Normal + roughness share the "secondary" gating because they only matter
   // at close range. They need NoColorSpace so the GPU samples them linearly —
   // sRGB decoding would corrupt the tangent-space normals and mis-scale roughness.
@@ -156,27 +181,24 @@ export function usePlanetAssets({
   //      byte/255 directly as the roughness scalar — CORRECT.
   //      `SRGBColorSpace` would apply a `pow(x/255, 2.2)` decode,
   //      understating roughness on rough-surface bands by up to ~4×.
-  const normalTextureLoaded = useDeferredTexture(normalRequest.selectedPath, {
-    enabled: shouldLoadSecondary,
-    pin: shouldPinMap,
-    colorSpace: THREE.NoColorSpace,
-  });
-  const roughnessTextureLoaded = useDeferredTexture(
+  const normalTextureLoaded = useProgressiveDeferredTexture(
+    normalRequest.selectedPath,
+    {
+      enabled: shouldLoadSecondary,
+      pin: shouldPinMap,
+      priority: 3,
+      colorSpace: THREE.NoColorSpace,
+    }
+  );
+  const roughnessTextureLoaded = useProgressiveDeferredTexture(
     roughnessRequest.selectedPath,
     {
       enabled: shouldLoadSecondary,
       pin: shouldPinMap,
+      priority: 3,
       colorSpace: THREE.NoColorSpace,
     }
   );
-
-  useEffect(() => {
-    if (assetPriority !== 1 || !mapRequest?.selectedPath) {
-      return;
-    }
-
-    void preloadDeferredTexture(mapRequest.selectedPath);
-  }, [assetPriority, mapRequest?.selectedPath]);
 
   const textureRing = ringTextureLoaded.texture ?? undefined;
   const textureClouds = cloudTextureLoaded.texture ?? undefined;

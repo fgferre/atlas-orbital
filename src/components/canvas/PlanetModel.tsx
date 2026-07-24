@@ -4,7 +4,7 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
-import { useDeferredTexture } from "../../hooks/useDeferredTexture";
+import { useProgressiveDeferredTexture } from "../../hooks/useProgressiveDeferredTexture";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { simulationClock } from "../../lib/simulationClock";
@@ -13,6 +13,7 @@ import { useStore } from "../../store";
 import {
   applyDepthSettings,
   cloneGlbSceneForRuntime,
+  disposeLoadedObject3D,
   disposeObject3D,
   normalizeToUnitSphereScale,
   prepareObjMeshGeometry,
@@ -32,8 +33,55 @@ interface PlanetModelProps {
   ringShadowIntensity?: number;
   qualityProfileName: ResolvedQualityName;
   assetPriority: number;
-  baseTextureSalience: number;
+  textureSalience: number;
 }
+
+const GLB_SOURCE_IDLE_EVICTION_MS = 10_000;
+const glbSourceUsage = new Map<
+  string,
+  {
+    refs: number;
+    scene: THREE.Object3D;
+    timer: ReturnType<typeof setTimeout> | null;
+  }
+>();
+
+const retainGlbSource = (path: string, scene: THREE.Object3D) => {
+  const current = glbSourceUsage.get(path);
+  if (current) {
+    current.refs += 1;
+    if (current.timer) {
+      clearTimeout(current.timer);
+      current.timer = null;
+    }
+    return;
+  }
+
+  glbSourceUsage.set(path, { refs: 1, scene, timer: null });
+};
+
+const releaseGlbSource = (path: string, scene: THREE.Object3D) => {
+  const current = glbSourceUsage.get(path);
+  if (!current || current.scene !== scene) {
+    return;
+  }
+
+  current.refs = Math.max(0, current.refs - 1);
+  if (current.refs > 0 || current.timer) {
+    return;
+  }
+
+  current.timer = setTimeout(() => {
+    const latest = glbSourceUsage.get(path);
+    if (!latest || latest !== current || latest.refs > 0) {
+      return;
+    }
+
+    disposeLoadedObject3D(latest.scene);
+    useGLTF.clear(path);
+    glbSourceUsage.delete(path);
+  }, GLB_SOURCE_IDLE_EVICTION_MS);
+};
 
 // Sub-component for GLB models
 const GLBModel = ({
@@ -68,6 +116,11 @@ const GLBModel = ({
   );
 
   useEffect(() => {
+    retainGlbSource(path, scene);
+    return () => releaseGlbSource(path, scene);
+  }, [path, scene]);
+
+  useEffect(() => {
     return () => {
       disposeObject3D(cloned);
     };
@@ -99,11 +152,12 @@ const OBJModel = ({
   assetPriority: number;
 }) => {
   const obj = useLoader(OBJLoader, path);
-  const directTexture = useDeferredTexture(
+  const directTexture = useProgressiveDeferredTexture(
     texturePath && shouldRenderDirectSurfaceMap(body) ? texturePath : null,
     {
       enabled: true,
-      pin: assetPriority <= 1,
+      pin: assetPriority === 0,
+      priority: assetPriority === 0 ? 0 : 1,
     }
   ).texture;
   const proceduralTexture = useMemo(() => {
@@ -168,7 +222,7 @@ export const PlanetModel = ({
   metalness,
   qualityProfileName,
   assetPriority,
-  baseTextureSalience,
+  textureSalience,
 }: PlanetModelProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
@@ -184,10 +238,10 @@ export const PlanetModel = ({
         body,
         "map",
         qualityProfileName,
-        baseTextureSalience,
+        textureSalience,
         TEXTURE_VARIANT_MANIFEST
       ),
-    [body, baseTextureSalience, qualityProfileName]
+    [body, qualityProfileName, textureSalience]
   );
 
   useFrame(() => {

@@ -70,6 +70,50 @@ export const disposeObject3D = (object: THREE.Object3D): void => {
 };
 
 /**
+ * Disposes loader-owned geometry, materials, and texture maps.
+ *
+ * Unlike `disposeObject3D`, this must only be used after the loader cache has
+ * no consumers. Runtime clones deliberately share immutable texture objects
+ * with the cached GLB source, so those maps are released once, at source-cache
+ * eviction, rather than every time an instance unmounts.
+ */
+export const disposeLoadedObject3D = (object: THREE.Object3D): void => {
+  const textures = new Set<THREE.Texture>();
+
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+
+    for (const material of materials) {
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) {
+          textures.add(value);
+        }
+      }
+
+      if (material instanceof THREE.ShaderMaterial) {
+        for (const uniform of Object.values(material.uniforms)) {
+          if (uniform?.value instanceof THREE.Texture) {
+            textures.add(uniform.value);
+          }
+        }
+      }
+    }
+  });
+
+  disposeObject3D(object);
+  for (const texture of textures) {
+    const image = texture.source?.data;
+    texture.dispose();
+    if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
+      image.close();
+    }
+  }
+};
+
+/**
  * Return the scalar that normalises `object`'s bounding box to a
  * unit sphere (diameter 2). Zero-volume objects map to `1` — the
  * callers that use this to set `<primitive scale={…}>` would render

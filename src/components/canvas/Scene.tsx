@@ -836,21 +836,29 @@ export const Scene = () => {
       */}
       {contextLost && (
         <AppCrashCard
+          title="3D view stopped"
+          description="The interface is still available, but the browser stopped the 3D graphics context."
           error={
             new Error(
-              "The 3D graphics context was lost — most often the GPU ran out of memory during load. The interface is still running, but the 3D view can't continue. Reload to retry; if it keeps happening, close other GPU-heavy tabs or lower the graphics quality."
+              "The browser reported a lost WebGL context. GPU memory pressure is one possible cause. Reload the 3D view; if it keeps happening, lower the graphics quality or close other GPU-heavy tabs."
             )
           }
+          retryLabel="Reload 3D view"
+          showReload={false}
           reset={() => window.location.reload()}
         />
       )}
       {bootTimedOut && !contextLost && (
         <AppCrashCard
+          title="3D view did not start"
+          description="The interface loaded, but the 3D scene did not become ready in time."
           error={
             new Error(
               `The 3D scene did not finish loading within ${SCENE_BOOT_WATCHDOG_MS / 1000}s. WebGL is available, so the renderer likely stalled or lost its context. Reload to retry; if it keeps happening, check the browser console and your graphics drivers.`
             )
           }
+          retryLabel="Reload"
+          showReload={false}
           reset={() => window.location.reload()}
         />
       )}

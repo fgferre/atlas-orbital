@@ -20,6 +20,8 @@ interface DeferredTextureEntry extends DeferredTextureSnapshot {
   lastUsedAt: number;
   evictionTimer: number | null;
   colorSpace: THREE.ColorSpace;
+  queued: boolean;
+  loadPriority: number;
 }
 
 export interface DeferredTextureEvictionCandidate {
@@ -41,8 +43,14 @@ const EMPTY_SNAPSHOT: DeferredTextureSnapshot = {
 };
 const emptySnapshotsByUrl = new Map<string, DeferredTextureSnapshot>();
 const IDLE_EVICTION_MS = 20_000;
+const MAX_CONCURRENT_TEXTURE_LOADS = 4;
+const LOWEST_LOAD_PRIORITY = 3;
+const MIPMAP_BYTE_FACTOR = 4 / 3;
+const loadQueue: DeferredTextureEntry[] = [];
 
-let textureBudgetBytes: number | null = null;
+let textureBudgetBytes = 64 * 1024 * 1024;
+let activeLoadCount = 0;
+let budgetEvictionScheduled = false;
 
 const notifyEntry = (entry: DeferredTextureEntry) => {
   entry.listeners.forEach((listener) => listener());
@@ -94,12 +102,29 @@ const inferTextureEdge = (url: string) => {
 
 export const estimateTextureByteSize = (url: string) => {
   const edge = inferTextureEdge(url);
-  return edge * edge * 4;
+  return estimateTextureByteSizeFromDimensions(edge, edge);
+};
+
+export const estimateTextureByteSizeFromDimensions = (
+  width: number,
+  height: number,
+  generateMipmaps = true
+) => {
+  const baseBytes = Math.max(0, width) * Math.max(0, height) * 4;
+  return Math.ceil(baseBytes * (generateMipmaps ? MIPMAP_BYTE_FACTOR : 1));
 };
 
 export const resolveDeferredTextureBudget = (
   profileName: ResolvedQualityName
 ) => {
+  if (profileName === "ultra") {
+    return 512 * 1024 * 1024;
+  }
+
+  if (profileName === "high") {
+    return 256 * 1024 * 1024;
+  }
+
   if (profileName === "balanced") {
     return 64 * 1024 * 1024;
   }
@@ -108,7 +133,7 @@ export const resolveDeferredTextureBudget = (
     return 32 * 1024 * 1024;
   }
 
-  return null;
+  return 32 * 1024 * 1024;
 };
 
 export const selectEvictionVictims = (
@@ -147,7 +172,12 @@ export const selectEvictionVictims = (
 };
 
 const disposeEntryTexture = (entry: DeferredTextureEntry) => {
-  entry.texture?.dispose();
+  const texture = entry.texture;
+  const image = texture?.source?.data;
+  texture?.dispose();
+  if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
+    image.close();
+  }
   entry.texture = null;
   entry.status = "idle";
   entry.error = null;
@@ -193,8 +223,20 @@ const evictToBudget = () => {
   });
 };
 
+const scheduleBudgetEviction = () => {
+  if (budgetEvictionScheduled) {
+    return;
+  }
+
+  budgetEvictionScheduled = true;
+  queueMicrotask(() => {
+    budgetEvictionScheduled = false;
+    evictToBudget();
+  });
+};
+
 const scheduleIdleEviction = (entry: DeferredTextureEntry) => {
-  if (textureBudgetBytes == null || typeof window === "undefined") {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -208,6 +250,9 @@ const scheduleIdleEviction = (entry: DeferredTextureEntry) => {
 const ensureEntry = (url: string, colorSpace?: THREE.ColorSpace) => {
   let entry = entries.get(url);
   if (entry) {
+    if (colorSpace && entry.status === "idle") {
+      entry.colorSpace = colorSpace;
+    }
     return entry;
   }
 
@@ -225,53 +270,136 @@ const ensureEntry = (url: string, colorSpace?: THREE.ColorSpace) => {
     lastUsedAt: getNow(),
     evictionTimer: null,
     colorSpace: colorSpace ?? THREE.SRGBColorSpace,
+    queued: false,
+    loadPriority: LOWEST_LOAD_PRIORITY,
   };
   syncEntrySnapshot(entry);
   entries.set(url, entry);
   return entry;
 };
 
-const startLoad = (entry: DeferredTextureEntry) => {
+const removeQueuedEntry = (entry: DeferredTextureEntry) => {
+  const queueIndex = loadQueue.indexOf(entry);
+  if (queueIndex >= 0) {
+    loadQueue.splice(queueIndex, 1);
+  }
+  entry.queued = false;
+};
+
+const updateLoadedTextureEstimate = (
+  entry: DeferredTextureEntry,
+  texture: THREE.Texture
+) => {
+  const image = texture.source?.data as
+    | {
+        width?: number;
+        height?: number;
+        naturalWidth?: number;
+        naturalHeight?: number;
+      }
+    | undefined;
+  const width = image?.naturalWidth ?? image?.width;
+  const height = image?.naturalHeight ?? image?.height;
+
+  if (
+    typeof width === "number" &&
+    Number.isFinite(width) &&
+    typeof height === "number" &&
+    Number.isFinite(height)
+  ) {
+    entry.estimatedBytes = estimateTextureByteSizeFromDimensions(
+      width,
+      height,
+      texture.generateMipmaps
+    );
+  }
+};
+
+const pumpLoadQueue = () => {
+  loadQueue.sort(
+    (left, right) =>
+      left.loadPriority - right.loadPriority ||
+      left.lastUsedAt - right.lastUsedAt
+  );
+
+  while (
+    activeLoadCount < MAX_CONCURRENT_TEXTURE_LOADS &&
+    loadQueue.length > 0
+  ) {
+    const entry = loadQueue.shift()!;
+    if (!entry.queued || entry.refCount === 0 || entry.status !== "loading") {
+      entry.queued = false;
+      continue;
+    }
+
+    entry.queued = false;
+    activeLoadCount += 1;
+    const loaded = loader.loadAsync(entry.url!);
+    entry.promise = loaded;
+
+    void loaded
+      .then((texture) => {
+        texture.colorSpace = entry.colorSpace;
+        texture.needsUpdate = true;
+        updateLoadedTextureEstimate(entry, texture);
+        entry.texture = texture;
+        entry.status = "ready";
+        entry.error = null;
+        entry.lastUsedAt = getNow();
+        syncEntrySnapshot(entry);
+        notifyEntry(entry);
+
+        if (entry.refCount === 0 && entry.pinCount === 0) {
+          // The request became irrelevant while the browser was decoding it.
+          // It was never displayed, so there is no navigation benefit in
+          // retaining it for the normal post-display grace period.
+          evictEntryIfPossible(entry);
+          return;
+        }
+        evictToBudget();
+      })
+      .catch((error: unknown) => {
+        entry.texture = null;
+        entry.status = "error";
+        entry.error = error instanceof Error ? error.message : "Failed to load";
+        syncEntrySnapshot(entry);
+        notifyEntry(entry);
+      })
+      .finally(() => {
+        if (entry.promise === loaded) {
+          entry.promise = null;
+        }
+        activeLoadCount = Math.max(0, activeLoadCount - 1);
+        pumpLoadQueue();
+      });
+  }
+};
+
+const startLoad = (entry: DeferredTextureEntry, priority: number) => {
+  entry.loadPriority = Math.min(
+    entry.loadPriority,
+    THREE.MathUtils.clamp(Math.round(priority), 0, LOWEST_LOAD_PRIORITY)
+  );
+
   if (entry.promise || entry.status === "ready") {
+    return;
+  }
+
+  if (entry.queued) {
+    pumpLoadQueue();
     return;
   }
 
   entry.status = "loading";
   entry.error = null;
+  entry.queued = true;
+  loadQueue.push(entry);
   syncEntrySnapshot(entry);
   notifyEntry(entry);
-
-  const loaded = loader.loadAsync(entry.url!).then((texture) => {
-    texture.colorSpace = entry.colorSpace;
-    texture.needsUpdate = true;
-    entry.texture = texture;
-    entry.status = "ready";
-    entry.promise = null;
-    entry.lastUsedAt = getNow();
-    syncEntrySnapshot(entry);
-    notifyEntry(entry);
-    evictToBudget();
-    return texture;
-  });
-  entry.promise = loaded;
-  // Handle load failure on a SIDE consumer (not chained into
-  // entry.promise, so its Promise<Texture> type is preserved). This
-  // both records the error state AND registers a rejection handler on
-  // `loaded`, so a failed fetch/404/decode no longer surfaces as an
-  // unhandled promise rejection — the previous re-throw did, because
-  // the acquire/preload call sites never await entry.promise. Consumers
-  // read the failure via entry.status / the snapshot+listener channel.
-  void loaded.catch((error: unknown) => {
-    entry.texture = null;
-    entry.status = "error";
-    entry.error = error instanceof Error ? error.message : "Failed to load";
-    entry.promise = null;
-    syncEntrySnapshot(entry);
-    notifyEntry(entry);
-  });
+  pumpLoadQueue();
 };
 
-export const setDeferredTextureBudget = (budgetBytes: number | null) => {
+export const setDeferredTextureBudget = (budgetBytes: number) => {
   textureBudgetBytes = budgetBytes;
   evictToBudget();
 };
@@ -309,7 +437,11 @@ export const subscribeToDeferredTexture = (
 
 export const acquireDeferredTexture = (
   url: string,
-  options?: { pin?: boolean; colorSpace?: THREE.ColorSpace }
+  options?: {
+    pin?: boolean;
+    colorSpace?: THREE.ColorSpace;
+    priority?: number;
+  }
 ) => {
   const entry = ensureEntry(url, options?.colorSpace);
   entry.refCount += 1;
@@ -318,7 +450,7 @@ export const acquireDeferredTexture = (
   }
   entry.lastUsedAt = getNow();
   clearEntryEvictionTimer(entry);
-  startLoad(entry);
+  startLoad(entry, options?.priority ?? LOWEST_LOAD_PRIORITY);
 };
 
 export const releaseDeferredTexture = (
@@ -337,29 +469,42 @@ export const releaseDeferredTexture = (
   entry.lastUsedAt = getNow();
 
   if (entry.refCount === 0) {
+    if (entry.queued && entry.pinCount === 0) {
+      removeQueuedEntry(entry);
+      entry.status = "idle";
+      entry.error = null;
+      entry.loadPriority = LOWEST_LOAD_PRIORITY;
+      syncEntrySnapshot(entry);
+      notifyEntry(entry);
+      pumpLoadQueue();
+      return;
+    }
+
     scheduleIdleEviction(entry);
-    evictToBudget();
+    scheduleBudgetEviction();
   }
 };
 
-export const preloadDeferredTexture = (
-  url: string,
-  options?: { pin?: boolean; colorSpace?: THREE.ColorSpace }
-) => {
-  const entry = ensureEntry(url, options?.colorSpace);
-  if (options?.pin) {
-    entry.pinCount += 1;
-  }
-  startLoad(entry);
-  return entry.promise ?? Promise.resolve(entry.texture);
+export const getDeferredTextureCacheStatsForTests = () => {
+  return {
+    activeLoadCount,
+    queuedLoadCount: loadQueue.filter((entry) => entry.queued).length,
+    readyBytes: [...entries.values()]
+      .filter((entry) => entry.status === "ready")
+      .reduce((sum, entry) => sum + entry.estimatedBytes, 0),
+  };
 };
 
 export const resetDeferredTextureCacheForTests = () => {
+  loadQueue.splice(0, loadQueue.length);
   entries.forEach((entry) => {
+    entry.queued = false;
     clearEntryEvictionTimer(entry);
     disposeEntryTexture(entry);
   });
   entries.clear();
   emptySnapshotsByUrl.clear();
-  textureBudgetBytes = null;
+  textureBudgetBytes = 64 * 1024 * 1024;
+  activeLoadCount = 0;
+  budgetEvictionScheduled = false;
 };

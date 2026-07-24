@@ -18,6 +18,12 @@ test.describe("boot", () => {
   // (R3F scene init, shader compiles), pushing total loader-gone
   // to ~40 s ± 10 s variance. 55 s toHaveCount timeout absorbs
   // this variance with 15 s headroom.
+  //
+  // N-9 follow-up (2026-07-23): the previously committed snapshot was a
+  // white/grey WebGL-failure frame with only the HTML UI and SUN label. It was
+  // replaced only after visually inspecting a populated starfield produced by
+  // the camera-driven streaming build. This gate must never be updated from a
+  // failing or blank render merely to make the pixel assertion green.
   test.setTimeout(100_000);
 
   test("mounts a sized canvas and logs no console errors within 15s", async ({

@@ -11,6 +11,10 @@ interface AppCrashCardProps {
    * while only the UI chrome is down.
    */
   fullScreen?: boolean;
+  title?: string;
+  description?: string;
+  retryLabel?: string;
+  showReload?: boolean;
 }
 
 /**
@@ -33,6 +37,10 @@ export function AppCrashCard({
   error,
   reset,
   fullScreen = false,
+  title = "Something went wrong",
+  description,
+  retryLabel = "Try again",
+  showReload = true,
 }: AppCrashCardProps): ReactNode {
   return (
     <div
@@ -44,13 +52,12 @@ export function AppCrashCard({
       }
     >
       <div className="pointer-events-auto w-full max-w-md rounded-xl border border-nasa-accent/30 bg-[#0a0e17]/95 p-6 text-center shadow-2xl backdrop-blur">
-        <h2 className="text-lg font-light tracking-wide text-white">
-          Something went wrong
-        </h2>
+        <h2 className="text-lg font-light tracking-wide text-white">{title}</h2>
         <p className="mt-2 text-sm text-white/60">
-          {fullScreen
-            ? "The app hit an unexpected error and couldn't continue."
-            : "Part of the interface crashed. The 3D view is still running."}
+          {description ??
+            (fullScreen
+              ? "The app hit an unexpected error and couldn't continue."
+              : "Part of the interface crashed. The 3D view is still running.")}
         </p>
         {error?.message ? (
           <p className="mt-3 break-words rounded border border-white/10 bg-black/40 px-3 py-2 text-left font-mono text-xs text-white/40">
@@ -63,15 +70,17 @@ export function AppCrashCard({
             onClick={reset}
             className="rounded-md border border-nasa-accent/40 px-4 py-2 text-sm text-nasa-accent transition hover:bg-nasa-accent/10"
           >
-            Try again
+            {retryLabel}
           </button>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-nasa-accent/90 px-4 py-2 text-sm font-medium text-black transition hover:bg-nasa-accent"
-          >
-            Reload
-          </button>
+          {showReload && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-nasa-accent/90 px-4 py-2 text-sm font-medium text-black transition hover:bg-nasa-accent"
+            >
+              Reload
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import * as THREE from "three";
 import {
   applyDepthSettings,
   cloneGlbSceneForRuntime,
+  disposeLoadedObject3D,
   disposeObject3D,
   normalizeToUnitSphereScale,
   prepareObjMeshGeometry,
@@ -60,6 +61,22 @@ describe("disposeObject3D", () => {
     const group = new THREE.Group();
     group.add(new THREE.Object3D());
     expect(() => disposeObject3D(group)).not.toThrow();
+  });
+});
+
+describe("disposeLoadedObject3D", () => {
+  it("disposes shared loader textures once alongside geometry and material", () => {
+    const texture = new THREE.Texture();
+    const textureDispose = vi.spyOn(texture, "dispose");
+    const materialA = new THREE.MeshStandardMaterial({ map: texture });
+    const materialB = new THREE.MeshStandardMaterial({ normalMap: texture });
+    const root = new THREE.Group();
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(), materialA));
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(), materialB));
+
+    disposeLoadedObject3D(root);
+
+    expect(textureDispose).toHaveBeenCalledOnce();
   });
 });
 

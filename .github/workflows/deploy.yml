@@ -38,12 +38,6 @@ jobs:
       # gate aborts the job with nothing published — the previously deployed
       # Pages version stays live.
       #
-      # E2E (`npm run test:e2e`) is deliberately NOT part of this gate:
-      # `e2e/boot.spec.ts` ("boot visual identity (frozen sim)") currently
-      # fails because the `atlas-loader` overlay is still mounted after the
-      # 55 s ceiling, for reasons unrelated to CI. Add the step here once
-      # that spec passes locally on `main` and a Playwright browser-install
-      # step (`npx playwright install --with-deps chromium`) is wired in.
       - name: Lint
         run: npm run lint
 
@@ -60,6 +54,16 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # The suite includes real WebGL/SwiftShader boot, focus, accessibility,
+      # CSP, responsive, and pixel-regression coverage. Keep one worker: GPU
+      # browser contexts are the constrained resource on hosted runners, and
+      # parallelizing these twelve scenarios makes the gate less reliable.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser E2E
+        run: npm run test:e2e -- --workers=1
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

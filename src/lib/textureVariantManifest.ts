@@ -174,24 +174,10 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
       },
     },
   },
-  haumea: {
-    map: {
-      variants: {
-        "2k": `${TEXTURE_PATH}2k_haumea.jpg`,
-      },
-    },
-  },
   makemake: {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_makemake.jpg`,
-      },
-    },
-  },
-  gonggong: {
-    map: {
-      variants: {
-        "2k": `${TEXTURE_PATH}2k_gonggong.jpg`,
       },
     },
   },

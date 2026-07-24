@@ -9,9 +9,14 @@ import {
 
 const EMPTY_DEPENDENCIES = Object.freeze([]);
 
-interface UseDeferredTextureOptions {
+export interface UseDeferredTextureOptions {
   enabled?: boolean;
   pin?: boolean;
+  /**
+   * Lower values enter the shared load queue first. Focused surfaces use 0,
+   * visible primary maps 1, prefetch 2, and close-range secondary maps 3.
+   */
+  priority?: number;
   dependencies?: ReadonlyArray<unknown>;
   /**
    * Colour space to apply when the texture finishes loading. Defaults to
@@ -29,6 +34,7 @@ export const useDeferredTexture = (
   const {
     enabled = true,
     pin = false,
+    priority = 3,
     dependencies = EMPTY_DEPENDENCIES,
     colorSpace,
   } = options;
@@ -39,7 +45,7 @@ export const useDeferredTexture = (
         return () => {};
       }
 
-      acquireDeferredTexture(url, { pin, colorSpace });
+      acquireDeferredTexture(url, { pin, colorSpace, priority });
       const unsubscribe = subscribeToDeferredTexture(url, notify);
 
       return () => {
@@ -47,9 +53,12 @@ export const useDeferredTexture = (
         releaseDeferredTexture(url, { pin });
       };
     },
-    [isActive, pin, url, colorSpace]
+    [isActive, pin, priority, url, colorSpace]
   );
-  const getSnapshot = useCallback(() => getDeferredTextureSnapshot(url), [url]);
+  const getSnapshot = useCallback(
+    () => getDeferredTextureSnapshot(isActive ? url : null),
+    [isActive, url]
+  );
 
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 

@@ -26,6 +26,15 @@ import { createProceduralSurfaceTexture } from "../../utils/proceduralSurface";
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import type { ResolvedSunRenderMode } from "../../lib/sunRenderMode";
 import type { Line2 } from "three-stdlib";
+import {
+  CAMERA_ASSET_INTEREST_DEMOTION_MS,
+  CAMERA_ASSET_INTEREST_SAMPLE_MS,
+  HIDDEN_CAMERA_ASSET_INTEREST,
+  cameraAssetInterestEquals,
+  isCameraAssetInterestPromotion,
+  resolveCameraAssetInterest,
+  type CameraAssetInterest,
+} from "../../lib/cameraAssetInterest";
 
 import {
   PROGRADE_ARROW_BASE_WIDTH,
@@ -60,6 +69,7 @@ const MAX_ORBIT_CACHE_ENTRIES = 256;
 // the same scratch (e.g. `getWorldPosition(TMP_WORLD_POS)` before
 // reading, `.set(0,0,0).applyMatrix4(...)` before consuming, etc.).
 const TMP_WORLD_POS = new THREE.Vector3();
+const TMP_ASSET_WORLD_POS = new THREE.Vector3();
 const TMP_RING_INV_MATRIX = new THREE.Matrix4();
 const TMP_RING_SUN_LOCAL = new THREE.Vector3();
 const TMP_PLANET_INV_MATRIX = new THREE.Matrix4();
@@ -124,7 +134,7 @@ const PlanetVisual = ({
   qualityProfileName,
   sunRenderMode,
   assetPriority,
-  baseTextureSalience,
+  cameraInterest,
 }: {
   body: CelestialBody;
   roughness: number;
@@ -137,7 +147,7 @@ const PlanetVisual = ({
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
   assetPriority: number;
-  baseTextureSalience: number;
+  cameraInterest: CameraAssetInterest;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
@@ -145,8 +155,6 @@ const PlanetVisual = ({
   const selectId = useStore((state) => state.selectId);
   const focusId = useStore((state) => state.focusId);
   const scaleMode = useStore((state) => state.scaleMode);
-  const [screenSalience, setScreenSalience] = useState(baseTextureSalience);
-  const screenSalienceRef = useRef(baseTextureSalience);
 
   const {
     textureRing,
@@ -161,9 +169,8 @@ const PlanetVisual = ({
     qualityProfileName,
     sunRenderMode,
     assetPriority,
-    baseTextureSalience,
     focusId,
-    screenSalience,
+    cameraInterest,
   });
 
   const orientationQuaternion = useMemo(
@@ -212,7 +219,7 @@ const PlanetVisual = ({
 
   const ringRef = useRef<THREE.Mesh>(null);
 
-  useFrame(({ camera, size, scene }) => {
+  useFrame(({ camera, scene }) => {
     if (!groupRef.current) return;
 
     // 1. Scaling
@@ -221,27 +228,6 @@ const PlanetVisual = ({
       scaleMode,
     });
     groupRef.current.scale.set(semanticRadius, semanticRadius, semanticRadius);
-
-    if (camera instanceof THREE.PerspectiveCamera) {
-      const worldPos = TMP_WORLD_POS;
-      groupRef.current.getWorldPosition(worldPos);
-      const distance = camera.position.distanceTo(worldPos);
-      const fovVertRad = THREE.MathUtils.degToRad(camera.fov);
-      const worldPerPixel =
-        (2 * distance * Math.tan(fovVertRad / 2)) / Math.max(1, size.height);
-      const radiusPx = semanticRadius / Math.max(worldPerPixel, 1e-6);
-
-      let nextScreenSalience = 0.12;
-      if (radiusPx >= 140) nextScreenSalience = 1;
-      else if (radiusPx >= 84) nextScreenSalience = 0.82;
-      else if (radiusPx >= 42) nextScreenSalience = 0.62;
-      else if (radiusPx >= 18) nextScreenSalience = 0.38;
-
-      if (Math.abs(nextScreenSalience - screenSalienceRef.current) > 0.04) {
-        screenSalienceRef.current = nextScreenSalience;
-        setScreenSalience(nextScreenSalience);
-      }
-    }
 
     // 2. Rotation & Shader Uniforms
     if (rotationRef.current) {
@@ -342,10 +328,7 @@ const PlanetVisual = ({
         atmoUniforms.v3LightPos.value.copy(TMP_ATMO_SUN_LOCAL).normalize();
 
         // fCameraHeight in the same local frame. Scalar uniforms require
-        // direct assignment (no `.copy()` path for floats); atlas
-        // convention for this is the per-line eslint-disable below —
-        // mirrors the block-level disable at Starfield.tsx:499-523.
-        // eslint-disable-next-line react-hooks/immutability -- scalar uniform update is the intended per-frame Three.js pattern
+        // direct assignment (no `.copy()` path for floats).
         atmoUniforms.fCameraHeight.value = TMP_ATMO_CAMERA_LOCAL.length();
 
         // T5.1 — dynamic scattering uniforms. Gaia writes fKrESun,
@@ -540,7 +523,7 @@ const PlanetVisualWrapper = (props: {
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
   assetPriority: number;
-  baseTextureSalience: number;
+  cameraInterest: CameraAssetInterest;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -585,7 +568,9 @@ const PlanetVisualWrapper = (props: {
   // Check for 3D Model first
   if (props.body.model) {
     const shouldLoadModel =
-      props.assetPriority <= 1 || props.baseTextureSalience >= 0.82;
+      props.assetPriority === 0 ||
+      (props.cameraInterest.visibility === "visible" &&
+        props.cameraInterest.salience >= 0.38);
 
     if (!shouldLoadModel) {
       return fallback;
@@ -603,7 +588,7 @@ const PlanetVisualWrapper = (props: {
             ringShadowIntensity={props.ringShadowIntensity}
             qualityProfileName={props.qualityProfileName}
             assetPriority={props.assetPriority}
-            baseTextureSalience={props.baseTextureSalience}
+            textureSalience={props.cameraInterest.salience}
           />
         </Suspense>
       </ErrorBoundary>
@@ -635,6 +620,15 @@ export const Planet = ({
   const groupRef = useRef<THREE.Group>(null);
   const orbitLineRef = useRef<Line2 | null>(null);
   const progradeRef = useRef<THREE.Group>(null);
+  const [cameraInterest, setCameraInterest] = useState<CameraAssetInterest>(
+    HIDDEN_CAMERA_ASSET_INTEREST
+  );
+  const cameraInterestRef = useRef(cameraInterest);
+  const lastInterestSampleAtRef = useRef(Number.NEGATIVE_INFINITY);
+  const pendingInterestRef = useRef<{
+    interest: CameraAssetInterest;
+    since: number;
+  } | null>(null);
 
   const orientationQuaternion = useMemo(
     () => computePoleOrientationQuaternion(body),
@@ -694,8 +688,11 @@ export const Planet = ({
     return { main, halo };
   }, [body.color, vectorIntensity]);
 
-  const { orbitSalience, assetPriority, baseTextureSalience } =
-    useOrbitalSalience(body, focusId, declutterOrbits);
+  const { orbitSalience, assetPriority } = useOrbitalSalience(
+    body,
+    focusId,
+    declutterOrbits
+  );
 
   const parentBody = useMemo(
     () => (body.parentId ? (BODIES_BY_ID.get(body.parentId) ?? null) : null),
@@ -781,6 +778,64 @@ export const Planet = ({
       scaleMode,
     });
     groupRef.current.position.copy(pos);
+
+    // Asset streaming is camera-driven, not render-tree-driven. Three may
+    // frustum-cull a mesh, but that does not stop React hooks from fetching its
+    // textures. Sample at a controlled cadence, promote immediately, and delay
+    // demotion briefly so a body near the viewport edge does not thrash tiers.
+    const nowMs = state.clock.elapsedTime * 1_000;
+    if (
+      camera instanceof THREE.PerspectiveCamera &&
+      nowMs - lastInterestSampleAtRef.current >= CAMERA_ASSET_INTEREST_SAMPLE_MS
+    ) {
+      lastInterestSampleAtRef.current = nowMs;
+      groupRef.current.getWorldPosition(TMP_ASSET_WORLD_POS);
+
+      let visualRadius = AstroPhysics.resolveSemanticBodyRadius({
+        body,
+        scaleMode,
+      });
+      if (body.model?.scale) {
+        visualRadius *= body.model.scale;
+      }
+      const shapeScale = body.shapeScale ? Math.max(...body.shapeScale) : 1;
+      visualRadius *= shapeScale;
+
+      const nextInterest = resolveCameraAssetInterest({
+        camera,
+        viewportWidth: size.width,
+        viewportHeight: size.height,
+        worldPosition: TMP_ASSET_WORLD_POS,
+        worldRadius: visualRadius,
+        focused: body.id === focusId,
+      });
+      const currentInterest = cameraInterestRef.current;
+
+      if (cameraAssetInterestEquals(currentInterest, nextInterest)) {
+        pendingInterestRef.current = null;
+      } else if (
+        isCameraAssetInterestPromotion(currentInterest, nextInterest)
+      ) {
+        pendingInterestRef.current = null;
+        cameraInterestRef.current = nextInterest;
+        setCameraInterest(nextInterest);
+      } else {
+        const pending = pendingInterestRef.current;
+        if (
+          !pending ||
+          !cameraAssetInterestEquals(pending.interest, nextInterest)
+        ) {
+          pendingInterestRef.current = {
+            interest: nextInterest,
+            since: nowMs,
+          };
+        } else if (nowMs - pending.since >= CAMERA_ASSET_INTEREST_DEMOTION_MS) {
+          pendingInterestRef.current = null;
+          cameraInterestRef.current = nextInterest;
+          setCameraInterest(nextInterest);
+        }
+      }
+    }
 
     // 2. Adaptive fade for ALL bodies based on camera distance (both modes)
     if (orbitLineRef.current) {
@@ -969,7 +1024,7 @@ export const Planet = ({
           qualityProfileName={qualityProfileName}
           sunRenderMode={sunRenderMode}
           assetPriority={assetPriority}
-          baseTextureSalience={baseTextureSalience}
+          cameraInterest={cameraInterest}
         />
 
         {/*
