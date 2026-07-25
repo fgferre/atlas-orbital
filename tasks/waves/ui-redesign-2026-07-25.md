@@ -91,7 +91,7 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
   drops information; both stop repeating it. The header also leads with
   the ACTIVE language and shows the other as the secondary line.
 
-## Wave 4 — scene semantics (PARTIAL)
+## Wave 4 — scene semantics (DONE)
 
 - **DONE — named territory.** `gridRegions.ts` + `GridRegionLabel.tsx`.
   "Earth's orbit", "Asteroid belt", "Kuiper belt", "Heliopause" drawn on
@@ -106,31 +106,59 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
 - **DONE — first run no longer hides the scene.** The tutorial dimmer was
   `bg-black/60 backdrop-blur-sm`: eight modal steps describing a solar
   system the reader could not see. Now a plain 35 % scrim.
-- **OPEN — the didactic↔realistic transition.** Still a radio button.
-  Watching compression release and the planets rush apart _is_ the lesson;
-  animating `scaleMode` changes is a real feature, not a constant tweak.
-- **RESOLVED IN PART — home framing.** The 28° tilt fixed the axis that
-  actually mattered (depth). The DISTANCE is still too far: at 1440×900 the
-  planetary system occupies roughly a tenth of the frame height.
+- **DONE — the didactic↔realistic transition glides.** Flipping the mode
+  used to teleport every body; the motion IS the lesson. Implemented at
+  `AstroPhysics.auToWorld`, the single chokepoint all 44 consumers already
+  route through and recompute per frame, so the whole scene animates
+  without one call site changing — and, critically, without 44 chances to
+  miss one and desync the grid from the planets. Self-advancing off the
+  wall clock: no ticker, nothing to unmount. Verified in-scene that rings,
+  orbit lines, region labels and planets expand together.
 
-  Investigated and **ruled out**: the body set. `resolveIntroEndPosition`
-  already routes through `AstroPhysics.resolveFocusExtent`, which for the
-  Sun filters internally to planets plus dwarfs with `a ≤ 40`
-  (`astrophysics.ts:776-790`) — Sedna was never in the framing, so
-  narrowing the `bodies` argument changes almost nothing. A patch doing
-  that was written, measured, and reverted. The dominant term is in
-  `resolveFocusExtent`'s ring/semantic-radius maths or in
-  `calculateViewportAwareDistance`'s margin; whoever picks this up should
-  instrument those two before editing either.
+  The transition records its DIRECTION rather than inferring it from the
+  requested mode. The first cut inferred it, which meant a caller asking
+  for the mode being LEFT got a value sliding away from it; a test caught
+  that. Known scope: only distance glides — body radii
+  (`resolveSemanticBodyRadius`) still snap on the first frame, and grid
+  decade SELECTION uses the target mode's inverse so LOD can be briefly
+  early or late. Ring radii come from `auToWorld`, so nothing drifts apart
+  on screen.
+
+- **NOT A DEFECT — home framing distance.** Measured directly: in didactic
+  mode `resolveFocusExtent` returns 2058 against Neptune's 1761, and
+  `calculateViewportAwareDistance` puts the system at **82 % of frame
+  height**. The framing was always correct.
+
+  Every "the default view is a tiny dot" capture in this program was taken
+  DURING the 12 s intro sweep — the loader hides well before
+  `INTRO_DURATION_MS` elapses, so screenshotting shortly after it clears
+  samples the camera mid-flight. Sampling at +20 s shows the full system,
+  labelled, filling the frame. The 28° tilt remains the right change on its
+  own merits (a plane viewed perpendicular has no depth cue), but the
+  evidence originally given for it was an artifact. Any future capture of
+  the home view must wait out the intro.
 
 ---
 
 ## Checked and NOT defects (do not re-raise)
 
-| Claim                                   | Why it is wrong                                                                                  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| AU label font "scales with ring radius" | It is `FONT_WORLD_BASE_DOMINANT` (26 vs 16) — intentional current-scale emphasis; measured ~1.5× |
-| Ring label formatted "1.0 AU"           | Misread: the ring line struck through the "0". Formatter is correct; the halo fix addressed this |
-| BODIES chips show no on/off state       | They do — cyan border + tint + glow when active. All five happened to be enabled in the capture  |
-| Chips vs switches is an inconsistency   | Chips are a multi-select filter, switches are independent booleans. Correct information design   |
-| Mobile boot fails at 390 px             | Test-harness error: the readiness gate keys on a heading TopBar renders `{!isMobile && …}`       |
+| Claim                                     | Why it is wrong                                                                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AU label font "scales with ring radius"   | It is `FONT_WORLD_BASE_DOMINANT` (26 vs 16) — intentional current-scale emphasis; measured ~1.5×                                                                  |
+| Ring label formatted "1.0 AU"             | Misread: the ring line struck through the "0". Formatter is correct; the halo fix addressed this                                                                  |
+| BODIES chips show no on/off state         | They do — cyan border + tint + glow when active. All five happened to be enabled in the capture                                                                   |
+| Chips vs switches is an inconsistency     | Chips are a multi-select filter, switches are independent booleans. Correct information design                                                                    |
+| Mobile boot fails at 390 px               | Test-harness error: the readiness gate keys on a heading TopBar renders `{!isMobile && …}`                                                                        |
+| The rail splits in two when a panel opens | Deliberate drawer metaphor: the open panel's tab becomes an invisible spacer of identical geometry (`LayersPanel.tsx:408-417`) and re-renders docked to the panel |
+| Home framing is too far out               | Measured at 82 % of frame height. Every "tiny dot" capture sampled the camera mid-intro; the loader clears long before the 12 s sweep ends                        |
+
+## Observed, left alone (needs a product call, not a fix)
+
+- **Home in realistic mode parks 23 world units from the Sun**, filling the
+  frame with its surface. `resolveFocusExtent` returns early for
+  non-didactic (`astrophysics.ts:772-774`), so children never widen the
+  extent. That early return is RIGHT for a body focus — framing Jupiter's
+  moon system makes Jupiter a speck — but it makes Home a close-up. The
+  honest overview in true scale is mostly empty space, which is arguably
+  the whole lesson of the mode. Two defensible answers; not the assistant's
+  call. Reproducible: set `scaleMode: "realistic"`, call `focusHome()`.

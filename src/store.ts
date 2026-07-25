@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { AstroPhysics } from "./lib/astrophysics";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
@@ -433,9 +434,14 @@ export const useStore = create<AppState>()(
           return { focusId: prev, selectedId: prev, focusHistory };
         }),
       toggleScaleMode: () =>
-        set((state) => ({
-          scaleMode: state.scaleMode === "didactic" ? "realistic" : "didactic",
-        })),
+        set((state) => {
+          // Glide instead of teleport — the motion IS the lesson. See
+          // `AstroPhysics.beginScaleTransition`.
+          const next =
+            state.scaleMode === "didactic" ? "realistic" : "didactic";
+          AstroPhysics.beginScaleTransition(state.scaleMode, next);
+          return { scaleMode: next };
+        }),
       // Persistence of `qualityMode`, `sunRenderMode`, and
       // `tutorialCompletionStatus` is handled entirely by the persist
       // middleware below — these setters no longer write to

@@ -253,6 +253,13 @@ export interface FocusExtentContext {
 
 export type ShadowExtentContext = FocusExtentContext;
 
+/**
+ * How long a scale-mode change takes to glide. Long enough that the outer
+ * planets visibly travel rather than jump, short enough not to feel like a
+ * loading screen. See `AstroPhysics.beginScaleTransition`.
+ */
+const SCALE_TRANSITION_MS = 2200;
+
 export class AstroPhysics {
   private static interpolateHermite(
     value: number,
@@ -438,10 +445,96 @@ export class AstroPhysics {
    * `GridAuLabels.tsx:131-134`. No new physics.
    */
   static auToWorld(au: number, scaleMode: ScaleMode): number {
-    return scaleMode === "didactic"
-      ? this.mapDidacticHeliocentricDistance(au)
-      : au * AU_TO_3D_UNITS;
+    const exact = (mode: ScaleMode) =>
+      mode === "didactic"
+        ? this.mapDidacticHeliocentricDistance(au)
+        : au * AU_TO_3D_UNITS;
+
+    // Scale-mode changes glide instead of cutting. See
+    // `beginScaleTransition` for why this lives here rather than in the
+    // 44 call sites.
+    const active = AstroPhysics.scaleTransitionProgress();
+    // Blend only for the mode the transition is heading INTO. A caller
+    // asking for the mode we are leaving wants that mapping exactly, not a
+    // value sliding away from it — inferring the direction from the
+    // requested mode instead of recording it made those two cases blend
+    // opposite ways.
+    if (active === null || active.to !== scaleMode) return exact(scaleMode);
+
+    const t = active.t;
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const from = exact(active.from);
+    return from + (exact(scaleMode) - from) * eased;
   }
+
+  /**
+   * Start gliding between scale modes.
+   *
+   * **Why here.** Flipping `scaleMode` used to teleport every body, and the
+   * jump *is* the lesson: watching the compression release and the planets
+   * rush apart is the clearest statement the app can make about how empty
+   * the solar system is. It was a radio button.
+   *
+   * `auToWorld` is the single chokepoint every position, orbit line, grid
+   * ring and region label already routes through, and they all recompute
+   * per frame — so blending inside it animates the whole scene without one
+   * consumer changing. The alternative, threading a blend factor through 44
+   * call sites, is the same behaviour with 44 chances to miss one and
+   * desync the grid from the planets, which is a bug this project has
+   * already had once.
+   *
+   * Self-advancing off the wall clock: no ticker, no store subscription,
+   * nothing to unmount. When the window elapses the blend stops applying
+   * and callers get the exact target mapping again.
+   *
+   * **Known scope.** Only DISTANCE glides. Body radii also differ between
+   * modes (`resolveSemanticBodyRadius`) and still snap on the first frame.
+   * Distance is the dominant motion and the part carrying the lesson; the
+   * radius pop is one frame at the start, not a drift.
+   *
+   * **Grid LOD during the glide.** `worldToAu` keeps using the target
+   * mode's exact inverse, so decade selection can lag the moving rings by
+   * up to the transition window. Ring RADII come from `auToWorld` and move
+   * with the planets, so nothing drifts apart on screen — only which
+   * decade is chosen is briefly early or late.
+   */
+  static beginScaleTransition(
+    from: ScaleMode,
+    to: ScaleMode,
+    nowMs: number = Date.now()
+  ): void {
+    if (from === to) return;
+    AstroPhysics.scaleTransition = { from, to, startMs: nowMs };
+  }
+
+  /**
+   * The in-flight transition and its raw progress in `[0, 1)`, or `null`
+   * when there is nothing to blend. Self-clearing: the first read past the
+   * window drops the state.
+   */
+  static scaleTransitionProgress(
+    nowMs: number = Date.now()
+  ): { from: ScaleMode; to: ScaleMode; t: number } | null {
+    const active = AstroPhysics.scaleTransition;
+    if (active === null) return null;
+    const t = (nowMs - active.startMs) / SCALE_TRANSITION_MS;
+    if (t >= 1 || t < 0) {
+      AstroPhysics.scaleTransition = null;
+      return null;
+    }
+    return { from: active.from, to: active.to, t };
+  }
+
+  /** Test seam — drops any in-flight transition. */
+  static resetScaleTransition(): void {
+    AstroPhysics.scaleTransition = null;
+  }
+
+  private static scaleTransition: {
+    from: ScaleMode;
+    to: ScaleMode;
+    startMs: number;
+  } | null = null;
 
   /**
    * Inverse of {@link auToWorld}: world-units → effective heliocentric

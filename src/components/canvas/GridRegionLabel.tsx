@@ -197,7 +197,9 @@ export const GridRegionLabel = () => {
         const hPx =
           (FONT_WORLD_BASE / FONT_DISTANCE_DIVISOR) *
           pixelsPerWorldUnitAtUnitDepth;
-        const wPx = region.label.length * hPx * 0.62;
+        // Slightly generous: the estimate ran tight and let body labels touch
+        // the region text. A declutter margin is cheaper too big than too small.
+        const wPx = region.label.length * hPx * 0.8;
         reserveLabelBox(frame, {
           x: ((TMP_WORLD.x + 1) / 2) * viewportWidth - wPx / 2,
           y: ((1 - TMP_WORLD.y) / 2) * viewportHeight - hPx / 2,
