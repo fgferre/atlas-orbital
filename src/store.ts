@@ -112,6 +112,14 @@ interface AppState {
     name: string;
     x: number;
     y: number;
+    /**
+     * Screen-pixel offset of the label from the icon, chosen by
+     * `OverlayPositionTracker`'s placement search. Both label renderers
+     * (`PlanetOverlay` HTML, `PlanetLabels3D` SDF) must apply it, or a
+     * nudged label lands somewhere the arbitration did not reserve.
+     */
+    labelDx: number;
+    labelDy: number;
     isSmall: boolean;
     showLabel: boolean;
     showIcon: boolean;

@@ -61,8 +61,8 @@ export const PlanetOverlay = memo(() => {
               className="absolute text-gray-300 text-xs font-semibold uppercase tracking-wide pointer-events-auto cursor-pointer transition-colors hover:text-nasa-accent drop-shadow-md whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent bg-transparent border-0 p-0"
               style={{
                 left: `${item.x}px`,
-                top: `${item.y}px`,
-                transform: "translate(12px, -50%)",
+                top: `${item.y + item.labelDy}px`,
+                transform: `translate(${item.labelDx}px, -50%)`,
                 textShadow: "0 1px 4px rgba(0,0,0,1)",
               }}
               onClick={(e) => {

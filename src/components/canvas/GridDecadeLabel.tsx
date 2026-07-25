@@ -12,6 +12,7 @@ import {
   resolveGridRingSet,
 } from "./shaders/gridRecScaling";
 import { createGridFadeState, stepGridFade } from "./gridFade";
+import { beginLabelReservations, reserveLabelBox } from "./labelReservations";
 
 /**
  * The flat-on-plane teal AU DISTANCE LABELS for the concentric ring grid
@@ -149,7 +150,20 @@ export const GridDecadeLabel = () => {
 
   const planeY = GRID_RECURSIVE_CONFIG.planeYOffset;
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
+    const frame = state.gl.info.render.frame;
+    const viewportWidth = state.size.width;
+    const viewportHeight = state.size.height;
+    // Pixels a one-world-unit object spans at one unit of depth. Combined
+    // with the label's distance-proportional scale this yields the constant
+    // on-screen height the labels are designed to hold.
+    const pixelsPerWorldUnitAtUnitDepth =
+      viewportHeight /
+      (2 *
+        Math.tan(
+          (((camera as THREE.PerspectiveCamera).fov ?? 45) * Math.PI) / 360
+        ));
+    beginLabelReservations(frame);
     // Unified grid fade — identical step to GridRecursive, so labels and
     // rings rise/fall together. Combined (multiplied) with the per-label
     // elevation fade below.
@@ -288,9 +302,42 @@ export const GridDecadeLabel = () => {
       const rawScale = (distance / FONT_DISTANCE_DIVISOR) * base;
       group.scale.setScalar(Math.min(rawScale, LABEL_SCALE_MAX_WORLD_UNITS));
 
+      // Publish this label's screen footprint so `OverlayPositionTracker`
+      // can arbitrate body labels against it. Without this the two passes
+      // are individually tidy and jointly broken — captures showed "1 AU"
+      // struck through "MOON", and "EARTH" in another framing.
+      //
+      // The height is the constant on-screen size the scale above is built
+      // to produce: worldSize/distance cancels, leaving base/divisor times
+      // the viewport's pixels-per-radian. Width is estimated from the glyph
+      // count; a declutter margin does not need to be exact.
       // Text + opacity. The dominant label reads at full opacity; the rest
       // slightly dimmer so the "current scale" reads prominently.
       const nextText = formatDecadeScaleLabel(c.au, allowLY);
+
+      // Publish this label's screen footprint so `OverlayPositionTracker`
+      // can arbitrate body labels against it. Without this the two passes
+      // are individually tidy and jointly broken — captures showed "1 AU"
+      // struck through "MOON", and "EARTH" in another framing.
+      //
+      // Height is the constant on-screen size the scale above is built to
+      // produce: worldSize/distance cancels, leaving base/divisor times the
+      // viewport's pixels-per-radian. Width is estimated from the glyph
+      // count — a declutter margin does not need to be exact. Skipped while
+      // the label is faint enough not to interfere.
+      if (effectiveFade > 0.35) {
+        TMP_WORLD.copy(group.position).project(camera);
+        const hPx =
+          (base / FONT_DISTANCE_DIVISOR) * pixelsPerWorldUnitAtUnitDepth;
+        const wPx = nextText.length * hPx * 0.72;
+        reserveLabelBox(frame, {
+          x: ((TMP_WORLD.x + 1) / 2) * viewportWidth - wPx / 2,
+          y: ((1 - TMP_WORLD.y) / 2) * viewportHeight - hPx / 2,
+          w: wPx,
+          h: hPx,
+        });
+      }
+
       const textMesh = slot.text;
       if (textMesh) {
         if (nextText !== slot.lastText) {

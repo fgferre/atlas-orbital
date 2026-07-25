@@ -2,6 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "../../store";
+import { getLabelReservations } from "./labelReservations";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { resolveBodyName } from "../../lib/bodyName";
 import * as THREE from "three";
@@ -22,10 +23,33 @@ interface OverlayItem {
   name: string;
   x: number;
   y: number;
+  /** Screen-pixel offset of the label from the icon. See LABEL_PLACEMENTS. */
+  labelDx: number;
+  labelDy: number;
   isSmall: boolean;
   showLabel: boolean;
   showIcon: boolean;
 }
+
+/**
+ * Label positions to try, in order, relative to the body's icon. First entry
+ * is the historical one (to the right, vertically centred) so nothing moves
+ * unless it would otherwise have been dropped.
+ *
+ * Vertical variations only, all on the same side. Mirroring to the left
+ * would mean flipping the text anchor, which troika can do but only via a
+ * per-frame `.anchorX` + `sync()` and a block-bounds measurement to find the
+ * left edge — and HTML and SDF would have to agree on that width. Stacking
+ * vertically needs neither: both renderers apply the same pure translate,
+ * so the two paths cannot drift from the arbitration or from each other.
+ */
+const LABEL_PLACEMENTS: ReadonlyArray<readonly [dx: number, dy: number]> = [
+  [12, 0],
+  [12, -18],
+  [12, 18],
+  [12, -36],
+  [12, 36],
+];
 
 interface ScreenBox {
   x: number;
@@ -198,42 +222,70 @@ export const OverlayPositionTracker = () => {
 
     const finalOverlays: OverlayItem[] = [];
 
+    // Seed the occupancy set with the AU ring labels the grid published
+    // earlier this frame (it runs at useFrame priority 0, this pass at 10).
+    // A body label now treats an AU label exactly like another body's label
+    // instead of drawing straight through it.
+    for (const box of getLabelReservations(state.gl.info.render.frame)) {
+      placedLabels.push(box);
+    }
+
     candidates.forEach((c) => {
       // Define Bounding Boxes
       // Icon: ~20x20 centered
       const iconBox = { x: c.x - 10, y: c.y - 10, w: 20, h: 20 };
 
-      // Label: Starts at x+12, ~80x20 (approximate text size)
-      // We could measure text, but approximation is faster and usually sufficient
+      // Label: ~80x20 (approximate text size). We could measure text, but
+      // approximation is faster and usually sufficient.
       const labelWidth = Math.min(120, Math.max(60, c.name.length * 8)); // Dynamic width based on name
-      const labelBox = { x: c.x + 12, y: c.y - 10, w: labelWidth, h: 20 };
+      const boxAt = (dx: number, dy: number): ScreenBox => ({
+        x: c.x + dx,
+        y: c.y + dy - 10,
+        w: labelWidth,
+        h: 20,
+      });
 
       const iconFitsBounds = fitsWithinBounds(iconBox, overlayBounds);
-      const labelFitsBounds = fitsWithinBounds(labelBox, overlayBounds);
       let showIcon = iconFitsBounds;
-      let showLabel = iconFitsBounds && labelFitsBounds;
+      let showLabel = iconFitsBounds;
+      let labelDx = LABEL_PLACEMENTS[0]![0];
+      let labelDy = LABEL_PLACEMENTS[0]![1];
+      let labelBox = boxAt(labelDx, labelDy);
 
       // Focused object skips collision arbitration but still respects reserved UI bounds.
       if (c.id !== focusId && showIcon) {
         // Check Icon Collision (vs other Icons)
         // We only hide icons if they overlap other icons.
-        // User said: "hide just labels, then we hide the body itself"
-        // So we check labels first? No, if icon is hidden, label must be hidden.
-
+        // If the icon is gone, the label goes with it.
         if (intersects(iconBox, placedIcons)) {
           showIcon = false;
-          showLabel = false; // If icon is gone, label is gone
+          showLabel = false;
         } else {
-          // Icon is safe. Now check Label.
-          // Check Label vs other Labels AND other Icons (don't draw text over icons)
-          if (
-            !labelFitsBounds ||
-            intersects(labelBox, placedLabels) ||
-            intersects(labelBox, placedIcons)
-          ) {
-            showLabel = false;
+          // Icon is safe. Try each placement around it before giving up.
+          // Previously the label sat only at x+12 and was dropped on the
+          // first collision, which is why Venus — whose label lands on the
+          // Sun's at system framing — lost its name while Hygiea kept its
+          // own out in empty screen space. A learner saw the asteroid and
+          // not the planet. Priority cannot fix that: it correctly ranks
+          // the Sun above Venus. Somewhere else to put the text can.
+          showLabel = false;
+          for (const [dx, dy] of LABEL_PLACEMENTS) {
+            const box = boxAt(dx, dy);
+            if (
+              fitsWithinBounds(box, overlayBounds) &&
+              !intersects(box, placedLabels) &&
+              !intersects(box, placedIcons)
+            ) {
+              labelDx = dx;
+              labelDy = dy;
+              labelBox = box;
+              showLabel = true;
+              break;
+            }
           }
         }
+      } else if (showLabel) {
+        showLabel = fitsWithinBounds(labelBox, overlayBounds);
       }
 
       // Register occupied space if visible
@@ -245,6 +297,8 @@ export const OverlayPositionTracker = () => {
         name: c.name,
         x: c.x,
         y: c.y,
+        labelDx,
+        labelDy,
         isSmall: true, // Kept for compatibility, logic moved to flags
         showLabel,
         showIcon,

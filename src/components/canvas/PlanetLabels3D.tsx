@@ -99,7 +99,7 @@ export const PlanetLabels3D = () => {
   // SDF labels are clickable with identical behavior.
   const selectId = useStore((s) => s.selectId);
   const { i18n } = useTranslation();
-  const { scene, camera } = useThree();
+  const { scene, camera, size } = useThree();
 
   // Imperatively-managed group refs. A plain Map (held by useRef)
   // keeps the per-frame visibility / position writes out of React's
@@ -108,6 +108,9 @@ export const PlanetLabels3D = () => {
   // mutations reachable through useMemo'd arrays.
   const groupRefs = useRef(new Map<string, THREE.Group>());
   const visibilityRef = useRef<Map<string, boolean>>(new Map());
+  const placementRef = useRef<
+    Map<string, { labelDx: number; labelDy: number }>
+  >(new Map());
 
   const setGroupRef = useCallback(
     (id: string) => (group: THREE.Group | null) => {
@@ -138,9 +141,24 @@ export const PlanetLabels3D = () => {
 
       const { overlayItems } = useStore.getState();
       visibilityRef.current.clear();
+      placementRef.current.clear();
       for (const item of overlayItems) {
         visibilityRef.current.set(item.id, item.showLabel);
+        placementRef.current.set(item.id, item);
       }
+
+      // One local unit renders at this many screen pixels, because the group
+      // scale below is built to hold a constant on-screen size. Converting
+      // the arbitration's pixel offsets through it keeps SDF labels in the
+      // exact slots `OverlayPositionTracker` reserved for them — otherwise
+      // the two renderers would disagree about where a nudged label sits.
+      const pixelsPerLocalUnit =
+        (FONT_WORLD_BASE / FONT_DISTANCE_DIVISOR) *
+        (size.height /
+          (2 *
+            Math.tan(
+              (((camera as THREE.PerspectiveCamera).fov ?? 45) * Math.PI) / 360
+            )));
 
       for (const body of SOLAR_SYSTEM_BODIES) {
         const group = groupRefs.current.get(body.id);
@@ -200,6 +218,19 @@ export const PlanetLabels3D = () => {
           LABEL_SCALE_MAX_WORLD_UNITS
         );
         group.scale.setScalar(clampedFontScale);
+
+        // Apply the placement the arbitration chose. `LABEL_PLACEMENTS[0]`
+        // reproduces the historical offset, so an unnudged label does not
+        // move. The text is the group's only child.
+        const placement = placementRef.current.get(body.id);
+        const text = group.children[0];
+        if (placement && text && pixelsPerLocalUnit > 0) {
+          text.position.set(
+            placement.labelDx / pixelsPerLocalUnit,
+            -placement.labelDy / pixelsPerLocalUnit,
+            0
+          );
+        }
       }
     } catch (err) {
       console.error("[PlanetLabels3D] frame error:", err);
