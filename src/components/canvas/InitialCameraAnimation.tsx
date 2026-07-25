@@ -15,7 +15,7 @@ const INTRO_START_POSITION = new THREE.Vector3(
   999990981402,
   4245931557
 );
-const INTRO_END_DIRECTION = new THREE.Vector3(0, 1746, 7).normalize();
+const INTRO_END_DIRECTION = new THREE.Vector3(0, 820, 1540).normalize();
 const INTRO_TARGET = new THREE.Vector3(0, 0, 0);
 const INTRO_DELAY_MS = 100;
 const FALLBACK_INTRO_END_DISTANCE = 1746;
