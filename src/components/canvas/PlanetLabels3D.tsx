@@ -49,7 +49,6 @@ import { useStore } from "../../store";
 
 // Module-level scratch vectors reused across frames + bodies.
 const TMP_WORLD = new THREE.Vector3();
-const TMP_BILLBOARD = new THREE.Matrix4();
 
 // Mesh cache keyed by body id — same pattern + invalidation rules as
 // `OverlayPositionTracker.tsx:69`. A cached entry whose
@@ -166,20 +165,21 @@ export const PlanetLabels3D = () => {
         mesh.getWorldPosition(TMP_WORLD);
         group.position.copy(TMP_WORLD);
 
-        // Billboard the text toward the camera — mirrors Gaia's
-        // `DecalUtils.drawFont3D` pattern at `DecalUtils.java:184-189`:
-        //   .rotate(getBillboardRotation(camera.direction, camera.up))
-        //   .rotate(0, 1, 0, 180)
-        // The `lookAt(group.position, camera.position, camera.up)`
-        // orients the group's local `-Z` toward the camera (Three.js
-        // camera convention). But `troika-three-text` renders its
-        // readable face on `+Z`, so without the 180° flip the back
-        // face would show (mirrored text). Applying `rotateY(π)` after
-        // the lookAt mirrors Gaia's `.rotate(0, 1, 0, 180)` byte-for-
-        // byte and brings the readable face toward the camera.
-        TMP_BILLBOARD.lookAt(group.position, camera.position, camera.up);
-        group.quaternion.setFromRotationMatrix(TMP_BILLBOARD);
-        group.rotateY(Math.PI);
+        // Screen-aligned billboard: adopt the camera's own orientation so
+        // the glyph plane is parallel to the screen plane. The camera looks
+        // down its local −Z, so its +Z faces the viewer, which is exactly
+        // the face `troika-three-text` renders readable.
+        //
+        // This replaces a `Matrix4.lookAt(labelPos, cameraPos, camera.up)`
+        // + `rotateY(π)` pair. That construction DEGENERATES in the app's
+        // most natural framing: looking down at the ecliptic, the lookAt
+        // axis is nearly parallel to `camera.up` (0,1,0), the `up × z`
+        // cross product collapses, and Three falls back to nudging `z.z`
+        // by 1e-4 — yielding an arbitrary roll per label. On screen that
+        // was "SEDNA" rotated vertical, "JUPITER" diagonal and "MOON"
+        // rendered mirrored as "NOOW". Copying the quaternion has no
+        // degenerate case and needs no flip.
+        group.quaternion.copy(camera.quaternion);
 
         const distance = group.position.distanceTo(camera.position);
         const rawFontScale =

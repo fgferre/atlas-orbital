@@ -8,8 +8,15 @@ import {
 } from "./labelMode";
 
 describe("labelMode", () => {
-  it("defaults to 'html' for a11y safety", () => {
-    expect(DEFAULT_LABEL_MODE).toBe("html");
+  it("defaults to 'sdf' so labels can carry depth", () => {
+    // Flipped from "html". The old pin was named "for a11y safety", but the
+    // accessible surface is the icon <button> in PlanetOverlay, which keys
+    // off `showIcons` and never reads `labelMode` — so the flip does not
+    // move a11y either way. SDF is the default because a label living in
+    // the scene can be occluded and depth-sorted; a DOM overlay cannot,
+    // which is why a distant body's label could land inside a focused
+    // planet's moon system.
+    expect(DEFAULT_LABEL_MODE).toBe("sdf");
   });
 
   it("exposes both modes in the canonical array", () => {

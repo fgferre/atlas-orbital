@@ -47,10 +47,26 @@ export const LABEL_MODE_LABELS: Record<LabelMode, string> = {
 };
 
 /**
- * Default mode on first boot. HTML stays the recommended baseline
- * because the HTML path is the only one that participates in the
- * browser's a11y tree (keyboard focus + screen reader announcements).
- * Surfacing the SDF option via LayersPanel lets users who want the
- * Gaia-faithful look opt in deliberately.
+ * Default mode on first boot: `"sdf"`.
+ *
+ * The reason is depth, not looks — at 1440p the two renderers are nearly
+ * indistinguishable. HTML labels are a flat DOM layer painted over the
+ * canvas, so they carry no depth information whatsoever: with Mars focused,
+ * Pluto's label rendered inside the Mars system next to Phobos and Deimos,
+ * because screen-space proximity is all the overlay knows. A label that
+ * lives in the scene can be occluded, depth-sorted and distance-faded. SDF
+ * is the prerequisite for that class of fix.
+ *
+ * **A11y is unchanged by the flip.** The accessible surface for a body is
+ * the icon `<button>` in `PlanetOverlay.tsx:31-47`, whose
+ * `aria-label={`Focus ${item.name}`}` renders on `showIcons` alone and does
+ * not consult `labelMode`. Keyboard tab stops and screen-reader
+ * announcements are identical in both modes.
+ *
+ * Known edge, pre-existing and unchanged in kind: with icons toggled OFF
+ * *and* SDF active, no focusable element remains per body (in HTML mode the
+ * label button takes `tabIndex={0}` in that case). Bodies stay fully
+ * keyboard-reachable through the Search panel; only the tab-through-visible-
+ * bodies path is lost, and only for a user who deliberately hid the icons.
  */
-export const DEFAULT_LABEL_MODE: LabelMode = "html";
+export const DEFAULT_LABEL_MODE: LabelMode = "sdf";
