@@ -162,3 +162,107 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
   honest overview in true scale is mostly empty space, which is arguably
   the whole lesson of the mode. Two defensible answers; not the assistant's
   call. Reproducible: set `scaleMode: "realistic"`, call `focusHome()`.
+
+---
+
+# HANDOFF — open work (2026-07-25, end of session)
+
+Three items remain. Each is reproduced and located; none is fixed. Read the
+operational traps first — they are what cost the previous session most.
+
+## Operational traps (read before capturing anything)
+
+1. **Wait out the intro.** Measured three times on a warm local preview:
+   loader clears at **23–25 s**, the intro sweep finishes at **46–49 s**.
+   The loader clears LONG before the camera settles, so a screenshot taken
+   shortly after `atlas-loader` reaches count 0 samples the camera
+   mid-flight. A whole round of "the default view is a tiny dot" findings
+   came from this and had to be withdrawn. Wait ≥ 20 s past loader-gone.
+2. **The store test hook needs the freeze flag.** `__ATLAS_TEST_STORE__` is
+   installed only when `__ATLAS_TEST_FREEZE__` is set (`store.ts:722-739`),
+   i.e. after `freezeSimulation(page)`. Freezing the SIMULATION clock does
+   not affect the intro, which runs on wall clock.
+3. **`labelMode`, `showEclipticGrid` and `scaleMode` are NOT persisted.**
+   They are absent from `partialize`, so seeding `localStorage` for them is
+   a silent no-op — two captures were produced that way and compared as if
+   meaningful. Drive them via `__ATLAS_TEST_STORE__.setState(...)` after
+   boot instead.
+4. **Zeroing an effect's intensity proves nothing about WHICH term.** It
+   kills the whole effect. Used as an A/B it establishes only "the artifact
+   lives in this effect", which sent the last session after two wrong terms
+   in a row.
+
+## 1. Lens-flare hex blob (diagnosed, not fixed)
+
+**Where:** `src/components/canvas/scene/effects/LensFlareEffect.ts:143`
+
+```glsl
+float s = max(0.01 - pow(regShape(p * 5.0 + mouse * dist * 5.0 + 0.9, 6), 1.0), 0.0) * 9.0;
+```
+
+`regShape(..., 6)` is a regular 6-sided polygon — the aperture-blade ghost,
+a 1:1 port of Gaia `lensflare.frag.glsl:105-113`. The element is INTENDED.
+The defect is that at weight `9.0` it saturates into an opaque grey plate
+over the photosphere when the source fills the frame, instead of a faint
+ghost.
+
+**Prior art in-repo:** `LensFlareEffect.ts:200-207` documents this defect by
+name — _"exploding halo + chromatic edges + hex blob" users report at
+5–30 AU_ — with a 2026-05-04 fix clamping the HDR occlusion sample to LDR.
+That fix did not close it; the blob is still there.
+
+**Tried and REVERTED — do not repeat:**
+
+- Softening the bias threshold + removing the `fract()` wrap in
+  `PseudoLensFlareEffect.ts`. **Wrong file** — `lensFlareIntensityMul`
+  targets the COMPLEX effect, stated at `resolver.ts:59`.
+- Clamping `perLightIntensity` to [0,1] in `LensFlareEffect.ts`, on the
+  theory that the per-light scalar multiplied after the existing clamp. No
+  visible change.
+
+**Next hypothesis, to MEASURE not assume:** the `* 9.0` weight on the `s`
+term, or scaling `regShape`'s `p * 5.0` with the source's apparent size.
+Isolate by zeroing `c`, `c1` and `s` individually — not the whole effect.
+
+**Repro:** boot, wait out the intro, then
+`setState({ scaleMode: "realistic" })` + `focusHome()`, wait ~9 s. The
+hexagon sits lower-left of the Sun. Crop x420 y480 340×240 at 1440×900.
+
+## 2. The `low` graphics preset renders an empty scene (reproduced, not fixed)
+
+Boot at defaults, then Display panel → **Low** (or
+`setGraphicsAutoMode(false)` + `setGraphicsPreset("low")`). The scene
+collapses to HTML overlay icons plus a few star pixels. No Sun, planets,
+orbits or grid.
+
+**Evidence it is real, not environment or loading:**
+
+- 45 s wait, then a direct `readPixels` of the centre 64×64 returns
+  `mean 0, max 0`.
+- `ultra` renders correctly in the same environment and run.
+- Nothing throws. One telling warning: `[SceneReadyChecker] Scene-ready
+fallback fired after 8000 ms — frame loop may not be running.`
+- The first attempt seeded `qualityMode` only, leaving `graphicsPreset` at
+  its default — a state no user can reach. Re-done through the real setter,
+  it still reproduces.
+
+**Why no test caught it:** `postprocessing.spec.ts` mounts the constrained
+tier but asserts only `data-postprocessing="inactive"` — never that
+anything renders. `boot.spec.ts`'s visual snapshot runs at the default
+tier. **No test looks at pixels on the low tier.**
+
+This is AGENTS.md pillar 4 (adaptive reach — "degrades to a fast floor").
+A black screen is not a fast floor, and it is the low-end audience.
+
+**Suggested first move:** a pixel gate asserting the canvas is not
+uniformly black, per preset. Cheap, and it would have caught this.
+
+## 3. Label visual hierarchy (not started)
+
+Earth and Weywot render identically — same colour, weight and size. The
+priority values already exist in `OverlayPositionTracker.tsx:159-168`
+(focus 100 / star 90 / planet 10 / dwarf 8 / moon 6 / other 4) and are used
+ONLY for collision arbitration, never for appearance. Making visual weight
+follow the hierarchy that is already computed is cheap and is the fastest
+way to make the scene read as designed. Both renderers need it:
+`PlanetOverlay` (HTML) and `PlanetLabels3D` (SDF, now the default).
