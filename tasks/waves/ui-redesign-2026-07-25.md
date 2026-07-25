@@ -36,7 +36,7 @@ an out-of-scene scale bar was explicitly rejected by the owner.
   with the inverse contract: the panel must contain no disabled control and
   must not promise future updates.
 
-## Wave 2 — one label arbitration pass
+## Wave 2 — one label arbitration pass (DONE, `0c1fd53`)
 
 Three independent decluttering systems draw into the same pixels and cannot
 see each other: grid AU ring labels (`GridDecadeLabel`, own
@@ -54,21 +54,31 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
   Mars focused, "PLUTO" rendered inside the Mars system beside Phobos and
   Deimos, because a DOM overlay knows only screen-space proximity.
 
-## Wave 3 — chrome hierarchy
+## Wave 3 — chrome hierarchy (PARTIAL)
 
-- The most valuable pixels permanently read "ATLAS ORBITAL / SYSTEM ONLINE".
-  That is a website header on a simulator; in this class of app the
-  top-left carries **state**. `FocusChip` already exists to say "you are on
-  X" but only appears when the sidebar is closed — a patch over a missing
-  primitive. Replace with one persistent context line: where, what scale,
-  what time. Branding shrinks to a mark.
-- Sidebar hierarchy is inverted: with Mars selected the panel opens with
-  "QUICK CONTEXT" encyclopedia prose **above** live telemetry, and states
-  the body's identity five times before any datum. Live state first,
-  reference behind a fold.
-- The right rail splits in two when a panel opens — the active tab detaches
-  to the panel's left edge.
-- Panels clip content with no scroll affordance.
+- **DONE** — sidebar order inverted. It opened with "QUICK CONTEXT"
+  encyclopedia prose above the live readouts: the least time-sensitive
+  thing on screen, and the only part a learner could read anywhere else,
+  sitting above the numbers that exist _only_ because a simulation is
+  running. Now Telemetry → Physical Data → Quick Context → Visual Fidelity.
+- **OPEN** — the context line. The most valuable pixels permanently read
+  "ATLAS ORBITAL / SYSTEM ONLINE". That is a website header on a simulator;
+  in this class of app the top-left carries **state**. `FocusChip` already
+  exists to say "you are on X" but only appears when the sidebar is closed
+  — a patch over a missing primitive. Replace with one persistent line:
+  where, what scale, what time. Branding shrinks to a mark. Touches
+  `TopBar`, `FocusChip` (+ its test) and the NOT-TO-SCALE pill's placement.
+- **OPEN, root cause found** — the right rail is not a rail. There is no
+  rail container: `RightControlRail.tsx` exports only icons/labels, and
+  each panel (`LayersPanel`, `SearchBar`, and the Display/A11y hosts)
+  renders **its own tab as a child of itself**. So when a panel slides in,
+  its tab travels with it and the strip visibly splits in two. Fixing it
+  means hoisting all four tabs into one positioned rail container and
+  having panels stop rendering tabs — a refactor across four files, not a
+  CSS tweak. Do not attempt it as a quick fix.
+- **OPEN** — panels clip content with no scroll affordance.
+- **OPEN** — the body identity is restated five times above the first datum
+  (`MARS`, `MARTE`, "TERRESTRIAL PLANET MARS", "PLANET", "INNER SYSTEM").
 
 ## Wave 4 — scene semantics
 

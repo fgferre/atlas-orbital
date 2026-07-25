@@ -193,60 +193,6 @@ export const Sidebar = () => {
 
             {/* Scrollable Content */}
             <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
-              {/* Description */}
-              <div className="space-y-2">
-                <h2 className="text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
-                  Quick Context
-                </h2>
-                <p className="text-sm leading-relaxed text-gray-300">
-                  {b.description || b.info}
-                </p>
-              </div>
-
-              {b.visualProvenance && (
-                <div>
-                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
-                    Visual Fidelity
-                  </h3>
-                  <div className="bg-black/20 p-3 rounded border border-white/5 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[9px] text-nasa-dim uppercase tracking-wider">
-                        Source Type
-                      </span>
-                      <span className="text-[9px] bg-white/10 px-2 py-1 rounded text-nasa-accent font-mono uppercase tracking-wide">
-                        {VISUAL_FIDELITY_LABELS[b.visualProvenance.fidelity]}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-300 font-rajdhani">
-                      {b.visualProvenance.summary}
-                    </p>
-                    {b.visualProvenance.limitationReason && (
-                      <p className="text-xs text-gray-400 font-rajdhani">
-                        {b.visualProvenance.limitationReason}
-                      </p>
-                    )}
-                    {b.visualProvenance.sources &&
-                      b.visualProvenance.sources.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {b.visualProvenance.sources
-                            .slice(0, 2)
-                            .map((source) => (
-                              <a
-                                key={source.url}
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-nasa-accent underline underline-offset-2 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
-                              >
-                                {source.label}
-                              </a>
-                            ))}
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-
               {/* Live Data Grid */}
               {stats && b.id !== "sun" && (
                 <div>
@@ -325,6 +271,66 @@ export const Sidebar = () => {
                   )}
                 </div>
               </div>
+
+              {/* Description.
+                  Below the live and physical data on purpose. This panel
+                  used to open with the encyclopedia paragraph, which is the
+                  least time-sensitive thing on screen and the only part a
+                  learner could read anywhere else, while the readouts that
+                  exist ONLY because a simulation is running sat below the
+                  fold. Live state first, reference after. */}
+              <div className="space-y-2">
+                <h2 className="text-[10px] font-orbitron uppercase tracking-[0.22em] text-nasa-accent">
+                  Quick Context
+                </h2>
+                <p className="text-sm leading-relaxed text-gray-300">
+                  {b.description || b.info}
+                </p>
+              </div>
+
+              {b.visualProvenance && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Visual Fidelity
+                  </h3>
+                  <div className="bg-black/20 p-3 rounded border border-white/5 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[9px] text-nasa-dim uppercase tracking-wider">
+                        Source Type
+                      </span>
+                      <span className="text-[9px] bg-white/10 px-2 py-1 rounded text-nasa-accent font-mono uppercase tracking-wide">
+                        {VISUAL_FIDELITY_LABELS[b.visualProvenance.fidelity]}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 font-rajdhani">
+                      {b.visualProvenance.summary}
+                    </p>
+                    {b.visualProvenance.limitationReason && (
+                      <p className="text-xs text-gray-400 font-rajdhani">
+                        {b.visualProvenance.limitationReason}
+                      </p>
+                    )}
+                    {b.visualProvenance.sources &&
+                      b.visualProvenance.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {b.visualProvenance.sources
+                            .slice(0, 2)
+                            .map((source) => (
+                              <a
+                                key={source.url}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-nasa-accent underline underline-offset-2 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
+                              >
+                                {source.label}
+                              </a>
+                            ))}
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
 
               {/* Records Section */}
               {b.records && b.records.length > 0 && (
