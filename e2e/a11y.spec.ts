@@ -43,10 +43,16 @@ test.describe("a11y", () => {
       )
       .toBe(before !== "true");
 
-    // Grayed rows are present (scope stability per design §9); they
-    // render but the toggle is disabled with a tooltip.
-    const highContrast = panel.getByTestId("toggle-high-contrast");
-    await expect(highContrast).toBeVisible();
-    await expect(highContrast).toBeDisabled();
+    // Honesty contract, replacing a pin that asserted the opposite: this
+    // panel must not advertise accessibility controls it cannot deliver.
+    // Colorblind Mode and High Contrast used to render here disabled under
+    // "Available in a future update" — a promise broken at the exact moment
+    // a user who needs them goes looking. Wire them and this assertion
+    // should be replaced by one that exercises the real behaviour, not
+    // loosened.
+    await expect(panel.getByText(/future update/i)).toHaveCount(0);
+    await expect(
+      panel.locator("[disabled], [aria-disabled='true']")
+    ).toHaveCount(0);
   });
 });

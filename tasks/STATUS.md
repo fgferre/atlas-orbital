@@ -9,7 +9,11 @@ _Last updated: 2026-07-24 (doc cleanup — archive noise out of hot path)._
 
 ## Active wave
 
-**None.** No `tasks/waves/*.md` is active.
+**[`tasks/waves/ui-redesign-2026-07-25.md`](./waves/ui-redesign-2026-07-25.md)** —
+interface redesign with fresh eyes. Wave 1 (remove what is not true) is
+done; Wave 2 is the single label arbitration pass. Read that file for the
+evidence base, the guardrail, and the list of claims already checked and
+rejected.
 
 T6.4 (HYG visual recovery) agent work is complete; plan archived at
 [`archive/waves/T6.4-visual-recovery.md`](./archive/waves/T6.4-visual-recovery.md).

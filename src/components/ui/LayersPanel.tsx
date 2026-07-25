@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { useDialogFocus } from "../../hooks/useDialogFocus";
@@ -55,7 +55,6 @@ const PANEL_COPY = {
 // localStorage under a versioned key so future hints (v2, v3, …) can
 // ship without colliding with prior dismissals, and without touching
 // the Zustand store (zero migration scope).
-const HINT_STORAGE_KEY = "atlas-restructure-hint-v1:dismissed";
 
 export const LayersPanel = ({
   activePanel,
@@ -202,8 +201,6 @@ export const LayersPanel = ({
   const panelSections =
     openPanel === "view" ? (
       <div className="space-y-3">
-        <RestructureHint />
-
         <Accordion label="World" defaultOpen={!isMobile}>
           <div>
             <SubsectionLabel>Scale Mode</SubsectionLabel>
@@ -497,48 +494,6 @@ export const LayersPanel = ({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-};
-
-const RestructureHint = () => {
-  const [dismissed, setDismissed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(HINT_STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  if (dismissed) return null;
-
-  const handleDismiss = () => {
-    try {
-      window.localStorage.setItem(HINT_STORAGE_KEY, "true");
-    } catch {
-      /* localStorage unavailable (quota, privacy mode) — fail silently */
-    }
-    setDismissed(true);
-  };
-
-  return (
-    <div
-      data-testid="restructure-hint"
-      className="relative border border-nasa-accent/30 bg-nasa-accent/5 px-3 py-2.5 pr-9"
-    >
-      <div className="text-[11px] leading-relaxed text-white/70">
-        Quality & render settings moved to{" "}
-        <span className="text-nasa-accent">Display</span>.
-      </div>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        aria-label="Dismiss restructure hint"
-        className="absolute right-2 top-2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-white/55 transition-colors hover:border-nasa-accent/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent"
-      >
-        ✕
-      </button>
     </div>
   );
 };
