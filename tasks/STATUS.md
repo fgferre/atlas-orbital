@@ -24,10 +24,11 @@ port onda. Prefer user-stated tasks, or themes in
 
 ## Carryover (parked — do not auto-expand)
 
-| ID       | Pri | Note                                                                                                                  |
-| -------- | --- | --------------------------------------------------------------------------------------------------------------------- |
-| U-smoke  | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                 |
-| Doc-debt | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs |
+| ID       | Pri | Note                                                                                                                                                                                           |
+| -------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U-smoke  | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                                                                                          |
+| Doc-debt | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs                                                                          |
+| Cross-AI | —   | Validation brief for external AI: [`archive/audits/cross-ai-validation-brief-2026-07-24.md`](./archive/audits/cross-ai-validation-brief-2026-07-24.md) (not a backlog — excavate + revalidate) |
 
 Post–July 2026 audit fixes already landed on `main`/ahead branch
 (frame, moons, `n`, mobile sidebar, CI gates, LOD, reduced-motion,
