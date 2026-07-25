@@ -62,6 +62,12 @@ import { createGridFadeState, stepGridFade } from "./gridFade";
 const ACCENT_TEAL = GRID_RECURSIVE_CONFIG.ringColor;
 
 /**
+ * Halo behind the glyphs. Near-black navy rather than pure black so it
+ * reads as depth against the space background instead of a punched hole.
+ */
+const LABEL_HALO = "#00060f";
+
+/**
  * Screen-stable font size: base world-unit value × `distance / divisor`
  * so the on-screen pixel height stays ~constant. Mirrors `PlanetLabels3D`.
  * The dominant ("current scale") label uses the larger base.
@@ -332,11 +338,16 @@ export const GridDecadeLabel = () => {
             anchorY="middle"
             letterSpacing={0.15}
             renderOrder={GRID_RECURSIVE_CONFIG.renderOrder + 2}
-            // Subtle ~1px-feel teal glow instead of a heavy black stroke.
-            outlineWidth="4%"
-            outlineBlur="40%"
-            outlineColor={ACCENT_TEAL}
-            outlineOpacity={0.5}
+            // Soft dark halo, not a hard stroke. The previous glow used
+            // ACCENT_TEAL — the ring's own colour — so a ring passing behind
+            // the glyphs never visually terminated: the line read through the
+            // letter counters and merged with the strokes ("10 AU" scanned as
+            // "1.0 AU"). A near-black halo at high blur keeps the soft HUD
+            // feel while giving the glyphs somewhere to sit.
+            outlineWidth="6%"
+            outlineBlur="55%"
+            outlineColor={LABEL_HALO}
+            outlineOpacity={0.85}
             raycast={noopRaycast}
           >
             {""}

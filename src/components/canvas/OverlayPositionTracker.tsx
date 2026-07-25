@@ -1,7 +1,9 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useStore } from "../../store";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { resolveBodyName } from "../../lib/bodyName";
 import * as THREE from "three";
 
 interface OverlayCandidate {
@@ -72,6 +74,10 @@ const meshCache = new Map<string, THREE.Object3D>();
 // Runs with LOWER priority (after planets update) to avoid lag
 export const OverlayPositionTracker = () => {
   const { scene, camera } = useThree();
+  // `useFrame`'s callback is recreated each render, so a language switch
+  // re-renders here and the next frame picks up the new closure.
+  const { i18n } = useTranslation();
+  const language = i18n.language;
   const setOverlayItems = useStore((state) => state.setOverlayItems);
   const prevVisibleRef = useRef<{ labels: Set<string>; icons: Set<string> }>({
     labels: new Set(),
@@ -168,7 +174,7 @@ export const OverlayPositionTracker = () => {
 
         candidates.push({
           id: body.id,
-          name: body.name.en,
+          name: resolveBodyName(body.name, language),
           type: body.type,
           radius: body.radiusKm,
           x,

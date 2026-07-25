@@ -237,9 +237,14 @@ export const Timeline = () => {
     return `${speed < 0 ? "-" : ""}${currentLabel}`;
   }, [currentLabel, isLiveMode, speed]);
 
+  // Collapsed desktop used to be a fixed 15.5rem — NARROWER than the 18rem
+  // mobile cap — so the clock truncated to "21:00:…" at 1440px and 2560px
+  // while reading in full at 390px. Sizing to content removes the inversion
+  // and survives locale-dependent time formats; the old width stays as a
+  // floor so the shell keeps its shape.
   const collapsedWidthClass = isMobile
     ? "w-[min(calc(100vw-1rem),18rem)]"
-    : "w-[15.5rem]";
+    : "w-auto min-w-[15.5rem] max-w-[calc(100vw-2rem)]";
   const expandedWidthClass = isMobile
     ? "w-[calc(100vw-1rem)]"
     : isCompact

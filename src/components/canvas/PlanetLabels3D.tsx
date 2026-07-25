@@ -1,9 +1,11 @@
 import { Text } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
+import { resolveBodyName } from "../../lib/bodyName";
 import { useStore } from "../../store";
 
 /**
@@ -97,6 +99,7 @@ export const PlanetLabels3D = () => {
   // Same focus action the HTML labels call (PlanetOverlay.tsx:68-71) so
   // SDF labels are clickable with identical behavior.
   const selectId = useStore((s) => s.selectId);
+  const { i18n } = useTranslation();
   const { scene, camera } = useThree();
 
   // Imperatively-managed group refs. A plain Map (held by useRef)
@@ -240,7 +243,7 @@ export const PlanetLabels3D = () => {
               document.body.style.cursor = "auto";
             }}
           >
-            {body.name.en}
+            {resolveBodyName(body.name, i18n.language)}
           </Text>
         </group>
       ))}
