@@ -37,7 +37,7 @@ test.describe("quality", () => {
   }) => {
     await visitAtlasAndWaitForReady(page);
 
-    await expect(page.getByText("System Online")).toBeVisible({
+    await expect(page.getByTestId("context-line")).toBeVisible({
       timeout: 30_000,
     });
 
@@ -103,7 +103,7 @@ test.describe("quality", () => {
 
     await visitAtlasAndWaitForReady(page);
 
-    await expect(page.getByText("System Online")).toBeVisible({
+    await expect(page.getByTestId("context-line")).toBeVisible({
       timeout: 30_000,
     });
 

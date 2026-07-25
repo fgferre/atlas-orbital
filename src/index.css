@@ -256,8 +256,33 @@ body {
 }
 
 /* Custom Scrollbar */
+/*
+ * Scroll affordance. The panels always scrolled, but content was sheared
+ * flat against the bottom edge with nothing to say more existed below — a
+ * 4px dim thumb is easy to miss on a dark panel. The mask fades the last
+ * few pixels so a cut-off row reads as "continues", and the thumb is a
+ * little wider and brighter as a second cue.
+ *
+ * ponytail: the fade is unconditional, so the final row stays slightly
+ * soft once you have scrolled all the way down. Making it disappear at the
+ * end needs a scroll listener per panel (or `animation-timeline: scroll()`,
+ * not broadly supported yet) — not worth it for 14px of softness.
+ */
+.scroll-fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+}
+
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {

@@ -54,45 +54,64 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
   Mars focused, "PLUTO" rendered inside the Mars system beside Phobos and
   Deimos, because a DOM overlay knows only screen-space proximity.
 
-## Wave 3 — chrome hierarchy (PARTIAL)
+## Wave 3 — chrome hierarchy (DONE)
 
 - **DONE** — sidebar order inverted. It opened with "QUICK CONTEXT"
   encyclopedia prose above the live readouts: the least time-sensitive
   thing on screen, and the only part a learner could read anywhere else,
   sitting above the numbers that exist _only_ because a simulation is
   running. Now Telemetry → Physical Data → Quick Context → Visual Fidelity.
-- **OPEN** — the context line. The most valuable pixels permanently read
+- **DONE** — the context line. The most valuable pixels permanently read
   "ATLAS ORBITAL / SYSTEM ONLINE". That is a website header on a simulator;
   in this class of app the top-left carries **state**. `FocusChip` already
   exists to say "you are on X" but only appears when the sidebar is closed
   — a patch over a missing primitive. Replace with one persistent line:
   where, what scale, what time. Branding shrinks to a mark. Touches
-  `TopBar`, `FocusChip` (+ its test) and the NOT-TO-SCALE pill's placement.
-- **OPEN, root cause found** — the right rail is not a rail. There is no
-  rail container: `RightControlRail.tsx` exports only icons/labels, and
-  each panel (`LayersPanel`, `SearchBar`, and the Display/A11y hosts)
-  renders **its own tab as a child of itself**. So when a panel slides in,
-  its tab travels with it and the strip visibly splits in two. Fixing it
-  means hoisting all four tabs into one positioned rail container and
-  having panels stop rendering tabs — a refactor across four files, not a
-  CSS tweak. Do not attempt it as a quick fix.
-- **OPEN** — panels clip content with no scroll affordance.
-- **OPEN** — the body identity is restated five times above the first datum
-  (`MARS`, `MARTE`, "TERRESTRIAL PLANET MARS", "PLANET", "INNER SYSTEM").
+  `TopBar`. Shipped as `ContextLine`, which ABSORBED `FocusChip` rather
+  than sitting beside it: the chip said the same thing but only when the
+  sidebar was closed, so keeping both would have duplicated the answer.
+  Its click behaviour (re-open via `setSelectedId`, never `selectId`, so
+  `focusHistory` is untouched) carried over with its tests. Three e2e specs
+  waited on the decorative "System Online" string as a readiness signal;
+  they now wait on the context line, which is real state.
+- **WITHDRAWN** — "the rail splits in two". Reading the code, this is a
+  deliberate drawer metaphor, not a defect: when a panel opens,
+  `LayersPanel.tsx:408-417` replaces that tab with an invisible spacer of
+  identical height/width/z so the remaining tabs keep their geometry, and
+  an equivalent trigger is rendered docked to the panel. The tab travels
+  with its drawer on purpose. A screenshot reads it as a split; the code
+  reads as intent. Left alone.
+- **DONE** — scroll affordance. The panels always scrolled, but content was
+  sheared flat against the bottom edge and a 4px dim thumb is easy to miss.
+  Added `.scroll-fade-bottom` (mask fading the last 14px) to the three
+  scroll containers and widened the thumb to 6px.
+- **DONE** — identity restatements. The catalog id now shows only when it
+  differs from the display name, and the type chip only when the
+  classification does not already contain the type word. Neither ever
+  drops information; both stop repeating it. The header also leads with
+  the ACTIVE language and shows the other as the secondary line.
 
-## Wave 4 — scene semantics
+## Wave 4 — scene semantics (PARTIAL)
 
-- **Named territory, not only numbers.** Nobody has intuition for "100 AU";
-  everybody has intuition for "this is where Voyager is". Band the plane
-  with named regions (Earth's orbit, Belt, Kuiper, heliopause) with the
-  number riding along for honesty. In-scene, SSS in spirit.
-- **The didactic↔realistic transition is the strongest teaching moment the
-  app owns and it is a radio button.** Watching compression release and the
-  planets rush apart _is_ the lesson.
-- Default home framing: what should "home" frame — Neptune, the belt, or a
-  cinematic outside-in approach? Owner decision, still open.
-- First run is an 8-step modal over a fully dimmed scene: the tutorial
-  hides the thing it describes.
+- **DONE — named territory.** `gridRegions.ts` + `GridRegionLabel.tsx`.
+  "Earth's orbit", "Asteroid belt", "Kuiper belt", "Heliopause" drawn on
+  the ecliptic at their real AU radii, through the same
+  `AstroPhysics.auToWorld` mapping the planets use, so they hold in BOTH
+  scale modes. Placed on the radial line OPPOSITE the AU ladder so
+  landmarks and measurements never queue behind each other, dimmer and
+  smaller because the number is the checkable quantity and the name is the
+  intuition. Values and their approximate nature are documented at the
+  data, and the distances are pinned by test — a silent edit there is a
+  silent factual change on screen.
+- **DONE — first run no longer hides the scene.** The tutorial dimmer was
+  `bg-black/60 backdrop-blur-sm`: eight modal steps describing a solar
+  system the reader could not see. Now a plain 35 % scrim.
+- **OPEN — the didactic↔realistic transition.** Still a radio button.
+  Watching compression release and the planets rush apart _is_ the lesson;
+  animating `scaleMode` changes is a real feature, not a constant tweak.
+- **RESOLVED IN PART — home framing.** The 28° tilt fixed the axis that
+  actually mattered (depth). What remains is the DISTANCE the intro settles
+  at, which is still tuned so the system reads small on wide viewports.
 
 ---
 

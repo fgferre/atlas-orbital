@@ -414,7 +414,7 @@ export const SearchBar = ({
             </div>
           </div>
         ) : results.length > 0 ? (
-          <div className="custom-scrollbar max-h-[min(20rem,45vh)] space-y-1 overflow-y-auto overscroll-contain pr-1">
+          <div className="custom-scrollbar scroll-fade-bottom max-h-[min(20rem,45vh)] space-y-1 overflow-y-auto overscroll-contain pr-1">
             {results.map((hit, index) => {
               const isActive = index === resolvedActiveIndex;
               const optionId = getOptionId(listboxId, hit.key);

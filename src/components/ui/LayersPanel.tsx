@@ -377,7 +377,7 @@ export const LayersPanel = ({
           </button>
         </div>
 
-        <div className="custom-scrollbar min-h-0 space-y-6 overflow-y-auto overscroll-contain pr-1">
+        <div className="custom-scrollbar scroll-fade-bottom min-h-0 space-y-6 overflow-y-auto overscroll-contain pr-1">
           {panelSections}
         </div>
       </div>

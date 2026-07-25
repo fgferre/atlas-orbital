@@ -191,13 +191,20 @@ export const TutorialOverlay = () => {
       <AnimatePresence>
         {isTutorialVisible && (
           <>
-            {/* Dimmer Layer - only when no spotlight target (z-98) */}
+            {/* Dimmer Layer - only when no spotlight target (z-98).
+                Was `bg-black/60 backdrop-blur-sm`, which put the first-run
+                experience behind a blur: eight modal steps describing a
+                solar system the reader could not see. The whole promise of
+                the app is on the other side of this layer. Dropped to a
+                plain 35 % scrim — enough separation for the card to read,
+                light enough that the scene stays legible while the copy
+                talks about it. */}
             {!currentStep.target && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[98] bg-black/60 backdrop-blur-sm pointer-events-auto"
+                className="fixed inset-0 z-[98] bg-black/35 pointer-events-auto"
               />
             )}
             {/* Click blocker for when spotlight is active */}

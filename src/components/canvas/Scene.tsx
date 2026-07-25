@@ -42,6 +42,7 @@ import { PlanetLabels3D } from "./PlanetLabels3D";
 import { PlanetOverlay } from "./PlanetOverlay";
 import { SceneReadyChecker } from "./SceneReadyChecker";
 import { GridDecadeLabel } from "./GridDecadeLabel";
+import { GridRegionLabel } from "./GridRegionLabel";
 import { GridRecursive } from "./GridRecursive";
 import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
@@ -696,6 +697,7 @@ export const Scene = () => {
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <GridRecursive />}
         {showEclipticGrid && <GridDecadeLabel />}
+        {showEclipticGrid && <GridRegionLabel />}
         <Suspense fallback={null}>
           <StarfieldManager />
           <Environment

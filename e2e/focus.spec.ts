@@ -12,9 +12,11 @@ test.describe("focus", () => {
   }) => {
     await visitAtlasAndWaitForReady(page);
 
-    // Wait for the system-online telemetry line — that's the signal the
-    // top bar is fully interactive, not just mounted.
-    await expect(page.getByText("System Online")).toBeVisible({
+    // Wait for the context line — the top bar is interactive once it is
+    // reporting real state. It replaced a decorative "System Online"
+    // string, which was never a readiness signal, only a label that
+    // happened to render late.
+    await expect(page.getByTestId("context-line")).toBeVisible({
       timeout: 30_000,
     });
 

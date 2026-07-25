@@ -10,10 +10,11 @@ _Last updated: 2026-07-24 (doc cleanup — archive noise out of hot path)._
 ## Active wave
 
 **[`tasks/waves/ui-redesign-2026-07-25.md`](./waves/ui-redesign-2026-07-25.md)** —
-interface redesign with fresh eyes. Waves 1 and 2 are done; Wave 3 is
-partial (sidebar order done, context line + rail hoist open); Wave 4 is
-untouched. Read that file for the evidence base, the guardrail, the rail
-root cause, and the list of claims already checked and rejected.
+interface redesign with fresh eyes. Waves 1–3 done, Wave 4 all but the
+didactic↔realistic transition animation and the intro's settle distance.
+Read that file before re-opening anything: it records six claims that were
+checked and turned out NOT to be defects, including the rail "split",
+which is a deliberate drawer metaphor.
 
 T6.4 (HYG visual recovery) agent work is complete; plan archived at
 [`archive/waves/T6.4-visual-recovery.md`](./archive/waves/T6.4-visual-recovery.md).

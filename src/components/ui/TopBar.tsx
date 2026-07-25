@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
-import { FocusChip } from "./FocusChip";
+import { ContextLine } from "./ContextLine";
 import { GearPopover } from "./GearPopover";
 
 export const TopBar = () => {
@@ -76,9 +76,7 @@ export const TopBar = () => {
                 <span className="font-orbitron">ATLAS </span>
                 <span className="font-orbitron text-nasa-accent">ORBITAL</span>
               </h1>
-              <div className="mt-0.5 text-[8px] font-orbitron uppercase tracking-[0.18em] text-nasa-accent/80">
-                System Online
-              </div>
+              <ContextLine />
             </div>
           )}
         </div>
@@ -102,10 +100,6 @@ export const TopBar = () => {
             <path d="M12 3l9 8h-3v10H6V11H3l9-8z" />
           </TopBarButton>
         </div>
-
-        {/* FocusChip: desktop-only conditional breadcrumb when Sidebar
-            is closed but camera is still focused on a body (§4.1 + §5.1). */}
-        {!isMobile && <FocusChip />}
 
         {/* Gear button + popover: relative wrapper anchors the popover
             via `absolute` positioning on desktop. Mobile popover uses

@@ -1,9 +1,11 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useStore } from "../../store";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { resolveBodyName } from "../../lib/bodyName";
 import {
   useOrbitalCalculation,
   useOrbitalProvenance,
@@ -20,6 +22,7 @@ export const Sidebar = () => {
   const selectedId = useStore((state) => state.selectedId);
   const setSelectedId = useStore((state) => state.setSelectedId);
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const { i18n } = useTranslation();
   const b = selectedId ? BODIES_BY_ID.get(selectedId) : undefined;
   // T6.4 post-audit (Codex): only feed the orbital engine known
   // curated body IDs. For HYG focus IDs (`hyg:K`) or any
@@ -157,12 +160,17 @@ export const Sidebar = () => {
                 <div className="mb-1 text-[10px] font-rajdhani font-bold uppercase tracking-[0.2em] text-nasa-accent">
                   Selected Body
                 </div>
+                {/* Both names on purpose — a bilingual affordance, not an
+                    untranslated string. The ACTIVE language leads; the other
+                    follows as the secondary line. */}
                 <h1 className="mb-1 text-2xl font-orbitron uppercase tracking-wide text-white">
-                  {b.name.en}
+                  {resolveBodyName(b.name, i18n.language)}
                 </h1>
                 {b.name.pt !== b.name.en && (
                   <div className="mb-2 text-sm uppercase tracking-[0.18em] text-white/55">
-                    {b.name.pt}
+                    {resolveBodyName(b.name, i18n.language) === b.name.pt
+                      ? b.name.en
+                      : b.name.pt}
                   </div>
                 )}
 
@@ -174,14 +182,28 @@ export const Sidebar = () => {
                   <span className="text-[10px] font-rajdhani uppercase tracking-wider text-nasa-dim">
                     {b.classification || b.type}
                   </span>
-                  <span className="text-[10px] font-rajdhani uppercase tracking-wider text-white/35">
-                    {b.id.toUpperCase()}
-                  </span>
+                  {/* The catalog id is worth showing only when it carries
+                      something the display name does not. For most bodies it
+                      is the name again in lower case, i.e. a fourth
+                      restatement before the reader reaches a single datum. */}
+                  {b.id.toUpperCase() !== b.name.en.toUpperCase() && (
+                    <span className="text-[10px] font-rajdhani uppercase tracking-wider text-white/35">
+                      {b.id.toUpperCase()}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <HeaderChip label={b.type.toUpperCase()} />
+                {/* Same rule for the type chip: "PLANET" under a
+                    classification that already reads "TERRESTRIAL PLANET"
+                    adds nothing, but a moon whose classification is
+                    "NATURAL SATELLITE" still needs its type shown. */}
+                {!(b.classification ?? "")
+                  .toUpperCase()
+                  .includes(b.type.toUpperCase()) && (
+                  <HeaderChip label={b.type.toUpperCase()} />
+                )}
                 {parentBody && (
                   <HeaderChip label={`ORBITING ${parentBody.name.en}`} />
                 )}
@@ -192,7 +214,7 @@ export const Sidebar = () => {
             </div>
 
             {/* Scrollable Content */}
-            <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
+            <div className="custom-scrollbar scroll-fade-bottom flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 pt-4">
               {/* Live Data Grid */}
               {stats && b.id !== "sun" && (
                 <div>
