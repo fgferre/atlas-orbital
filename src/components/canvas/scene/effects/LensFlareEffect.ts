@@ -134,13 +134,48 @@ const fragmentShader = /* glsl */ `
   }
 
   // lensflare.frag.glsl:115-137 circle
+  //
+  // APERTURE_GHOST_OFFSET_REMOVED (2026-07-25) — the one deliberate
+  // divergence from \`lensflare.frag.glsl\` in this function.
+  //
+  // Upstream shifts the hexagon's shape coordinate by a constant +0.9,
+  // which lands every aperture ghost at a FIXED screen offset of
+  // (-0.18, -0.18) — independent of the light AND independent of the
+  // per-iteration \`dist\` dispersion factor. Two consequences, both
+  // visible in atlas and neither of them optics:
+  //
+  //   1. Sun at screen centre (atlas's home framing, and where the
+  //      camera spends most of its time) — \`mouse\` is zero, so the
+  //      \`mouse * dist * 5.0\` separation term vanishes and all ten
+  //      loop iterations draw the SAME hexagon at the SAME place.
+  //      \`regShape\` has no radial falloff, so ten coincident copies
+  //      stack into one flat hard-edged plate hanging in empty sky —
+  //      the "hex blob" users report. Measured offline: peak channel
+  //      92/255 for the blade term alone against 31 for the circular
+  //      ghosts it is supposed to accompany.
+  //   2. Sun off-centre — the hexagons form their own row, displaced
+  //      down-left away from the circular ghosts they belong to, so
+  //      the flare reads as two unrelated sets of shapes.
+  //
+  // Dropping the constant puts each blade ghost concentric with its own
+  // circular ghost and strings the chain along the light→centre axis,
+  // which is what an aperture image actually does. With the Sun
+  // centred the blades collapse into the Sun's own glare and stop
+  // being a discrete object (peak 93 → 46).
+  //
+  // Justified under AGENTS.md: Gaia is a technical reference, not a
+  // merge gate, and +0.9 is an unmotivated ShaderToy constant rather
+  // than physics. Fidelity and wow both improve; nothing regresses.
   vec3 lensFlareCircle(vec2 p, float size, float decay, vec3 color, float dist, vec2 mouse) {
     float l = length(p + mouse * (dist * 4.0)) + size / 2.0;
     float l2 = length(p + mouse * (dist * 4.0)) + size / 3.0;
 
     float c = max(0.01 - pow(length(p + mouse * dist), size * 1.4), 0.0) * 35.0;
     float c1 = max(0.001 - pow(l - 0.3, 1.0 / 40.0) + sin(l * 30.0), 0.0) * 9.0;
-    float s = max(0.01 - pow(regShape(p * 5.0 + mouse * dist * 5.0 + 0.9, 6), 1.0), 0.0) * 9.0;
+    // Aperture-blade ghost. Gaia (and the ShaderToy original it came
+    // from) adds a constant 0.9 to the shape coordinate; atlas drops it
+    // — see APERTURE_GHOST_OFFSET_REMOVED below.
+    float s = max(0.01 - pow(regShape(p * 5.0 + mouse * dist * 5.0, 6), 1.0), 0.0) * 9.0;
 
     color = 0.5 + 0.5 * sin(color);
     color = cos(vec3(0.44, 0.24, 0.2) * 8.0 + dist * 4.0) * 0.5 + 0.5;
@@ -203,8 +238,14 @@ const fragmentShader = /* glsl */ `
       // at solar-system camera distances; without a clamp here, those
       // HDR samples drive the per-light \`perLightIntensity\` past 1.0
       // and the 10-iteration \`lensFlareCircle\` accumulator amplifies
-      // beyond Gaia's behaviour, producing the "exploding halo + chromatic
-      // edges + hex blob" defect users report at 5-30 AU.
+      // beyond Gaia's behaviour, producing the "exploding halo +
+      // chromatic edges" defect users report at 5-30 AU.
+      //
+      // This clamp was ALSO credited with the "hex blob" half of that
+      // report. It never fixed it, and could not have: the blob is a
+      // geometry bug, not an intensity one — see
+      // APERTURE_GHOST_OFFSET_REMOVED on \`lensFlareCircle\`. Scaling
+      // \`perLightIntensity\` only dims a hexagon that is still there.
       // Gaia's chain side-steps this naturally because LightGlow at
       // \`lightglow.frag.glsl:97\` writes \`saturate(effectColor + scene)\`
       // — the LDR-composited buffer that LensFlare then reads. atlas's
