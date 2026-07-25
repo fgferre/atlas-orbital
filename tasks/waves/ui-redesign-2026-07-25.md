@@ -110,8 +110,18 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
   Watching compression release and the planets rush apart _is_ the lesson;
   animating `scaleMode` changes is a real feature, not a constant tweak.
 - **RESOLVED IN PART — home framing.** The 28° tilt fixed the axis that
-  actually mattered (depth). What remains is the DISTANCE the intro settles
-  at, which is still tuned so the system reads small on wide viewports.
+  actually mattered (depth). The DISTANCE is still too far: at 1440×900 the
+  planetary system occupies roughly a tenth of the frame height.
+
+  Investigated and **ruled out**: the body set. `resolveIntroEndPosition`
+  already routes through `AstroPhysics.resolveFocusExtent`, which for the
+  Sun filters internally to planets plus dwarfs with `a ≤ 40`
+  (`astrophysics.ts:776-790`) — Sedna was never in the framing, so
+  narrowing the `bodies` argument changes almost nothing. A patch doing
+  that was written, measured, and reverted. The dominant term is in
+  `resolveFocusExtent`'s ring/semantic-radius maths or in
+  `calculateViewportAwareDistance`'s margin; whoever picks this up should
+  instrument those two before editing either.
 
 ---
 
