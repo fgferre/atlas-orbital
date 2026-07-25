@@ -137,6 +137,31 @@ const DeferredTextureBudgetGate = ({
 };
 
 /**
+ * Draws the frame on tiers where `PostProcessingPipeline` is unmounted.
+ *
+ * R3F only auto-renders while EVERY `useFrame` subscriber sits at
+ * priority 0 (`react-three-fiber`'s loop skips `gl.render` as soon as
+ * `internal.priority` is non-zero, handing the render to whoever owns
+ * the highest-priority slot). `OverlayPositionTracker` (priority 10)
+ * and `useSunScreenProjection` (11) trip that gate unconditionally, so
+ * the only thing drawing on ultra/high/medium is `EffectComposer`'s own
+ * subscriber. The `constrained` tier unmounts the composer — which used
+ * to leave nobody rendering at all: a black canvas with correctly
+ * positioned HTML overlay icons floating over it.
+ *
+ * Priority 1 is the slot @react-three/postprocessing's composer uses by
+ * default, so frame ordering relative to the trackers is identical to
+ * every other tier.
+ */
+const DirectRenderPass = () => {
+  useFrame(({ gl, scene, camera }) => {
+    gl.render(scene, camera);
+  }, 1);
+
+  return null;
+};
+
+/**
  * Dynamic zoom speed based on camera distance.
  * Close to planets: slow zoom for precision
  * Far away: fast zoom to cover astronomical distances
@@ -797,7 +822,7 @@ export const Scene = () => {
         <NormalizedWheelZoom controlsRef={controlsRef} />
         {isTestFreezeActive && <TestCameraProbe controlsRef={controlsRef} />}
 
-        {postProcessingActive && (
+        {postProcessingActive ? (
           <PostProcessingPipeline
             bloomRef={bloomRef}
             hueSatRef={hueSatRef}
@@ -808,6 +833,8 @@ export const Scene = () => {
             )}
             toneMapping={effectiveGraphics.toneMapping}
           />
+        ) : (
+          <DirectRenderPass />
         )}
         <DeferredTextureBudgetGate profileName={qualityProfile.name} />
         <CriticalSceneAssetsGate />

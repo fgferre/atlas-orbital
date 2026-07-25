@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import sharp from "sharp";
 
 /**
  * Suppresses the onboarding overlay by seeding the localStorage flag the
@@ -67,6 +68,39 @@ export const pageHasSizedCanvas = async (page: Page): Promise<boolean> =>
 
     return canvases.some((canvas) => canvas.width > 10 && canvas.height > 10);
   });
+
+/**
+ * Fraction (0–1) of a central screen crop whose pixels are brighter than
+ * near-black. Proves the WebGL canvas is actually being DRAWN, which no
+ * other gate covers: `data-postprocessing`, the ready latch and the boot
+ * watchdog all pass happily while the renderer issues no draw call at
+ * all (see `DirectRenderPass` in `Scene.tsx` for how that happened).
+ *
+ * `gl.readPixels` cannot answer this — after the frame is composited the
+ * drawing buffer is cleared, so it returns zeros on EVERY tier including
+ * working ones. A page screenshot is the only honest reading.
+ *
+ * The crop excludes the top bar, the bottom playback bar and the right
+ * rail so only scene pixels are counted. Reference readings on a 1440×900
+ * viewport: ~4.3 % on `constrained`, ~7.1 % on `ultra`, and ~0.2 % when
+ * nothing renders (the HTML overlay icon rings float over a black
+ * canvas and are all that survives).
+ */
+export const canvasLitFraction = async (page: Page): Promise<number> => {
+  const shot = await page.screenshot({
+    clip: { x: 200, y: 150, width: 1040, height: 670 },
+  });
+  const { data, info } = await sharp(shot)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  let lit = 0;
+  for (let i = 0; i < data.length; i += info.channels) {
+    if (Math.max(data[i], data[i + 1], data[i + 2]) >= 16) lit++;
+  }
+
+  return lit / (info.width * info.height);
+};
 
 /**
  * Navigates to the preview root and waits for the Atlas shell to finish
