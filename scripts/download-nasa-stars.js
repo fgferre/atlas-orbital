@@ -22,6 +22,10 @@ const FILES = [
   "stars.5.bin", // mag 10-12+
 ];
 
+// Floor for "this is a real catalog file, not a truncated transfer". The
+// smallest real payload here is tens of KB; anything under 1 KB is a stub.
+const MIN_EXPECTED_BYTES = 1024;
+
 /**
  * Download a single file from NASA Eyes CDN
  * @param {string} filename - Name of the file to download
@@ -31,12 +35,17 @@ async function downloadFile(filename) {
   const url = `${BASE_URL}/${filename}`;
   const outputPath = path.join(OUTPUT_DIR, filename);
 
-  // Skip if file already exists
+  // Skip if a plausible file already exists. Same suspicious-size guard as
+  // `download-hyg.js:86-93` — a bare existsSync would accept a truncated
+  // partial download as the source of truth forever.
   if (fs.existsSync(outputPath)) {
     const stats = fs.statSync(outputPath);
     const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-    console.log(`⏭️  ${filename} already exists (${sizeMB} MB) - skipping`);
-    return { filename, size: stats.size, skipped: true, success: true };
+    if (stats.size >= MIN_EXPECTED_BYTES) {
+      console.log(`⏭️  ${filename} already exists (${sizeMB} MB) - skipping`);
+      return { filename, size: stats.size, skipped: true, success: true };
+    }
+    console.log(`↻ ${filename} looks truncated (${sizeMB} MB) - redownloading`);
   }
 
   return new Promise((resolve) => {
@@ -59,6 +68,19 @@ async function downloadFile(filename) {
 
         response.on("end", () => {
           const buffer = Buffer.concat(chunks);
+          if (buffer.length < MIN_EXPECTED_BYTES) {
+            console.error(
+              `✗ ${filename}: suspiciously small (${buffer.length} B) - not written`
+            );
+            resolve({
+              filename,
+              size: 0,
+              skipped: false,
+              success: false,
+              error: "truncated response",
+            });
+            return;
+          }
           fs.writeFileSync(outputPath, buffer);
 
           const sizeMB = (buffer.length / 1024 / 1024).toFixed(2);

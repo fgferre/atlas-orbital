@@ -80,6 +80,62 @@ export const hygEquatorialToScene = (
     -(y * COS_OBLIQUITY + z * SIN_OBLIQUITY)
   );
 
+/** Milliarcseconds → radians. HYG stores proper motion in mas/yr. */
+const MAS_TO_RAD = 4.848136811e-9;
+
+/**
+ * Per-star proper-motion velocity, in **parsec/year, equatorial J2000** —
+ * i.e. the same frame and units as `catalog.positions`, so a caller can add
+ * `velocity × years` to a raw position and convert the sum with
+ * `hygEquatorialToScene` in one pass.
+ *
+ * Lives here, next to the frame conversion, for the reason the module
+ * docstring gives: the *previous* incarnation of this bug had the frame math
+ * forked across three call sites. This one had the proper-motion term forked
+ * too — present in the `Starfield` vertex shader (`starPosition + velocity ×
+ * yearsSinceJ2000`) and absent from every CPU consumer, so the star the
+ * camera flew toward was not the star being drawn. One definition, both
+ * paths.
+ *
+ * Tangent-plane decomposition: μ_α* and μ_δ are angular rates on the sky, so
+ * the linear rate is `μ · distance`, projected onto the local east
+ * (`∂/∂α`) and north (`∂/∂δ`) unit vectors. Radial velocity is not in the
+ * catalog and is not modelled.
+ *
+ * Writes into `out` and returns it; allocation-free for hot callers.
+ */
+export const hygProperMotionEquatorial = (
+  positions: Float32Array,
+  pmRA: Int16Array,
+  pmDec: Int16Array,
+  index: number,
+  out: THREE.Vector3 = new THREE.Vector3()
+): THREE.Vector3 => {
+  const i = index * 3;
+  const px = positions[i]!;
+  const py = positions[i + 1]!;
+  const pz = positions[i + 2]!;
+
+  const dist = Math.sqrt(px * px + py * py + pz * pz);
+  if (dist <= 0) return out.set(0, 0, 0);
+
+  const decRad = Math.asin(pz / dist);
+  const raRad = Math.atan2(py, px);
+  const cosRA = Math.cos(raRad);
+  const sinRA = Math.sin(raRad);
+  const cosDec = Math.cos(decRad);
+  const sinDec = Math.sin(decRad);
+
+  const pmRaPcPerYr = pmRA[index]! * MAS_TO_RAD * dist;
+  const pmDecPcPerYr = pmDec[index]! * MAS_TO_RAD * dist;
+
+  return out.set(
+    -sinRA * pmRaPcPerYr + -sinDec * cosRA * pmDecPcPerYr,
+    cosRA * pmRaPcPerYr + -sinDec * sinRA * pmDecPcPerYr,
+    cosDec * pmDecPcPerYr
+  );
+};
+
 /**
  * Bulk, allocation-free variant: rewrite a packed `[x0,y0,z0, x1,…]`
  * Float32Array of equatorial-J2000 triplets into the scene frame,

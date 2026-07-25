@@ -32,16 +32,62 @@ export const TT_TAI_OFFSET_SECONDS = 32.184;
 // Approximate TDB - TT offset max amplitude (~2ms)
 export const TDB_TT_MAX_OFFSET_MS = 2;
 
-// Delta-T approximation coefficients (simplified model)
-// For more precision, use lookup tables or IERS data
-const DELTA_T_POLY_COEFFS = {
-  // For years 2000-2050: polynomial approximation
-  baseYear: 2000,
-  // Delta-T in seconds = a + b*t + c*t^2 where t = years from 2000
-  a: 64.0, // Base offset around year 2000
-  b: 0.5, // Rate of change per year
-  c: 0.001, // Acceleration term
-};
+/**
+ * Delta-T (TT − UT1) polynomial set from Espenak & Meeus, *Five Millennium
+ * Canon of Solar Eclipses* (NASA/TP–2006–214141), as published on the NASA
+ * eclipse site. Valid −1999 … +3000 and extrapolating smoothly beyond, which
+ * covers the whole window our providers announce in
+ * `registry.ts` VALIDITY_RANGES (VSOP87 spans −2000 … +6000).
+ *
+ * Each row is `[upperYearExclusive, origin, divisor, ...coeffs]` and evaluates
+ * as ΔT = Σ cₖ·tᵏ with t = (y − origin) / divisor. Rows are ordered; the first
+ * whose upper bound exceeds `y` wins.
+ *
+ * ponytail: the reference's optional lunar-secular-acceleration correction
+ * (−0.000012932·(y−1955)²) is omitted — it is a 0.4 % term at year 6000 and
+ * only applies when pairing ΔT with an ṅ of −26 ″/cy² for eclipse canon work.
+ */
+const DELTA_T_BRANCHES: readonly (readonly number[])[] = [
+  [-500, 1820, 100, -20, 0, 32],
+  [
+    500, 0, 100, 10583.6, -1014.41, 33.78311, -5.952053, -0.1798452,
+    0.022174192, 0.0090316521,
+  ],
+  [
+    1600, 1000, 100, 1574.2, -556.01, 71.23472, 0.319781, -0.8503463,
+    -0.005050998, 0.0083572073,
+  ],
+  [1700, 1600, 1, 120, -0.9808, -0.01532, 1 / 7129],
+  [1800, 1700, 1, 8.83, 0.1603, -0.0059285, 0.00013336, -1 / 1174000],
+  [
+    1860, 1800, 1, 13.72, -0.332447, 0.0068612, 0.0041116, -0.00037436,
+    0.0000121272, -0.0000001699, 0.000000000875,
+  ],
+  [
+    1900,
+    1860,
+    1,
+    7.62,
+    0.5737,
+    -0.251754,
+    0.01680668,
+    -0.0004473624,
+    1 / 233174,
+  ],
+  [1920, 1900, 1, -2.79, 1.494119, -0.0598939, 0.0061966, -0.000197],
+  [1941, 1920, 1, 21.2, 0.84493, -0.0761, 0.0020936],
+  [1961, 1950, 1, 29.07, 0.407, -1 / 233, 1 / 2547],
+  [1986, 1975, 1, 45.45, 1.067, -1 / 260, -1 / 718],
+  [
+    2005, 2000, 1, 63.86, 0.3345, -0.060374, 0.0017275, 0.000651814,
+    0.00002373599,
+  ],
+  [2050, 2000, 1, 62.92, 0.32217, 0.005589],
+  // 2050 ≤ y < 2150: the reference's −20 + 32u² − 0.5628(2150 − y), expanded
+  // onto the same u = (y − 1820)/100 basis so it fits the table form.
+  [2150, 1820, 100, -205.72, 56.28, 32],
+  [Infinity, 1820, 100, -20, 0, 32],
+];
 
 /**
  * Convert JavaScript Date to Julian Date (UT)
@@ -66,27 +112,37 @@ export function jdToDate(jd: number): Date {
 }
 
 /**
- * Calculate approximate Delta-T (TT - UT1) in seconds
- * Uses a simplified polynomial model for 2000-2050
- * For higher precision, use IERS bulletins
+ * Calculate Delta-T (TT − UT1) in seconds.
+ *
+ * Espenak & Meeus polynomial set (see `DELTA_T_BRANCHES`). Accurate to a few
+ * seconds over the historical record and continuous across the full window our
+ * ephemeris providers claim, so scrubbing the Timeline to year 3000 no longer
+ * silently pins ΔT at a clamped 100 s (real ΔT there is ≈ 4400 s ≈ 0.6° of
+ * lunar orbital motion).
+ *
+ * Known approximation, disclosed rather than hidden: the 2005–2050 branch was
+ * fitted in 2006 and slightly over-predicts present-day ΔT (≈ 75 s modelled vs
+ * ≈ 69 s observed for 2026) because Earth's rotational slowdown stalled after
+ * the fit. That residual is ~0.2 arcsec of planetary position — below anything
+ * the scene can show. Live IERS bulletins would be the only way to do better.
+ *
  * @param date JavaScript Date
  * @returns Delta-T in seconds
  */
 export function calculateDeltaT(date: Date): number {
-  const year =
-    date.getUTCFullYear() +
-    (date.getUTCMonth() + 1) / 12 +
-    date.getUTCDate() / 365.25;
+  // Decimal year per the reference's convention: y = year + (month − 0.5)/12.
+  const year = date.getUTCFullYear() + (date.getUTCMonth() + 0.5) / 12;
 
-  const t = year - DELTA_T_POLY_COEFFS.baseYear;
+  const branch =
+    DELTA_T_BRANCHES.find((b) => year < b[0]!) ??
+    DELTA_T_BRANCHES[DELTA_T_BRANCHES.length - 1]!;
 
-  // Polynomial approximation: Delta-T = a + b*t + c*t^2
-  const deltaT =
-    DELTA_T_POLY_COEFFS.a +
-    DELTA_T_POLY_COEFFS.b * t +
-    DELTA_T_POLY_COEFFS.c * t * t;
-
-  return Math.max(30, Math.min(100, deltaT)); // Clamp to reasonable range
+  const t = (year - branch[1]!) / branch[2]!;
+  let deltaT = 0;
+  for (let k = branch.length - 1; k >= 3; k--) {
+    deltaT = deltaT * t + branch[k]!;
+  }
+  return deltaT;
 }
 
 /**

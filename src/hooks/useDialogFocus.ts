@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import type { RefObject } from "react";
 
@@ -38,6 +38,17 @@ export const useDialogFocus = ({
   initialFocusRef,
   onClose,
 }: UseDialogFocusOptions) => {
+  // Five of the six call sites pass an inline `onClose` arrow, so keeping it
+  // in the effect's dependency list meant the trap tore down and re-armed on
+  // every parent render — and the re-arm runs `focusInitialTarget()`. A
+  // keyboard user toggling a control inside LayersPanel had focus yanked back
+  // to the panel's Close button, making the toggle list impossible to walk.
+  // The ref keeps the latest handler without tying it to focus lifecycle.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!isOpen || typeof window === "undefined") {
       return;
@@ -69,7 +80,7 @@ export const useDialogFocus = ({
       }
 
       if (event.key === "Escape") {
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
 
@@ -107,5 +118,5 @@ export const useDialogFocus = ({
       document.removeEventListener("keydown", handleKeyDown);
       previousFocus?.focus();
     };
-  }, [containerRef, initialFocusRef, isOpen, onClose]);
+  }, [containerRef, initialFocusRef, isOpen]);
 };

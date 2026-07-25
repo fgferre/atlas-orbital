@@ -151,6 +151,11 @@ export const TutorialOverlay = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
+        // Same anti-stacking guard `Overlay` applies to `?`: reopening the
+        // tutorial over an already-open modal would arm a second
+        // document-level focus trap on top of the first.
+        const s = useStore.getState();
+        if (s.showCredits || s.gearOpen || s.shortcutsModalOpen) return;
         e.preventDefault();
         reopenTutorial();
       }

@@ -10,7 +10,8 @@ import {
   resolveHygDistanceFromSunPc,
   resolveHygWorldPosition,
 } from "./hygFocusResolver";
-import { HYG_OBLIQUITY_RAD } from "../starfield/hygFrame";
+import { HYG_OBLIQUITY_RAD, hygEquatorialToScene } from "../starfield/hygFrame";
+import { simulationClock, yearsSinceJ2000 } from "../simulationClock";
 
 const DISTANCE_SCALE = 206_265_000.0;
 const OBLIQUITY_RAD = HYG_OBLIQUITY_RAD;
@@ -320,6 +321,52 @@ describe("resolveHygDistanceFromSunPc", () => {
     expect(resolveHygDistanceFromSunPc(NaN, catalog)).toBeNull();
     expect(resolveHygDistanceFromSunPc(3, catalog)).toBeNull();
     expect(resolveHygDistanceFromSunPc(1_000_000, catalog)).toBeNull();
+  });
+
+  it("displaces a high-proper-motion star by exactly what the Starfield shader draws", () => {
+    // Product contract, not an implementation pin: the vertex shader at
+    // `Starfield.tsx` computes `starPosition + velocity * yearsSinceJ2000`,
+    // and the camera must fly to that same point. When only the shader
+    // applied the term, clicking Sirius aimed the camera ~94,000 wu off the
+    // sprite — far enough to push the star out of frame during the final
+    // approach. Compare against the shader's formula, evaluated
+    // independently here, rather than against a hard-coded vector.
+    const pmCatalog = buildCatalog([0, 0, 0, 2.637, 0, 0]);
+    // Sirius-scale: 2.637 pc, 1339 mas/yr, put entirely on the Dec axis so
+    // the expected displacement is a clean +z in the catalog frame.
+    pmCatalog.pmDec[1] = 1339;
+
+    const MAS_TO_RAD = 4.848136811e-9;
+    const years = 1000;
+    const restore = simulationClock.getNow();
+    simulationClock.seek(new Date(Date.UTC(3000, 0, 1, 12)));
+    try {
+      const actualYears = yearsSinceJ2000();
+      expect(actualYears).toBeCloseTo(years, 0);
+
+      // Read the float32 the resolver reads, so the comparison is about the
+      // formula and not about Float32Array rounding of the literal.
+      const distPc = pmCatalog.positions[3]!;
+      const vz = 1339 * MAS_TO_RAD * distPc; // pc/yr, north tangent at Dec 0
+      const expected = hygEquatorialToScene(
+        distPc * DISTANCE_SCALE,
+        0,
+        vz * actualYears * DISTANCE_SCALE
+      );
+
+      const got = resolveHygWorldPosition(1, pmCatalog)!;
+      expect(got.distanceTo(expected) / expected.length()).toBeLessThan(1e-6);
+
+      // And the displacement is large enough to matter: > 3e6 world units
+      // over a millennium, i.e. many times the fly-to landing radius.
+      const atEpoch = resolveHygWorldPosition(
+        1,
+        buildCatalog([0, 0, 0, 2.637, 0, 0])
+      )!;
+      expect(got.distanceTo(atEpoch)).toBeGreaterThan(3e6);
+    } finally {
+      simulationClock.seek(restore);
+    }
   });
 
   it("is independent of the obliquity rotation applied by resolveHygWorldPosition", () => {

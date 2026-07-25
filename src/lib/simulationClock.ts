@@ -208,3 +208,18 @@ export class SimulationClock {
 }
 
 export const simulationClock = new SimulationClock();
+
+const J2000_EPOCH_MS = Date.parse("2000-01-01T12:00:00Z");
+const MS_PER_JULIAN_YEAR = 365.25 * 86400 * 1000;
+
+/**
+ * Julian years of simulated time elapsed since J2000.0 — the epoch every HYG
+ * catalog position is stored at.
+ *
+ * Single source of truth on purpose: the `Starfield` vertex shader and the
+ * CPU-side `resolveHygWorldPosition` both displace a star by
+ * `properMotion × yearsSinceJ2000()`, and if the two ever disagreed the
+ * camera would fly to a point where no star is drawn.
+ */
+export const yearsSinceJ2000 = (): number =>
+  (simulationClock.getNow().getTime() - J2000_EPOCH_MS) / MS_PER_JULIAN_YEAR;

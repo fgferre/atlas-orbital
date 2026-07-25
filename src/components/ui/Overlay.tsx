@@ -71,6 +71,13 @@ export const Overlay = () => {
       }
 
       if (event.key === "?") {
+        // A right-control panel (View / Search) is itself a focus trap via
+        // `useDialogFocus`, so stacking the shortcuts sheet on top gave two
+        // live document-level keydown traps: one Escape closed both and
+        // focus restoration raced between the two cleanups. `/` is
+        // deliberately exempt above — it *switches* panels through
+        // `requestPanel` rather than layering.
+        if (activePanel) return;
         event.preventDefault();
         setShortcutsModalOpen(true);
       }
@@ -78,7 +85,7 @@ export const Overlay = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setShortcutsModalOpen]);
+  }, [setShortcutsModalOpen, activePanel]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">

@@ -91,17 +91,46 @@ describe("Time Utilities", () => {
   });
 
   describe("Delta-T", () => {
-    it("should return positive Delta-T for modern dates", () => {
-      const date = new Date("2020-01-01");
-      const deltaT = calculateDeltaT(date);
-      expect(deltaT).toBeGreaterThan(0);
-      expect(deltaT).toBeLessThan(100);
-    });
+    // Contract: ΔT must track the published Espenak & Meeus / IERS record
+    // across the whole window our providers advertise in registry.ts
+    // (VSOP87 spans −2000…+6000), not just the modern era. Tolerances are
+    // ~0.5 % — enough to catch a wrong branch, loose enough to survive a
+    // decimal-year convention tweak.
+    const PUBLISHED: ReadonlyArray<[year: number, deltaTSeconds: number]> = [
+      [-500, 17190],
+      [0, 10580],
+      [500, 5710],
+      [1000, 1570],
+      [1500, 198],
+      [1700, 9],
+      [1800, 13.7],
+      [1900, -2.8],
+      [1950, 29.1],
+      [2000, 63.8],
+    ];
 
-    it("should return reasonable Delta-T for J2000", () => {
-      const deltaT = calculateDeltaT(J2000_EPOCH);
-      expect(deltaT).toBeGreaterThan(60); // ~64s at J2000
-      expect(deltaT).toBeLessThan(70);
+    it.each(PUBLISHED)(
+      "matches the published Delta-T at year %i (%f s)",
+      (year, expected) => {
+        const date = new Date(Date.UTC(2000, 0, 1));
+        date.setUTCFullYear(year);
+        // Absolute floor of 1 s keeps the near-zero 1900 epoch meaningful.
+        const tolerance = Math.max(1, Math.abs(expected) * 0.005);
+        expect(Math.abs(calculateDeltaT(date) - expected)).toBeLessThanOrEqual(
+          tolerance
+        );
+      }
+    );
+
+    it("keeps growing quadratically past the fitted window (no clamp)", () => {
+      // The old model clamped to 100 s, which silently froze ΔT for any
+      // Timeline scrub past ~2070 while the UI still claimed validity.
+      expect(calculateDeltaT(new Date(Date.UTC(3000, 0, 1)))).toBeGreaterThan(
+        4000
+      );
+      expect(
+        calculateDeltaT(new Date(Date.UTC(2150, 0, 1)))
+      ).toBeGreaterThanOrEqual(calculateDeltaT(new Date(Date.UTC(2100, 0, 1))));
     });
 
     it("should increase over time", () => {

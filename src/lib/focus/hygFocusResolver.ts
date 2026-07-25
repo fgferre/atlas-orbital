@@ -32,7 +32,14 @@
 import * as THREE from "three";
 
 import type { HygCatalogData } from "../../utils/hygBinary";
-import { hygEquatorialToScene } from "../starfield/hygFrame";
+import {
+  hygEquatorialToScene,
+  hygProperMotionEquatorial,
+} from "../starfield/hygFrame";
+import { yearsSinceJ2000 } from "../simulationClock";
+
+/** Scratch for the proper-motion term; `resolveHygWorldPosition` runs per frame. */
+const TMP_PROPER_MOTION = new THREE.Vector3();
 
 /**
  * Prefix for focus IDs targeting HYG catalog stars. Matches the
@@ -119,10 +126,17 @@ export const parseHygFocusId = (focusId: string | null): number | null => {
  * pipeline. Returns `null` when the index is out of range; otherwise
  * writes the result into `out` (default new Vector3) and returns it.
  *
- * Mirrors `StarHoverPicker.buildPickCandidates` exactly:
+ * Mirrors what `Starfield`'s vertex shader actually draws:
  *   1. Read `catalog.positions[3*K..3*K+3]` (parsec-scale equatorial J2000).
- *   2. Multiply by `DISTANCE_SCALE` (parsec → atlas world unit).
- *   3. Convert equatorial J2000 → scene frame via
+ *   2. Add `properMotion × yearsSinceJ2000()`, matching the shader's
+ *      `animatedPos = starPosition + velocity * yearsSinceJ2000`. Without
+ *      this the camera flew to a star's year-2000 position while the sprite
+ *      was drawn at the simulated epoch — ~94,000 wu apart for Sirius today,
+ *      enough to push the sprite out of frame below ~227,000 wu of approach
+ *      and leave the fly-to aimed at empty sky until the procedural mesh
+ *      faded in. High-proper-motion stars (Barnard's) were ~5× worse.
+ *   3. Multiply by `DISTANCE_SCALE` (parsec → atlas world unit).
+ *   4. Convert equatorial J2000 → scene frame via
  *      `lib/starfield/hygFrame.ts:hygEquatorialToScene` — the SAME
  *      helper `Starfield` bakes into its instance buffer and
  *      `StarHoverPicker` uses to build pick candidates, so render,
@@ -151,10 +165,22 @@ export const resolveHygWorldPosition = (
   if (!Number.isInteger(starIndex) || starIndex < 0) return null;
   if (starIndex >= catalog.header.count) return null;
 
+  const years = yearsSinceJ2000();
+  hygProperMotionEquatorial(
+    catalog.positions,
+    catalog.pmRA,
+    catalog.pmDec,
+    starIndex,
+    TMP_PROPER_MOTION
+  );
+
   const i = starIndex * 3;
-  const px = catalog.positions[i] * DISTANCE_SCALE;
-  const py = catalog.positions[i + 1] * DISTANCE_SCALE;
-  const pz = catalog.positions[i + 2] * DISTANCE_SCALE;
+  const px =
+    (catalog.positions[i] + TMP_PROPER_MOTION.x * years) * DISTANCE_SCALE;
+  const py =
+    (catalog.positions[i + 1] + TMP_PROPER_MOTION.y * years) * DISTANCE_SCALE;
+  const pz =
+    (catalog.positions[i + 2] + TMP_PROPER_MOTION.z * years) * DISTANCE_SCALE;
 
   return hygEquatorialToScene(px, py, pz, out);
 };

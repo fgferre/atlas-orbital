@@ -24,15 +24,35 @@ port onda. Prefer user-stated tasks, or themes in
 
 ## Carryover (parked — do not auto-expand)
 
-| ID       | Pri | Note                                                                                                                                                                                           |
-| -------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U-smoke  | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                                                                                          |
-| Doc-debt | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs                                                                          |
-| Cross-AI | —   | Validation brief for external AI: [`archive/audits/cross-ai-validation-brief-2026-07-24.md`](./archive/audits/cross-ai-validation-brief-2026-07-24.md) (not a backlog — excavate + revalidate) |
+| ID       | Pri | Note                                                                                                                                                                                                                                                                                                  |
+| -------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U-smoke  | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                                                                                                                                                                                                 |
+| Doc-debt | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs                                                                                                                                                                                 |
+| Cross-AI | —   | Validation brief: [`archive/audits/cross-ai-validation-brief-2026-07-24.md`](./archive/audits/cross-ai-validation-brief-2026-07-24.md). **Three external audits were revalidated against code on 2026-07-24** — see the Cross-AI triage note below. Do not re-open their claims without new evidence. |
 
 Post–July 2026 audit fixes already landed on `main`/ahead branch
 (frame, moons, `n`, mobile sidebar, CI gates, LOD, reduced-motion,
 WebGL card, etc.). **Archived audit P0 lists are not a todo list.**
+
+### Cross-AI triage — 2026-07-24
+
+~30 claims from three external audits (Antigravity, GLM, Grok) were
+verified line-by-line against HEAD. **Fixed:** ΔT clamp → Espenak-Meeus
+(honesty at the announced VSOP range), HYG proper motion missing from
+every CPU consumer (fly-to aimed ~94 000 wu off the drawn sprite),
+`useDialogFocus` focus yank, `?`/Ctrl+Shift+T modal stacking,
+`PlanetModel` ignoring `rotationEpoch`, Playwright `retries`,
+NASA downloader truncation guard.
+
+**Rejected with evidence — do not re-open:** hyperbolic Kepler solver
+(catalog max e = 0.85, no comets, no user-add path); GPU-instanced orbit
+curves (13 orbits by default, 44 max); QD→star-shader bridge (~1e-4 px);
+`starfield.ts` base-path bug (already `BASE_URL`-aware); `selectId(null)`,
+`onRehydrateStorage`, `migrateLegacyStorage` SSR, texture-cache eviction,
+HYG CSV quote handling (0 of 119 626 rows affected), `camera.near`
+collapse. Three proposed fixes would have **introduced** bugs
+(`useOrbitalEngine` → frozen Sidebar; `onRehydrateStorage` → TDZ crash at
+boot; focus-tracking reset → target snap).
 
 ---
 

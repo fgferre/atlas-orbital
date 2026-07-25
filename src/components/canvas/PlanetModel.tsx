@@ -258,12 +258,17 @@ export const PlanetModel = ({
     const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
     groupRef.current.scale.set(s * sx, s * sy, s * sz);
 
-    // Rotation
+    // Rotation — same helper as `Planet.tsx` so a body's `rotationEpoch` /
+    // `rotationOffsetDegrees` are honoured whether it renders as a shaded
+    // sphere or as a GLB model. The raw `Date.now()/period` form this
+    // replaced silently ignored both fields.
     if (rotationRef.current && body.rotationPeriodHours) {
-      const nowMs = simulationClock.getNow().getTime();
-      const currentRotation =
-        (nowMs / (body.rotationPeriodHours * 3600000)) * Math.PI * 2;
-      rotationRef.current.rotation.y = currentRotation;
+      rotationRef.current.rotation.y = AstroPhysics.calculateRotationAngle(
+        simulationClock.getNow(),
+        body.rotationPeriodHours,
+        body.rotationOffsetDegrees || 0,
+        body.rotationEpoch ? new Date(body.rotationEpoch) : undefined
+      );
     }
   });
 

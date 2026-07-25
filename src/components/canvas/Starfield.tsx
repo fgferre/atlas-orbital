@@ -41,7 +41,7 @@ import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useStore } from "../../store";
-import { simulationClock } from "../../lib/simulationClock";
+import { yearsSinceJ2000 } from "../../lib/simulationClock";
 import {
   buildFadeAlphaAttribute,
   buildFocusMaskAttribute,
@@ -52,7 +52,10 @@ import {
   loadHygCatalog,
   type HygCatalogData,
 } from "../../lib/starfield";
-import { transformHygEquatorialTripletsInPlace } from "../../lib/starfield/hygFrame";
+import {
+  hygProperMotionEquatorial,
+  transformHygEquatorialTripletsInPlace,
+} from "../../lib/starfield/hygFrame";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 import {
@@ -80,15 +83,6 @@ import {
 // distances (verified Sirius ≈ 3e-8 rad clamp ceiling; mag-5 G-dwarf
 // at 20 pc ≈ 1.1e-9 rad in the opacity-lint band).
 const DISTANCE_SCALE = 206_265_000.0;
-
-// Convert 1 milliarcsecond to radians. Used to turn the stored pmra/pmdec
-// (integer mas/yr) into the tangential proper motion component.
-const MAS_TO_RAD = 4.848136811e-9;
-
-// Milliseconds per Julian year (365.25 days). J2000 epoch in UT ms is
-// `Date.parse("2000-01-01T12:00:00Z")`.
-const J2000_EPOCH_MS = Date.parse("2000-01-01T12:00:00Z");
-const MS_PER_JULIAN_YEAR = 365.25 * 86400 * 1000;
 
 // Gaia Sky `star.group.quad.vertex.glsl` port (θ.1b). The vertex:
 //   1. Applies proper motion via `yearsSinceJ2000`.
@@ -316,16 +310,13 @@ function getStarSpriteTexture(): THREE.DataTexture {
 }
 
 /**
- * Convert HYG's pmra / pmdec (int16 mas/yr) into a 3D velocity in
- * parsecs/year aligned with the catalog's own J2000 equatorial frame.
- * The shader displaces by `velocity × yearsSinceJ2000`.
+ * Pack the whole catalog's proper-motion velocities (parsec/year, catalog
+ * equatorial J2000) into an instance attribute. The shader displaces by
+ * `velocity × yearsSinceJ2000`.
  *
- *   east  = (−sinα, cosα, 0)
- *   north = (−sinδ·cosα, −sinδ·sinα, cosδ)
- *   v = (pmRA · east + pmDec · north) · mas_to_rad · dist
- *
- * HYG's `pmra` convention already includes cos(δ), so no extra
- * multiplication.
+ * The per-star math lives in `hygProperMotionEquatorial` so the CPU
+ * consumers of the same displacement — fly-to target, stellar mesh
+ * placement — cannot drift away from what this buffer makes the GPU draw.
  *
  * Output stays in the catalog's equatorial frame; the caller runs it
  * through `transformHygEquatorialTripletsInPlace` alongside the
@@ -335,30 +326,13 @@ function buildVelocityAttribute(catalog: HygCatalogData): Float32Array {
   const { positions, pmRA, pmDec } = catalog;
   const count = catalog.header.count;
   const velocities = new Float32Array(count * 3);
+  const v = new THREE.Vector3();
 
   for (let i = 0; i < count; i++) {
-    const px = positions[i * 3 + 0];
-    const py = positions[i * 3 + 1];
-    const pz = positions[i * 3 + 2];
-
-    const dist = Math.sqrt(px * px + py * py + pz * pz);
-    if (dist <= 0) continue;
-
-    const decRad = Math.asin(pz / dist);
-    const raRad = Math.atan2(py, px);
-    const cosRA = Math.cos(raRad);
-    const sinRA = Math.sin(raRad);
-    const cosDec = Math.cos(decRad);
-    const sinDec = Math.sin(decRad);
-
-    const pmRaPcPerYr = pmRA[i] * MAS_TO_RAD * dist;
-    const pmDecPcPerYr = pmDec[i] * MAS_TO_RAD * dist;
-
-    velocities[i * 3 + 0] =
-      -sinRA * pmRaPcPerYr + -sinDec * cosRA * pmDecPcPerYr;
-    velocities[i * 3 + 1] =
-      cosRA * pmRaPcPerYr + -sinDec * sinRA * pmDecPcPerYr;
-    velocities[i * 3 + 2] = cosDec * pmDecPcPerYr;
+    hygProperMotionEquatorial(positions, pmRA, pmDec, i, v);
+    velocities[i * 3 + 0] = v.x;
+    velocities[i * 3 + 1] = v.y;
+    velocities[i * 3 + 2] = v.z;
   }
 
   return velocities;
@@ -585,9 +559,7 @@ export const Starfield = () => {
   useFrame(() => {
     const matUniforms = material.uniforms;
 
-    const years =
-      (simulationClock.getNow().getTime() - J2000_EPOCH_MS) /
-      MS_PER_JULIAN_YEAR;
+    const years = yearsSinceJ2000();
     matUniforms.yearsSinceJ2000.value = years;
 
     // Viewport height × effective DPR. `gl.getPixelRatio()` returns the
