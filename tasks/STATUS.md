@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (fidelity & honesty wave opened; UI redesign archived)._
+_Last updated: 2026-07-26 (W1+W2 code-complete, smoke pending; W3 next)._
 
 ---
 
@@ -12,7 +12,12 @@ _Last updated: 2026-07-26 (fidelity & honesty wave opened; UI redesign archived)
 **[`tasks/waves/fidelity-honesty-2026-07-26.md`](./waves/fidelity-honesty-2026-07-26.md)** —
 thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
-pre-committed**. Nothing started yet — W1 is next.
+pre-committed**.
+
+**W1 and W2 are code-complete on `main` (through `d137ddf`); both owe a browser
+smoke, checklist in that commit body. W3 (photometry / exposure floor) is next
+— first shader work, first medium-risk wave.** Per-item commits are in the
+wave file's progress table.
 
 Read that file's **Standing law** before touching anything: it fixes the
 helper-deletes-what-it-replaces rule, the zero-new-uniform GLSL convention, the
