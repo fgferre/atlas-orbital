@@ -321,6 +321,21 @@ invisible now is. The fix moves alpha monotonically **down** at every colour, so
 it can only remove a hard outer ring, never introduce one — the "if it rings,
 touch `alpha`" contingency cannot fire in this direction.
 
+**`npm run test:e2e` is flaky on this workstation right now, and it is not W3.**
+Three consecutive full runs produced three different failure sets — `hyg-focus`
+alone, then `hyg-focus` + `postprocessing` + `quality`, then `hyg-focus` alone
+again — with three different failure _modes_: `ANGLE_instanced_arrays not
+supported` from drei's SDF generator, `pageHasSizedCanvas` never true, and the
+`atlas-loader` never unmounting. The last full run was made with `src/` checked
+out at **`ffd0288`** (pre-W3) and rebuilt, and it failed too. Each individual spec
+also passes when run alone at W3. The signature — a canvas that never mounts and a
+missing WebGL1 extension, varying per run — reads as WebGL-context pressure from
+many Chromium launches in one session, not as a code regression. **The single
+pixel gate (`boot.spec.ts`) passed in every run at both commits.** Before treating
+a red `test:e2e` here as a bug, re-run the failing spec alone and, if it passes,
+suspect the machine; CI runs with `retries: 2`, which is why this has not surfaced
+there.
+
 **Found while checking an anchor, belongs to W7, deliberately not fixed here:**
 three's `output_fragment` chunk was renamed `opaque_fragment` in r152 and this
 repo is on r181, so all three `.replace("#include <output_fragment>", ...)` calls
