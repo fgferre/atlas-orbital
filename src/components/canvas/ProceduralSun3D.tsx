@@ -9,11 +9,12 @@ import {
   DEFAULT_CLASS_BIAS_GAMMA,
   SOLAR_CLASS_COLOR,
 } from "../../lib/stellarSurfaceTransfer";
-import { resolveSunRenderRange } from "../../lib/sunRenderRange";
 import {
   SUN_DEFAULT_VISUAL_PROFILE,
   type StellarVisualProfile,
 } from "../../lib/stellarVisualProfile";
+import { SUN_FX_PROFILES, shouldBakeCube } from "../../lib/sunFxProfile";
+import { resolveSunRenderRange } from "../../lib/sunRenderRange";
 import {
   proceduralSunFlaresFragmentShader,
   proceduralSunFlaresVertexShader,
@@ -27,63 +28,9 @@ import {
   proceduralSunSphereVertexShader,
 } from "./shaders/proceduralSunShaders";
 
-type SunFXProfile = {
-  cubeResolution: number;
-  sphereSegments: number;
-  raysLineCount: number;
-  raysLineLength: number;
-  flaresLineCount: number;
-  flaresLineLength: number;
-  cubeUpdateInterval: number;
-  lowRes: boolean;
-};
-
 const SPHERE_RADIUS = 1.5;
 const SURFACE_RADIUS = 1.49;
 const GLOW_RING_RADIUS = SURFACE_RADIUS;
-
-const SUN_FX_PROFILES: Record<ResolvedQualityName, SunFXProfile> = {
-  ultra: {
-    cubeResolution: 512,
-    sphereSegments: 64,
-    raysLineCount: 4095,
-    raysLineLength: 8,
-    flaresLineCount: 2047,
-    flaresLineLength: 16,
-    cubeUpdateInterval: 1,
-    lowRes: false,
-  },
-  high: {
-    cubeResolution: 512,
-    sphereSegments: 64,
-    raysLineCount: 4095,
-    raysLineLength: 8,
-    flaresLineCount: 2047,
-    flaresLineLength: 16,
-    cubeUpdateInterval: 1,
-    lowRes: false,
-  },
-  balanced: {
-    cubeResolution: 192,
-    sphereSegments: 56,
-    raysLineCount: 1024,
-    raysLineLength: 4,
-    flaresLineCount: 640,
-    flaresLineLength: 10,
-    cubeUpdateInterval: 2,
-    lowRes: true,
-  },
-  constrained: {
-    cubeResolution: 128,
-    sphereSegments: 48,
-    raysLineCount: 512,
-    raysLineLength: 4,
-    flaresLineCount: 320,
-    flaresLineLength: 8,
-    cubeUpdateInterval: 3,
-    lowRes: true,
-  },
-};
 
 /* ─── Geometry creators ─── */
 
@@ -698,7 +645,13 @@ export const ProceduralSun3D = ({
 
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
-    frameCountRef.current += 1;
+    // W3/P-01 — read the counter *before* advancing it, so frame 0 bakes on
+    // every tier instead of showing an unbaked cubemap for the first
+    // `interval - 1` frames after boot. The advance stays above the
+    // `isClose` early-return so the bake phase survives a stretch of frames
+    // spent out of render range.
+    const frameCount = frameCountRef.current;
+    frameCountRef.current = frameCount + 1;
 
     const group = groupRef.current;
     if (!group) return;
@@ -732,7 +685,7 @@ export const ProceduralSun3D = ({
 
     // Bake perlin cubemap
     perlinResources.material.uniforms.uTime.value = time * 0.1;
-    if (frameCountRef.current % profile.cubeUpdateInterval === 0) {
+    if (shouldBakeCube(frameCount, profile.cubeUpdateInterval)) {
       perlinResources.cubeCamera.update(gl, perlinResources.scene);
     }
 
