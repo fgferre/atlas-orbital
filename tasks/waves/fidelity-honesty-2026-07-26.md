@@ -9,6 +9,21 @@ every confirmed fidelity and honesty defect. Tranche 2 is additive and is
 
 Item IDs are defined in the triage document. Do not schedule anything from its §3.
 
+**Revised 2026-07-26 after a second external review round** (three reviewers, then
+three verification agents against HEAD). Eleven findings landed; eight were
+defects in this file's own text, not in the code. The material ones, each marked
+inline where it lives: the eclipse cone anchors were computed from the **mean**
+Earth–Moon distance and would have rendered a total eclipse annular (W7); the
+obliquity derivation used ecliptic north instead of the orbital normal, wrong by
+176° for Venus (W2); the plume speed band was gas velocity applied to grain
+trajectories, entirely above escape (W13); the `groupRef` invariant fused two
+different refs (W5); standing law 2 forbade uniforms that W7 and W10 both require;
+a 6 h eclipse scan step misses **every** eclipse in the decade (W8); W11's
+acceptance gate watched tolerance literals rather than measured residuals; the
+Moon is not among the eighteen analytical satellites (W6); and **NEW-5**, a live
+411× atmosphere overboost, surfaced from reversing one of the triage's own
+rejections (W10).
+
 **Scope boundary.** The 2026-07-25 hunt's own queue — V1–V8 (limb darkening,
 anisotropy, wrapS, earthshine, Mars atmosphere, bloom/AgX defaults, HYG bulk
 colours, Venus atmosphere map), U1–U5, A1–A3, Q1–Q4 — is **deliberately not in
@@ -49,13 +64,21 @@ Applies to every wave. Violations are defects, not style notes.
 
 1. **The diff that introduces a helper deletes what it replaces, in the same
    commit.** No wave leaves a half-migrated call site on `main`.
-2. **New GLSL adds zero uniforms and zero varyings.** `viewMatrix[3].xyz` is the
-   Sun in view space — an invariant `usePlanetMaterials.ts:107` and `:383`
-   already lean on. `geometryPosition`/`geometryNormal`/`geometryViewDir` exist
-   only _after_ `lights_fragment_begin`; before it (at `map_fragment` /
-   `emissivemap_fragment`) use `vViewPosition` and the faceDirection-flipped
-   `normal`. Redeclaring `vWorldPos`/`vWorldNormal` reproduces the "redefinition"
-   failure recorded at `usePlanetMaterials.ts:252-257`.
+2. **New GLSL prefers built-ins over new uniforms; where a wave must add one it
+   names it in its exit criteria with the reason.** Corrected 2026-07-26 — the
+   original wording said "zero uniforms and zero varyings", which the plan's own
+   W7 (+2 eclipse-cone uniforms across three declaration sites) and W10
+   (+1 `vAtmPosition` varying) both violate. Those two are the sanctioned
+   exceptions; anything else needs the same justification in writing.
+   The Sun **is** at the world origin, so `viewMatrix[3].xyz` is the Sun in view
+   space and needs no uniform — but note `usePlanetMaterials.ts:107`/`:383` are
+   precedent for the **invariant**, not for the technique: those sites bind an
+   explicit `uSunPositionWorld` at `:108`/`:384`.
+   `geometryPosition`/`geometryNormal`/`geometryViewDir` exist only _after_
+   `lights_fragment_begin`; before it (at `map_fragment` / `emissivemap_fragment`)
+   use `vViewPosition` and the faceDirection-flipped `normal`. Redeclaring
+   `vWorldPos`/`vWorldNormal` reproduces the "redefinition" failure recorded at
+   `usePlanetMaterials.ts:252-257`.
 3. **Every physical constant this plan introduces needs an independent check that
    does not pass through the constant itself**, named in the JSDoc beside it.
    This rule was earned: a specified flattening formula would have shipped
@@ -146,12 +169,26 @@ nowhere, so the five TNOs' fabricated zeros stay invisible. Io reads Mass 0.015�
 Earth and Escape 0.16×; Mimas shows no mass badge rather than "0.00×". Mercury's
 geometric elongation never exceeds ~28.3° across a simulated year, and the Sky
 Geometry note states geometric-from-Earth's-centre with no observer location,
-atmosphere or twilight. **The tilt cell becomes pole-first:** derive obliquity
-from `poleRA`/`poleDec` when present, show `axialTilt` when it is a real
-measured value, honest "N/A" otherwise — `${b.axialTilt}°` is currently
-unguarded and `StatBox`'s `value || "N/A"` cannot catch the string `"undefined°"`,
-which is truthy. This stops 27 invented `0°` readings four waves earlier than the
-schema change.
+atmosphere or twilight. **The tilt cell becomes pole-first**, with the derivation
+**corrected 2026-07-26** — the first draft said "derive obliquity from
+`poleRA`/`poleDec`", i.e. the angle to **ecliptic north**, which is wrong by
+6.98° for Mercury, **176.1°** for Venus (prograde where it is retrograde) and
+15.5° for Uranus, and right only for Earth because Earth's orbit _is_ the
+ecliptic. Obliquity is the angle between the spin axis and the **orbital
+normal**, so the derivation needs four inputs: the IAU pole; the obliquity of the
+ecliptic ε to rotate that pole into the frame the orbit lives in; the orbit
+normal `n̂ = (sin i sin Ω, −sin i cos Ω, cos i)` from the record's own `i`/`Ω`;
+and the retrograde flip `obliquity = retrograde ? 180 − θ : θ`, keyed off
+`sign(rotationPeriodHours)` (Venus −5832.5, Uranus −17.24 already carry it).
+Verified against the catalog: Mercury 0.0166 vs 0.03, Venus 177.365 vs 177.3,
+Uranus 97.775 vs 97.77, Earth 23.4393 vs 23.44. **Satellites get no derived
+obliquity** — their `i` is referred to a mix of Laplace and parent-equatorial
+planes with no field recording which, the same gap that drops Iapetus's
+inclination cell in this wave. So: derive for sun-orbiting bodies, show
+`axialTilt` where a real measured value exists, honest "N/A" otherwise —
+`${b.axialTilt}°` is currently unguarded and `StatBox`'s `value || "N/A"` cannot
+catch the string `"undefined°"`, which is truthy. This stops 27 invented `0°`
+readings four waves earlier than the schema change.
 
 Scope note: for the Moon the parent **is** Earth, so the geocentric vector is
 used directly and the result is the lunar phase. Other satellites render no Sky
@@ -209,7 +246,25 @@ normalisation rather than a published coefficient, and names the selection
 criterion (no optically significant atmosphere). The schema flag is named for the
 physical property, not as a one-member extensibility union.
 
-**Verification.** `npm run lint && npm run build && npm run test:run -- celestialBodies qualityProfile`,
+**P-01's automated gate must be built, not borrowed.** `cubeUpdateInterval` lives
+only in `ProceduralSun3D.tsx` (`SUN_FX_PROFILES` at `:53/:63/:73/:83`, consumed at
+`:735`) and **no test file anywhere references it or `SUN_FX_PROFILES`** — the
+originally-specified `celestialBodies qualityProfile` command is structurally
+blind and P-01 could ship unfixed with a green gate. Lift the profile record (or
+at minimum the interval map) into an exported module beside
+`stellarVisualProfile.ts`, extract the schedule predicate as a pure
+`shouldBakeCube(frameCount, interval)`, and pin both: the four tier values, the
+frame-0 bake, and phase continuity across an `isClose` gap.
+
+**Known limitation to record, not silently skip.** Bodies with a `model` field —
+haumea, vesta, pallas, hygiea — render through `PlanetModel.tsx`, which builds its
+own materials with no `onBeforeCompile` and never calls `usePlanetMaterials`. They
+receive `roughness`/`metalness` as props (so P-01's metalness change does reach
+them) but no shader patch from W3, W7 or W9. All four are airless rock or ice and
+therefore meet W3's own selection criterion while being unable to receive the
+patch. State it; do not let the asymmetry pass unremarked.
+
+**Verification.** `npm run lint && npm run build && npm run test:run -- celestialBodies qualityProfile sunFxProfile`,
 then **one browser smoke per commit**. P-01: granulation identical to main after
 15 s, first frame after boot lit not black, frame time measured with the Sun
 filling the viewport before and after. BRDF: a full Moon's limb stops darkening
@@ -276,12 +331,24 @@ does **not** need F-01. `computePoleOrientationQuaternion` uses
 arbitrary, and all five flattened bodies already carry IAU poles — squash-about-Y
 then spin-about-Y commutes. OPP-SHAPE depends on F-04 alone.
 
-**The invariant, binding on every commit in this wave:** `groupRef` stays
-**uniform** at `resolveSemanticBodyRadius`. It parents both satellite subtrees at
-`Planet.tsx:1039-1043`, and a non-uniform parent scale composed with a child
-rotation is a **shear**, not a rotated ellipsoid — Uranus at 97.77° would render
-a skewed blob and Quaoar's long axis would freeze in the ecliptic frame. The
-per-axis vector goes to the planet, cloud and atmosphere **meshes** individually,
+**The invariant, binding on every commit in this wave.** Corrected 2026-07-26 —
+the first draft fused **two different `groupRef`s** into one sentence. There are
+two: `PlanetVisual`'s own ref (declared `Planet.tsx:152`, scaled at `:230`,
+rendered `:424`), and the **outer** `Planet` ref (declared `:620`, positioned at
+`:780`, rendered `:1008`). They have different jobs and the invariant is different
+for each.
+
+- **`PlanetVisual`'s ref stays uniform** at `resolveSemanticBodyRadius`, because
+  a pole quaternion (`:435`) and the spin group (`:437`) sit **below** it, so a
+  non-uniform scale there composes as S·R — a **shear**, not a rotated ellipsoid.
+  Uranus at 97.77° would render a skewed blob and Quaoar's long axis would freeze
+  in the ecliptic frame. It parents **no** satellites.
+- **The outer `Planet` ref must never receive scale of any kind.** It is the one
+  that parents both satellite subtrees (`:1039-1041`), and it carries position
+  only today. This is what the wave's smoke line is actually testing when it says
+  "if Weywot or Io moved, the scale went on `groupRef`".
+
+The per-axis vector goes to the planet, cloud and atmosphere **meshes** individually,
 as the **normalised** ratio `resolveBodyAxisScale(...) / resolveSemanticBodyRadius(...)`
 whose max component is exactly 1.0 — assert that identity first. Apply the same
 normalised ratio at `PlanetModel.tsx` instead of the raw `shapeScale`.
@@ -311,7 +378,15 @@ the catalog has exactly one `atmosphereScattering` (Earth) and exactly one
 `ringSystem` (Saturn), so stage A is trap-free. Stage B is Saturn and touches two
 shipped shaders: normalise `vPos.y` by (1−f) in the ring-shadow-on-planet patch
 and apply the same normalisation to the planet-shadow-on-ring solve that
-hard-codes "Radius is 1.0". **Stage B opens with F-09** — Saturn's
+hard-codes "Radius is 1.0". **`vObjectNormal` moves in the same commit** — the
+shader exports the raw unit-sphere attribute at `usePlanetMaterials.ts:548` and
+consumes it for `sunDot` at `:571`, feeding the `smoothstep(0.0, 0.05, sunDot)`
+terminator fade. Mapping the position by 1/(1−f) while leaving the normal at
+identity is inconsistent, and on Saturn (f = 0.098) the true surface normal
+departs from the spherical one by up to **5.6°**, which lands the terminator-side
+edge of the ring shadow in the wrong place — precisely what this wave's own smoke
+is looking at. The normal transforms by the **inverse-transpose** of the axis
+scale (reciprocal per-axis factors), not by the same (1−f) as the position. **Stage B opens with F-09** — Saturn's
 (1−f)^(−1/3) = 1.034963 _is_ the 60268/58232 = 1.034963 factor, so the wave that
 changes the object-space unit owns the ring ratios: write them once as the
 published 1.110 / 2.326, with a comment stating the settled invariant (ring
@@ -361,22 +436,56 @@ constant. `npm run test:run -- regression` proves positions did not move. Earth'
 sub-solar point sits on Greenwich at 2026-03-20T12:00:00Z and at the antipode at
 00:00Z. **NEW-2 is fixed in the same diff:** the cloud super-rotation multiplies
 the **rate**, not the wrapped angle, so the once-per-day 10.7° snap is gone. **No
-per-texture seam-offset field is introduced** — `SphereGeometry` puts the u = 0.5
-meridian on mesh +X, which is where node Q sits at W = 0, and increasing u drives
-z negative, which `ecliptic2ThreeJs` maps to increasing east longitude; the
-residual is zero by construction.
+per-texture seam-offset field is introduced**, with the derivation **corrected
+2026-07-26**. `SphereGeometry` does put the u = 0.5 meridian on mesh **+X** —
+the leading minus on `vertex.x` (`three/src/geometries/SphereGeometry.js:100`)
+gives u = 0 → −X, 0.25 → +Z, 0.5 → **+X**, 0.75 → −Z. The original justification
+via `ecliptic2ThreeJs` was a **non-sequitur** (that function remaps the orbital
+engine's position vectors and never touches the mesh-local texture path); the
+real argument is rotation handedness — `rotationRef.rotation.y = W` and `R_y(+W)`
+maps +X → −Z, the same sense in which u increases. And the residual is **not zero
+by construction**: it is zero **given the equirectangular convention that
+longitude 0 sits at u = 0.5**, which is a property of the asset, not of the
+geometry. **Assert it once, in this gate, against Earth's Greenwich check** —
+do not assume it holds for Ganymede's or Iapetus's map.
 
-**Step 2.** Eighteen analytical satellites plus Pluto and Charon carry poles and
-W terms transcribed from **Archinal et al. 2018, Tables 1 and 2, read out of the
-source at edit time — never copied from this file or from any plan**, with Pluto
-and Charon sharing α₀ 132.993 / δ₀ −6.163 at a 180° W offset. For each satellite,
-its existing Horizons fixture vector transformed into the body-fixed frame gives
-sub-parent longitude 0 within its optical-libration amplitude (~8° Moon, ~1°
-others), using the 18 fixtures already on disk — **zero new fixtures**. The Moon
-must **visibly rock**: a face-the-parent hack would pass a static check and kill
-libration. No pole is added to Orcus or Quaoar — none is measured, and
-`Planet.tsx:1039-1041` mounts equatorial-framed children under the parent
-quaternion, so a parent pole would move Vanth and Weywot.
+**Step 2 — nineteen bodies, not eighteen.** The analytical satellite record holds
+exactly 18 keys and **the Moon is not among them**: it is `ELP-MPP02-trunc`,
+served by `moonElp.ts`, and its catalog record carries no `poleRA`/`poleDec`. Left
+as drafted it would fall to the `rotationPeriodHours` fallback with W₀ = 0 and an
+unconstrained phase origin — flatly contradicting this wave's own smoke, which
+demands the near-side maria stay Earth-facing. So: the eighteen analytical
+satellites **plus the Moon** plus Pluto and Charon carry poles and W terms
+transcribed from **Archinal et al. 2018, Tables 1 and 2, read out of the source at
+edit time — never copied from this file or from any plan**, with Pluto and Charon
+sharing α₀ 132.993 / δ₀ −6.163 at a 180° W offset. **Decide and record for the
+Moon specifically** whether it gets the full E₁–E₁₃ physical-libration series or a
+mean Ẇ with the libration terms deferred; only the former satisfies "rocking
+gently", and a mean-Ẇ Moon must say so in its JSDoc rather than imply libration it
+does not model. Fixtures exist for all of them (`moon-2025-01-01.json` and two
+more), so the "zero new fixtures" arithmetic still holds. For each body, its
+Horizons fixture vector transformed into the body-fixed frame gives sub-parent
+longitude 0 within its optical-libration amplitude (~8° Moon, ~1° others). The
+Moon must **visibly rock**: a face-the-parent hack would pass a static check and
+kill libration. No pole is added to Orcus or Quaoar — none is measured, and
+`Planet.tsx:1041` mounts equatorial-framed children under the parent quaternion,
+so a parent pole would move Vanth and Weywot.
+
+**Charon needs a relative pole, and Pluto's pole moves Charon.** Charon is
+Kepler-primary, so `satelliteUsesParentEquatorialFrame` is **true** for it and it
+is mounted **inside** Pluto's quaternion group (`Planet.tsx:1041`) — pinned by
+`moonSceneFrame.test.ts:262-269`. Giving Charon an **absolute** IAU pole therefore
+composes `Q_pluto · Q_charon` and breaks the very mutual lock this wave is trying
+to demonstrate. Two acceptable resolutions, pick one and record it: pass Charon's
+pole **relative to Pluto's frame** (`Q_pluto⁻¹ · Q_charon`), or move Charon out of
+`equatorialChildren` by giving it ecliptic-J2000 elements in the same diff.
+Second-order and unmentioned in the first draft: giving **Pluto** a pole also
+changes **Charon's position**, because the same quaternion rotates the
+equatorial-frame Kepler elements, and replacing `setFromUnitVectors` with an
+explicit `makeBasis` pins an azimuth that was previously arbitrary. Charon has no
+Horizons fixture, so the suite physically cannot see that move — the smoke is the
+only instrument, and it must check Charon's orbital longitude against main, not
+just the face lock.
 
 **Schema and the second render path.** `axialTilt` becomes `axialTilt?: number`
 with a JSDoc naming it a legacy display field superseded by `poleRA`/`poleDec`
@@ -461,20 +570,49 @@ whole-scene DFS and pins NEW-4's currently-accidental resolution.
 
 **Exit criteria.** `resolveEclipseConeGeometry(earth, moon)` returns active at
 2024-04-08T18:18Z and inactive at 2024-05-08T03:22Z, **scale-mode independently**,
-with the Earth/Moon (umbra −47 km, penumbra 3 529 km = 2.03 R_moon) and Io/Jupiter
-(umbra 71 153 km, penumbra 71 908 km) anchors in its JSDoc. `vrScale` is
+with anchors in its JSDoc that were **recomputed 2026-07-26** — the first draft's
+numbers came from the **mean** Earth–Moon distance rather than the distance on
+eclipse day, which inverted the sign of the umbra and would have forced the
+2024-04-08 **total** eclipse to render annular. Correct values from this repo's
+own ELP and VSOP providers at 2024-04-08T18:18Z (`d_se` 149 463 545 km, `d_er`
+**359 804** km): umbra **+64.9 km**, penumbra **3 417.5 km = 1.968 R_moon**.
+The positive umbra **is** the falsification test that the event renders total.
+Cross-check that does not pass through the same arithmetic: the perpendicular
+distance from Earth's centre to the shadow axis comes out 2 192 km against a
+published gamma of 2 188 km. The Io/Jupiter anchor carried the same slip this
+plan calls F-09 — it was derived from Jupiter's **equatorial** 71 492 km while
+the code feeds `radiusKm` **69 911**, so the anchors are **69 558 / 70 343 km**.
+**Anchors are computed at the instant, never from mean distances.** `vrScale` is
 recomputed from the synthesized point — the current `receiverWorldPos.length()*2`
 is already marginal and **fails silently** once the axis point moves to physical
 range, because `dist_segment_point` then returns an endpoint distance and the
 shadow quietly does not appear. `uEclipsingBodyRadius` is replaced by
 `uEclipsingUmbraRadius` + `uEclipsingPenumbraRadius` in **all three** declaration
 sites (cloud, Earth, eclipse-only) — missing one is a runtime-only GLSL
-"undeclared identifier". `uEclipsingMinShadow` makes annular eclipses render
+"undeclared identifier". **The rename also touches the driver's READ sites, in
+the same commit.** `Planet.tsx:408` reads `s.uniforms.uEclipsingBodyRadius` and
+`:411` is `if (!uPos || !uRadius || !uVrScale || !uActive) continue;` — a
+rename that updates only the declarations leaves every material failing that
+guard, so `uActive` is never written and **all eclipses stop firing with no
+console error at all**, because the injected GLSL still compiles. This is the
+single most silent failure in the wave.
+**W3's regolith patch survives this rewrite verbatim.** Io, Europa, Ganymede,
+Callisto and Enceladus reach W3's trailing branch today; the moment they gain
+`eclipsingBodyId` here they jump into the eclipse branch — the one this wave
+rewrites — and its only Lommel-Seeliger copy is the one W3 put there for the
+Moon. Assert after the rewrite that all five still carry LS; otherwise five
+moons revert to Lambert silently, with no test and no console line. `uEclipsingMinShadow` makes annular eclipses render
 annular rather than total. `computeEclipseShading`, `eclipseBlend`,
 `distSegmentPoint`, `getDiffractionSpectrum` and their 26 test cases are
 **deleted** while the constants `eclipseShaderPatch.ts` interpolates survive, and
 the file's JSDoc is rewritten from "pure-TypeScript mirror" to the constant
-registry it actually is. Thirteen moons gain `eclipsingBodyId` with **zero** code
+registry it actually is. Fix three mislabelled comments while there:
+`eclipseMath.ts:123` says "Atlas uses km units" and `eclipseShaderPatch.ts:41`
+says "world-space radius (km)" — every quantity in this path is three.js **world
+units** (1 wu = AU/1000), not km. Harmless today because the mislabel is uniform,
+but it is what led an external reviewer to report a nonexistent 1e5 unit
+mismatch, and this plan's own standing law 4 says the sentences that describe a
+number get corrected with it. Thirteen moons gain `eclipsingBodyId` with **zero** code
 change, and Io darkens through a visible gradient on ingress rather than snapping
 — today's fixed `UMBRA0 = 0.04` at Jupiter's radius is 2 861 km, larger than Io
 itself. Realistic mode is visually identical to main.
@@ -536,12 +674,22 @@ behind the same `BODIES_BY_ID` guard documented as the fix for a prior
 `console.error` storm, is labelled a **geometric shadow-cone intersection** rather
 than a visibility prediction, quotes the model's accuracy in **minutes never
 seconds**, and never implies an observer location — "a shadow is falling on Earth
-now", never "visible from your city". The forward scan (6 h coarse step to a sign
-change, then bisect to ~1 min) runs off the render path **with its own engine
-instance or a bounded scratch cache** — a 2-year scan is ~2 920 samples × 2 bodies
-against a 2 000-entry shared cache with oldest-insertion eviction, so a naive scan
-flushes the live position cache and every visible body takes a cold-miss frame
-right after the click. Both locale bundles carry every new key.
+now", never "visible from your city". **The forward scan brackets candidates at syzygy, not by endpoint sign change** —
+corrected 2026-07-26. The first draft's 6 h coarse step **misses every eclipse in
+the decade**: the 2024-04-08 intersection window is 5.17 h (15:42→20:52 UTC,
+reproducing published P1/P4 to about a minute), so samples at 15:00 and 21:00 are
+both negative, and the shortest windows in ten years are **2.28 h** (solar,
+2029-07-11) and **1.45 h** (lunar, 2031-06-05). No fixed step is ever safe here,
+because a near-grazing event's window shrinks continuously to zero — the scan is
+hunting a transient positive bump in a smooth function, not a sign change. Bracket
+from mean lunar elongation, which is monotone and cheap, or detect local maxima of
+the cone-margin function, then bisect to ~1 min. That collapses the cost to ~50
+candidates and a few hundred evaluations; a fixed 30-min step would instead be
+~70 000 samples, **12× the budget the first draft assumed**. Either way it runs
+off the render path **with its own engine instance or a bounded scratch cache** —
+the shared cache holds 2 000 entries with oldest-insertion eviction, so a naive
+scan flushes the live position cache and every visible body takes a cold-miss
+frame right after the click. Both locale bundles carry every new key.
 
 **Verification.** `npm run test:run -- i18n bodySearch && npm run lint && npm run build`.
 Smoke at both viewports: empty Search lists 45 grouped bodies, scroll to the
@@ -610,7 +758,7 @@ Then `npm run test:e2e` — this changes what the boot frame draws.
 
 ### W10 — Atmosphere on the disc · medium · 2-3 days
 
-**Items:** D-01, **+ D-02's comment correction**
+**Items:** D-01, NEW-5, **+ D-02's comment correction**
 
 Earth's day side reddens approaching the terminator and the limb lifts blue — the
 ISS orbital-photo look — by compiling the Nishita ground integrator that is
@@ -642,10 +790,25 @@ so a quality flip does not keep a stale material. `atmosphereShader.ts`'s
 divergence entry no longer says the ground function is a no-op stub.
 
 **Folded in from D-02:** `Planet.tsx:334-352` and the `atmosphereDynamics.ts`
-header state that the descent-brightening branch is unreachable behind the 1.1
-dolly margin against a 1.025 shell, that the same geometry kills the T5.1 ESun
-boost (`camHeightGr` 0.1 vs `atmosphereHeight` 0.025), and name the one change
-that would unlock it. `computeDynamicAtmosphereUniforms` and its test **stay**.
+header state that the descent-brightening branch is unreachable **through the
+dolly path** behind the 1.1 margin against a 1.025 shell, that the same geometry
+keeps the T5.1 ESun boost dormant there (`camHeightGr` 0.1 vs `atmosphereHeight`
+0.025), and name the one change that would unlock it.
+`computeDynamicAtmosphereUniforms` and its test **stay**.
+
+**NEW-5 — a live overbright defect, one clamp.** `minDistance` bounds
+camera-to-**target**, not camera-to-body: panning is enabled, the pan offset is
+deliberately preserved across focus tracking, and nothing bounds it, so
+camera-to-body reaches zero whenever the pan offset equals the orbit radius. At
+the body centre `atmFactor = 1.025/0.025 = 41` and `eSun = 10 + 41 × 100 = 4110`
+— a **411×** overboost with no lower clamp (`atmosphereDynamics.ts:149-159`). The
+surface-mode interlock that would otherwise block the descent arms only for a
+focused `type === "planet"` body, is bound to pointer-lock **success** rather than
+to surface mode, and stops re-requesting for the session after three failures.
+Clamp `atmFactor` to 1.0 (or clamp `camHeightGr` at the inner radius) with a
+comment recording that the upstream guard assumed a bounded camera. It is one
+line and has no dependency on the rest of this wave — pull it into W1 if the
+overbright is ever observed before W10 lands.
 
 **Known limit to state explicitly:** the Earth branch is gated on `textureNight`
 having resolved, and Earth carries `eclipsingBodyId`, so before the night map
@@ -688,13 +851,28 @@ depend on.
 
 **Half-day desk spike as the gate, before any propagator code:** compute
 `−1.5·n·J2·(R/a)²·cos i/(1−e²)²` offline for the four `pub` bodies (Phobos,
-Mimas, Tethys, Io) and check sign and magnitude against their recorded residuals
-(Mimas 5.213°, Phobos 3.550°). If the predicted correction does not match the
-residual's direction and scale, **the wave does not exist** and cost half a day
-instead of five.
+Mimas, Tethys, Io) and check sign and magnitude against the **signed along-track
+residual at one epoch on each side of the 2025-01-01 baseline**, recomputed from
+the fixtures. Corrected 2026-07-26: the first draft said to check against the
+recorded 5.213° / 3.550°, which cannot confirm a sign — those are **unsigned
+maxima over a two-sided window** of a multi-term error budget (the test's own
+comment attributes them jointly to nodal precession, apsidal precession, resonance
+and J2 short-period terms). A sign flip shows as an error that grows on one side
+of the baseline and shrinks on the other; a two-sided max hides exactly that.
+If the predicted correction does not match, **the wave does not exist** and cost
+half a day instead of five.
 
-**Acceptance gate, non-negotiable:** no number in `MULTI_EPOCH_OVERRIDES` may
-**rise**. Fourteen of the eighteen mean motions carry `fix` provenance and were
+**Acceptance gate, non-negotiable — and it must be built first.** Corrected
+2026-07-26: "no number in `MULTI_EPOCH_OVERRIDES` may rise" is **not a gate**.
+That table holds **tolerance literals** sized at roughly 1.1–1.3× the observed
+residual and never below a 0.3°/0.2% floor, edited by hand and written by nothing
+— Callisto's 0.024° observed sits under a 0.3° tolerance, so a wrongly-signed term
+could **double** its error and pass with 6× margin, and the stated gate is
+satisfied trivially by not touching the file. The diagnostic gate is: commit the
+current **measured** per-body, per-epoch `angleError` (18 bodies × 4 off-baseline
+epochs = 72 values) as a baseline table, then assert element-wise
+`newError <= baselineError`, with the four `pub` bodies additionally required to
+**drop**. Fourteen of the eighteen mean motions carry `fix` provenance and were
 least-squares fitted in-sample, and a fit against along-track error necessarily
 absorbs the secular longitude rate — so an explicit term on top can make those 14
 worse. If any rises, re-derive with the J2 propagator in the loop and rewrite
@@ -740,10 +918,21 @@ ephemeris — so its rendered south pole is ecliptic south, ~27° off true. Emit
 a measured phenomenon at a wrong location would violate the fidelity pillar while
 claiming to serve it. **Verify the emission point before any look work.**
 
-Ship-1 is **one** south-polar source region, the ballistic parabola from the
-measured 300-1000 m/s ejection range and the record's own 0.113 m/s² surface
-gravity, the Henyey-Greenstein forward-scattering term (g ≈ 0.6), and the measured
-~3× orbital-phase modulation peaking near apoapsis. Four separately-parameterised
+**The speed band was corrected 2026-07-26** — the first draft applied the **gas**
+velocity to a **grain** trajectory model. Escape velocity from the record's own
+0.113 m/s² and 252 km radius is **238.7 m/s**, so the quoted 300-1000 m/s band is
+1.26× to 4.19× escape and **nothing in it returns**; even the slowest would reach
+an apex of 398 km, 1.6 × the moon's radius, before turning over. The real plume is
+two populations: the gas leaves supersonically and unbound at 300-1000 m/s, while
+the **ice grains** — the thing that is actually visible — span roughly 50-200 m/s,
+mostly **below** escape, falling back as south-polar snow, with a fast minority
+escaping to feed the E ring. That straddling is the honest physical picture and it
+is also the teaching point.
+
+Ship-1 is **one** south-polar source region, the ballistic parabola driven by the
+sub-escape grain distribution against the record's own 0.113 m/s² surface gravity,
+the Henyey-Greenstein forward-scattering term (g ≈ 0.6), and the measured ~3×
+orbital-phase modulation peaking near apoapsis. Four separately-parameterised
 tiger-stripe sources are what turn this into a 4-5 day wave, and at the ~40 px
 visibility floor they span a few pixels and are not distinguishable from one.
 
