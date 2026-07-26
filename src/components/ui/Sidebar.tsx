@@ -38,6 +38,20 @@ export const Sidebar = () => {
   const orbitalCalculation =
     orbitalResult.state === "ready" ? orbitalResult.data : null;
 
+  // Earth's own catalog record is the comparison baseline, so the badges cannot
+  // drift from the value the Earth panel itself prints.
+  const earthBaseline = useMemo(() => {
+    const earth = BODIES_BY_ID.get("earth");
+    if (!earth) return null;
+    const mass = AstroPhysics.parseScientificValue(earth.mass);
+    return {
+      radiusKm: earth.radiusKm,
+      gravity: AstroPhysics.parseScientificValue(earth.gravity),
+      mass,
+      escape: AstroPhysics.calculateEscapeVelocity(mass, earth.radiusKm),
+    };
+  }, []);
+
   // Real-time Calculations
   const stats = useMemo(() => {
     if (!b || !orbitalCalculation) return null;
@@ -72,7 +86,17 @@ export const Sidebar = () => {
     }
     const ratio = val / earthVal;
     if (ratio >= 0.99 && ratio <= 1.01) return `1.00× ${suffix}`;
-    return `${ratio.toFixed(2)}× ${suffix}`;
+    // Below 1e-3 the badge stops carrying information at any sane width —
+    // Mimas is 6.3e-6 of Earth's mass — and a two-decimal render would state
+    // "0.00× Earth" for a body that plainly has mass. No badge is honest; a
+    // rounded-to-nothing one is not.
+    if (ratio < 1e-3) return null;
+    // Magnitude-aware: two decimals suit ratios around and above 1, but they
+    // flatten Io's 0.015 mass ratio to 0.01. Significant figures keep small
+    // bodies readable without padding large ones.
+    const formatted =
+      ratio >= 1 ? ratio.toFixed(2) : Number(ratio.toPrecision(2)).toString();
+    return `${formatted}× ${suffix}`;
   };
 
   const formatTelemetryValue = (value: number, unit: string) => {
@@ -257,16 +281,20 @@ export const Sidebar = () => {
                   <StatBox
                     label="Radius"
                     value={`${b.radiusKm.toLocaleString()} km`}
-                    badge={getEarthComparison(b.radiusKm, 6371)}
+                    badge={
+                      earthBaseline
+                        ? getEarthComparison(b.radiusKm, earthBaseline.radiusKm)
+                        : undefined
+                    }
                   />
                   <StatBox
                     label="Gravity"
                     value={b.gravity}
                     badge={
-                      b.gravity
+                      b.gravity && earthBaseline
                         ? getEarthComparison(
                             AstroPhysics.parseScientificValue(b.gravity),
-                            9.8,
+                            earthBaseline.gravity,
                             "g"
                           )
                         : undefined
@@ -278,8 +306,25 @@ export const Sidebar = () => {
                       stats?.escape ?? Number.NaN,
                       "km/s"
                     )}
+                    badge={
+                      stats && earthBaseline
+                        ? getEarthComparison(stats.escape, earthBaseline.escape)
+                        : undefined
+                    }
                   />
-                  <StatBox label="Mass" value={b.mass} fullWidth />
+                  <StatBox
+                    label="Mass"
+                    value={b.mass}
+                    badge={
+                      b.mass && earthBaseline
+                        ? getEarthComparison(
+                            AstroPhysics.parseScientificValue(b.mass),
+                            earthBaseline.mass
+                          )
+                        : undefined
+                    }
+                    fullWidth
+                  />
                   <StatBox
                     label="Composition"
                     value={b.composition}
