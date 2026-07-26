@@ -2,9 +2,16 @@
  * Asteroid provider (Ceres, Pallas, Vesta).
  *
  * Uses heliocentric J2000 ecliptic osculating elements at epoch 2025-01-01
- * and propagates them with a two-body Kepler step. The 1900-2050 validity
+ * and propagates them with a two-body Kepler step. The 2000-2050 validity
  * window is enforced by the engine, not by this module — outside the window
  * the engine routes to the Kepler fallback.
+ *
+ * The window is epoch ±25 yr, not the wider range this docblock advertised
+ * until 2026-07-26. `registry.ts` VALIDITY_RANGES.asteroid is the enforced
+ * source and records the derivation: the only far-epoch measurement on disk
+ * is the ceres-1890-01-01 Horizons fixture at 7.40° angular error, and
+ * interpolating that against the ±1 yr residual gives roughly dt^1.5 growth,
+ * so anything wider was never measured and must not be advertised.
  *
  * Every entry below was produced by `scripts/derive-elements-from-fixtures.js`
  * against the corresponding Horizons fixture on disk, identical pipeline
