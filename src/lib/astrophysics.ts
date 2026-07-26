@@ -226,6 +226,20 @@ export interface CelestialBody {
    */
   eclipsingBodyId?: string;
 
+  /**
+   * True when the surface is bare regolith or ice with no optically
+   * significant atmosphere — a physical property of the body, not a render
+   * setting. W3 keys the Lommel-Seeliger diffuse patch off it (see
+   * `regolithPhotometryPatch.ts`), because that law describes light returning
+   * from exposed grains and is wrong for a scattering atmosphere.
+   *
+   * Opt-in per record: absent means "not reviewed", not "has an atmosphere".
+   * Set on Mercury, the Moon, Io, Europa, Ganymede, Callisto and Enceladus.
+   * The four `model`-path bodies (haumea, vesta, pallas, hygiea) qualify
+   * physically but cannot receive the shader patch — recorded in that file.
+   */
+  airlessRegolith?: boolean;
+
   // Optional non-uniform scale for observation-based ellipsoids.
   shapeScale?: [number, number, number];
 

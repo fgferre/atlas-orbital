@@ -19,6 +19,7 @@ import {
   ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
   ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
 } from "../shaders/eclipseShaderPatch";
+import { REGOLITH_PHOTOMETRY_LIGHTS_PATCH } from "../shaders/regolithPhotometryPatch";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
 /**
@@ -488,6 +489,7 @@ export function usePlanetMaterials({
     // lunar eclipse). Injects the eclipse shader on top of a
     // default MeshStandardMaterial.
     else if (body.eclipsingBodyId) {
+      const regolith = !!body.airlessRegolith;
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.uSunPositionWorld = {
@@ -522,6 +524,17 @@ export function usePlanetMaterials({
           #include <output_fragment>
           `
         );
+
+        // W3 — Lommel-Seeliger call site 1 of 2. This branch chain is
+        // mutually exclusive and it is the Moon's only route, so the
+        // regolith patch has to be applied here as well as in the
+        // trailing branch below.
+        if (regolith) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            "#include <lights_fragment_begin>",
+            REGOLITH_PHOTOMETRY_LIGHTS_PATCH
+          );
+        }
       };
     }
     // Apply shaders: ring shadows for ringed planets (if not Earth)
@@ -609,6 +622,21 @@ export function usePlanetMaterials({
         );
       };
     }
+    // W3 — Lommel-Seeliger call site 2 of 2, deliberately the LAST branch:
+    // airless bodies that reach no branch at all today (Mercury, Io, Europa,
+    // Ganymede, Callisto, Enceladus). They had no `onBeforeCompile`
+    // whatsoever before this wave. Placed after the ring branch so a future
+    // airless body that also carries a `ringSystem` keeps its ring shadow
+    // rather than silently trading it for the photometry patch.
+    else if (body.airlessRegolith) {
+      mat.onBeforeCompile = (shader) => {
+        mat.userData.shader = shader;
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <lights_fragment_begin>",
+          REGOLITH_PHOTOMETRY_LIGHTS_PATCH
+        );
+      };
+    }
 
     return mat;
   }, [
@@ -622,6 +650,7 @@ export function usePlanetMaterials({
     body.type,
     body.ringSystem,
     body.eclipsingBodyId,
+    body.airlessRegolith,
     roughness,
     metalness,
     sunRenderMode,
