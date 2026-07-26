@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "../../store";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
+import type { CelestialBody } from "../../lib/astrophysics";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { resolveBodyName } from "../../lib/bodyName";
 import {
@@ -408,7 +409,11 @@ export const Sidebar = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <StatBox label="Rotation Period" value={b.dayLength} />
-                  <StatBox label="Year Length" value={b.yearLength} />
+                  <StatBox
+                    label="Orbital Period"
+                    value={orbitalPeriod(b)?.value}
+                    subLabel={orbitalPeriod(b)?.subLabel}
+                  />
                   <StatBox
                     label="Distance"
                     value={b.distanceFromParent || `${b.orbit.a} AU`}
@@ -527,6 +532,32 @@ const OrbitalProvenanceDisplay = ({ bodyId }: { bodyId: string }) => {
       </div>
     </div>
   );
+};
+
+/**
+ * The time for one orbit around the parent, and where the number came from.
+ *
+ * Twenty moons used to ship `yearLength: "Unknown"` while carrying `orbit.n`
+ * in the same record — Io declared ignorance of a 1.77-day period it already
+ * printed nine lines later as its rotation. The catalog string wins where it
+ * exists; otherwise 360/n is the period, and it is labelled as derived rather
+ * than passed off as a quoted value.
+ *
+ * The satellite validity window (2020-2030) deliberately does NOT appear here:
+ * it bounds the *position* accuracy of the two-body propagation, while the
+ * period is a time-independent constant of the record. Attaching it would be a
+ * new false disclosure.
+ */
+const orbitalPeriod = (
+  b: CelestialBody
+): { value: string; subLabel?: string } | undefined => {
+  if (b.yearLength) return { value: b.yearLength };
+  const n = b.orbit?.n;
+  if (!n) return undefined;
+  return {
+    value: `${(360 / n).toFixed(2)} days`,
+    subLabel: "Derived from mean motion",
+  };
 };
 
 const StatBox = ({

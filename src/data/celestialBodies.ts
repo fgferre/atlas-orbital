@@ -602,7 +602,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice and rocks",
     atmosphere: "Tenuous, molecular oxygen",
     dayLength: "7.15 days",
-    yearLength: "Unknown",
     curiosity:
       "Ganymede is the only moon in the Solar System known to have a substantial magnetosphere, likely created by convection within its liquid iron core.",
     facts: [
@@ -637,7 +636,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Very tenuous, carbon dioxide",
     dayLength: "16.69 days",
-    yearLength: "Unknown",
     curiosity:
       "Callisto is often considered the most 'boring' of the Galilean moons due to its lack of activity, but it is a prime candidate for human exploration due to low radiation levels.",
     facts: [
@@ -672,7 +670,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Silicate rock, sulfur",
     atmosphere: "Sulfur dioxide",
     dayLength: "1.77 days",
-    yearLength: "Unknown",
     curiosity:
       "Io's extreme volcanic activity is the result of tidal heating from friction generated within Io's interior as it is pulled between Jupiter and the other Galilean moons.",
     facts: [
@@ -707,7 +704,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice",
     atmosphere: "Tenuous, molecular oxygen",
     dayLength: "3.55 days",
-    yearLength: "Unknown",
     curiosity:
       "Europa is one of the most promising places in the solar system to look for extraterrestrial life. Its subsurface ocean is kept liquid by tidal heating.",
     facts: [
@@ -745,7 +741,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks, hydrocarbons",
     atmosphere: "Nitrogen, methane",
     dayLength: "15.95 days",
-    yearLength: "Unknown",
     curiosity:
       "Titan has lakes and seas of liquid methane and ethane. The largest, Kraken Mare, is larger than the Caspian Sea on Earth.",
     facts: [
@@ -794,7 +789,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice and rocks",
     atmosphere: "Tenuous (oxygen, carbon dioxide)",
     dayLength: "4.52 days",
-    yearLength: "Unknown",
     curiosity:
       "Rhea may have a tenuous ring system of its own, although this has not been definitively confirmed.",
     facts: [
@@ -829,7 +823,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "79.33 days",
-    yearLength: "Unknown",
     curiosity:
       "Iapetus has a massive equatorial ridge running three-quarters of the way around the moon, making it look like a walnut.",
     facts: [
@@ -872,7 +865,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice and rocks",
     atmosphere: "Tenuous (oxygen)",
     dayLength: "2.74 days",
-    yearLength: "Unknown",
     curiosity:
       "Dione shares its orbit with two small co-orbital moons, Helene and Polydeuces, which sit at its Lagrangian points.",
     facts: [
@@ -915,7 +907,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice",
     atmosphere: "Not detected",
     dayLength: "1.89 days",
-    yearLength: "Unknown",
     curiosity:
       "A huge valley called Ithaca Chasma runs about 2,000 km long, covering three-quarters of Tethys' circumference.",
     facts: [
@@ -958,7 +949,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice and rocks",
     atmosphere: "Water vapor (caused by cryovolcanic jets)",
     dayLength: "1.37 days",
-    yearLength: "Unknown",
     curiosity:
       "Enceladus has cryovolcanoes near the south pole which shoot geyser-like jets of water vapor, molecular hydrogen, other volatiles, and solid material, including sodium chloride crystals and ice particles, into space.",
     facts: [
@@ -1001,7 +991,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice",
     atmosphere: "Not detected",
     dayLength: "0.94 days",
-    yearLength: "Unknown",
     curiosity:
       "Mimas is dominated by the Herschel crater, which is so large that the impact nearly shattered the moon. This gives it a striking resemblance to the Death Star from Star Wars.",
     facts: [
@@ -1037,7 +1026,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Nitrogen ice, methane, water",
     atmosphere: "Nitrogen, methane",
     dayLength: "5.88 days",
-    yearLength: "Unknown",
     curiosity:
       "Triton is geologically active; its surface is young and has few impact craters. Complex cryovolcanic and tectonic terrains suggest a complex geological history.",
     facts: [
@@ -1073,7 +1061,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice and rocks",
     atmosphere: "Not detected",
     dayLength: "8.71 days",
-    yearLength: "Unknown",
     curiosity:
       "Titania is marked by a massive canyon system that dwarfs the Grand Canyon on Earth, indicating past tectonic activity.",
     facts: [
@@ -1108,7 +1095,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice and rocks",
     atmosphere: "Not detected",
     dayLength: "13.46 days",
-    yearLength: "Unknown",
     curiosity:
       "Oberon has the reddest surface among the major Uranian moons. Its surface is heavily cratered, suggesting it has been stable since the early history of the solar system.",
     facts: [
@@ -1146,7 +1132,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "4.14 days",
-    yearLength: "Unknown",
     curiosity:
       "Umbriel is the darkest of Uranus's major moons, reflecting only about half as much light as Ariel. Its surface is old and heavily cratered.",
     facts: [
@@ -1181,7 +1166,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "2.52 days",
-    yearLength: "Unknown",
     curiosity:
       "Ariel has the youngest surface of all Uranian moons, with few large craters and many extensive interconnected rift valleys (canyons).",
     facts: [
@@ -1216,7 +1200,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "1.41 days",
-    yearLength: "Unknown",
     curiosity:
       "It has “Frankenstein conditions”, a landscape composed of distinct patches.",
     facts: ["Deep fissures and regions of unusual relief."],
@@ -1783,7 +1766,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Water ice, ammonia, rocks",
     atmosphere: "Not detected",
     dayLength: "6.39 days (synchronized with Pluto)",
-    yearLength: "Unknown",
     curiosity:
       "Charon is so large relative to Pluto that the two bodies orbit a common center of gravity outside of Pluto, making them a binary dwarf planet system.",
     facts: [
@@ -1828,7 +1810,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "Synchronized (~9.54 days)",
-    yearLength: "Unknown",
     curiosity:
       "Vanth is remarkably large compared to Orcus; if Orcus were a planet, Vanth would be the third largest moon relative to its planet in the Solar System.",
     facts: [
@@ -1882,7 +1863,6 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     composition: "Ice, rocks",
     atmosphere: "Not detected",
     dayLength: "Synchronized (~12.43 days)",
-    yearLength: "Unknown",
     curiosity:
       "Weywot is named after the Tongva sky father, the son of Quaoar. It was discovered in images taken to search for a ring system around Quaoar.",
     facts: [
