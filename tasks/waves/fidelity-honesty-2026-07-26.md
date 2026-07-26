@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status                            | Commit                                                                    |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY |
-| W2 The panel stops contradicting itself | not started                       | —                                                                         |
-| W3 Photometry and the exposure floor    | not started                       | —                                                                         |
-| W4 The star surfaces stop lying         | not started                       | —                                                                         |
-| W5 Body figure                          | not started                       | —                                                                         |
-| W6 One pole, one spin                   | not started                       | —                                                                         |
-| W7 Eclipses happen when eclipses happen | not started                       | —                                                                         |
-| W8 Reach and discovery                  | not started                       | —                                                                         |
-| W9 The rings transmit                   | not started                       | —                                                                         |
-| W10 Atmosphere on the disc              | not started                       | —                                                                         |
-| — CHECKPOINT —                          | —                                 | —                                                                         |
-| W11 J2 secular precession               | not decided                       | —                                                                         |
-| W12 Uranus stops being a bare ball      | not decided                       | —                                                                         |
-| W13 Enceladus erupts                    | not decided                       | —                                                                         |
+| Wave                                    | Status                            | Commit                                                                                                                |
+| --------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                             |
+| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell |
+| W3 Photometry and the exposure floor    | not started                       | —                                                                                                                     |
+| W4 The star surfaces stop lying         | not started                       | —                                                                                                                     |
+| W5 Body figure                          | not started                       | —                                                                                                                     |
+| W6 One pole, one spin                   | not started                       | —                                                                                                                     |
+| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                     |
+| W8 Reach and discovery                  | not started                       | —                                                                                                                     |
+| W9 The rings transmit                   | not started                       | —                                                                                                                     |
+| W10 Atmosphere on the disc              | not started                       | —                                                                                                                     |
+| — CHECKPOINT —                          | —                                 | —                                                                                                                     |
+| W11 J2 secular precession               | not decided                       | —                                                                                                                     |
+| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                     |
+| W13 Enceladus erupts                    | not decided                       | —                                                                                                                     |
 
 ---
 
