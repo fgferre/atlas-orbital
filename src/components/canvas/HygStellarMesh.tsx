@@ -108,9 +108,18 @@ import { useStarfieldCatalog } from "./useStarfieldCatalog";
  */
 const M3_FADE_DURATION_MS = 300;
 
+/**
+ * Per-star data that is genuinely **static** for a given catalog index.
+ *
+ * W4/F-06 removed `worldPos` from this record. It was resolved once inside a
+ * `useMemo` keyed on `[starIndex, catalog, focusId]`, which froze the star at
+ * whichever simulated epoch happened to be current when focus landed — while
+ * `resolveHygWorldPosition` reads `yearsSinceJ2000()` live and
+ * `CameraController` calls it every frame. Under time warp the camera tracked
+ * the real star and ran away from a stationary mesh. Position now lives in a
+ * per-frame ref, and everything left in this record really is epoch-invariant.
+ */
 interface HygStarData {
-  /** World-space position (parsec × DISTANCE_SCALE × R_x(obliquity)). */
-  worldPos: THREE.Vector3;
   /** Visual profile from T6.2's `stellarVisualProfileFrom`. */
   visualProfile: StellarVisualProfile;
   /**
@@ -240,9 +249,6 @@ export const HygStellarMesh = () => {
       return null;
     }
 
-    const worldPos = resolveHygWorldPosition(starIndex, catalog);
-    if (!worldPos) return null;
-
     const bv = catalog.colorIndices[starIndex];
     const spectIdx = catalog.spectIndices[starIndex] ?? 0;
     const spectRaw = catalog.spectStrings[spectIdx] ?? "";
@@ -263,8 +269,19 @@ export const HygStellarMesh = () => {
     );
     const radiusWorldUnits = radiusSolar * SUN_RADIUS_WORLD_UNITS;
 
-    return { worldPos, visualProfile, radiusWorldUnits };
+    return { visualProfile, radiusWorldUnits };
   }, [starIndex, catalog, focusId]);
+
+  /**
+   * W4/F-06 — live world position, re-resolved every frame from the catalog
+   * plus proper motion. `resolveHygWorldPosition` takes an `out` parameter
+   * precisely so a `useFrame` caller allocates nothing, and it reads
+   * `yearsSinceJ2000()` internally, so this is the whole fix: call it per
+   * frame instead of caching it in a memo. Handed to `ProceduralSun3D` as
+   * `positionRef` rather than as the `position` prop, because R3F applies
+   * props on reconciliation only.
+   */
+  const posRef = useRef(new THREE.Vector3());
 
   // M3 — cross-fade ramp state. `rampRef` is the live [0..1]
   // position consumed by useFrame (no React re-render). `targetRef`
@@ -286,13 +303,25 @@ export const HygStellarMesh = () => {
       // `meshActive` flip below once ramp returns to 0.
       targetRef.current = 0;
     } else {
-      const distToCamera = camera.position.distanceTo(starData.worldPos);
-      const sa = computeStellarSolidAngle(
-        starData.radiusWorldUnits,
-        distToCamera
-      );
-      const wasActive = targetRef.current === 1;
-      targetRef.current = shouldStellarMeshBeActive(wasActive, sa) ? 1 : 0;
+      // W4/F-06 — resolve first, then gate. This runs before
+      // `ProceduralSun3D`'s own `useFrame` (parent subscribes ahead of child
+      // at the same priority) and before `meshActive` can flip true, so the
+      // mesh never mounts against an unwritten ref.
+      if (
+        starIndex === null ||
+        !catalog ||
+        !resolveHygWorldPosition(starIndex, catalog, posRef.current)
+      ) {
+        targetRef.current = 0;
+      } else {
+        const distToCamera = camera.position.distanceTo(posRef.current);
+        const sa = computeStellarSolidAngle(
+          starData.radiusWorldUnits,
+          distToCamera
+        );
+        const wasActive = targetRef.current === 1;
+        targetRef.current = shouldStellarMeshBeActive(wasActive, sa) ? 1 : 0;
+      }
     }
 
     rampRef.current = stepRampToward(
@@ -390,7 +419,7 @@ export const HygStellarMesh = () => {
     <ProceduralSun3D
       qualityProfileName={qualityProfile.name}
       sunVisualRadiusWorld={starData.radiusWorldUnits}
-      position={starData.worldPos}
+      positionRef={posRef}
       visualProfile={starData.visualProfile ?? SUN_DEFAULT_VISUAL_PROFILE}
       renderRange="close"
       visibilityRef={rampRef}

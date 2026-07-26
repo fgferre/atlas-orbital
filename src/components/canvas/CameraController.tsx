@@ -448,9 +448,13 @@ export const CameraController = () => {
       flyingRef.current.isFlying = true;
       // Resetting focus-tracking state to `targetPos` matches the
       // curated-body contract: post-fly, focus-tracking glues
-      // `controls.target` to the star world position (which is
-      // static for HYG stars, so no further drift). AimLerp's
-      // per-frame writes during the flight override the
+      // `controls.target` to the star world position. W4/F-06 corrected
+      // this comment — it used to claim that position is "static for HYG
+      // stars, so no further drift", which is false and was the second copy
+      // of the assumption that froze `HygStellarMesh`'s mesh. HYG stars have
+      // real proper motion and this file's own `useFrame` re-resolves them
+      // every frame (`resolveHygWorldPosition` reads `yearsSinceJ2000()`).
+      // AimLerp's per-frame writes during the flight override the
       // focus-tracking write in useFrame; once both flight refs
       // are inactive, focus-tracking takes over again.
       resetFocusTrackingState(focusTrackingRef.current, targetPos);

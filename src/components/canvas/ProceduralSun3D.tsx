@@ -273,6 +273,22 @@ interface ProceduralSun3DProps {
    */
   position?: [number, number, number] | THREE.Vector3;
   /**
+   * W4/F-06 — live world position, re-read every frame.
+   *
+   * `position` above is an R3F **prop**, and R3F applies props on
+   * reconciliation only, so a caller that mutates the same `Vector3` in
+   * place never reaches `group.position` — the mesh freezes wherever it was
+   * when the prop last changed identity. HYG stars have real proper motion
+   * and `CameraController` already re-resolves their position every frame,
+   * so a frozen mesh means the camera tracks the star and the mesh does not.
+   * That is what this ref exists to prevent; it is not a style preference.
+   *
+   * When provided it **wins** over `position`, which is left at its default
+   * so the two cannot fight. When omitted (the Sun mount, which sits at the
+   * world origin and does not move) behaviour is byte-identical to before.
+   */
+  positionRef?: React.MutableRefObject<THREE.Vector3>;
+  /**
    * T6.1 — externalized uniform set. Default
    * `SUN_DEFAULT_VISUAL_PROFILE` is byte-identical to the Sun's
    * pre-T6.1 hardcoded values (every uniform pinned by
@@ -307,6 +323,7 @@ export const ProceduralSun3D = ({
   qualityProfileName,
   sunVisualRadiusWorld,
   position = [0, 0, 0],
+  positionRef,
   visualProfile = SUN_DEFAULT_VISUAL_PROFILE,
   renderRange,
   visibilityRef,
@@ -655,6 +672,12 @@ export const ProceduralSun3D = ({
 
     const group = groupRef.current;
     if (!group) return;
+
+    // W4/F-06 — commit the live position BEFORE the visibility gate below.
+    // The gate can early-return, and a group left at a stale position while
+    // out of range would draw one frame in the wrong place the moment it
+    // comes back — the same class of bug this ref replaces.
+    if (positionRef) group.position.copy(positionRef.current);
 
     // T6.1 — visibility gate. When `renderRange` prop is passed
     // (T6.3 will pass it explicitly per solid-angle gate matching
