@@ -96,25 +96,6 @@ export function useOrbitalProvenance(bodyId: string): {
 }
 
 /**
- * Hook to get osculating elements for a body
- */
-export function useOsculatingElements(bodyId: string): {
-  a: number;
-  e: number;
-  i: number;
-  O: number;
-  w: number;
-  M: number;
-  n: number;
-} | null {
-  const datetime = useStore((state) => state.displayedDatetime);
-
-  return useMemo(() => {
-    return orbitalEngine.getOsculatingElements(bodyId, datetime);
-  }, [bodyId, datetime]);
-}
-
-/**
  * Hook to batch calculate positions for multiple bodies
  * Note: Returns a new Map on each recalculation - use with caution
  */

@@ -422,6 +422,27 @@ export const Sidebar = () => {
                     }
                   />
                   <StatBox label="Axial Tilt" value={`${b.axialTilt}°`} />
+                  <StatBox
+                    label="Eccentricity"
+                    value={b.orbit.e.toFixed(3)}
+                    subLabel={b.orbit.e < 0.01 ? "Near-circular" : undefined}
+                  />
+                  <StatBox
+                    label="Inclination"
+                    value={inclinationToEcliptic(b)}
+                    subLabel={
+                      inclinationToEcliptic(b) ? "to ecliptic" : undefined
+                    }
+                  />
+                  <StatBox
+                    label={
+                      b.parentId
+                        ? "Periapsis / Apoapsis"
+                        : "Perihelion / Aphelion"
+                    }
+                    value={orbitDistanceRange(b)}
+                    fullWidth
+                  />
                 </div>
               </div>
 
@@ -558,6 +579,38 @@ const orbitalPeriod = (
     value: `${(360 / n).toFixed(2)} days`,
     subLabel: "Derived from mean motion",
   };
+};
+
+/** Same <0.1 AU switch to km the Current Dist. box uses, so one body never
+ *  reads in two units across the same panel. */
+const formatDistance = (au: number): string =>
+  au < 0.1
+    ? `${(au * AU_IN_KM).toLocaleString(undefined, { maximumFractionDigits: 0 })} km`
+    : `${au.toFixed(2)} AU`;
+
+/**
+ * Inclination is only honest for sun-orbiting bodies.
+ *
+ * Catalog inclination for MOONS is measured against a mix of reference planes
+ * — Triton's 156.8° is to Neptune's equator, Iapetus's 15.47° to its Laplace
+ * plane, Io's 0.05° to Jupiter's equator — and no field records which. Printing
+ * "Inclination 15.47°" with no plane named would be invented precision, so the
+ * cell is omitted rather than qualified with a guess.
+ *
+ * Ω, ω and M are never rendered at all: five TNOs (Gonggong, Quaoar, Orcus,
+ * Sedna, Salacia) carry fabricated zeros for them, and a panel that shows them
+ * would present placeholders as measurements.
+ */
+const inclinationToEcliptic = (b: CelestialBody): string | undefined =>
+  b.parentId ? undefined : `${b.orbit.i.toFixed(2)}°`;
+
+/** Closest and farthest approach. A circular orbit collapses to one value
+ *  rather than printing the same number on both sides of a dash. */
+const orbitDistanceRange = (b: CelestialBody): string => {
+  const { minAU, maxAU } = AstroPhysics.resolveOrbitDistanceBoundsAU(b.orbit);
+  const near = formatDistance(minAU);
+  const far = formatDistance(maxAU);
+  return near === far ? near : `${near} – ${far}`;
 };
 
 const StatBox = ({
