@@ -619,6 +619,57 @@ export class AstroPhysics {
   }
 
   /**
+   * Obliquity: the angle between the spin axis and the ORBITAL normal.
+   *
+   * Not the angle to ecliptic north. That distinction is the whole point —
+   * Mercury's IAU pole sits 7.01° from ecliptic north while its obliquity is
+   * 0.03°, because Mercury's orbit is itself inclined 7°. Deriving from ecliptic
+   * north would be wrong by 6.98° for Mercury, 176.1° for Venus (reporting a
+   * retrograde body as prograde) and 15.5° for Uranus, and right only for Earth,
+   * whose orbit *is* the ecliptic.
+   *
+   * Four inputs: the IAU pole, the obliquity of the ecliptic (to rotate that
+   * pole into the frame the orbit lives in), the orbit normal from the record's
+   * own `i`/`Ω`, and the rotation sense for the retrograde convention, which
+   * `rotationPeriodHours` already carries as its sign.
+   *
+   * Returns null when the body has no measured pole, or when its orbit is
+   * referred to a plane the catalog does not record — every satellite today.
+   */
+  static resolveObliquityDeg(body: CelestialBody): number | null {
+    const { poleRA, poleDec } = body;
+    if (poleRA === undefined || poleDec === undefined) return null;
+    // Satellite inclinations are referred to a mix of Laplace and
+    // parent-equatorial planes with no field saying which, so the orbit normal
+    // cannot be built for them.
+    if (body.parentId) return null;
+
+    const ra = THREE.MathUtils.degToRad(poleRA);
+    const dec = THREE.MathUtils.degToRad(poleDec);
+    // ICRF equatorial unit vector for the pole, then rotate into ecliptic.
+    const eps = THREE.MathUtils.degToRad(23.4392911);
+    const xq = Math.cos(dec) * Math.cos(ra);
+    const yq = Math.cos(dec) * Math.sin(ra);
+    const zq = Math.sin(dec);
+    const pole = new THREE.Vector3(
+      xq,
+      yq * Math.cos(eps) + zq * Math.sin(eps),
+      -yq * Math.sin(eps) + zq * Math.cos(eps)
+    );
+
+    const inc = THREE.MathUtils.degToRad(body.orbit.i);
+    const node = THREE.MathUtils.degToRad(body.orbit.O);
+    const orbitNormal = new THREE.Vector3(
+      Math.sin(inc) * Math.sin(node),
+      -Math.sin(inc) * Math.cos(node),
+      Math.cos(inc)
+    );
+
+    const angle = THREE.MathUtils.radToDeg(pole.angleTo(orbitNormal));
+    return body.rotationPeriodHours < 0 ? 180 - angle : angle;
+  }
+
+  /**
    * Where a body sits relative to the Sun, seen from Earth.
    *
    * `elongationDeg` is the Sun–Earth–body angle: 0° means the body is in the

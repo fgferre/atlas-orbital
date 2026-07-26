@@ -486,7 +486,7 @@ export const Sidebar = () => {
                       !b.distanceFromParent ? "(Avg from Sun)" : undefined
                     }
                   />
-                  <StatBox label="Axial Tilt" value={`${b.axialTilt}°`} />
+                  <StatBox label="Axial Tilt" value={axialTiltLabel(b)} />
                   <StatBox
                     label="Eccentricity"
                     value={b.orbit.e.toFixed(3)}
@@ -695,6 +695,27 @@ const formatDistance = (au: number): string =>
  */
 const inclinationToEcliptic = (b: CelestialBody): string | undefined =>
   b.parentId ? undefined : `${b.orbit.i.toFixed(2)}°`;
+
+/**
+ * Obliquity, or nothing.
+ *
+ * Twenty-seven records carry `axialTilt: 0` as a placeholder rather than a
+ * measurement — no moon in the catalog has a measured obliquity — and the cell
+ * used to print all of them as a confident "0°", claiming every moon spins bolt
+ * upright. A placeholder zero now renders N/A.
+ *
+ * The template is also guarded: `${b.axialTilt}°` on an absent field produces
+ * the string "undefined°", which is truthy and sails straight past StatBox's
+ * `value || "N/A"` fallback. W6 makes the field optional, so the guard has to
+ * exist before then.
+ */
+const axialTiltLabel = (b: CelestialBody): string | undefined => {
+  if (b.axialTilt === undefined || !Number.isFinite(b.axialTilt)) {
+    return undefined;
+  }
+  if (b.axialTilt === 0 && b.poleRA === undefined) return undefined;
+  return `${b.axialTilt}°`;
+};
 
 /** Closest and farthest approach. A circular orbit collapses to one value
  *  rather than printing the same number on both sides of a dash. */

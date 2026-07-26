@@ -549,3 +549,35 @@ describe("resolveSkyGeometry", () => {
     expect(best.lit).toBeLessThan(0.55);
   });
 });
+
+describe("resolveObliquityDeg", () => {
+  // Standing-law-3 style check: the catalog's hand-entered obliquities are
+  // confirmed by an independent route — the IAU pole rotated into the ecliptic
+  // and measured against the orbit normal built from the record's own i and Ω.
+  // Neither number feeds the other, so a typo in either shows up here.
+  it("reproduces every catalog obliquity from the IAU pole and the orbit", () => {
+    const poled = SOLAR_SYSTEM_BODIES.filter((b) => b.poleRA !== undefined);
+    expect(poled.length).toBeGreaterThanOrEqual(9);
+
+    for (const body of poled) {
+      const derived = AstroPhysics.resolveObliquityDeg(body);
+      expect(derived, `${body.id} has no derivable obliquity`).not.toBeNull();
+      expect(
+        Math.abs((derived as number) - body.axialTilt),
+        `${body.id}: derived ${derived?.toFixed(2)}° vs catalog ${body.axialTilt}°`
+      ).toBeLessThan(0.1);
+    }
+  });
+
+  it("measures against the orbit normal, not ecliptic north", () => {
+    // Mercury is the falsification case: its pole is 7.01° from ecliptic north
+    // while its obliquity is 0.03°, because its orbit is itself inclined 7°.
+    // An implementation that used ecliptic north would return ~7 here.
+    const mercury = getBody("mercury");
+    expect(AstroPhysics.resolveObliquityDeg(mercury)).toBeLessThan(0.5);
+
+    // Venus is the sign case: a retrograde spin must read ~177°, not ~1.2°.
+    const venus = getBody("venus");
+    expect(AstroPhysics.resolveObliquityDeg(venus)).toBeGreaterThan(170);
+  });
+});
