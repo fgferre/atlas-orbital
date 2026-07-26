@@ -244,13 +244,33 @@ not. Focus outranks type. See `src/lib/labelTier.ts`.
 
 `isSmall` was hardcoded `true` and read nowhere; `tier` replaces it.
 
-## Checked and NOT a defect here
+## 4. Lens-texture 404 fallback — `4a055fa`
 
-- **Lens textures 404 → "harmless"**, claimed at `lensFlareSprites.ts:23-29`.
-  The claim is wrong — with both textures missing, `dirt * 3.0 + starburst`
-  degenerates to `1 - smoothstep(0, 0.3, d)`, a mask anchored to the SCREEN
-  centre, so the whole flare collapses into a centre blob with no grit. It is
-  not this machine's problem (the gitignored binaries are present locally and
-  ship in `dist`), but any fresh clone or CI runner without them gets that
-  degradation silently. Worth a conservative neutral-multiplier fallback if
-  the flare ever misbehaves on a machine that lacks the files.
+Surfaced while diagnosing item 2 and fixed on request. `lensFlareSprites.ts`
+documented its 404 path as "a clean flare with no grit, which is harmless
+visually". Three's fallback for an image-less texture is 1×1 transparent
+black, and black is the right no-op for exactly one of the three slots:
+`dirt` (additive through `× 3.0`) yes; `starburst` (multiplicative, `s1 * s2`)
+and `lensColor` (`result *= …`) no. Black starburst leaves only
+`1 - smoothstep(0, 0.3, d)`, a mask anchored to the SCREEN centre, which
+amputates the ghost chain; black lensColor multiplies the PSEUDO flare by
+zero and it renders nothing at all.
+
+Each texture now carries its own neutral 1×1 stand-in, replaced in place once
+the real image decodes. `ImageLoader` rather than `TextureLoader` because the
+latter owns the Texture it returns and assigns `.image` itself, leaving no
+seam to pre-seed; object identity never changes, so the Uniform the Effect
+captured at construction is untouched.
+
+**Invisible on this machine** — the binaries are gitignored license-ambiguous
+Gaia originals, present locally and copied into `dist`. It is fresh clones and
+CI runners that render without them. Confirming that took blocking the
+requests at the Playwright layer: moving the files out of `dist` does NOT
+produce a 404, because `vite preview`'s sirv indexes the directory once at
+startup and keeps serving from that index.
+
+Verified in Chromium with the requests aborted (no console error, scene
+renders, neutral canvas reads back 255,255,255,255) and offline at shader
+level: missing textures go from max 36 / mean 1.12 (amputated) to 58 / 3.30,
+against 144 / 7.62 with the real files — the remaining gap is the grime,
+which is what the original claim described.
