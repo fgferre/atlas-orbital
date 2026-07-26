@@ -24,7 +24,8 @@ const FOUR_PI = 4.0 * Math.PI;
 // θ.5b+c — Rayleigh + Mie atmospheric scattering port + per-frame wiring,
 // combined ship of T3.1.
 //
-// 1:1 port of Gaia Sky's atmosphere shaders (commit 450c344ca):
+// Port of Gaia Sky's atmosphere shaders (commit 450c344ca), 1:1 apart from
+// the numeric divergence at (G) below:
 //   - `/tmp/gaiasky/assets/shader/atm.vertex.glsl` (70 LOC)
 //   - `/tmp/gaiasky/assets/shader/atm.fragment.glsl` (40 LOC)
 // Consumes the θ.5a snippet (`atmscatteringSnippet.ts`, landed in
@@ -59,8 +60,11 @@ const FOUR_PI = 4.0 * Math.PI;
 //    before pasting `ATMSCATTERING_VERT_GLSL` (which contains
 //    `out vec3 v_position;`) and a manual `varying vec3 v_position;`
 //    declaration in the frag wrapper (since the frag snippet uses
-//    `v_position` only as a function param). The snippet itself stays
-//    BYTE-IDENTICAL with θ.5a — shim lives outside the imported constant.
+//    `v_position` only as a function param). The shim lives OUTSIDE the
+//    imported constant and never edits it — the snippet's own single
+//    divergence from Gaia (W3 / F-05, the Rec.709 luma swizzle) is a
+//    deliberate edit to the constant itself, recorded in that file's
+//    "Known divergences" block.
 //    Rationale: `ShaderMaterial` with `glslVersion: GLSL3` tangles with
 //    Three's implicit fragment-output injection (caught and reverted in
 //    the first θ.5b attempt). GLSL1 has no such ambiguity.
@@ -70,7 +74,9 @@ const FOUR_PI = 4.0 * Math.PI;
 //    Three.js auto-provides `attribute vec3 position;` + `modelMatrix`,
 //    `viewMatrix`, `projectionMatrix`, `modelViewMatrix`.
 //    `#define a_position position` aliases Gaia's attribute name so the
-//    θ.5a snippet stays byte-identical.
+//    aliasing costs the θ.5a snippet no edit of its own. (The snippet is
+//    byte-identical to Gaia except for one character — see the Rec.709
+//    luma exception at (G) below.)
 //    Matrix product `projectionMatrix * modelViewMatrix * vec4(position, 1.0)`
 //    in atlas equals `u_projViewTrans * u_worldTrans * vec4(a_position, 1.0)`
 //    in Gaia — same chain of transforms, different names.
@@ -95,7 +101,19 @@ const FOUR_PI = 4.0 * Math.PI;
 //    instead of Gaia's `layout (location = 0) out vec4 fragColor;`. Same
 //    RGBA slot-0 write.
 //
-// All numeric constants, phase functions, and integrator bodies are
+// G) Rec.709 luma exception — the ONE place atlas' GLSL differs numerically
+//    from Gaia. The sky integrator's alpha term reads
+//    `luma(tonedAtmosphere.rgb)`; Gaia writes `.rbg`, which pays green's
+//    0.7152 weight to blue and blue's 0.0722 to green. Against the
+//    blue-dominant colour a Rayleigh atmosphere produces, that inflates the
+//    luminance driving alpha by ~59%, so the limb renders opaque where it
+//    should fade. Fixed in W3 / F-05 (2026-07-26) as an Atlas correctness
+//    divergence, not an upstream sync — Gaia is a technical reference, not a
+//    merge gate (AGENTS.md). Full rationale in `atmscatteringSnippet.ts`'s
+//    "Known divergences" block; `LUMA_GLSL` below is unchanged and remains a
+//    verbatim inline of Gaia's `luma.glsl`.
+//
+// All other numeric constants, phase functions, and integrator bodies are
 // byte-identical to Gaia via the θ.5a `ATMSCATTERING_*_GLSL` imports.
 
 // Inlined from `/tmp/gaiasky/assets/shader/lib/luma.glsl` (5 LOC;

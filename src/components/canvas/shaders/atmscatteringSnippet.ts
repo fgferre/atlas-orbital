@@ -1,5 +1,7 @@
-// 1:1 port of Gaia Sky's atmospheric-scattering include files,
+// Port of Gaia Sky's atmospheric-scattering include files,
 // commit 450c344ca (2026-04-22 clone at `/tmp/gaiasky/`).
+// 1:1 apart from a single deliberate correctness divergence — see
+// "Known divergences from Gaia" below.
 //
 // Source files:
 //   - `/tmp/gaiasky/assets/shader/lib/atmscattering.frag.glsl` (223 LOC)
@@ -25,7 +27,19 @@
 //     translating to atlas conventions.
 //
 // Known divergences from Gaia (documented per lesson L22 DIFF GATE):
-//   - **None, numeric**. Every constant and expression is byte-identical.
+//   - **Atlas correctness divergence, one character** (W3 / F-05, 2026-07-26):
+//     the sky integrator's alpha term reads `luma(tonedAtmosphere.rgb)` where
+//     Gaia writes `luma(tonedAtmosphere.rbg)`. The swizzle pays Rec.709's
+//     green weight (0.7152) to the blue channel and blue's weight (0.0722) to
+//     green, so for the blue-dominant colour a Rayleigh atmosphere actually
+//     produces, the luminance driving `tonedAtmosphere.a` runs ~59% high —
+//     the limb renders opaque where it should fade out, and a faint limb that
+//     should be invisible draws. This is **not** an upstream sync and is not
+//     waiting on one: AGENTS.md's constitution makes Gaia an optional
+//     technical reference, not a merge gate, so a defect that survives in the
+//     reference is still a defect here. Every other constant and expression
+//     in this file remains byte-identical, which is why the divergence is
+//     recorded as one line rather than a fork.
 //   - **Formatting**: Whitespace and line breaks preserved exactly.
 //   - **No `#ifndef GLSL_LIB_ATMSCAT` header guard** here because the
 //     template literal is concatenated, not `#include`d — duplicate-
@@ -266,7 +280,7 @@ vec4 computeAtmosphericScattering(vec3 v_position) {
     vec4 tonedAtmosphere;
     tonedAtmosphere.rgb = vec3(1.0) - exp((rayleighColor + mieColor) * -exposureSky);
 
-    float lma = luma(tonedAtmosphere.rbg);
+    float lma = luma(tonedAtmosphere.rgb);
     float scl = smoothstep(0.05, 0.2, lma);
     tonedAtmosphere.a = (heightNormalized * (1.0 - fadeFactor) + lma * fadeFactor) * scl * fAlpha;
     return tonedAtmosphere;
