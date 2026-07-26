@@ -29,12 +29,13 @@ import { useStore } from "../../store";
  * in β's scope.
  *
  * **Smoothing.** Uses troika's default `fwidth()`-based smoothing,
- * same decision as `GridAuLabels.tsx` (T4.5-δ). Gaia's fixed-scale
- * `1/(16 × u_scale)` formula from `font.fragment.glsl:26` is pinned
- * in `src/lib/msdfFontMath.ts` by T4.5-α and available for a future
- * uniform-override pass; troika's adaptive smoothing is device-
- * pixel-ratio-aware and handles extreme zoom better than Gaia's
- * fixed divisor at the atlas camera ranges we ship.
+ * same decision as `GridAuLabels.tsx` (T4.5-δ). This is settled, not
+ * deferred: troika's adaptive smoothing is device-pixel-ratio-aware
+ * and handles extreme zoom better than a fixed divisor at the atlas
+ * camera ranges we ship. The alternative that was once held open —
+ * overriding it with a fixed `1/(16 × scale)` — was retired with its
+ * constants on 2026-07-26; reconstruct from the upstream shader if it
+ * is ever revisited.
  *
  * **Positioning.** Each label sits at its body's world position
  * (mesh lookup cached by body id, mirroring

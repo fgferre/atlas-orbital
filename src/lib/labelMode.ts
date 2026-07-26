@@ -20,8 +20,7 @@
  * Gaia-native look opt in via the Layers panel.
  *
  * Source citations (all under `/tmp/gaiasky/`):
- *  - `assets/shader/font.fragment.glsl:1-41` — MSDF font shader
- *    (math primitives pinned in `src/lib/msdfFontMath.ts` by T4.5-α).
+ *  - `assets/shader/font.fragment.glsl:1-41` — MSDF font shader.
  *  - `assets/shader/font.vertex.glsl:21-28` — per-body fade-in
  *    `v_opacity = clamp((pow(viewAngle, viewAnglePow) - thLabel) /
  *    thLabel, 0, 0.95) * componentAlpha` (not ported in β; atlas
@@ -32,9 +31,8 @@
  *    the dispatch Gaia uses for body labels. Atlas's drei `<Text>`
  *    ports the output (SDF fragment via troika's default
  *    `fwidth()` smoothing — same decision as `GridAuLabels.tsx`
- *    shipped in T4.5-δ; Gaia's `1/(16 × u_scale)` override stays
- *    deferred behind T4.5-α's `MSDF_SMOOTHING_DIVISOR` constant
- *    for a later tightening onda).
+ *    shipped in T4.5-δ, and settled rather than deferred; see
+ *    `PlanetLabels3D.tsx` §Smoothing).
  */
 
 export type LabelMode = "html" | "sdf";
