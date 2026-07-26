@@ -3,6 +3,8 @@ import * as THREE from "three";
 
 import { SOLAR_SYSTEM_BODIES } from "../data/celestialBodies";
 import { AstroPhysics, AU_TO_3D_UNITS } from "./astrophysics";
+import { resolveHeliocentricPositionAU } from "./orbital/heliocentric";
+import { initializeOrbitalEngine } from "./orbital/setup";
 
 const TEST_DATE = new Date("2000-01-01T12:00:00Z");
 
@@ -491,5 +493,59 @@ describe("AstroPhysics didactic geometry", () => {
     }).length();
 
     expect(callistoDistance / ioDistance).toBeGreaterThan(1.5);
+  });
+});
+
+describe("resolveSkyGeometry", () => {
+  // Ephemeris contract (AGENTS §6): the panel states where a body sits
+  // relative to the Sun. Mercury's elongation is the sharpest available
+  // falsification — it is bounded by the geometry of its own orbit, so a frame
+  // error, a parent-centred vector or a swapped subtraction all break it.
+  it("keeps Mercury inside its real elongation bound across a year", () => {
+    initializeOrbitalEngine();
+    let maxElongation = 0;
+
+    for (let day = 0; day < 366; day += 1) {
+      const date = new Date(Date.UTC(2025, 0, 1 + day));
+      const geometry = AstroPhysics.resolveSkyGeometry(
+        resolveHeliocentricPositionAU("mercury", date),
+        resolveHeliocentricPositionAU("earth", date)
+      );
+      if (geometry) {
+        maxElongation = Math.max(maxElongation, geometry.elongationDeg);
+      }
+    }
+
+    // Mercury's greatest elongation ranges 18°–28° depending on where in its
+    // eccentric orbit the alignment falls. Anything past 30° is not Mercury.
+    expect(maxElongation).toBeGreaterThan(17);
+    expect(maxElongation).toBeLessThan(30);
+  });
+
+  it("reports Venus half-lit at greatest elongation", () => {
+    initializeOrbitalEngine();
+    // The dichotomy: an inner planet shows 50% of its disc exactly when the
+    // Sun-Venus-Earth angle is 90°, which is greatest elongation. This pins the
+    // phase angle to the right vertex — computing it at Earth instead of at the
+    // body gives a different, wrong number here.
+    let best = { elongation: 0, lit: 0 };
+    for (let day = 0; day < 584; day += 1) {
+      const date = new Date(Date.UTC(2025, 0, 1 + day));
+      const geometry = AstroPhysics.resolveSkyGeometry(
+        resolveHeliocentricPositionAU("venus", date),
+        resolveHeliocentricPositionAU("earth", date)
+      );
+      if (geometry && geometry.elongationDeg > best.elongation) {
+        best = {
+          elongation: geometry.elongationDeg,
+          lit: geometry.illuminatedFraction,
+        };
+      }
+    }
+
+    expect(best.elongation).toBeGreaterThan(44);
+    expect(best.elongation).toBeLessThan(48);
+    expect(best.lit).toBeGreaterThan(0.45);
+    expect(best.lit).toBeLessThan(0.55);
   });
 });

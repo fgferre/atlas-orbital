@@ -618,6 +618,48 @@ export class AstroPhysics {
       .multiplyScalar(referenceDistance);
   }
 
+  /**
+   * Where a body sits relative to the Sun, seen from Earth.
+   *
+   * `elongationDeg` is the Sun–Earth–body angle: 0° means the body is in the
+   * Sun's direction, 180° means opposite it. `illuminatedFraction` is the lit
+   * fraction of the disc, from the Sun–body–Earth phase angle.
+   *
+   * Purely geometric, from body centres. There is no observer location in this
+   * app, so this states where a body IS relative to the Sun — never that it
+   * will be visible. No atmosphere, no refraction, no twilight, no horizon.
+   *
+   * Both vectors must be heliocentric AU (see
+   * `src/lib/orbital/heliocentric.ts`); passing a parent-centred satellite
+   * vector silently yields the parent's answer.
+   */
+  static resolveSkyGeometry(
+    bodyHelioAU: THREE.Vector3,
+    earthHelioAU: THREE.Vector3
+  ): { elongationDeg: number; illuminatedFraction: number } | null {
+    const earthToBody = bodyHelioAU.clone().sub(earthHelioAU);
+    const earthToSun = earthHelioAU.clone().negate();
+    if (earthToBody.lengthSq() < 1e-12 || earthToSun.lengthSq() < 1e-12) {
+      return null;
+    }
+
+    const elongationDeg = THREE.MathUtils.radToDeg(
+      earthToSun.angleTo(earthToBody)
+    );
+
+    // Phase angle is measured AT the body, between the Sun and Earth.
+    const bodyToSun = bodyHelioAU.clone().negate();
+    const bodyToEarth = earthHelioAU.clone().sub(bodyHelioAU);
+    if (bodyToSun.lengthSq() < 1e-12)
+      return { elongationDeg, illuminatedFraction: 1 };
+    const phase = bodyToSun.angleTo(bodyToEarth);
+
+    return {
+      elongationDeg,
+      illuminatedFraction: (1 + Math.cos(phase)) / 2,
+    };
+  }
+
   static resolveOrbitDistanceBoundsAU(orbitParams: OrbitParams): {
     minAU: number;
     maxAU: number;

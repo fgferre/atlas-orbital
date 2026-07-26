@@ -5,6 +5,7 @@ import { useStore } from "../../store";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
 import type { CelestialBody } from "../../lib/astrophysics";
+import { resolveHeliocentricPositionAU } from "../../lib/orbital/heliocentric";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { resolveBodyName } from "../../lib/bodyName";
 import {
@@ -37,6 +38,25 @@ export const Sidebar = () => {
   const orbitalResult = useOrbitalCalculation(orbitalBodyId, b?.parentId);
   const orbitalCalculation =
     orbitalResult.state === "ready" ? orbitalResult.data : null;
+
+  const displayedDatetime = useStore((state) => state.displayedDatetime);
+
+  // Where this body sits relative to the Sun, seen from Earth. Scope is
+  // sun-orbiting bodies plus the Moon: for the Moon the parent IS Earth, so the
+  // composed heliocentric difference already IS the geocentric vector and the
+  // result is the lunar phase. Other satellites are omitted — their elongation
+  // sits within a degree of their parent's and adds no signal.
+  const skyGeometry = useMemo(() => {
+    if (!b || b.id === "sun" || b.id === "earth") return null;
+    if (b.parentId && b.id !== "moon") return null;
+    try {
+      const earth = resolveHeliocentricPositionAU("earth", displayedDatetime);
+      const body = resolveHeliocentricPositionAU(b.id, displayedDatetime);
+      return AstroPhysics.resolveSkyGeometry(body, earth);
+    } catch {
+      return null;
+    }
+  }, [b, displayedDatetime]);
 
   // Earth's own catalog record is the comparison baseline, so the badges cannot
   // drift from the value the Earth panel itself prints.
@@ -490,6 +510,33 @@ export const Sidebar = () => {
                   />
                 </div>
               </div>
+
+              {/* Sky Geometry */}
+              {skyGeometry && (
+                <div>
+                  <h3 className="text-nasa-accent text-[10px] uppercase tracking-widest mb-2 font-bold border-b border-white/5 pb-1">
+                    Sky Geometry
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatBox
+                      label="Elongation"
+                      value={`${skyGeometry.elongationDeg.toFixed(1)}°`}
+                      subLabel="from the Sun"
+                    />
+                    <StatBox
+                      label="Illuminated"
+                      value={`${(skyGeometry.illuminatedFraction * 100).toFixed(0)}%`}
+                      subLabel="of the disc"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[9px] text-gray-500 font-rajdhani">
+                    Geometric, from body centres as seen from Earth&apos;s
+                    centre. Says where the body is relative to the Sun, not
+                    whether you could see it — there is no observer location,
+                    atmosphere or twilight in this model.
+                  </p>
+                </div>
+              )}
 
               {/* Orbital Model */}
               <OrbitalProvenanceDisplay bodyId={b.id} />
