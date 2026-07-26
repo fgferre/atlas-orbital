@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status      | Commit |
-| --------------------------------------- | ----------- | ------ |
-| W1 Correct the record                   | not started | —      |
-| W2 The panel stops contradicting itself | not started | —      |
-| W3 Photometry and the exposure floor    | not started | —      |
-| W4 The star surfaces stop lying         | not started | —      |
-| W5 Body figure                          | not started | —      |
-| W6 One pole, one spin                   | not started | —      |
-| W7 Eclipses happen when eclipses happen | not started | —      |
-| W8 Reach and discovery                  | not started | —      |
-| W9 The rings transmit                   | not started | —      |
-| W10 Atmosphere on the disc              | not started | —      |
-| — CHECKPOINT —                          | —           | —      |
-| W11 J2 secular precession               | not decided | —      |
-| W12 Uranus stops being a bare ball      | not decided | —      |
-| W13 Enceladus erupts                    | not decided | —      |
+| Wave                                    | Status                            | Commit                                                                    |
+| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY |
+| W2 The panel stops contradicting itself | not started                       | —                                                                         |
+| W3 Photometry and the exposure floor    | not started                       | —                                                                         |
+| W4 The star surfaces stop lying         | not started                       | —                                                                         |
+| W5 Body figure                          | not started                       | —                                                                         |
+| W6 One pole, one spin                   | not started                       | —                                                                         |
+| W7 Eclipses happen when eclipses happen | not started                       | —                                                                         |
+| W8 Reach and discovery                  | not started                       | —                                                                         |
+| W9 The rings transmit                   | not started                       | —                                                                         |
+| W10 Atmosphere on the disc              | not started                       | —                                                                         |
+| — CHECKPOINT —                          | —                                 | —                                                                         |
+| W11 J2 secular precession               | not decided                       | —                                                                         |
+| W12 Uranus stops being a bare ball      | not decided                       | —                                                                         |
+| W13 Enceladus erupts                    | not decided                       | —                                                                         |
 
 ---
 
@@ -924,9 +924,9 @@ Earth focused, toggle the directional light) settles it before any code.
 disc.** The Moon already carries `eclipsingBodyId: "earth"`, and its own catalog
 comment promises "the signature blood-moon red tint comes from the diffraction
 spectrum". Run the computed cone through the lunar geometry and Earth's umbra at
-lunar distance is ~2.6 R_moon — **the whole Moon fits inside it**, `shdw = 0`
+lunar distance is ~2.6 R*moon — **the whole Moon fits inside it**, `shdw = 0`
 everywhere, and totality renders **black** where today an accidental copper wash
-appears. That is a fidelity _and_ wow regression on the most commonly observed
+appears. That is a fidelity \_and* wow regression on the most commonly observed
 eclipse type there is, inside the wave named for eclipse fidelity, and the drafted
 exit criteria contain **zero lunar anchors**. Two obligations, whichever path is
 taken: add the anchors (`resolveEclipseConeGeometry(moon, earth)` active at the
