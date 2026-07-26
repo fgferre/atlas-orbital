@@ -51,7 +51,7 @@ export const RIGHT_CONTROL_BUTTONS = [
   // "Access" instead of "Accessibility" — the vertical rail button
   // caps at roughly 7 characters before truncation; "Access" reads
   // as an abbreviation users parse correctly and keeps layout in
-  // parity with the existing "Project" / "Display" labels. The
+  // parity with the sibling "Search" / "Display" labels. The
   // panel header (PANEL_COPY.a11y.title in LayersPanel.tsx) spells
   // it out in full.
   { id: "a11y", label: "Access" },

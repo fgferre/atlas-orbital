@@ -85,8 +85,12 @@ const TUTORIAL_STEPS: TutorialStep[] = [
           </li>
           <li>• Display — graphics quality and per-feature tuning</li>
           <li>• Access — motion and UI scale</li>
-          <li>• Project — Replay Tutorial, Mission Report, and Debug</li>
         </ul>
+        <p className="mt-2">
+          Session tools sit behind the gear button instead of the rail: Replay
+          Tutorial and Keyboard Shortcuts under Help, Mission Report under
+          About, and the Developer toggle.
+        </p>
       </>
     ),
     target: "settings",
