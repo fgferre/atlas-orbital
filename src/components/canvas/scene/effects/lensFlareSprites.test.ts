@@ -10,6 +10,7 @@ import {
   LENS_COLOR_TEXTURE_URL,
   LENS_DIRT_TEXTURE_URL,
   LENS_STARBURST_TEXTURE_URL,
+  NEUTRAL_LEVEL,
 } from "./lensFlareSprites";
 
 // Post-T2.3a, the three sprites load asynchronously from
@@ -78,6 +79,27 @@ describe("lens-flare sprites — shader sampling contract pins", () => {
     expect(tex.magFilter).toBe(THREE.LinearFilter);
     expect(tex.generateMipmaps).toBe(false);
     expect(tex.colorSpace).toBe(THREE.NoColorSpace);
+  });
+
+  // The three binaries are gitignored (license-ambiguous Gaia
+  // originals), so a fresh clone and every CI runner render without
+  // them. What the shader samples in that case has to be a no-op, and
+  // for two of the three slots three's own empty-texture black is NOT
+  // one. These are the numbers that make a missing asset change
+  // nothing; they are not free to re-tune.
+  it("neutral levels make the dirt × starburst modulation collapse to exactly 1", () => {
+    // Mirrors `vec3 modulated = flare * (dirt * 3.0 + starburst)` in
+    // both LensFlareEffect and PseudoLensFlareEffect.
+    const dirt = NEUTRAL_LEVEL.dirt / 255;
+    const starburst = NEUTRAL_LEVEL.starburst / 255;
+    expect(dirt * 3 + starburst).toBe(1);
+  });
+
+  it("lensColor's neutral is the multiplicative identity", () => {
+    // `result *= texture2D(u_lensColorTexture, ...)` in
+    // pseudolensflare.frag.glsl:48. Anything below white dims the
+    // accumulated ghosts; black erases the PSEUDO flare entirely.
+    expect(NEUTRAL_LEVEL.color / 255).toBe(1);
   });
 
   it("sprite getters memoize the loaded texture across repeated calls", () => {
