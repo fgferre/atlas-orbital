@@ -39,5 +39,24 @@ export const RING_EMISSIVE_POWER = 0.2;
 /** Default roughness for planet surfaces without a dedicated roughness map. */
 export const DEFAULT_PLANET_ROUGHNESS = 0.7;
 
-/** Default metalness for planet surfaces (most are non-metallic by default). */
-export const DEFAULT_PLANET_METALNESS = 0.3;
+/**
+ * Default metalness for planet surfaces.
+ *
+ * **0.0, and it is not an artistic choice.** Rock, ice and regolith are
+ * dielectrics: their specular reflectance at normal incidence is F0 ≈ 0.04,
+ * which is exactly what a metalness-workflow BRDF assumes at metalness 0.
+ * Above 0 the same workflow reinterprets the albedo texture as a conductor's
+ * complex reflectance and *removes* that fraction of the energy from the
+ * diffuse lobe — at the previous 0.3 every planetary surface in the catalog
+ * lost ~30% of its direct diffuse response to a specular lobe that no
+ * silicate or water-ice surface has.
+ *
+ * Raising it to 0.0 therefore moves peak linear direct diffuse ~1.43×
+ * globally (1 / (1 − 0.3)). That is the reason W3 is sequenced ahead of every
+ * other look wave: exposure has to settle before W5, W9 and W10 are smoked
+ * against it, so a look change stays attributable to the wave that caused it.
+ *
+ * Bodies with a genuinely metallic surface fraction (M-type asteroids) would
+ * need a per-record override, not a global default; none is claimed today.
+ */
+export const DEFAULT_PLANET_METALNESS = 0.0;
