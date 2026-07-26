@@ -61,7 +61,7 @@ darkening)** belongs beside it.
 | --------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                             |
 | W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell |
-| W3 Photometry and the exposure floor    | not started                       | —                                                                                                                     |
+| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                 |
 | W4 The star surfaces stop lying         | not started                       | —                                                                                                                     |
 | W5 Body figure                          | not started                       | —                                                                                                                     |
 | W6 One pole, one spin                   | not started                       | —                                                                                                                     |
@@ -281,6 +281,59 @@ receive `roughness`/`metalness` as props (so P-01's metalness change does reach
 them) but no shader patch from W3, W7 or W9. All four are airless rock or ice and
 therefore meet W3's own selection criterion while being unable to receive the
 patch. State it; do not let the asymmetry pass unremarked.
+
+#### What the gates actually proved (2026-07-26, post-ship)
+
+Recorded because two of them proved less than the plan assumed, and one of them
+found a defect in another wave.
+
+**The single pixel gate is structurally blind to this entire wave.** The frozen
+boot frame is a wide shot: starfield, HUD chrome, and a ~10 px `SUN` label ring.
+**No planet surface is in frame at all.** So `npm run test:e2e` passed
+unchanged — no re-bless was needed or performed — and that pass is _not_ evidence
+the exposure move is correct. Nobody should record "boot baseline unchanged" as a
+photometry result. Same caution for W5, W9 and W10, all of which the plan expects
+to move that baseline: they will not, unless they change the starfield or the HUD.
+
+**The runtime smoke was run headlessly instead of interactively, and what it can
+prove it does prove.** A throwaway Playwright spec flew to one body per code path
+in Chromium on real hardware and read the console at error _and_ warning. Mercury
+and Io (the new trailing branch) and the Moon (the eclipse branch) all render lit,
+with the flat disc and hard terminator the law predicts, and the run logged
+**zero console errors** — which is the GLSL-compile smoke standing law 8 is
+actually about. The spec was deleted after use; it is not a gate.
+
+**Still owed, and owed by a human, not by CI:** the three interactive readings no
+script can take. Granulation A/B against main after 15 s at ultra; frame time with
+the Sun filling the viewport before and after P-01; and Earth's lit limb and
+terminator at close range for F-05. On the last one the camera is the obstacle,
+not the renderer: selecting a body that owns satellites frames the **whole
+satellite system**, so Earth and Saturn draw ~14 px wide and wheel-dolly does not
+override it. Worth knowing before anyone else tries to script a close-up.
+
+**F-05 was therefore verified numerically instead, which for a one-character
+swizzle is the stronger check.** With Rec.709 weights against a blue-dominant
+limb colour (0.20, 0.35, 0.75): `lma` falls 0.604 → 0.347, a factor 1.741. In the
+mid-limb regime (0.08, 0.14, 0.30) the `smoothstep(0.05, 0.2, lma)` gate goes
+1.000 → 0.636, so the fade finally engages instead of saturating. At a faint limb
+(0.02, 0.03, 0.09) it goes 0.052 → **0.000**, i.e. the limb that should be
+invisible now is. The fix moves alpha monotonically **down** at every colour, so
+it can only remove a hard outer ring, never introduce one — the "if it rings,
+touch `alpha`" contingency cannot fire in this direction.
+
+**Found while checking an anchor, belongs to W7, deliberately not fixed here:**
+three's `output_fragment` chunk was renamed `opaque_fragment` in r152 and this
+repo is on r181, so all three `.replace("#include <output_fragment>", ...)` calls
+in `usePlanetMaterials.ts` (`:206` cloud, `:478` Earth, `:521` eclipse-only) are
+**silent no-ops** — `String.replace` with an absent needle returns the string
+unchanged. The eclipse _shader_ penumbra has never run on this three version;
+what is visible today is the `SmartSunLight` shadow map, which is consistent with
+W7's own third-round note about a second eclipse renderer. Not fixed in W3 on
+purpose: activating it before W7 corrects the cone would switch on the shadow
+F-03 says fires on ~86% of new moons against a real ~8.6%. W3's own patch anchors
+on `lights_fragment_begin`, which r181 does ship, and
+`regolithPhotometry.test.ts` asserts that against `THREE.ShaderLib.physical`.
+Every other chunk name the repo replaces was cross-checked and exists.
 
 **Verification.** `npm run lint && npm run build && npm run test:run -- celestialBodies qualityProfile sunFxProfile`,
 then **one browser smoke per commit**. P-01: granulation identical to main after
@@ -854,6 +907,34 @@ rename that updates only the declarations leaves every material failing that
 guard, so `uActive` is never written and **all eclipses stop firing with no
 console error at all**, because the injected GLSL still compiles. This is the
 single most silent failure in the wave.
+
+**The eclipse fragment patch is already not running, and has not been for some
+time — found in W3, 2026-07-26.** All three sites inject by
+`.replace("#include <output_fragment>", ...)`, but three renamed that chunk to
+`opaque_fragment` in **r152** and this repo is on **r181**
+(`package.json: "three": "^0.181.2"`; the chunk registry at
+`three/src/renderers/shaders/ShaderChunk.js:209` exports `opaque_fragment` and no
+`output_fragment`). `String.prototype.replace` with an absent needle returns the
+string unchanged, so `usePlanetMaterials.ts:206` (cloud), `:478` (Earth day/night)
+and `:521` (eclipse-only, the Moon) all silently inject nothing.
+`ECLIPSE_FRAGMENT_OUTPUT_PATCH` has never reached the shader on this three
+version; the shadow a user sees today comes from the `SmartSunLight` shadow map,
+which is exactly the "second eclipse renderer" the third round flagged, and it
+explains why that renderer visually dominates.
+**Three consequences for this wave.** (a) F-03's cone correction is not a
+behaviour change until the needle is fixed — fixing the constants alone changes
+nothing on screen. (b) The needle fix and the cone fix must land **together**:
+repairing the needle first switches on the _uncorrected_ cone, i.e. a shadow that
+fires on ~86% of new moons. That is why W3 left it alone rather than "just fixing
+the typo". (c) The `uEclipsingBodyRadius` rename trap above is currently
+**invisible** for the same reason — it will become live the moment the needle
+works, so sequence the needle fix first within the wave and re-read that trap.
+**Add the general guard while here**, since this is the second silent-no-op class
+in one wave: one test that walks every `#include <...>` needle the repo replaces
+and asserts it exists in the corresponding `THREE.ShaderLib` source. It is ~15
+lines, it is red today, and it is the only thing that would have caught a dead
+eclipse shader whose age nobody can currently state.
+`regolithPhotometry.test.ts` has the single-needle form of that assert to copy.
 **W3's regolith patch survives this rewrite verbatim.** Io, Europa, Ganymede,
 Callisto and Enceladus reach W3's trailing branch today; the moment they gain
 `eclipsingBodyId` here they jump into the eclipse branch — the one this wave

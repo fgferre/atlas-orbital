@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (W1+W2 code-complete, smoke pending; W3 next)._
+_Last updated: 2026-07-26 (W1+W2+W3 code-complete, smoke pending; W4 next)._
 
 ---
 
@@ -14,10 +14,20 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1 and W2 are code-complete on `main` (through `d137ddf`); both owe a browser
-smoke, checklist in that commit body. W3 (photometry / exposure floor) is next
-— first shader work, first medium-risk wave.** Per-item commits are in the
-wave file's progress table.
+**W1, W2 and W3 are code-complete on `main` (through `24c4d33`); all three owe a
+browser smoke. W4 (star surfaces / HYG panel) is next — fully independent, it
+shares no file with anything shipped so far.** Per-item commits are in the wave
+file's progress table.
+
+Two W3 findings a later wave must not re-derive, both recorded in that wave's
+"What the gates actually proved" subsection: **the single pixel gate is
+structurally blind to planet surfaces** (the frozen boot frame is a wide shot —
+so W5/W9/W10 should not read "baseline unchanged" as a photometry result), and
+**the eclipse fragment patch has never run on three r181** — `output_fragment` was
+renamed `opaque_fragment` in r152, so three `.replace` calls in
+`usePlanetMaterials.ts` are silent no-ops. That one is logged against **W7**, not
+open for a drive-by fix: repairing the needle before the cone switches on a shadow
+that fires on ~86% of new moons.
 
 Read that file's **Standing law** before touching anything: it fixes the
 helper-deletes-what-it-replaces rule, the zero-new-uniform GLSL convention, the
