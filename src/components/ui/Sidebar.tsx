@@ -407,7 +407,7 @@ export const Sidebar = () => {
                   Orbital Data
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
-                  <StatBox label="Day Length" value={b.dayLength} />
+                  <StatBox label="Rotation Period" value={b.dayLength} />
                   <StatBox label="Year Length" value={b.yearLength} />
                   <StatBox
                     label="Distance"

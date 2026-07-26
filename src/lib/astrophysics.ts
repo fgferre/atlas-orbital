@@ -157,6 +157,20 @@ export interface CelestialBody {
   gravity?: string;
   composition?: string;
   atmosphere?: string;
+  /**
+   * Sidereal rotation period, as displayed text.
+   *
+   * This is one quantity across all 47 records — the time for one rotation
+   * against the stars, matching `rotationPeriodHours`. It is NOT the solar
+   * day. The panel labels it "Rotation Period" for exactly that reason:
+   * until 2026-07-26 the label said "Day Length" while Earth alone quoted a
+   * solar day ("24 hours"), so the field silently meant two different things.
+   *
+   * Three bodies have a solar day that differs materially from this value,
+   * and each states it in its own `facts`: Mercury (58.6 d sidereal vs 175.94 d
+   * solar, the 3:2 spin-orbit resonance), Venus (243 d retrograde sidereal vs
+   * 116.75 d solar) and the Moon (27.32 d sidereal vs 29.53 d synodic).
+   */
   dayLength?: string;
   yearLength?: string;
   curiosity?: string;

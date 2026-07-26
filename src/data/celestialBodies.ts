@@ -128,7 +128,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     facts: [
       "Its thick atmosphere traps heat, making it the hottest planet (462°C).",
       "Atmospheric pressure is 92 times greater than Earth's.",
-      "A day on Venus is longer than a year on Venus.",
+      "Venus turns once every 243 days — longer than its 225-day year — but it spins backwards, so sunrise to sunrise takes only about 117 days.",
       "It is the brightest natural object in Earth's night sky after the Moon.",
     ],
     records: ["Hottest planet", "Slowest rotation"],
@@ -168,7 +168,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     gravity: "9.8 m/s²",
     composition: "Rocks, iron, water, varied atmosphere",
     atmosphere: "78% nitrogen, 21% oxygen, 1% other gases",
-    dayLength: "24 hours",
+    dayLength: "23h 56min (sidereal)",
     yearLength: "365.25 days",
     curiosity:
       "Earth is the only planet not named after a Greek or Roman god. The name comes from Old English and Germanic words meaning 'ground'.",
@@ -562,6 +562,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "The Moon is in synchronous rotation with Earth, which means it always shows the same face to us. The 'dark side' is not actually dark, just never visible from Earth.",
     facts: [
       "The Moon is drifting away from Earth at a rate of 3.8 cm per year.",
+      "It turns once every 27.3 days but takes 29.5 days to run through its phases, because Earth keeps moving along its own orbit meanwhile.",
       "Temperatures on the surface range from 127°C in sunlight to -173°C in shadow.",
       "There is water ice at the poles in permanently shadowed craters.",
       "It is the fifth-largest satellite in the Solar System.",
