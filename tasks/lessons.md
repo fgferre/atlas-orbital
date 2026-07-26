@@ -547,6 +547,23 @@ level: "error"`. I never opened the dev server in the actual
   and paste the console — never skip the gate. Memory pointer:
   `feedback_browser_console_per_ship.md`.
 
+- **An instrument that returns the same reading for pass and fail is
+  not a gate — run the control first.** Two sessions were spent on
+  wrong causes because the reading never discriminated.
+  `gl.readPixels` on the default framebuffer returns `max 0, mean 0`
+  after the frame composites (`preserveDrawingBuffer` is off), so it
+  reported "black" for the broken `constrained` tier **and for a
+  working ultra render**; the real signal was a page screenshot.
+  Likewise, zeroing an effect's intensity to find which of its terms
+  produces an artifact kills the whole effect — as an A/B it only
+  establishes "it is in this effect", which sent two passes at the
+  lens flare after the wrong term. Before trusting any new reading,
+  take it once on a state you KNOW is good and once on a state you
+  KNOW is broken; if the two agree, the instrument is the bug. For
+  per-term shader isolation, evaluating the fragment shader offline
+  in Node (real textures, one term at a time) is both decisive and
+  ~1000× faster than a build-and-browse loop.
+
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
 source"). Default both `true`. When a material legitimately needs either
@@ -558,7 +575,10 @@ lens-flare / bloom / LightGlow audit.
 change; regenerating a Playwright baseline; after a burst of HMR edits;
 consolidating multi-pass audit output.
 
-**Canonical code markers:** Ship-protocol step 8 (temporal smoke) + step
+**Canonical code markers:** `canvasLitFraction` in `e2e/helpers.ts` with
+its calibration numbers (4.3 % / 7.1 % / 0.157 % neutered) and the
+negative control described in `tasks/waves/ui-redesign-2026-07-25.md`
+§Wave 5; Ship-protocol step 8 (temporal smoke) + step
 10 (baseline PNG human gate) in `tasks/STATUS.md`; HDR convention
 `depthTest={true} toneMapped={true}` per `ProceduralSun3D.tsx:419,445,475`
 and the `1d6cc30` fix to `SunScreenFlare.tsx` + `PlanetMotionOverlays.tsx`.
