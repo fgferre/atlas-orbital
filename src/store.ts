@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { VisualPresetType } from "./config/visualPresets";
 import type { ViewportFramingState } from "./lib/camera/effectiveViewport";
 import { DEFAULT_LABEL_MODE, type LabelMode } from "./lib/labelMode";
+import type { LabelTier } from "./lib/labelTier";
 import type { QualityMode } from "./lib/qualityProfile";
 import { simulationClock } from "./lib/simulationClock";
 import type { SunRenderMode } from "./lib/sunRenderMode";
@@ -121,7 +122,12 @@ interface AppState {
      */
     labelDx: number;
     labelDy: number;
-    isSmall: boolean;
+    /**
+     * Visual weight of this body's label. Classified once by
+     * `OverlayPositionTracker` and consumed by both renderers — see
+     * `src/lib/labelTier.ts`.
+     */
+    tier: LabelTier;
     showLabel: boolean;
     showIcon: boolean;
   }>;

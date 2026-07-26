@@ -6,6 +6,7 @@ import * as THREE from "three";
 
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { resolveBodyName } from "../../lib/bodyName";
+import { LABEL_TIER_SDF, labelTierFor } from "../../lib/labelTier";
 import { useStore } from "../../store";
 
 /**
@@ -64,7 +65,7 @@ const meshCache = new Map<string, THREE.Object3D>();
 // visually comparable to the HTML label's ~12-20 px footprint).
 const FONT_WORLD_BASE = 9;
 const FONT_DISTANCE_DIVISOR = 1000;
-const LABEL_COLOR = "#d1d5db";
+// Glyph colour is per-tier — see `LABEL_TIER_SDF` in lib/labelTier.ts.
 const LABEL_OUTLINE_COLOR = "#000000";
 const LABEL_OUTLINE_WIDTH = 0.15;
 const LABEL_OUTLINE_OPACITY = 1;
@@ -95,6 +96,9 @@ const noopRaycast: THREE.Object3D["raycast"] = () => null;
 export const PlanetLabels3D = () => {
   const showLabels = useStore((s) => s.showLabels);
   const labelMode = useStore((s) => s.labelMode);
+  // Drives the primary label tier. Changes rarely, so subscribing here
+  // keeps tier styling out of the frame loop entirely.
+  const focusId = useStore((s) => s.focusId);
   // Same focus action the HTML labels call (PlanetOverlay.tsx:68-71) so
   // SDF labels are clickable with identical behavior.
   const selectId = useStore((s) => s.selectId);
@@ -241,43 +245,59 @@ export const PlanetLabels3D = () => {
 
   return (
     <group raycast={noopRaycast}>
-      {SOLAR_SYSTEM_BODIES.map((body) => (
-        <group
-          key={body.id}
-          ref={setGroupRef(body.id)}
-          visible={false}
-          raycast={noopRaycast}
-        >
-          <Text
-            position={[LABEL_OFFSET_FRACTION, 0, 0]}
-            fontSize={1}
-            color={LABEL_COLOR}
-            anchorX="left"
-            anchorY="middle"
-            outlineWidth={LABEL_OUTLINE_WIDTH}
-            outlineColor={LABEL_OUTLINE_COLOR}
-            outlineOpacity={LABEL_OUTLINE_OPACITY}
-            // Clickable like the HTML labels (PlanetOverlay.tsx). The
-            // `<Text>` keeps troika's default raycast (no `noopRaycast`
-            // override) so R3F's pointer system can hit it; hidden
-            // groups (`group.visible = false`) are skipped by the event
-            // raycaster, matching what is on screen.
-            onClick={(e) => {
-              e.stopPropagation();
-              selectId(body.id);
-            }}
-            onPointerOver={(e) => {
-              e.stopPropagation();
-              document.body.style.cursor = "pointer";
-            }}
-            onPointerOut={() => {
-              document.body.style.cursor = "auto";
-            }}
+      {SOLAR_SYSTEM_BODIES.map((body) => {
+        // Tier drives glyph size / colour / opacity as plain JSX props,
+        // so nothing here costs per-frame work: `focusId` is the only
+        // input that changes at runtime and React already re-renders on
+        // it. Deliberately NOT applied to the group scale — the group's
+        // scale is the unit `pixelsPerLocalUnit` converts the
+        // arbitration's pixel offsets through, so scaling it would
+        // shrink a tertiary label's nudge along with its text and move
+        // it out of the slot the tracker reserved.
+        const tier = labelTierFor(body.type, body.id === focusId);
+        const style = LABEL_TIER_SDF[tier];
+        return (
+          <group
+            key={body.id}
+            ref={setGroupRef(body.id)}
+            visible={false}
+            raycast={noopRaycast}
           >
-            {resolveBodyName(body.name, i18n.language)}
-          </Text>
-        </group>
-      ))}
+            <Text
+              position={[LABEL_OFFSET_FRACTION, 0, 0]}
+              fontSize={style.scale}
+              color={style.color}
+              fillOpacity={style.fillOpacity}
+              anchorX="left"
+              anchorY="middle"
+              // Scaled with the glyphs so the outline keeps the same
+              // proportion at every tier (troika reads this in local
+              // units, not as a fraction of fontSize).
+              outlineWidth={LABEL_OUTLINE_WIDTH * style.scale}
+              outlineColor={LABEL_OUTLINE_COLOR}
+              outlineOpacity={LABEL_OUTLINE_OPACITY}
+              // Clickable like the HTML labels (PlanetOverlay.tsx). The
+              // `<Text>` keeps troika's default raycast (no `noopRaycast`
+              // override) so R3F's pointer system can hit it; hidden
+              // groups (`group.visible = false`) are skipped by the event
+              // raycaster, matching what is on screen.
+              onClick={(e) => {
+                e.stopPropagation();
+                selectId(body.id);
+              }}
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = "pointer";
+              }}
+              onPointerOut={() => {
+                document.body.style.cursor = "auto";
+              }}
+            >
+              {resolveBodyName(body.name, i18n.language)}
+            </Text>
+          </group>
+        );
+      })}
     </group>
   );
 };

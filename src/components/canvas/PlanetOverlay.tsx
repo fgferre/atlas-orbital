@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { useStore } from "../../store";
+import { LABEL_TIER_CLASS } from "../../lib/labelTier";
 
 // This component renders OUTSIDE the Canvas and displays HTML overlays.
 // Wrapped in `memo` because `overlayItems` is re-emitted only when its
@@ -58,7 +59,7 @@ export const PlanetOverlay = memo(() => {
             <button
               type="button"
               tabIndex={showIcons && item.showIcon ? -1 : 0}
-              className="absolute text-gray-300 text-xs font-semibold uppercase tracking-wide pointer-events-auto cursor-pointer transition-colors hover:text-nasa-accent drop-shadow-md whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent bg-transparent border-0 p-0"
+              className={`absolute uppercase pointer-events-auto cursor-pointer transition-colors hover:text-nasa-accent drop-shadow-md whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nasa-accent bg-transparent border-0 p-0 ${LABEL_TIER_CLASS[item.tier]}`}
               style={{
                 left: `${item.x}px`,
                 top: `${item.y + item.labelDy}px`,

@@ -5,6 +5,7 @@ import { useStore } from "../../store";
 import { getLabelReservations } from "./labelReservations";
 import { SOLAR_SYSTEM_BODIES } from "../../data/celestialBodies";
 import { resolveBodyName } from "../../lib/bodyName";
+import { labelTierFor, type LabelTier } from "../../lib/labelTier";
 import * as THREE from "three";
 
 interface OverlayCandidate {
@@ -16,6 +17,7 @@ interface OverlayCandidate {
   y: number;
   dist: number;
   priority: number;
+  tier: LabelTier;
 }
 
 interface OverlayItem {
@@ -26,7 +28,7 @@ interface OverlayItem {
   /** Screen-pixel offset of the label from the icon. See LABEL_PLACEMENTS. */
   labelDx: number;
   labelDy: number;
-  isSmall: boolean;
+  tier: LabelTier;
   showLabel: boolean;
   showIcon: boolean;
 }
@@ -205,6 +207,7 @@ export const OverlayPositionTracker = () => {
           y,
           dist,
           priority: basePriority + stabilityBonus,
+          tier: labelTierFor(body.type, body.id === focusId),
         });
       }
     });
@@ -299,7 +302,7 @@ export const OverlayPositionTracker = () => {
         y: c.y,
         labelDx,
         labelDy,
-        isSmall: true, // Kept for compatibility, logic moved to flags
+        tier: c.tier,
         showLabel,
         showIcon,
       });
@@ -313,7 +316,7 @@ export const OverlayPositionTracker = () => {
     for (const o of finalOverlays) {
       key += `${o.id}|${o.x | 0}|${o.y | 0}|${o.showLabel ? 1 : 0}|${
         o.showIcon ? 1 : 0
-      };`;
+      }|${o.tier};`;
     }
 
     const dbg = dbgRef.current;
