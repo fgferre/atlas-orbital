@@ -577,7 +577,7 @@ consolidating multi-pass audit output.
 
 **Canonical code markers:** `canvasLitFraction` in `e2e/helpers.ts` with
 its calibration numbers (4.3 % / 7.1 % / 0.157 % neutered) and the
-negative control described in `tasks/waves/ui-redesign-2026-07-25.md`
+negative control described in `tasks/archive/waves/ui-redesign-2026-07-25.md`
 §Wave 5; Ship-protocol step 8 (temporal smoke) + step
 10 (baseline PNG human gate) in `tasks/STATUS.md`; HDR convention
 `depthTest={true} toneMapped={true}` per `ProceduralSun3D.tsx:419,445,475`

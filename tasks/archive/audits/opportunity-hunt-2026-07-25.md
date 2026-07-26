@@ -3,7 +3,7 @@
 **Date:** 2026-07-25  
 **Method:** 7 parallel explore agents + manual re-check of top claims  
 **Authority:** [`AGENTS.md`](../../../AGENTS.md) wins. This file is a **revalidation brief**, not an auto-backlog.  
-**Related:** prior brief [`cross-ai-validation-brief-2026-07-24.md`](./cross-ai-validation-brief-2026-07-24.md); UI wave [`../../waves/ui-redesign-2026-07-25.md`](../../waves/ui-redesign-2026-07-25.md).
+**Related:** prior brief [`cross-ai-validation-brief-2026-07-24.md`](./cross-ai-validation-brief-2026-07-24.md); UI wave [`../waves/ui-redesign-2026-07-25.md`](../waves/ui-redesign-2026-07-25.md) (archived 2026-07-26).
 
 ### How to use
 
@@ -16,14 +16,14 @@
 
 ## 0. Do not re-open (already shipped / rejected)
 
-| Area                                                                                                                                           | Evidence                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| UI redesign waves 1–5 (honesty chrome, labels, ContextLine, scale glide, named territory, low-tier black canvas, lens flare, label hierarchy)  | `tasks/STATUS.md`, `tasks/waves/ui-redesign-2026-07-25.md`        |
-| HYG frame, analytical moon frame, satellite `nDegPerDay`, HYG PM on fly-to, ΔT Espenak-Meeus, mobile sidebar, WebGL card, deploy quality gates | Post-`b541a6d` commits + STATUS Cross-AI triage                   |
-| ScalePill, light-travel-time (HYG), camera streaming / overview ≤2k (not “boot all 8k”)                                                        | `ScalePill.tsx`, `HygStarPanel.tsx`, `textureVariants.ts` + gates |
-| HYG search (name/Bayer/HD/HIP/Gliese) → focus → flight → sprite/mesh crossfade → panel                                                         | Path end-to-end solid                                             |
-| Cross-AI rejects: hyperbolic Kepler, GPU instanced orbits, QD→star shader, etc.                                                                | STATUS “Rejected with evidence”                                   |
-| Home framing “tiny system” mid-intro                                                                                                           | Wave: measure after intro (~20 s)                                 |
+| Area                                                                                                                                           | Evidence                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| UI redesign waves 1–5 (honesty chrome, labels, ContextLine, scale glide, named territory, low-tier black canvas, lens flare, label hierarchy)  | `tasks/STATUS.md`, `tasks/archive/waves/ui-redesign-2026-07-25.md` |
+| HYG frame, analytical moon frame, satellite `nDegPerDay`, HYG PM on fly-to, ΔT Espenak-Meeus, mobile sidebar, WebGL card, deploy quality gates | Post-`b541a6d` commits + STATUS Cross-AI triage                    |
+| ScalePill, light-travel-time (HYG), camera streaming / overview ≤2k (not “boot all 8k”)                                                        | `ScalePill.tsx`, `HygStarPanel.tsx`, `textureVariants.ts` + gates  |
+| HYG search (name/Bayer/HD/HIP/Gliese) → focus → flight → sprite/mesh crossfade → panel                                                         | Path end-to-end solid                                              |
+| Cross-AI rejects: hyperbolic Kepler, GPU instanced orbits, QD→star shader, etc.                                                                | STATUS “Rejected with evidence”                                    |
+| Home framing “tiny system” mid-intro                                                                                                           | Wave: measure after intro (~20 s)                                  |
 
 ---
 

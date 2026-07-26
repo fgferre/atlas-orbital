@@ -3,42 +3,45 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-25 (wave 5 — the three carried-over UI items closed)._
+_Last updated: 2026-07-26 (fidelity & honesty wave opened; UI redesign archived)._
 
 ---
 
 ## Active wave
 
-**[`tasks/waves/ui-redesign-2026-07-25.md`](./waves/ui-redesign-2026-07-25.md)** —
-interface redesign with fresh eyes. **All five waves are done**, including the
-three items wave 4 handed off: the `low` preset drawing nothing (`a07f94f`),
-the lens-flare hexagon (`6204153`), and label visual hierarchy (`14f79d8`).
+**[`tasks/waves/fidelity-honesty-2026-07-26.md`](./waves/fidelity-honesty-2026-07-26.md)** —
+thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
+fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
+pre-committed**. Nothing started yet — W1 is next.
 
-Read that file before re-opening anything. It records seven claims that were
-checked and turned out NOT to be defects, one observed behaviour (Home in
-realistic mode) deliberately left for a product decision, and — most usefully
-— two measurements that looked like evidence and were not (`readPixels` after
-compositing; zeroing an effect to identify a term).
+Read that file's **Standing law** before touching anything: it fixes the
+helper-deletes-what-it-replaces rule, the zero-new-uniform GLSL convention, the
+independent-check rule for every new physical constant, the single pixel gate,
+and the seven arbitrated decisions that must not be re-litigated.
 
-T6.4 (HYG visual recovery) agent work is complete; plan archived at
+Findings, evidence and the rejection list live in
+[`archive/audits/cross-ai-triage-2026-07-26.md`](./archive/audits/cross-ai-triage-2026-07-26.md).
+Do not schedule anything from its §3 — that is what was checked and killed.
+
+Previous waves: UI redesign (all five done) archived at
+[`archive/waves/ui-redesign-2026-07-25.md`](./archive/waves/ui-redesign-2026-07-25.md);
+T6.4 HYG visual recovery at
 [`archive/waves/T6.4-visual-recovery.md`](./archive/waves/T6.4-visual-recovery.md).
-User smoke acceptance (named-star fly-to, quality flip) may still be
-informal QA — not an agent loop blocker.
 
 **Default agent action on a fresh session:** do **not** invent a Gaia
-port onda. Prefer user-stated tasks, or themes in
-[`ROADMAP.md`](./ROADMAP.md) only after confirming with the user.
+port onda. Work the active wave in order, or prefer user-stated tasks.
 
 ---
 
 ## Carryover (parked — do not auto-expand)
 
-| ID         | Pri | Note                                                                                                                                                                                                                                                                                                  |
-| ---------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U-smoke    | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                                                                                                                                                                                                 |
-| Doc-debt   | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs                                                                                                                                                                                 |
-| Cross-AI   | —   | Validation brief: [`archive/audits/cross-ai-validation-brief-2026-07-24.md`](./archive/audits/cross-ai-validation-brief-2026-07-24.md). **Three external audits were revalidated against code on 2026-07-24** — see the Cross-AI triage note below. Do not re-open their claims without new evidence. |
-| Hunt-07-25 | —   | Proven opportunity hunt (bugs + gaps, no re-proposals): [`archive/audits/opportunity-hunt-2026-07-25.md`](./archive/audits/opportunity-hunt-2026-07-25.md). Re-check HEAD before treating IDs as open.                                                                                                |
+| ID           | Pri | Note                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------ | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| U-smoke      | P2  | Optional user re-smoke of HYG fly-to / search / star panel after T6.4                                                                                                                                                                                                                                                                                                          |
+| Doc-debt     | —   | Historical audits/sweeps live under `archive/`; re-check claims against **current** code before treating as open bugs                                                                                                                                                                                                                                                          |
+| Cross-AI     | —   | Validation brief: [`archive/audits/cross-ai-validation-brief-2026-07-24.md`](./archive/audits/cross-ai-validation-brief-2026-07-24.md). **Three external audits were revalidated against code on 2026-07-24** — see the Cross-AI triage note below. Do not re-open their claims without new evidence.                                                                          |
+| Hunt-07-25   | —   | Proven opportunity hunt (bugs + gaps, no re-proposals): [`archive/audits/opportunity-hunt-2026-07-25.md`](./archive/audits/opportunity-hunt-2026-07-25.md). Re-check HEAD before treating IDs as open. **Still open and deliberately NOT in the active wave** — the 07-26 hunt was told not to re-propose them, so V1–V8, U1–U5, A1–A3 and Q1–Q4 remain this file's own queue. |
+| Triage-07-26 | —   | Six external audits triaged by 21 agents: [`archive/audits/cross-ai-triage-2026-07-26.md`](./archive/audits/cross-ai-triage-2026-07-26.md). ~2/3 of the pasted claims died. **§3 is a do-not-reopen list with the killing evidence attached.** Survivors are scheduled in the active wave.                                                                                     |
 
 Post–July 2026 audit fixes already landed on `main`/ahead branch
 (frame, moons, `n`, mobile sidebar, CI gates, LOD, reduced-motion,
