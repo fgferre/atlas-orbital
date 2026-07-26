@@ -165,104 +165,92 @@ priority + hysteresis) and HYG star labels. Captured collisions: "1 AU" vs
 
 ---
 
-# HANDOFF — open work (2026-07-25, end of session)
+# Wave 5 — closing the three carried-over items (2026-07-25)
 
-Three items remain. Each is reproduced and located; none is fixed. Read the
-operational traps first — they are what cost the previous session most.
+All three items the previous session handed off are now fixed and pushed.
+What follows is the reasoning that is not recoverable from the diffs.
 
-## Operational traps (read before capturing anything)
+## 1. The `low` graphics preset rendered nothing — `a07f94f`
 
-1. **Wait out the intro.** Measured three times on a warm local preview:
-   loader clears at **23–25 s**, the intro sweep finishes at **46–49 s**.
-   The loader clears LONG before the camera settles, so a screenshot taken
-   shortly after `atlas-loader` reaches count 0 samples the camera
-   mid-flight. A whole round of "the default view is a tiny dot" findings
-   came from this and had to be withdrawn. Wait ≥ 20 s past loader-gone.
-2. **The store test hook needs the freeze flag.** `__ATLAS_TEST_STORE__` is
-   installed only when `__ATLAS_TEST_FREEZE__` is set (`store.ts:722-739`),
-   i.e. after `freezeSimulation(page)`. Freezing the SIMULATION clock does
-   not affect the intro, which runs on wall clock.
-3. **`labelMode`, `showEclipticGrid` and `scaleMode` are NOT persisted.**
-   They are absent from `partialize`, so seeding `localStorage` for them is
-   a silent no-op — two captures were produced that way and compared as if
-   meaningful. Drive them via `__ATLAS_TEST_STORE__.setState(...)` after
-   boot instead.
-4. **Zeroing an effect's intensity proves nothing about WHICH term.** It
-   kills the whole effect. Used as an A/B it establishes only "the artifact
-   lives in this effect", which sent the last session after two wrong terms
-   in a row.
+**Not** an empty scene: a scene that was never drawn. React-three-fiber
+auto-renders only while every `useFrame` subscriber sits at priority 0; one
+non-zero priority and the loop stops calling `gl.render` and hands the frame
+to whoever owns the render slot. `OverlayPositionTracker` (10) and
+`useSunScreenProjection` (11) trip that unconditionally, so on
+ultra/high/medium the only thing drawing was `EffectComposer`'s own
+subscriber. `constrained` unmounts the composer, and nobody took over.
 
-## 1. Lens-flare hex blob (diagnosed, not fixed)
+That is why every other signal looked healthy — the frame loop really was
+running, the overlay icons tracked their bodies correctly over a black
+canvas, the ready latch fired, the boot watchdog stayed quiet.
 
-**Where:** `src/components/canvas/scene/effects/LensFlareEffect.ts:143`
+`DirectRenderPass` takes the composer's slot (same default priority 1) and
+issues the render itself.
 
-```glsl
-float s = max(0.01 - pow(regShape(p * 5.0 + mouse * dist * 5.0 + 0.9, 6), 1.0), 0.0) * 9.0;
-```
+### The measurement that was wrong
 
-`regShape(..., 6)` is a regular 6-sided polygon — the aperture-blade ghost,
-a 1:1 port of Gaia `lensflare.frag.glsl:105-113`. The element is INTENDED.
-The defect is that at weight `9.0` it saturates into an opaque grey plate
-over the photosphere when the source fills the frame, instead of a faint
-ghost.
+The handoff cited `readPixels` returning `mean 0, max 0` on `low` as proof.
+That reading is worthless: **it returns zeros on ultra too.** Once a frame
+composites, the drawing buffer is cleared, and `preserveDrawingBuffer` is
+off. Any pixel evidence in this app has to come from a screenshot.
 
-**Prior art in-repo:** `LensFlareEffect.ts:200-207` documents this defect by
-name — _"exploding halo + chromatic edges + hex blob" users report at
-5–30 AU_ — with a 2026-05-04 fix clamping the HDR occlusion sample to LDR.
-That fix did not close it; the blob is still there.
+`canvasLitFraction` (e2e/helpers.ts) does that — a chrome-free centre crop,
+fraction of pixels above near-black. Asserted on both tiers in
+`postprocessing.spec.ts`, polled rather than sampled once because the intro
+camera is still flying for ~45 s and framing at any instant is not a
+contract. Calibration: 4.3 % constrained, 7.1 % ultra, **0.157 %** with the
+render call deliberately neutered (only the HTML icon rings survive) against
+a 1.5 % threshold. The negative control was run — the gate does fail on the
+broken build.
 
-**Tried and REVERTED — do not repeat:**
+## 2. The lens-flare hexagon — `6204153`
 
-- Softening the bias threshold + removing the `fract()` wrap in
-  `PseudoLensFlareEffect.ts`. **Wrong file** — `lensFlareIntensityMul`
-  targets the COMPLEX effect, stated at `resolver.ts:59`.
-- Clamping `perLightIntensity` to [0,1] in `LensFlareEffect.ts`, on the
-  theory that the per-light scalar multiplied after the existing clamp. No
-  visible change.
+The blade term `s` in `lensFlareCircle` is intended; the bug is where it
+lands. Upstream adds a constant `+0.9` to the shape coordinate, parking every
+aperture ghost at a fixed screen offset of (-0.18, -0.18) — independent of the
+light AND of the per-iteration `dist` dispersion factor that is supposed to
+separate the ten ghosts.
 
-**Next hypothesis, to MEASURE not assume:** the `* 9.0` weight on the `s`
-term, or scaling `regShape`'s `p * 5.0` with the source's apparent size.
-Isolate by zeroing `c`, `c1` and `s` individually — not the whole effect.
+With the Sun at screen centre — atlas's home framing — `mouse` is zero, the
+`mouse * dist * 5.0` separation term vanishes, and all ten iterations draw the
+same hexagon in the same place. `regShape` has no radial falloff, so they
+stack into one opaque plate. Off-centre, the blades form their own row
+displaced away from the circular ghosts they belong to.
 
-**Repro:** boot, wait out the intro, then
-`setState({ scaleMode: "realistic" })` + `focusHome()`, wait ~9 s. The
-hexagon sits lower-left of the Sun. Crop x420 y480 340×240 at 1440×900.
+Dropping the constant puts each blade concentric with its own circular ghost
+and strings the chain along the light→centre axis, which is what an aperture
+image physically does. Marked in-source as `APERTURE_GHOST_OFFSET_REMOVED`.
 
-## 2. The `low` graphics preset renders an empty scene (reproduced, not fixed)
+### What actually unblocked this
 
-Boot at defaults, then Display panel → **Low** (or
-`setGraphicsAutoMode(false)` + `setGraphicsPreset("low")`). The scene
-collapses to HTML overlay icons plus a few star pixels. No Sun, planets,
-orbits or grid.
+Two sessions failed here because the only available experiment was "turn the
+effect off", which cannot name a term. The fix was to **evaluate the fragment
+shader offline in Node** against the real dirt/starburst JPEGs — ~60 lines,
+renders `c` / `c1` / `s` individually in milliseconds instead of a 3-minute
+build-and-browse cycle. Peak channel, Sun centred: 93 before, 46 after; the
+blade term alone measured 92 against 31 for the circular ghosts.
 
-**Evidence it is real, not environment or loading:**
+The old `T2.1-fix-α` comment crediting the LDR clamp with addressing the hex
+blob has been corrected in place. It never did and could not have — scaling
+intensity only dims a hexagon that is still there.
 
-- 45 s wait, then a direct `readPixels` of the centre 64×64 returns
-  `mean 0, max 0`.
-- `ultra` renders correctly in the same environment and run.
-- Nothing throws. One telling warning: `[SceneReadyChecker] Scene-ready
-fallback fired after 8000 ms — frame loop may not be running.`
-- The first attempt seeded `qualityMode` only, leaving `graphicsPreset` at
-  its default — a state no user can reach. Re-done through the real setter,
-  it still reproduces.
+## 3. Label visual hierarchy — `14f79d8`
 
-**Why no test caught it:** `postprocessing.spec.ts` mounts the constrained
-tier but asserts only `data-postprocessing="inactive"` — never that
-anything renders. `boot.spec.ts`'s visual snapshot runs at the default
-tier. **No test looks at pixels on the low tier.**
+Priorities existed but were spent entirely on collision arbitration. Now
+`OverlayPositionTracker` publishes a `tier` and both renderers consume it, so
+flipping `labelMode` changes the renderer and not the hierarchy. Three tiers,
+not six: the priority table needs fine gradations to break ties, the eye does
+not. Focus outranks type. See `src/lib/labelTier.ts`.
 
-This is AGENTS.md pillar 4 (adaptive reach — "degrades to a fast floor").
-A black screen is not a fast floor, and it is the low-end audience.
+`isSmall` was hardcoded `true` and read nowhere; `tier` replaces it.
 
-**Suggested first move:** a pixel gate asserting the canvas is not
-uniformly black, per preset. Cheap, and it would have caught this.
+## Checked and NOT a defect here
 
-## 3. Label visual hierarchy (not started)
-
-Earth and Weywot render identically — same colour, weight and size. The
-priority values already exist in `OverlayPositionTracker.tsx:159-168`
-(focus 100 / star 90 / planet 10 / dwarf 8 / moon 6 / other 4) and are used
-ONLY for collision arbitration, never for appearance. Making visual weight
-follow the hierarchy that is already computed is cheap and is the fastest
-way to make the scene read as designed. Both renderers need it:
-`PlanetOverlay` (HTML) and `PlanetLabels3D` (SDF, now the default).
+- **Lens textures 404 → "harmless"**, claimed at `lensFlareSprites.ts:23-29`.
+  The claim is wrong — with both textures missing, `dirt * 3.0 + starburst`
+  degenerates to `1 - smoothstep(0, 0.3, d)`, a mask anchored to the SCREEN
+  centre, so the whole flare collapses into a centre blob with no grit. It is
+  not this machine's problem (the gitignored binaries are present locally and
+  ship in `dist`), but any fresh clone or CI runner without them gets that
+  degradation silently. Worth a conservative neutral-multiplier fallback if
+  the flare ever misbehaves on a machine that lacks the files.

@@ -3,17 +3,22 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-24 (doc cleanup — archive noise out of hot path)._
+_Last updated: 2026-07-25 (wave 5 — the three carried-over UI items closed)._
 
 ---
 
 ## Active wave
 
 **[`tasks/waves/ui-redesign-2026-07-25.md`](./waves/ui-redesign-2026-07-25.md)** —
-interface redesign with fresh eyes. **All four waves are done.** Read that
-file before re-opening anything: it records seven claims that were checked
-and turned out NOT to be defects, plus one observed behaviour (Home in
-realistic mode) deliberately left for a product decision.
+interface redesign with fresh eyes. **All five waves are done**, including the
+three items wave 4 handed off: the `low` preset drawing nothing (`a07f94f`),
+the lens-flare hexagon (`6204153`), and label visual hierarchy (`14f79d8`).
+
+Read that file before re-opening anything. It records seven claims that were
+checked and turned out NOT to be defects, one observed behaviour (Home in
+realistic mode) deliberately left for a product decision, and — most usefully
+— two measurements that looked like evidence and were not (`readPixels` after
+compositing; zeroing an effect to identify a term).
 
 T6.4 (HYG visual recovery) agent work is complete; plan archived at
 [`archive/waves/T6.4-visual-recovery.md`](./archive/waves/T6.4-visual-recovery.md).
