@@ -564,6 +564,22 @@ level: "error"`. I never opened the dev server in the actual
   in Node (real textures, one term at a time) is both decisive and
   ~1000× faster than a build-and-browse loop.
 
+- **`onBeforeCompile` string patching has no gate at all, and it fails
+  silently.** `shader.fragmentShader.replace("#include <chunk>", ...)` returns
+  the string **unchanged** when the needle is absent, so an upstream chunk
+  rename turns a shipped shader patch into dead code with no error, no warning
+  and every gate green. three renamed `output_fragment` → `opaque_fragment` in
+  **r152**; this repo runs r181, and the eclipse fragment patch was found in W3
+  (2026-07-26) to have been injecting nothing at three `.replace` sites — the
+  eclipse shadow users see comes from a different renderer entirely. Two rules:
+  after writing any chunk-needle patch, assert the needle exists in the matching
+  `THREE.ShaderLib.<material>` source; and on every three upgrade, re-run that
+  assert rather than trusting a green suite. The same incident showed the
+  **single pixel gate's own scope** — the frozen boot frame is a wide shot with
+  no planet surface in it, so it can neither confirm nor deny a global exposure
+  change, and "boot baseline unchanged" must never be written down as a
+  photometry result.
+
 **HDR pipeline corollary.** `depthTest: false` and `toneMapped: false`
 are implicit contracts with every HDR post-effect ("treat me as a light
 source"). Default both `true`. When a material legitimately needs either
@@ -573,7 +589,8 @@ lens-flare / bloom / LightGlow audit.
 
 **Fires when:** marking "runtime smoke passed" on a visual shader
 change; regenerating a Playwright baseline; after a burst of HMR edits;
-consolidating multi-pass audit output.
+consolidating multi-pass audit output; writing or upgrading anything that
+patches a three ShaderChunk by string replace.
 
 **Canonical code markers:** `canvasLitFraction` in `e2e/helpers.ts` with
 its calibration numbers (4.3 % / 7.1 % / 0.157 % neutered) and the
@@ -581,7 +598,10 @@ negative control described in `tasks/archive/waves/ui-redesign-2026-07-25.md`
 §Wave 5; Ship-protocol step 8 (temporal smoke) + step
 10 (baseline PNG human gate) in `tasks/STATUS.md`; HDR convention
 `depthTest={true} toneMapped={true}` per `ProceduralSun3D.tsx:419,445,475`
-and the `1d6cc30` fix to `SunScreenFlare.tsx` + `PlanetMotionOverlays.tsx`.
+and the `1d6cc30` fix to `SunScreenFlare.tsx` + `PlanetMotionOverlays.tsx`;
+the needle assert in `src/components/canvas/shaders/regolithPhotometry.test.ts`
+("anchors on a chunk three actually ships") against the dead
+`#include <output_fragment>` sites at `usePlanetMaterials.ts:206`, `:478`, `:521`.
 
 **Folds:** L11 L26 L28 L29-framing L32-screenshot.
 
