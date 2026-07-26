@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (W1+W2+W3 code-complete, smoke pending; W4 next)._
+_Last updated: 2026-07-26 (W1–W4 code-complete, smoke pending; W5 next)._
 
 ---
 
@@ -14,10 +14,11 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1, W2 and W3 are code-complete on `main` (through `24c4d33`); all three owe a
-browser smoke. W4 (star surfaces / HYG panel) is next — fully independent, it
-shares no file with anything shipped so far.** Per-item commits are in the wave
-file's progress table.
+**W1 through W4 are code-complete on `main` (through `8ec84bb`); all four owe a
+browser smoke. W5 (body figure) is next — medium risk, and the first wave where
+an implementer can pass every gate with a wrong answer, so read its "Third
+round" subsection before touching the resolver.** Per-item commits are in the
+wave file's progress table.
 
 Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is
@@ -28,6 +29,12 @@ renamed `opaque_fragment` in r152, so three `.replace` calls in
 `usePlanetMaterials.ts` are silent no-ops. That one is logged against **W7**, not
 open for a drive-by fix: repairing the needle before the cone switches on a shadow
 that fires on ~86% of new moons.
+
+W4 added a third: **the wave file's own Rigel and Proxima figures were computed
+from a catalog edition that is not the one on disk.** The shipped code is right
+and the plan's numbers are not — do not tune the code to match them. Measured
+values and the corrected Stefan-Boltzmann comparison are in W4's "What the gates
+actually proved".
 
 Read that file's **Standing law** before touching anything: it fixes the
 helper-deletes-what-it-replaces rule, the zero-new-uniform GLSL convention, the

@@ -62,7 +62,7 @@ darkening)** belongs beside it.
 | W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                             |
 | W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell |
 | W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                 |
-| W4 The star surfaces stop lying         | not started                       | —                                                                                                                     |
+| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                             |
 | W5 Body figure                          | not started                       | —                                                                                                                     |
 | W6 One pole, one spin                   | not started                       | —                                                                                                                     |
 | W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                     |
@@ -383,19 +383,60 @@ reaches `group.position`. The Sun mount (no `positionRef`) is byte-identical.
 — a second copy of the same frozen assumption, in a file whose own code
 re-resolves per frame — is corrected.
 
-Rigel reads Luminosity ~40 600 × Sun and **not** ~857 000: the Stefan-Boltzmann
-form inherits `radiusFromSpect`'s geometric-mean blend with the Ia table value of
-1000 R☉, tuned for apparent disc size rather than luminosity accounting, and
-would ship a 7.1× error inside an honesty fix. Constellation reads "Orion" —
+Rigel's Luminosity comes from its absolute magnitude and **not** from
+Stefan-Boltzmann: that form inherits `radiusFromSpect`'s geometric-mean blend
+with the Ia table value of 1000 R☉, tuned for apparent disc size rather than
+luminosity accounting, and would ship a large error inside an honesty fix.
+**The specific figures drafted here (~40 600 vs ~857 000, "7.1×") were computed
+from an absmag the shipped catalog does not carry — see the measured values in
+"What the gates actually proved" below and use those.** Constellation reads
+"Orion" —
 `CONSTELLATION_NAMES` moves from its private copy in `StarHoverTooltip.tsx` to
 `hygNameIndex.ts`, which already is the HYG-abbreviation-to-display module and is
 already imported by `hygStarInfo.ts`. Temperature, Radius and Mass each carry an
 "est." chip and **Luminosity deliberately does not**, because marking a catalog
 restatement as modelled is its own small lie. The footer cites
 `STARFIELD_SOURCE_METADATA.hyg.label` and `.creditsLink` rather than a
-hand-written string. Proxima prints 5.4e-5, not "0.00". A spect-less star hides
-the est. rows and the footer together. Every new string exists in en **and**
-pt-BR (`i18n.test.ts:141` already enforces parity — no new test needed).
+hand-written string. Proxima prints in exponential form, not "0.00". A
+spect-less star hides the est. rows and the footer together — one boolean gates
+both, so a chip can never appear without its disclosure or a disclosure without
+rows; Luminosity survives that case because `absmag` needs no spectral class.
+Every new string exists in en **and** pt-BR (`i18n.test.ts:141` already enforces
+parity — no new test needed).
+
+#### What the gates actually proved (2026-07-26, post-ship)
+
+**This section's own numbers were wrong, and the shipped code is right.** Read
+end-to-end from the shipped HYG v4.2 binary in Chromium: **Rigel's `absmag` is
+−6.93, not the −6.69 this file assumed**, so Luminosity (visual) reads
+**50 722 × Sun**, not ~40 600. Proxima's is **15.45, not 15.49**, so it reads
+**5.7e-5**, not 5.4e-5. Both discrepancies have one cause — the drafted anchors
+came from a different catalog edition than the one on disk — and neither is a
+defect: the formula is `10^(−0.4 × (M_V − 4.83))` and it reproduces whatever the
+catalog carries. **Do not "fix" the code to hit the numbers in this file.**
+
+**The claim the item rests on is confirmed and larger than stated.** The
+Stefan-Boltzmann route through `radiusFromSpect` would report Rigel at
+**958 188 × Sun** (from its own modelled 230 R☉ and 11 920 K), an **18.9×**
+overstatement — not the 7.1× this file guessed. Betelgeuse reads 13 170 × Sun
+from `absmag` −5.47.
+
+**One honesty point the item did not name.** HYG's `absmag` is a **V-band**
+quantity, so this row is visual luminosity, not bolometric — materially
+different for both hot and cool stars. The label therefore reads "Luminosity
+(visual)" and `visualLuminosityFromAbsmag`'s JSDoc says why. Any future wave
+that adds a bolometric correction changes the label with it.
+
+Constellation reads **Orion** in both locales (IAU names stay Latin — recorded
+in `CONSTELLATION_NAMES`' JSDoc, not left implicit). pt-BR renders every new
+string with no raw keys. Console clean across the run.
+
+**Still owed by a human:** the temporal half of F-06 — Sirius at 1 year/second
+for 20+ s, watching for lateral slide and sprite/mesh pop, and the
+defocus/refocus ramp restart. `e2e/hyg-focus.spec.ts` passes and covers the
+fly-to contract, but a single scripted screenshot cannot see multi-frame
+drift (lesson M5). Also owed: a spect-less star, which needs one picked out of
+the catalog by hand — the unit test covers the branch, the smoke does not.
 
 **Verification.** `npm run test:run -- hygFocusResolver HygStarPanel i18n stellarPhysics && npm run build`.
 Smoke: search Sirius, fly in until the disc appears, set 1 year/second and play —
