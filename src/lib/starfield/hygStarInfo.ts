@@ -18,8 +18,9 @@ import {
   radiusFromSpect,
   temperatureFromBV,
   temperatureFromSpect,
+  visualLuminosityFromAbsmag,
 } from "../stellarPhysics";
-import { BAYER_TO_GREEK } from "./hygNameIndex";
+import { BAYER_TO_GREEK, constellationDisplayName } from "./hygNameIndex";
 
 export interface HygStarInfo {
   starIndex: number;
@@ -27,7 +28,15 @@ export interface HygStarInfo {
   bayerAbbrev: string | null;
   bayerGreek: string | null;
   flamsteed: number;
+  /** IAU abbreviation as the catalog stores it ("Ori") — used in designations. */
   constellation: string | null;
+  /**
+   * Expanded constellation name ("Orion") for the row where the constellation
+   * is the subject. Deliberately separate from `constellation`: Bayer and
+   * Flamsteed designations take the abbreviation, so one field cannot serve
+   * both without printing "β Orion".
+   */
+  constellationName: string | null;
   spect: string | null;
   hd: number;
   hip: number;
@@ -44,6 +53,17 @@ export interface HygStarInfo {
   radiusSolar: number;
   /** Mass in solar units; NaN when class + absmag don't yield a usable estimate. */
   massSolar: number;
+  /**
+   * **Visual** (V-band) luminosity in solar units, straight from `absmag`.
+   * NaN when the catalog has no absolute magnitude for this star.
+   *
+   * Not routed through `radiusFromSpect` + Stefan-Boltzmann: that path blends
+   * with a luminosity-class table tuned for apparent disc size, and would
+   * report Rigel more than an order of magnitude over-bright inside what is
+   * supposed to be an honesty fix. See `visualLuminosityFromAbsmag` for why
+   * "visual" belongs in the label.
+   */
+  luminositySolar: number;
   /** Display string for the panel header (proper name preferred, then Bayer-Greek + con, ...). */
   primaryName: string;
   /** Comma-joined secondary designations or null when nothing else applies. */
@@ -156,6 +176,9 @@ export function buildHygStarInfo(
     spect,
     Number.isFinite(absmag) ? absmag : null
   );
+  const luminositySolar = Number.isFinite(absmag)
+    ? visualLuminosityFromAbsmag(absmag)
+    : NaN;
 
   const bayerGreek = bayerAbbrev ? (BAYER_TO_GREEK[bayerAbbrev] ?? null) : null;
 
@@ -196,6 +219,9 @@ export function buildHygStarInfo(
     bayerGreek,
     flamsteed,
     constellation: constellation || null,
+    constellationName: constellation
+      ? constellationDisplayName(constellation)
+      : null,
     spect: spect || null,
     hd,
     hip,
@@ -207,6 +233,7 @@ export function buildHygStarInfo(
     tEffK,
     radiusSolar,
     massSolar,
+    luminositySolar,
     primaryName,
     designation,
     wikipediaQuery,

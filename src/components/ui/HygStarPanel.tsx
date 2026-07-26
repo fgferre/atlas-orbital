@@ -12,6 +12,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { parseHygFocusId } from "../../lib/focus/hygFocusResolver";
 import {
+  STARFIELD_SOURCE_METADATA,
   getCachedHygCatalog,
   hygTierForQuality,
   loadHygCatalog,
@@ -130,6 +131,14 @@ export const HygStarPanel = () => {
 
   const distanceLy = starInfo.distancePc * PARSEC_IN_LIGHT_YEARS;
 
+  // W4/OPP-STAR-PANEL — one boolean drives the modelled rows AND the footnote
+  // that explains them, so the panel can never show an "est." chip with no
+  // disclosure or a disclosure with nothing to disclose. Effective
+  // temperature, radius and mass are all keyed on the spectral class; without
+  // one there is no class to model from, so the honest move is to show
+  // nothing rather than a value whose stated provenance would be wrong.
+  const showsModelledRows = starInfo.spect !== null;
+
   const panelClassName = isMobile
     ? "fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] h-[min(58dvh,34rem)] w-auto translate-y-0 opacity-100 pointer-events-auto"
     : "absolute left-4 top-20 w-[min(22rem,calc(100vw-2rem))] xl:w-[min(24rem,calc(100vw-2rem))] translate-x-0 opacity-100 pointer-events-auto";
@@ -201,28 +210,46 @@ export const HygStarPanel = () => {
                 value={starInfo.spect}
               />
             )}
-            {Number.isFinite(starInfo.tEffK) && (
+            {showsModelledRows && Number.isFinite(starInfo.tEffK) && (
               <StatRow
                 label={t("hygStarPanel.fields.temperature")}
                 value={`${Math.round(starInfo.tEffK).toLocaleString(i18n.language)} ${t(
                   "hygStarPanel.units.kelvin"
                 )}`}
+                estimatedLabel={t("hygStarPanel.estimatedChip")}
               />
             )}
-            {Number.isFinite(starInfo.radiusSolar) &&
+            {showsModelledRows &&
+              Number.isFinite(starInfo.radiusSolar) &&
               starInfo.radiusSolar > 0 && (
                 <StatRow
                   label={t("hygStarPanel.fields.radius")}
                   value={`${formatSolar(starInfo.radiusSolar)} ${t(
                     "hygStarPanel.units.solarRadii"
                   )}`}
+                  estimatedLabel={t("hygStarPanel.estimatedChip")}
                 />
               )}
-            {Number.isFinite(starInfo.massSolar) && (
+            {showsModelledRows && Number.isFinite(starInfo.massSolar) && (
               <StatRow
                 label={t("hygStarPanel.fields.mass")}
                 value={`${formatSolar(starInfo.massSolar)} ${t(
                   "hygStarPanel.units.solarMasses"
+                )}`}
+                estimatedLabel={t("hygStarPanel.estimatedChip")}
+              />
+            )}
+            {/* Luminosity carries NO est. chip on purpose: it is one measured
+                absolute magnitude restated in solar units, not a model, and
+                tagging a catalog restatement as modelled is its own small
+                lie. The label says "visual" because HYG's absmag is V-band
+                and the bolometric output is materially larger for hot and
+                cool stars alike. */}
+            {Number.isFinite(starInfo.luminositySolar) && (
+              <StatRow
+                label={t("hygStarPanel.fields.luminosity")}
+                value={`${formatLuminosity(starInfo.luminositySolar, i18n.language)} ${t(
+                  "hygStarPanel.units.solarLuminosities"
                 )}`}
               />
             )}
@@ -258,13 +285,30 @@ export const HygStarPanel = () => {
                 value={starInfo.absmag.toFixed(2)}
               />
             )}
-            {starInfo.constellation && (
+            {starInfo.constellationName && (
               <StatRow
                 label={t("hygStarPanel.fields.constellation")}
-                value={starInfo.constellation}
+                value={starInfo.constellationName}
               />
             )}
           </dl>
+
+          {showsModelledRows && (
+            <p
+              className="text-[10px] leading-relaxed text-white/40"
+              data-testid="hyg-panel-provenance"
+            >
+              {t("hygStarPanel.estimatedNote")}{" "}
+              <a
+                href={STARFIELD_SOURCE_METADATA.hyg.creditsLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-nasa-accent/80 underline-offset-2 hover:underline"
+              >
+                {STARFIELD_SOURCE_METADATA.hyg.label}
+              </a>
+            </p>
+          )}
 
           {wikipediaEnabled && wikipediaQuery && (
             <WikipediaSection
@@ -282,12 +326,23 @@ export const HygStarPanel = () => {
 interface StatRowProps {
   label: string;
   value: string;
+  /**
+   * When present, renders the "est." chip beside the label. Passed as text
+   * rather than a boolean so the chip goes through i18n like every other
+   * user-visible string in this panel.
+   */
+  estimatedLabel?: string;
 }
 
-const StatRow = ({ label, value }: StatRowProps) => (
+const StatRow = ({ label, value, estimatedLabel }: StatRowProps) => (
   <>
     <dt className="font-rajdhani uppercase tracking-[0.18em] text-white/45">
       {label}
+      {estimatedLabel && (
+        <span className="ml-1.5 rounded-sm border border-white/15 px-1 py-px text-[8px] normal-case tracking-normal text-white/40">
+          {estimatedLabel}
+        </span>
+      )}
     </dt>
     <dd className="text-right text-white/85 truncate">{value}</dd>
   </>
@@ -298,6 +353,19 @@ function formatSolar(value: number): string {
   if (value >= 100) return value.toFixed(0);
   if (value >= 10) return value.toFixed(1);
   return value.toFixed(2);
+}
+
+/**
+ * Luminosity spans ~11 orders of magnitude across the catalog, so
+ * `formatSolar`'s two decimals collapse every red dwarf to "0.00" — Proxima
+ * reads 5.4e-5, not zero, and printing zero for a star that is visibly there
+ * is exactly the kind of quiet falsehood this wave exists to remove.
+ */
+function formatLuminosity(value: number, locale: string): string {
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  if (value < 0.01) return value.toExponential(1);
+  if (value >= 1000) return Math.round(value).toLocaleString(locale);
+  return formatSolar(value);
 }
 
 interface WikipediaSectionProps {

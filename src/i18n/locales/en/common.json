@@ -10,6 +10,7 @@
       "temperature": "Effective temperature",
       "radius": "Radius",
       "mass": "Mass",
+      "luminosity": "Luminosity (visual)",
       "distance": "Distance",
       "apparentMagnitude": "Apparent magnitude",
       "absoluteMagnitude": "Absolute magnitude",
@@ -19,11 +20,14 @@
     "units": {
       "solarRadii": "× Sun",
       "solarMasses": "M☉",
+      "solarLuminosities": "× Sun",
       "parsec": "pc",
       "lightYear": "ly",
       "yearsAgo": "years ago",
       "kelvin": "K"
     },
+    "estimatedChip": "est.",
+    "estimatedNote": "Effective temperature, radius and mass are modelled from the spectral class and absolute magnitude, not measured for this star. Luminosity is the catalog absolute magnitude restated in solar units, in visible light only. Catalog:",
     "wikipedia": {
       "heading": "About",
       "loading": "Loading…",

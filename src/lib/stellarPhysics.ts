@@ -303,6 +303,37 @@ export const temperatureFromBV = (bv: number): number => {
   return T0 * (1 / (a * bv + b) + 1 / (a * bv + c));
 };
 
+// ─── Stellar luminosity ───────────────────────────────────────────
+
+/**
+ * The Sun's absolute **visual** magnitude, M_V = +4.83. The anchor for
+ * every magnitude→luminosity conversion in this module.
+ */
+export const SOLAR_ABSOLUTE_MAGNITUDE_V = 4.83;
+
+/**
+ * Visual luminosity in solar units from a V-band absolute magnitude:
+ *
+ *     L_V / L_V☉ = 10 ^ (−0.4 × (M_V − M_V☉))
+ *
+ * **This is not bolometric luminosity, and the distinction is a display
+ * contract, not a footnote.** HYG's `absmag` is a V-band quantity, so the
+ * result is what the star emits in visible light relative to the Sun. Hot and
+ * cool stars both radiate a large fraction of their output outside V — for
+ * Rigel the bolometric correction is worth roughly a factor of two — so any
+ * UI showing this number must say "visual" rather than implying total output.
+ *
+ * It is nonetheless a **restatement of a catalog value**, not a model: one
+ * measured magnitude in, one number out, no spectral class, no temperature,
+ * no radius. That is precisely why W4 shows it without an "estimated" chip
+ * while temperature, radius and mass carry one — and why it must not be
+ * derived from Stefan-Boltzmann through `radiusFromSpect`, whose
+ * geometric-mean blend with the luminosity-class table is tuned for apparent
+ * disc size and would report Rigel more than an order of magnitude bright.
+ */
+export const visualLuminosityFromAbsmag = (absmag: number): number =>
+  Math.pow(10, -0.4 * (absmag - SOLAR_ABSOLUTE_MAGNITUDE_V));
+
 // ─── Stellar radius ───────────────────────────────────────────────
 
 /**
@@ -437,14 +468,10 @@ export const radiusFromSpect = (
   ) {
     const tableR = RADIUS_FACTOR_BY_LUMINOSITY[parsed.luminosityClass];
     if (Number.isFinite(absmag)) {
-      const M_SUN_ABS = 4.83;
       const T_SUN = 5778;
       const tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
       if (Number.isFinite(tEff) && tEff > 0) {
-        const lumOverSun = Math.pow(
-          10,
-          -0.4 * ((absmag as number) - M_SUN_ABS)
-        );
+        const lumOverSun = visualLuminosityFromAbsmag(absmag as number);
         const tRatio = T_SUN / tEff;
         const sbR = Math.sqrt(lumOverSun) * tRatio * tRatio;
         // Geometric-mean blend with the table value matches the MS
@@ -475,17 +502,18 @@ export const radiusFromSpect = (
   const tableR = thisR * (1 - t) + nextR * t;
 
   // Optional Stefan-Boltzmann refinement when absmag is available.
-  // R/R_sun = sqrt(L/L_sun) × (T_sun / T_eff)²
-  // L/L_sun = 10^(-0.4 × (absmag - M_sun)) where M_sun = 4.83.
+  // R/R_sun = sqrt(L/L_sun) × (T_sun / T_eff)², with L from
+  // `visualLuminosityFromAbsmag` (W4 extracted the formula that used to be
+  // inlined here and above — one anchor for M_V☉ = 4.83, and the panel's
+  // Luminosity row reads the same function).
   // We average the table value with the SB value to prevent
   // pathological output when absmag-vs-spect disagree (catalog
   // noise). This is atlas-opinion smoothing — not a Gaia behavior.
   if (Number.isFinite(absmag)) {
-    const M_SUN_ABS = 4.83;
     const T_SUN = 5778;
     const tEff = temperatureFromSpect(parsed.spectralClass, parsed.subclass);
     if (Number.isFinite(tEff) && tEff > 0) {
-      const lumOverSun = Math.pow(10, -0.4 * ((absmag as number) - M_SUN_ABS));
+      const lumOverSun = visualLuminosityFromAbsmag(absmag as number);
       const tRatio = T_SUN / tEff;
       const sbR = Math.sqrt(lumOverSun) * tRatio * tRatio;
       // Geometric mean blends table + SB; clamp to a sensible range

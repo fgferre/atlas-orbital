@@ -10,6 +10,7 @@
       "temperature": "Temperatura efetiva",
       "radius": "Raio",
       "mass": "Massa",
+      "luminosity": "Luminosidade (visual)",
       "distance": "Distância",
       "apparentMagnitude": "Magnitude aparente",
       "absoluteMagnitude": "Magnitude absoluta",
@@ -19,11 +20,14 @@
     "units": {
       "solarRadii": "× Sol",
       "solarMasses": "M☉",
+      "solarLuminosities": "× Sol",
       "parsec": "pc",
       "lightYear": "al",
       "yearsAgo": "anos atrás",
       "kelvin": "K"
     },
+    "estimatedChip": "est.",
+    "estimatedNote": "Temperatura efetiva, raio e massa são modelados a partir da classe espectral e da magnitude absoluta, não medidos para esta estrela. A luminosidade é a magnitude absoluta do catálogo reescrita em unidades solares, apenas em luz visível. Catálogo:",
     "wikipedia": {
       "heading": "Sobre",
       "loading": "Carregando…",

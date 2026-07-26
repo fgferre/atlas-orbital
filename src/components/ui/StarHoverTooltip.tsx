@@ -8,98 +8,8 @@
  * the feature is idle.
  */
 
+import { constellationDisplayName } from "../../lib/starfield/hygNameIndex";
 import { useStore } from "../../store";
-
-const CONSTELLATION_NAMES: Record<string, string> = {
-  And: "Andromeda",
-  Ant: "Antlia",
-  Aps: "Apus",
-  Aqr: "Aquarius",
-  Aql: "Aquila",
-  Ara: "Ara",
-  Ari: "Aries",
-  Aur: "Auriga",
-  Boo: "Boötes",
-  Cae: "Caelum",
-  Cam: "Camelopardalis",
-  Cnc: "Cancer",
-  CVn: "Canes Venatici",
-  CMa: "Canis Major",
-  CMi: "Canis Minor",
-  Cap: "Capricornus",
-  Car: "Carina",
-  Cas: "Cassiopeia",
-  Cen: "Centaurus",
-  Cep: "Cepheus",
-  Cet: "Cetus",
-  Cha: "Chamaeleon",
-  Cir: "Circinus",
-  Col: "Columba",
-  Com: "Coma Berenices",
-  CrA: "Corona Australis",
-  CrB: "Corona Borealis",
-  Crv: "Corvus",
-  Crt: "Crater",
-  Cru: "Crux",
-  Cyg: "Cygnus",
-  Del: "Delphinus",
-  Dor: "Dorado",
-  Dra: "Draco",
-  Equ: "Equuleus",
-  Eri: "Eridanus",
-  For: "Fornax",
-  Gem: "Gemini",
-  Gru: "Grus",
-  Her: "Hercules",
-  Hor: "Horologium",
-  Hya: "Hydra",
-  Hyi: "Hydrus",
-  Ind: "Indus",
-  Lac: "Lacerta",
-  Leo: "Leo",
-  LMi: "Leo Minor",
-  Lep: "Lepus",
-  Lib: "Libra",
-  Lup: "Lupus",
-  Lyn: "Lynx",
-  Lyr: "Lyra",
-  Men: "Mensa",
-  Mic: "Microscopium",
-  Mon: "Monoceros",
-  Mus: "Musca",
-  Nor: "Norma",
-  Oct: "Octans",
-  Oph: "Ophiuchus",
-  Ori: "Orion",
-  Pav: "Pavo",
-  Peg: "Pegasus",
-  Per: "Perseus",
-  Phe: "Phoenix",
-  Pic: "Pictor",
-  Psc: "Pisces",
-  PsA: "Piscis Austrinus",
-  Pup: "Puppis",
-  Pyx: "Pyxis",
-  Ret: "Reticulum",
-  Sge: "Sagitta",
-  Sgr: "Sagittarius",
-  Sco: "Scorpius",
-  Scl: "Sculptor",
-  Sct: "Scutum",
-  Ser: "Serpens",
-  Sex: "Sextans",
-  Tau: "Taurus",
-  Tel: "Telescopium",
-  Tri: "Triangulum",
-  TrA: "Triangulum Australe",
-  Tuc: "Tucana",
-  UMa: "Ursa Major",
-  UMi: "Ursa Minor",
-  Vel: "Vela",
-  Vir: "Virgo",
-  Vol: "Volans",
-  Vul: "Vulpecula",
-};
 
 const formatDistance = (parsecs: number | null) => {
   if (parsecs == null || !Number.isFinite(parsecs)) return null;
@@ -117,9 +27,7 @@ export const StarHoverTooltip = () => {
   const primaryName = entry.proper ?? entry.bayer ?? entry.flam;
   if (!primaryName) return null;
 
-  const constellation = entry.con
-    ? (CONSTELLATION_NAMES[entry.con] ?? entry.con)
-    : null;
+  const constellation = entry.con ? constellationDisplayName(entry.con) : null;
   const distance = formatDistance(distanceParsecs);
   const secondary = entry.proper && entry.bayer ? entry.bayer : undefined;
 

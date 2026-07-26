@@ -31,6 +31,122 @@
 import type { HygCatalogData } from "../../utils/hygBinary";
 
 /**
+ * IAU constellation abbreviation (HYG's `con` column) -> full display name.
+ *
+ * W4 moved this out of `StarHoverTooltip.tsx`, where it was a component-private
+ * const, so the hover tooltip and the star panel cannot drift apart on what
+ * "Ori" is called. This module is already the HYG-abbreviation-to-display
+ * layer (see `BAYER_TO_GREEK` below) and is already imported by
+ * `hygStarInfo.ts`, so nothing new is coupled by the move.
+ *
+ * Names are intentionally NOT translated. IAU constellation names are Latin
+ * and are used untranslated in both locales, the same convention the catalog
+ * itself follows.
+ *
+ * Keep the abbreviation for Bayer/Flamsteed designations ("beta Ori") and use
+ * the expansion only where the constellation is the subject of the row —
+ * "beta Orion" is not a designation anyone writes.
+ */
+export const CONSTELLATION_NAMES: Record<string, string> = {
+  And: "Andromeda",
+  Ant: "Antlia",
+  Aps: "Apus",
+  Aqr: "Aquarius",
+  Aql: "Aquila",
+  Ara: "Ara",
+  Ari: "Aries",
+  Aur: "Auriga",
+  Boo: "Boötes",
+  Cae: "Caelum",
+  Cam: "Camelopardalis",
+  Cnc: "Cancer",
+  CVn: "Canes Venatici",
+  CMa: "Canis Major",
+  CMi: "Canis Minor",
+  Cap: "Capricornus",
+  Car: "Carina",
+  Cas: "Cassiopeia",
+  Cen: "Centaurus",
+  Cep: "Cepheus",
+  Cet: "Cetus",
+  Cha: "Chamaeleon",
+  Cir: "Circinus",
+  Col: "Columba",
+  Com: "Coma Berenices",
+  CrA: "Corona Australis",
+  CrB: "Corona Borealis",
+  Crv: "Corvus",
+  Crt: "Crater",
+  Cru: "Crux",
+  Cyg: "Cygnus",
+  Del: "Delphinus",
+  Dor: "Dorado",
+  Dra: "Draco",
+  Equ: "Equuleus",
+  Eri: "Eridanus",
+  For: "Fornax",
+  Gem: "Gemini",
+  Gru: "Grus",
+  Her: "Hercules",
+  Hor: "Horologium",
+  Hya: "Hydra",
+  Hyi: "Hydrus",
+  Ind: "Indus",
+  Lac: "Lacerta",
+  Leo: "Leo",
+  LMi: "Leo Minor",
+  Lep: "Lepus",
+  Lib: "Libra",
+  Lup: "Lupus",
+  Lyn: "Lynx",
+  Lyr: "Lyra",
+  Men: "Mensa",
+  Mic: "Microscopium",
+  Mon: "Monoceros",
+  Mus: "Musca",
+  Nor: "Norma",
+  Oct: "Octans",
+  Oph: "Ophiuchus",
+  Ori: "Orion",
+  Pav: "Pavo",
+  Peg: "Pegasus",
+  Per: "Perseus",
+  Phe: "Phoenix",
+  Pic: "Pictor",
+  Psc: "Pisces",
+  PsA: "Piscis Austrinus",
+  Pup: "Puppis",
+  Pyx: "Pyxis",
+  Ret: "Reticulum",
+  Sge: "Sagitta",
+  Sgr: "Sagittarius",
+  Sco: "Scorpius",
+  Scl: "Sculptor",
+  Sct: "Scutum",
+  Ser: "Serpens",
+  Sex: "Sextans",
+  Tau: "Taurus",
+  Tel: "Telescopium",
+  Tri: "Triangulum",
+  TrA: "Triangulum Australe",
+  Tuc: "Tucana",
+  UMa: "Ursa Major",
+  UMi: "Ursa Minor",
+  Vel: "Vela",
+  Vir: "Virgo",
+  Vol: "Volans",
+  Vul: "Vulpecula",
+};
+
+/**
+ * Expand a HYG `con` abbreviation for display, falling back to the
+ * abbreviation itself when the catalog carries something unmapped — an
+ * unfamiliar three-letter code is still more use than an empty cell.
+ */
+export const constellationDisplayName = (abbrev: string): string =>
+  CONSTELLATION_NAMES[abbrev] ?? abbrev;
+
+/**
  * HYG Bayer abbreviation → Greek letter glyph. HYG stores
  * Latin abbreviations ("Alp" / "Bet" / ...) per Yale Bright Star
  * Catalogue convention; canonical IAU display uses Greek glyphs.

@@ -95,6 +95,49 @@ describe("buildHygStarInfo", () => {
     expect(info?.massSolar).toBeLessThan(10);
   });
 
+  // W4/OPP-STAR-PANEL. Luminosity must come from the catalog's absolute
+  // magnitude alone. Routing it through `radiusFromSpect` + Stefan-Boltzmann
+  // inherits that helper's geometric-mean blend with the Ia table value of
+  // 1000 R☉ — tuned for apparent disc size, not luminosity accounting — and
+  // reports Rigel more than an order of magnitude over-bright. Shipping that
+  // inside an honesty fix is the failure this pins.
+  it("derives visual luminosity from absolute magnitude, not from the radius model", () => {
+    const rigel: HygStarInput = {
+      ...SIRIUS,
+      proper: "Rigel",
+      bayer: "Bet",
+      constellation: "Ori",
+      spect: "B8Ia",
+      absmag: -6.69,
+    };
+    const info = buildHygStarInfo(
+      parseHygBinaryBuffer(encodeHygCatalog([rigel])),
+      0
+    );
+    expect(info?.luminositySolar).toBeGreaterThan(38_000);
+    expect(info?.luminositySolar).toBeLessThan(43_000);
+    // The number the Stefan-Boltzmann route would have produced.
+    expect(info?.luminositySolar).toBeLessThan(200_000);
+    expect(info?.constellationName).toBe("Orion");
+  });
+
+  it("keeps a red dwarf's luminosity a real number rather than zero", () => {
+    const proxima: HygStarInput = {
+      ...SIRIUS,
+      proper: "Proxima Centauri",
+      bayer: "",
+      constellation: "Cen",
+      spect: "M5Ve",
+      absmag: 15.49,
+    };
+    const info = buildHygStarInfo(
+      parseHygBinaryBuffer(encodeHygCatalog([proxima])),
+      0
+    );
+    expect(info?.luminositySolar).toBeGreaterThan(4e-5);
+    expect(info?.luminositySolar).toBeLessThan(7e-5);
+  });
+
   it("returns null for out-of-range starIndex", () => {
     const catalog = parseHygBinaryBuffer(encodeHygCatalog([SIRIUS]));
     expect(buildHygStarInfo(catalog, -1)).toBeNull();
@@ -193,8 +236,12 @@ describe("HygStarPanel — focused HYG star", () => {
     useStore.setState({ selectedId: "hyg:0" });
     render(<HygStarPanel />);
 
-    // Spectral class label + value
-    expect(screen.getByText(/spectral class/i)).toBeInTheDocument();
+    // Spectral class label + value. Scoped to the `dt` because W4's
+    // provenance footnote also names the spectral class — the label and the
+    // sentence that discloses what it is used for are both meant to be there.
+    expect(
+      screen.getByText(/spectral class/i, { selector: "dt" })
+    ).toBeInTheDocument();
     expect(screen.getByText("A1V")).toBeInTheDocument();
     // Distance contains both pc and ly (Sirius ≈ 2.66 pc / 8.65 ly).
     expect(
@@ -203,8 +250,61 @@ describe("HygStarPanel — focused HYG star", () => {
     // Light travel time
     expect(screen.getByText(/light travel time/i)).toBeInTheDocument();
     expect(screen.getByText(/~\d+\.\d years ago/i)).toBeInTheDocument();
-    // Constellation
-    expect(screen.getByText("CMa")).toBeInTheDocument();
+    // Constellation — W4 expands the HYG abbreviation for the row where the
+    // constellation is the subject. "CMa" survives only inside the Bayer
+    // designation in the header, which is where it belongs.
+    expect(screen.getByText("Canis Major")).toBeInTheDocument();
+  });
+
+  // W4/OPP-STAR-PANEL — the panel's honesty contract. Modelled rows are
+  // marked and disclosed; a catalog restatement is not marked; and the marks
+  // and the disclosure appear and disappear together, so the panel can never
+  // show a chip nobody explains or an explanation for nothing.
+  it("marks the modelled rows and discloses them, but not the catalog restatement", () => {
+    useStore.setState({ selectedId: "hyg:0" });
+    render(<HygStarPanel />);
+
+    for (const label of [
+      /effective temperature/i,
+      /^radius$/i,
+      /^mass$/i,
+    ] as const) {
+      const dt = screen.getByText(label, { selector: "dt" });
+      expect(dt.textContent).toContain("est.");
+    }
+
+    const luminosity = screen.getByText(/luminosity/i, { selector: "dt" });
+    expect(luminosity.textContent).not.toContain("est.");
+    expect(luminosity.textContent).toMatch(/visual/i);
+
+    const provenance = screen.getByTestId("hyg-panel-provenance");
+    expect(provenance.textContent).toMatch(/not measured for this star/i);
+    // Cited from the source registry, never hand-written.
+    expect(provenance.textContent).toContain(
+      starfieldModule.STARFIELD_SOURCE_METADATA.hyg.label
+    );
+    expect(provenance.querySelector("a")?.getAttribute("href")).toBe(
+      starfieldModule.STARFIELD_SOURCE_METADATA.hyg.creditsLink
+    );
+  });
+
+  it("hides the modelled rows and the disclosure together for a star with no spectral class", () => {
+    const noSpect = parseHygBinaryBuffer(
+      encodeHygCatalog([{ ...SIRIUS, spect: "" }])
+    );
+    vi.spyOn(starfieldModule, "getCachedHygCatalog").mockReturnValue(noSpect);
+    useStore.setState({ selectedId: "hyg:0" });
+    render(<HygStarPanel />);
+
+    expect(
+      screen.queryByText(/effective temperature/i, { selector: "dt" })
+    ).toBeNull();
+    expect(screen.queryByText(/^radius$/i, { selector: "dt" })).toBeNull();
+    expect(screen.queryByTestId("hyg-panel-provenance")).toBeNull();
+    // Luminosity survives: absmag is measured, so it needs no spectral class.
+    expect(
+      screen.getByText(/luminosity/i, { selector: "dt" })
+    ).toBeInTheDocument();
   });
 
   it("renders the Wikipedia 'About' section after the summary resolves", async () => {
