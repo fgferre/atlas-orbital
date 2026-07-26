@@ -222,3 +222,41 @@ describe("OrbitalEngine.getOsculatingElements validity gating", () => {
     expect(analytic).not.toEqual(kepler);
   });
 });
+
+describe("OrbitalEngine.getProvenance validity note honesty", () => {
+  // Product contract (AGENTS §6, honesty/provenance): the registry's measured
+  // accuracy figures describe the ANALYTICAL theory. Quoting them while the
+  // Kepler fallback is the thing actually running would attach a measurement
+  // to a model the app is not using.
+  it("quotes the measured accuracy only while the analytical theory is running", () => {
+    initializeOrbitalEngine();
+    const engine = new OrbitalEngine();
+
+    const inRange = engine.getProvenance(
+      "ceres",
+      new Date("2025-06-01T00:00:00Z")
+    );
+    expect(inRange.isFallback).toBe(false);
+    expect(inRange.validityNote).toContain("0.01°");
+
+    const outOfRange = engine.getProvenance(
+      "ceres",
+      new Date("1890-01-01T00:00:00Z")
+    );
+    expect(outOfRange.isFallback).toBe(true);
+    expect(outOfRange.validityNote).toContain("Kepler fallback");
+    expect(outOfRange.validityNote).not.toContain("0.01°");
+  });
+
+  it("does not collide a BCE start year with the range separator", () => {
+    initializeOrbitalEngine();
+    // The Moon's window starts at year -3000; a bare `${start}-${end}`
+    // template renders the range as the unreadable "-3000-3000".
+    const note = new OrbitalEngine().getProvenance(
+      "moon",
+      new Date("2025-06-01T00:00:00Z")
+    ).validityNote;
+    expect(note).toContain("3000 BCE");
+    expect(note).not.toContain("-3000-");
+  });
+});

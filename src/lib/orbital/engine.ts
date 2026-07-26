@@ -17,6 +17,7 @@ import type {
   OrbitalEngineConfig,
   BodyOrbitalMetadata,
   OsculatingElements,
+  ValidityRange,
 } from "./types";
 import { DEFAULT_ENGINE_CONFIG } from "./types";
 import { dateToTDB } from "./time";
@@ -44,6 +45,59 @@ function getCacheKey(bodyId: string, jdTDB: number): string {
  * ~30 visible bodies × a generous time window fits comfortably.
  */
 const MAX_POSITION_CACHE_ENTRIES = 2000;
+
+/**
+ * Build the user-facing validity sentence for a body's orbit model.
+ *
+ * Two arms, and they must stay two arms. The registry's `note` describes the
+ * measured accuracy of the ANALYTICAL theory (e.g. "~0.01° near epoch,
+ * extrapolated to ~1° at the 2000/2050 edges"). Outside the window that theory
+ * is not what is running — the Kepler fallback is — so quoting its accuracy
+ * there would attach a measurement to a model the app is not using. Inside the
+ * window it is the honest thing to show, and until 2026-07-26 it was shown to
+ * nobody: the note existed in the registry and never reached the panel.
+ */
+function formatValidityWindow(startYear: number, endYear: number): string {
+  // A bare `${start}-${end}` renders VSOP's -2000 as "-2000-6000", where the
+  // sign and the range hyphen collide into nonsense. An en dash separates the
+  // range, and a BCE start forces an explicit CE end so the era is unambiguous.
+  const start = startYear < 0 ? `${Math.abs(startYear)} BCE` : `${startYear}`;
+  const end =
+    endYear < 0
+      ? `${Math.abs(endYear)} BCE`
+      : startYear < 0
+        ? `${endYear} CE`
+        : `${endYear}`;
+  return `${start}–${end}`;
+}
+
+function resolveValidityNote(
+  validityRange: ValidityRange | undefined,
+  inValidityRange: boolean,
+  isFallback: boolean
+): string | undefined {
+  if (!validityRange) return undefined;
+
+  const { startYear, endYear, note } = validityRange;
+  const window = formatValidityWindow(startYear, endYear);
+
+  if (isFallback) {
+    return inValidityRange
+      ? `Kepler fallback active; the ${window} theory is not running.`
+      : `Outside ${window} — running the Kepler fallback, whose accuracy here is not characterised.`;
+  }
+
+  if (!note) return `Valid ${window}.`;
+
+  // Most family notes already state their own window (Pluto's says "valid
+  // 1885-2099" verbatim, VSOP's says "2000 BCE - 6000 CE"); prefixing those
+  // would print the range twice. Match on the absolute year so a BCE start
+  // written as "2000 BCE" in the note still counts as stated.
+  const noteStatesWindow =
+    note.includes(String(Math.abs(startYear))) &&
+    note.includes(String(Math.abs(endYear)));
+  return noteStatesWindow ? `${note}.` : `Valid ${window}. ${note}.`;
+}
 
 /**
  * Orbital Engine
@@ -345,10 +399,11 @@ export class OrbitalEngine {
       provider: isFallback ? "kepler" : metadata.primaryProvider,
       isFallback,
       plannedModel: isFallback ? plannedModel : undefined,
-      validityNote:
-        metadata.validityRange && plannedModel && !inValidityRange
-          ? `Valid ${metadata.validityRange.startYear}-${metadata.validityRange.endYear}`
-          : undefined,
+      validityNote: resolveValidityNote(
+        metadata.validityRange,
+        inValidityRange,
+        isFallback
+      ),
     };
   }
 
