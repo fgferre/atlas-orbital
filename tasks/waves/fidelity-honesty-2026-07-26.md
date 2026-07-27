@@ -1389,8 +1389,12 @@ Two consequences, both load-bearing:
 
 - **The parser is validated against the hand transcription.** It re-emits the
   nine bodies stage A entered by hand and reproduces **all 54 secular
-  coefficients exactly**. Two methods, no shared step, same numbers — which is
-  what makes the other 22 bodies trustworthy without a second human pass.
+  coefficients exactly**. Two _transcription methods_, same numbers — which is
+  what makes the other 22 trustworthy without a second human pass. Note the
+  limit, because an earlier draft of this line oversold it: both routes read
+  the same kernel, so this proves fidelity of copying, **not** correctness of
+  the source. The instruments that are genuinely independent of this repo are
+  the Horizons sub-solar fixtures and pole-vs-orbit-normal, below.
 - **The drop-and-disclose prescription would have shipped gross errors.** Peak
   amplitudes the plan would have deleted as "periodic detail": **Mimas 44.85°**
   of prime meridian, **Triton 32.35°** of pole, Tethys 9.66°, Miranda 4.41°,
@@ -1500,6 +1504,31 @@ cross-check now excludes satellites, because `resolveObliquityDeg` measures
 against the **orbit normal** and a satellite's catalog `orbit.i` is referred to
 a Laplace or parent-equatorial plane no field names — the Moon's 6.68° is quoted
 to the ecliptic, a different quantity.
+
+**Audited by an independent model, 2026-07-27, and it found something real.**
+The audit re-derived the transcription from the kernel with its own parser
+(exact for all 31 records, the three disclosed truncations matching their
+declared amplitudes), re-queried Horizons against a stored fixture URL
+digit-for-digit, and mutation-tested the suite five ways — every mutation
+caught. What it broke is the **closure claim**: "Charon and Triton retired
+fabricated data" was only true inside 2020-2030. Outside it `engine.ts` drops
+to the Kepler fallback and reads `body.orbit`, which still held the fabricated
+parent-equatorial elements — and because stage B made the mount registry-driven
+and **date-blind**, nothing rotated them any more. Charon's orbit sat **67.2°**
+off Pluto's equator at 2019 and 2031, snapping there as a user scrubbed across
+the edge, with the mutual lock breaking silently. Worse than pre-W6, where the
+`axialTilt` quaternion at least tilted it into the right ballpark.
+**Fixed:** both records now carry the same fixture-derived ecliptic elements,
+re-referenced to J2000, so the fallback is geometrically _identical_ to the
+analytical path — measured 0.082° at 2000, 2019, 2025, 2031 and 2100, and the
+window-edge jump is 4.697° over two hours against 4.70° of true orbital motion,
+i.e. none. Pinned in `moonSceneFrame.test.ts`. Two smaller audit findings also
+fixed: the Moon was drawing an unearned 0.29° stale-position allowance (that
+allowance now keys on the provider, not on having a parent — ELP is valid at
+2000), and `Planet.tsx`'s comment still listed Charon and Triton as legacy.
+**The same trap is live for the other 18 analytical satellites and predates
+this wave** — Miranda's plane moves 104.6° across the window. Logged in STATUS
+as `Fallback-frame`, not swept in here.
 
 **Gates:** `test:run` 2381 passed (117 files), `test:coverage` thresholds hold,
 `lint` clean, `tsc --noEmit` clean, `build` clean, **`test:e2e` 12/12 passed**.

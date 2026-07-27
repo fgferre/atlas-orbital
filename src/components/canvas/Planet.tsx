@@ -722,8 +722,9 @@ export const Planet = ({
   const displayedDatetime = useStore((state) => state.displayedDatetime);
 
   /**
-   * Parent pole for the legacy parent-equatorial satellites (Charon, Triton,
-   * Vanth, Weywot), applied by React on reconciliation rather than per frame.
+   * Parent pole for the legacy parent-equatorial satellites — after W6 stage B
+   * that is Vanth and Weywot only, the two TNO moons with no measured orbit to
+   * invert. Applied by React on reconciliation rather than per frame.
    *
    * Documented approximation: this evaluates the parent's pole at the 4 Hz
    * store tick instead of at 60 Hz. IAU poles move by degrees per *century*,

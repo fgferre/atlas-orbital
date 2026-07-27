@@ -35,6 +35,7 @@ import { BODIES_BY_ID } from "../../data/celestialBodies";
 import type { CelestialBody } from "../../lib/astrophysics";
 import {
   initializeOrbitalEngine,
+  orbitalEngine,
   resolveOrbitalDisplayPosition,
 } from "../../lib/orbital";
 import { ecliptic2ThreeJs } from "../../lib/orbital/analytical/coordUtils";
@@ -303,6 +304,37 @@ describe("Charon and Triton after W6 stage B", () => {
     ).toBeLessThan(1e-4);
   });
 
+  it("charon and triton keep their orbit plane outside the validity window", () => {
+    // The analytical mount discriminator is registry-driven and **date-blind**,
+    // but the ENGINE is not: outside `plutoSat` / `neptunian` (2020-2030) it
+    // drops to the Kepler fallback and reads `body.orbit`. Those fields used to
+    // hold parent-EQUATORIAL elements that only made sense under a rotation the
+    // mount no longer applies, so scrubbing across the window edge swung
+    // Charon's orbit **67.2°** off Pluto's equator — breaking the mutual lock
+    // this wave exists to demonstrate, at a date no fixture covers.
+    //
+    // They now hold the same fixture-derived ecliptic elements re-referenced to
+    // J2000, so the fallback is geometrically identical to the analytical path
+    // and only its (uncharacterised) accuracy degrades. This asserts the plane,
+    // which is the part that was wrong; `isFallback` still flips, by design.
+    const IN_WINDOW = new Date("2025-01-01T00:00:00Z");
+    const OUT_OF_WINDOW = new Date("2035-01-01T00:00:00Z");
+
+    for (const [id, parent] of [
+      ["charon", "pluto"],
+      ["triton", "neptune"],
+    ] as const) {
+      const shift = angleDeg(
+        engineOrbitNormal(id, parent, IN_WINDOW),
+        engineOrbitNormal(id, parent, OUT_OF_WINDOW)
+      );
+      expect(
+        shift,
+        `${id}: orbit plane moved ${shift.toFixed(2)}° crossing the validity window — the fallback elements are in a different frame from the analytical ones`
+      ).toBeLessThan(0.1);
+    }
+  });
+
   it("triton: the fabricated node is gone and it now points at Horizons", () => {
     // This assertion is inverted from its previous form, exactly as its own
     // comment predicted. It used to assert a FLOOR — that Triton was more
@@ -328,3 +360,18 @@ describe("Charon and Triton after W6 stage B", () => {
  * residual at epoch is 0.002°, three orders below this.
  */
 const MAX_TRUTH_AT_EPOCH_DEG = 1.0;
+
+/** Orbit normal straight from the engine, whichever provider is serving. */
+function engineOrbitNormal(
+  bodyId: string,
+  parentId: string,
+  date: Date
+): THREE.Vector3 {
+  const at = (d: Date) => {
+    const r = orbitalEngine.calculatePosition(bodyId, d, parentId);
+    return new THREE.Vector3(r.position.x, r.position.y, r.position.z);
+  };
+  return new THREE.Vector3()
+    .crossVectors(at(date), at(new Date(date.getTime() + 3_600_000)))
+    .normalize();
+}

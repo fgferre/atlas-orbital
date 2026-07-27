@@ -10,6 +10,7 @@ import { BODIES_BY_ID } from "../data/celestialBodies";
 import { initializeOrbitalEngine } from "./orbital/setup";
 import { resolveHeliocentricPositionAU } from "./orbital/heliocentric";
 import { dateToTDB } from "./orbital/time";
+import { isAnalyticalSatellite } from "./orbital/analytical/satellites";
 
 /**
  * Where the Sun stands overhead, checked against JPL Horizons across 200 years.
@@ -317,6 +318,11 @@ function longitudeErrorDeg(fixture: SubSolarFixture): number {
  * pinned there, so the tight bound is physically earned and stays.
  */
 function stalePositionAllowanceDeg(fixture: SubSolarFixture): number {
+  // Keyed on the PROVIDER, not on having a parent. The Moon is a satellite but
+  // is served by ELP-MPP02, which is valid over millennia — granting it this
+  // allowance at its 2000-01-01 fixture would hand a perfectly good ephemeris a
+  // 0.29° discount it has not earned, and quietly blind the bound there.
+  if (!isAnalyticalSatellite(fixture.bodyId)) return 0;
   const body = BODIES_BY_ID.get(fixture.bodyId);
   if (!body?.parentId) return 0;
 
