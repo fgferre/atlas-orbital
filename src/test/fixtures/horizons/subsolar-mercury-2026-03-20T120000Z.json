@@ -1,0 +1,18 @@
+{
+  "kind": "subpoint",
+  "bodyId": "mercury",
+  "horizonsCommand": "199",
+  "name": "Mercury",
+  "date": "2026-03-20T12:00:00Z",
+  "center": "500@10",
+  "timeScale": "UT",
+  "targetFrame": "IAU_MERCURY",
+  "longitudeSense": "west",
+  "subSolarLonDeg": 41.306852,
+  "subSolarLatDeg": -0.003714,
+  "rangeAU": 0.43627513416471,
+  "lightTimeSeconds": 217.70337901695123,
+  "generatedAt": "2026-07-27T12:27:20.697Z",
+  "source": "NASA JPL Horizons API (OBSERVER, QUANTITIES 14,20)",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27199%27&OBJ_DATA=%27NO%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27OBSERVER%27&CENTER=%27500%4010%27&START_TIME=%272026-03-20T12%3A00%3A00%27&STOP_TIME=%272026-03-20T12%3A01%3A00%27&STEP_SIZE=%271m%27&QUANTITIES=%2714%2C20%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

@@ -1,0 +1,18 @@
+{
+  "kind": "subpoint",
+  "bodyId": "jupiter",
+  "horizonsCommand": "599",
+  "name": "Jupiter",
+  "date": "2026-03-20T12:00:00Z",
+  "center": "500@10",
+  "timeScale": "UT",
+  "targetFrame": "IAU_JUPITER",
+  "longitudeSense": "west",
+  "subSolarLonDeg": 264.302579,
+  "subSolarLatDeg": 1.324348,
+  "rangeAU": 5.24020401665811,
+  "lightTimeSeconds": 2614.8868725898387,
+  "generatedAt": "2026-07-27T12:27:37.289Z",
+  "source": "NASA JPL Horizons API (OBSERVER, QUANTITIES 14,20)",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27599%27&OBJ_DATA=%27NO%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27OBSERVER%27&CENTER=%27500%4010%27&START_TIME=%272026-03-20T12%3A00%3A00%27&STOP_TIME=%272026-03-20T12%3A01%3A00%27&STEP_SIZE=%271m%27&QUANTITIES=%2714%2C20%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}
