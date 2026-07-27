@@ -56,6 +56,11 @@ import {
   hygProperMotionEquatorial,
   transformHygEquatorialTripletsInPlace,
 } from "../../lib/starfield/hygFrame";
+import {
+  parseHygFocusId,
+  resolveHygWorldPosition,
+} from "../../lib/focus/hygFocusResolver";
+import { cameraRelativeVector3 } from "../../lib/math/cameraRelative";
 import { useQualityProfile } from "../../hooks/useQualityProfile";
 import { useStarfieldCatalog } from "./useStarfieldCatalog";
 import {
@@ -131,6 +136,26 @@ const vertexShader = /* glsl */ `
 
   uniform float yearsSinceJ2000;
 
+  // NEW-6 — the focused star's position RELATIVE TO THE CAMERA, subtracted on
+  // the CPU in float64 (QD, via cameraRelativeVector3) and uploaded small.
+  //
+  // Why this exists: starPosition is an absolute world coordinate, and at
+  // 165 pc that is ~3.4e10 wu, where one float32 step is 2048 wu. Feeding it
+  // through modelViewMatrix * vec4(absolute, 1.0) cancels two ~3.4e10
+  // numbers in float32 to recover a ~10^3 wu view offset — the sprite lands up
+  // to thousands of wu from where the procedural mesh (which reaches the GPU
+  // through a float64-composed, already-camera-relative matrix) draws it. The
+  // owner reported that misalignment in LIVE mode, so no simulated time is
+  // involved. cameraRelative.ts:30-39 documented this exact failure and put
+  // the threshold at ~1e7 wu; :46-52 then closed it as moot for this file by
+  // comparing two equally float32-limited forms. The form that works is
+  // neither of them: subtract BEFORE anything is rounded.
+  //
+  // Only the focused star gets this. Everything else is a point at parsec
+  // distance where a float32 step is angularly invisible, which is the same
+  // trade Gaia makes.
+  uniform vec3 u_focusedCamRel;
+
   // Gaia Sky vertex uniforms (verified host defaults from
   // StarSetQuadComponent.java:46 + Constants.java:110-112).
   uniform vec2 u_solidAngleMap;      // vec2(1e-10, 2e-9)
@@ -169,7 +194,17 @@ const vertexShader = /* glsl */ `
   void main() {
     // Proper motion displacement (same as pre-θ.1b).
     vec3 animatedPos = starPosition + velocity * yearsSinceJ2000;
-    vec4 viewPosition = modelViewMatrix * vec4(animatedPos, 1.0);
+
+    // NEW-6 — the focused star takes the precise path. mat3(modelViewMatrix)
+    // is the rotation only, whose elements are O(1), applied to a ~10^3 wu
+    // vector: no large-magnitude cancellation anywhere. u_focusedCamRel
+    // already carries proper motion, because the CPU resolves it with the same
+    // resolveHygWorldPosition the mesh and the camera use — which is what
+    // makes all three agree by construction rather than by coincidence.
+    bool isFocused = a_focusMask > 0.5;
+    vec4 viewPosition = isFocused
+      ? vec4(mat3(modelViewMatrix) * u_focusedCamRel, 1.0)
+      : modelViewMatrix * vec4(animatedPos, 1.0);
 
     float dist = length(viewPosition.xyz);
 
@@ -202,7 +237,7 @@ const vertexShader = /* glsl */ `
     //    set per-frame by the mesh gate) closes the band: the
     //    sprite is alive at full opacity until the mesh starts
     //    fading it out via (1 - a_fadeAlpha).
-    bool isFocused = a_focusMask > 0.5;
+    // (isFocused is declared above, where NEW-6 branches the transform.)
     float boundaryFade = isFocused
       ? 1.0
       : smoothstep(u_LEN0, u_LEN0 * 1000.0, dist);
@@ -391,8 +426,13 @@ function buildColorAttribute(catalog: HygCatalogData): Float32Array {
   return colors;
 }
 
+/** NEW-6 scratch — the focused star's world position, refilled each frame. */
+const TMP_FOCUSED_WORLD = new THREE.Vector3();
+
 export const Starfield = () => {
   const qualityMode = useStore((state) => state.qualityMode);
+  const focusId = useStore((state) => state.focusId);
+  const camera = useThree((state) => state.camera);
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
@@ -422,6 +462,10 @@ export const Starfield = () => {
         u_brightnessPower: { value: U_BRIGHTNESS_POWER_DEFAULT },
         u_minQuadSolidAngle: { value: U_MIN_QUAD_SOLID_ANGLE },
         u_LEN0: { value: LEN0 },
+        // NEW-6 — written each frame from the CPU float64 resolve. Zero when
+        // nothing is focused, which is safe because `a_focusMask` is 0 on every
+        // slot then and the branch never reads it.
+        u_focusedCamRel: { value: new THREE.Vector3() },
         // `u_sizeFactor` is the atlas equivalent of Gaia Sky's
         // `u_alphaSizeBr.y = starPointSize × 1e6 × pointScale`
         // (`StarSetQuadComponent.java:96`). Exact default derivation:
@@ -561,6 +605,23 @@ export const Starfield = () => {
 
     const years = yearsSinceJ2000();
     matUniforms.yearsSinceJ2000.value = years;
+
+    // NEW-6 — feed the focused star's camera-relative position, resolved in
+    // float64 from the SAME function `HygStellarMesh` and `CameraController`
+    // use, so sprite, mesh and camera aim cannot disagree. One star per frame:
+    // two allocations-free helper calls, no attribute re-upload.
+    const focusedIndex = parseHygFocusId(focusId);
+    if (
+      focusedIndex !== null &&
+      catalog &&
+      resolveHygWorldPosition(focusedIndex, catalog, TMP_FOCUSED_WORLD)
+    ) {
+      cameraRelativeVector3(
+        TMP_FOCUSED_WORLD,
+        camera.position,
+        matUniforms.u_focusedCamRel.value as THREE.Vector3
+      );
+    }
 
     // Viewport height × effective DPR. `gl.getPixelRatio()` returns the
     // renderer's clamped DPR (honors `qualityProfile.dprMax`), so this
