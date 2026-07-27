@@ -218,6 +218,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "planet",
     name: { en: "MARS", pt: "MARTE" },
     radiusKm: 3389,
+    flattening: 0.0058979,
     color: "#DD4422",
     orbit: {
       a: 1.523,
@@ -338,6 +339,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "planet",
     name: { en: "JUPITER", pt: "JÚPITER" },
     radiusKm: 69911,
+    flattening: 0.064887,
     color: "#D9A066",
     orbit: {
       a: 5.204,
@@ -439,6 +441,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "planet",
     name: { en: "URANUS", pt: "URANO" },
     radiusKm: 25362,
+    flattening: 0.022945,
     color: "#99FFFF",
     orbit: {
       a: 19.21,
@@ -501,6 +504,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "planet",
     name: { en: "NEPTUNE", pt: "NETUNO" },
     radiusKm: 24622,
+    flattening: 0.017104,
     color: "#3333FF",
     orbit: {
       a: 30.11,

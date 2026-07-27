@@ -240,8 +240,55 @@ export interface CelestialBody {
    */
   airlessRegolith?: boolean;
 
-  // Optional non-uniform scale for observation-based ellipsoids.
+  /**
+   * Measured triaxial semi-axis ratios against `radiusKm`, in **publication
+   * order** — `[a, b, c]` = semi-major, intermediate, minor, exactly as
+   * occultation and lightcurve solutions quote them.
+   *
+   * **The order is data, not formatting.** For a relaxed rotator the SHORT
+   * axis `c` is the spin axis, and the mesh spins about scene **Y**, so the
+   * resolver maps `(x, y, z) = (a, c, b)`. Feeding the triple straight through
+   * would put `b` at the pole and spin the body about its intermediate axis —
+   * dynamically impossible, and it *looks* more convincing than the truth
+   * because it swings the silhouette further. See `resolveBodyFigureRatio`.
+   *
+   * Mutually exclusive with `flattening` (a body has one figure, described one
+   * way) and ignored on the `model` path, where the asset owns the figure.
+   * Both enforced in `celestialBodies.test.ts`.
+   */
   shapeScale?: [number, number, number];
+
+  /**
+   * Geometric flattening (Re − Rp) / Re of a rotationally symmetric body.
+   *
+   * Applied against `radiusKm`, which is the **volumetric mean** radius, so
+   * the figure is volume-preserving: the equatorial semi-axis is
+   * `R̄ · (1 − f)^(−1/3)` and the polar one `R̄ · (1 − f)^(2/3)`. Their product
+   * `Re² · Rp` is `R̄³` by construction, and `Rp / Re` is `(1 − f)`.
+   *
+   * **Provenance and the independent check** (standing law 3). Values are
+   * derived from JPL Solar System Dynamics' *Planetary Physical Parameters*
+   * table (https://ssd.jpl.nasa.gov/planets/phys_par.html, read 2026-07-26),
+   * as `f = 1 − (R̄ / Re)³` from that table's own equatorial and volumetric
+   * mean radii — **two measured quantities**, so no third constant is
+   * transcribed and the check does not pass through `f` itself. Feeding each
+   * value back through the formula reproduces the published equatorial radius
+   * to 0.015% or better (Jupiter and Saturn to the metre), which is what
+   * `astrophysics.test.ts` asserts. The derived values also agree with the
+   * NASA planetary fact sheet's own flattening row to four significant
+   * figures — a second, independent corroboration.
+   *
+   * Mars is the one body where the catalog's `radiusKm` (3389) is rounded from
+   * the source's 3389.50; `f` is taken from the source pair rather than from
+   * the rounded mean, which costs 0.5 km on the rendered equator and keeps the
+   * flattening itself right. Deriving it from 3389 instead would inflate `f`
+   * by 7.5%, because `f` is a difference of near-equal cubes.
+   *
+   * Earth is deliberately **not** flagged: 0.00335 is sub-pixel at every
+   * framing the app offers, and Earth is the only body with an
+   * `atmosphereScattering` shell, whose Nishita integrator assumes a sphere.
+   */
+  flattening?: number;
 
   model?: {
     path: string;
@@ -781,6 +828,84 @@ export class AstroPhysics {
     return "subsystem";
   }
 
+  /**
+   * Per-axis figure of a body as multipliers on its mean radius, in **scene
+   * axis order** `(x, y, z)` with **y the spin axis**, normalised so the
+   * largest component is exactly `1`.
+   *
+   * Two sources, mutually exclusive by catalog contract:
+   *
+   * - `shapeScale` is in publication order `[a, b, c]` (semi-major,
+   *   intermediate, minor). A relaxed rotator spins about its **short** axis,
+   *   so this maps `(x, y, z) = (a, c, b)`. Getting that mapping wrong puts the
+   *   intermediate axis at the pole, which is dynamically impossible and, worse,
+   *   renders a *larger* silhouette swing than the truth — a wrong answer that
+   *   photographs better. `celestialBodies.test.ts` pins `y === min(...)` for
+   *   every triaxial rotator precisely because no visual check can catch it.
+   * - `flattening` gives the volume-preserving oblate figure
+   *   `((1−f)^(−1/3), (1−f)^(2/3), (1−f)^(−1/3))`. **Not** `y *= (1 − f)`:
+   *   `radiusKm` is the volumetric mean, so squashing only the pole would leave
+   *   Jupiter's equator 1.4% and its pole 2.2% small.
+   *
+   * Scale-mode independent on purpose — the renderer bakes this ratio into a
+   * memoised geometry, and keying that geometry on scale mode would rebuild it
+   * on every didactic/realistic toggle.
+   */
+  static resolveBodyFigureRatio(body: CelestialBody): [number, number, number] {
+    let axes: [number, number, number];
+
+    if (body.shapeScale) {
+      const [a, b, c] = body.shapeScale;
+      // (x, y, z) = (a, c, b) — spin about the short axis c.
+      axes = [Math.abs(a), Math.abs(c), Math.abs(b)];
+    } else if (body.flattening) {
+      const oblate = 1 - body.flattening;
+      const equatorial = Math.pow(oblate, -1 / 3);
+      const polar = Math.pow(oblate, 2 / 3);
+      axes = [equatorial, polar, equatorial];
+    } else {
+      return [1, 1, 1];
+    }
+
+    const longest = Math.max(axes[0], axes[1], axes[2]);
+    if (!Number.isFinite(longest) || longest <= 0) return [1, 1, 1];
+    return [axes[0] / longest, axes[1] / longest, axes[2] / longest];
+  }
+
+  /**
+   * Absolute per-axis semi-axes in world units, in scene axis order with y the
+   * spin axis. Its largest component equals `resolveSemanticBodyRadius` **by
+   * construction** — both read the same ratio helper — which is the identity
+   * every bounds and framing consumer depends on.
+   */
+  static resolveBodyAxisScale({
+    body,
+    scaleMode = "realistic",
+  }: SemanticBodyRadiusContext): [number, number, number] {
+    const semanticRadius = this.resolveSemanticBodyRadius({ body, scaleMode });
+    const ratio = this.resolveBodyFigureRatio(body);
+    return [
+      semanticRadius * ratio[0],
+      semanticRadius * ratio[1],
+      semanticRadius * ratio[2],
+    ];
+  }
+
+  /**
+   * The body's **largest** semi-axis in world units.
+   *
+   * Max, not mean, and that is the right choice for every live consumer: it is
+   * the upper bound framing, focus extent and near-plane logic need, and it is
+   * stable across a spin, whereas a projected radius would flicker Quaoar's
+   * texture tier twice per 17.68 h period.
+   *
+   * Note that "max = equatorial" is an accident of biaxial figures. For a
+   * triaxial body the max is the **longest equatorial** semi-axis, which no
+   * published ring ratio is quoted against — harmless while Saturn is the only
+   * `ringSystem`, but Quaoar is simultaneously the one triaxial record and one
+   * whose own prose mentions a ring, so read `resolveRingOuterRadius` before
+   * assuming the two compose.
+   */
   static resolveSemanticBodyRadius({
     body,
     scaleMode = "realistic",
@@ -790,9 +915,15 @@ export class AstroPhysics {
         ? this.calculateDidacticRadius(body.radiusKm)
         : body.radiusKm * KM_TO_3D_UNITS;
 
-    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
-    const shapeMultiplier = Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz));
-    return baseRadius * shapeMultiplier;
+    if (body.shapeScale) {
+      const [sx, sy, sz] = body.shapeScale;
+      return baseRadius * Math.max(Math.abs(sx), Math.abs(sy), Math.abs(sz));
+    }
+    if (body.flattening) {
+      // Equatorial semi-axis of the volume-preserving oblate figure.
+      return baseRadius * Math.pow(1 - body.flattening, -1 / 3);
+    }
+    return baseRadius;
   }
 
   static resolveRingOuterRadius(

@@ -199,6 +199,7 @@ const PlanetVisual = ({
     planetMaterial,
     ringMaterial,
     ringGeometry,
+    figureGeometry,
   } = usePlanetMaterials({
     body,
     roughness,
@@ -222,7 +223,11 @@ const PlanetVisual = ({
   useFrame(({ camera, scene }) => {
     if (!groupRef.current) return;
 
-    // 1. Scaling
+    // 1. Scaling. W5 — this stays UNIFORM at the largest semi-axis. The pole
+    // quaternion and the spin group sit below this group, so a non-uniform
+    // scale here would compose as S·R — a shear, not a rotated ellipsoid, and
+    // Uranus at 97.77° would render as a skewed blob. The figure lives in the
+    // baked `figureGeometry` instead, below the rotations where it belongs.
     const semanticRadius = AstroPhysics.resolveSemanticBodyRadius({
       body,
       scaleMode,
@@ -376,11 +381,19 @@ const PlanetVisual = ({
           eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
           pos = TMP_ECLIPSE_ECLIPSING_POS;
           // World radius of the eclipsing body, matching atlas's
-          // scale-mode resolution. `resolveSemanticBodyRadius`
-          // returns the same value the eclipsing body's mesh is
-          // actually scaled by, so the shader's
-          // `eclipsingBodyRadius × 1.7` penumbra ratio matches what's
-          // rendered on screen.
+          // scale-mode resolution.
+          //
+          // W5 corrected this comment (standing law 4). It used to claim
+          // `resolveSemanticBodyRadius` "returns the same value the eclipsing
+          // body's mesh is actually scaled by". That is now only true for a
+          // spherical body: a body with a `flattening` or `shapeScale` record
+          // is scaled uniformly by its LARGEST semi-axis and then carries its
+          // figure in the baked geometry, so the shadow caster is treated as a
+          // sphere of that largest semi-axis. Harmless today — the only
+          // eclipsing bodies in the catalog are the Moon and Earth, both
+          // unflagged — but the cone model gains a real per-axis error the day
+          // a flattened body eclipses anything, and W7 owns that fix.
+          // The `eclipsingBodyRadius × 1.7` penumbra ratio is unchanged.
           radius = AstroPhysics.resolveSemanticBodyRadius({
             body: eclipsingBody,
             scaleMode,
@@ -442,7 +455,11 @@ const PlanetVisual = ({
               receiveShadow={body.type !== "star"}
               raycast={THREE.Mesh.prototype.raycast}
             >
-              <sphereGeometry args={[1, 64, 64]} />
+              {figureGeometry ? (
+                <primitive object={figureGeometry} attach="geometry" />
+              ) : (
+                <sphereGeometry args={[1, 64, 64]} />
+              )}
               <primitive object={planetMaterial} attach="material" />
             </mesh>
           ) : null}
@@ -459,7 +476,17 @@ const PlanetVisual = ({
                 body.atmosphereScattering.outerRadiusRatio ?? 1.025,
               ]}
             >
-              <sphereGeometry args={[1, 64, 64]} />
+              {/* Earth is the only `atmosphereScattering` body and is
+                  deliberately unflagged for figure, so this branch always
+                  takes the sphere today. Kept symmetric so a future flattened
+                  atmosphere body gets a conformal shell rather than a sphere
+                  around an ellipsoid — the catalog test forbids that pairing
+                  until the Nishita integrator learns ellipsoids. */}
+              {figureGeometry ? (
+                <primitive object={figureGeometry} attach="geometry" />
+              ) : (
+                <sphereGeometry args={[1, 64, 64]} />
+              )}
               <primitive object={atmosphereMaterial} attach="material" />
             </mesh>
           )}
@@ -494,7 +521,16 @@ const PlanetVisual = ({
               and the Rec.709 luma convention matching Gaia luma.glsl. */}
           {cloudMaterial && (
             <mesh scale={[1.01, 1.01, 1.01]} castShadow receiveShadow={false}>
-              <sphereGeometry args={[1, 64, 64]} />
+              {/* Earth is the only body with a cloud texture, so this also
+                  always takes the sphere today; symmetric for the same reason
+                  as the atmosphere shell above. The uniform 1.01 stays a
+                  uniform scale on the mesh — it inflates the figure, it does
+                  not reshape it. */}
+              {figureGeometry ? (
+                <primitive object={figureGeometry} attach="geometry" />
+              ) : (
+                <sphereGeometry args={[1, 64, 64]} />
+              )}
               <primitive object={cloudMaterial} attach="material" />
               {cloudShadowMaterial && (
                 <primitive
@@ -541,11 +577,15 @@ const PlanetVisualWrapper = (props: {
 
   useFrame(() => {
     if (!meshRef.current) return;
-    const semanticRadius = AstroPhysics.resolveSemanticBodyRadius({
+    // W5 — the fallback carries the figure too. It has no tilt or spin group
+    // under it, so a per-axis scale here is safe (there is no rotation to
+    // shear), and without it the boot frame and every model body below the
+    // salience gate would re-commit the round-Quaoar bug in miniature.
+    const [ax, ay, az] = AstroPhysics.resolveBodyAxisScale({
       body: props.body,
       scaleMode,
     });
-    meshRef.current.scale.set(semanticRadius, semanticRadius, semanticRadius);
+    meshRef.current.scale.set(ax, ay, az);
   });
 
   const fallback = (
@@ -798,8 +838,10 @@ export const Planet = ({
       if (body.model?.scale) {
         visualRadius *= body.model.scale;
       }
-      const shapeScale = body.shapeScale ? Math.max(...body.shapeScale) : 1;
-      visualRadius *= shapeScale;
+      // W5 — the `Math.max(...body.shapeScale)` multiply that used to sit here
+      // was a double-apply: `resolveSemanticBodyRadius` already returns the
+      // largest semi-axis, so Quaoar's asset-interest radius was inflated by
+      // 1.18² = 1.39×, promoting its texture tier earlier than any other body.
 
       const nextInterest = resolveCameraAssetInterest({
         camera,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { type CelestialBody } from "../../../lib/astrophysics";
+import { AstroPhysics, type CelestialBody } from "../../../lib/astrophysics";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
@@ -737,6 +737,44 @@ export function usePlanetMaterials({
     };
   }, [ringGeometry]);
 
+  /**
+   * W5 — the body's figure, **baked into the geometry** rather than applied as
+   * a non-uniform mesh scale.
+   *
+   * The mesh-scale alternative keeps the sphere a sphere in object space, so
+   * every object-space varying a shader patch reads (`vPos`, `vObjectNormal`)
+   * still describes a unit sphere and has to be hand-corrected per patch —
+   * and the correction is easy to get wrong in a way that compiles and renders
+   * plausibly. `applyMatrix4` moves the positions **and** re-derives the
+   * normals through the normal matrix, so `vPos` is already the ellipsoid
+   * point and `vObjectNormal` is already the true surface normal, for this
+   * patch and every future one.
+   *
+   * The ratio is normalised (largest component exactly 1) and scale-mode
+   * independent, so this geometry survives a didactic/realistic toggle. The
+   * uniform semantic radius still goes on the group above, which is what keeps
+   * the pole quaternion and the spin group below it composing as a rotated
+   * ellipsoid instead of a shear.
+   *
+   * Returns `null` for a spherical body so the caller keeps its plain
+   * `<sphereGeometry>` JSX and R3F's own disposal — no allocation and no
+   * behaviour change for the 40-odd records with no measured figure.
+   */
+  const figureGeometry = useMemo(() => {
+    const [rx, ry, rz] = AstroPhysics.resolveBodyFigureRatio(body);
+    if (rx === 1 && ry === 1 && rz === 1) return null;
+
+    const geometry = new THREE.SphereGeometry(1, 64, 64);
+    geometry.applyMatrix4(new THREE.Matrix4().makeScale(rx, ry, rz));
+    return geometry;
+  }, [body]);
+
+  useEffect(() => {
+    return () => {
+      figureGeometry?.dispose();
+    };
+  }, [figureGeometry]);
+
   return useMemo(
     () => ({
       cloudMaterial,
@@ -745,6 +783,7 @@ export function usePlanetMaterials({
       planetMaterial,
       ringMaterial,
       ringGeometry,
+      figureGeometry,
     }),
     [
       cloudMaterial,
@@ -753,6 +792,7 @@ export function usePlanetMaterials({
       planetMaterial,
       ringMaterial,
       ringGeometry,
+      figureGeometry,
     ]
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
 import { SOLAR_SYSTEM_BODIES } from "../data/celestialBodies";
-import { AstroPhysics, AU_TO_3D_UNITS } from "./astrophysics";
+import { AstroPhysics, AU_TO_3D_UNITS, KM_TO_3D_UNITS } from "./astrophysics";
 import { resolveHeliocentricPositionAU } from "./orbital/heliocentric";
 import { initializeOrbitalEngine } from "./orbital/setup";
 
@@ -493,6 +493,53 @@ describe("AstroPhysics didactic geometry", () => {
     }).length();
 
     expect(callistoDistance / ioDistance).toBeGreaterThan(1.5);
+  });
+});
+
+describe("body figure in world units", () => {
+  // The wave's arithmetic gate. `cameraNearPlane.test.ts` is built entirely on
+  // Deimos, which has neither a `shapeScale` nor a `flattening`, so it is
+  // structurally blind to this change and is NOT the gate (lesson M5).
+  it("renders the giant planets at their published equatorial radius", () => {
+    const cases: [string, number][] = [
+      ["jupiter", 71492],
+      ["uranus", 25559],
+      ["neptune", 24764],
+    ];
+    for (const [id, equatorialKm] of cases) {
+      const semantic = AstroPhysics.resolveSemanticBodyRadius({
+        body: getBody(id),
+        scaleMode: "realistic",
+      });
+      expect(semantic / KM_TO_3D_UNITS).toBeCloseTo(equatorialKm, -1);
+    }
+  });
+
+  it("grows the equatorial radius by the amount the wave predicted", () => {
+    // Recorded so the focus-extent shift is attributable: every moon of a
+    // flattened planet moves in DIDACTIC mode, because the didactic subsystem
+    // distance is a multiple of the parent's semantic radius. Realistic-mode
+    // separations come from orbital elements and do not move — that is what
+    // the wave's "Io's separation unchanged" smoke actually checks.
+    const expected: Record<string, number> = {
+      jupiter: 1.0226,
+      uranus: 1.0078,
+      neptune: 1.0058,
+      mars: 1.002,
+    };
+    for (const [id, ratio] of Object.entries(expected)) {
+      const body = getBody(id);
+      const flattening = body.flattening!;
+      expect(Math.pow(1 - flattening, -1 / 3)).toBeCloseTo(ratio, 3);
+    }
+  });
+
+  it("leaves an unflagged body perfectly spherical", () => {
+    for (const id of ["earth", "venus", "mercury", "moon"]) {
+      expect(AstroPhysics.resolveBodyFigureRatio(getBody(id))).toEqual([
+        1, 1, 1,
+      ]);
+    }
   });
 });
 

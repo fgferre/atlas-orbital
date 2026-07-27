@@ -255,8 +255,18 @@ export const PlanetModel = ({
       s *= body.model.scale;
     }
 
-    const [sx, sy, sz] = body.shapeScale ?? [1, 1, 1];
-    groupRef.current.scale.set(s * sx, s * sy, s * sz);
+    // W5 — UNIFORM, and the `shapeScale` multiply that used to be here is
+    // gone for two independent reasons. It was a double-apply
+    // (`resolveSemanticBodyRadius` already returns the largest semi-axis), and
+    // it put a non-uniform scale on the group that has the tilt group and
+    // `rotationRef` BELOW it — the same S·R shear `PlanetVisual` outlaws.
+    //
+    // The precedence rule, stated once here and in the resolver's JSDoc: on
+    // the model path **the asset owns the figure**. Haumea's GLB already
+    // encodes its ellipsoid, so applying `shapeScale` or `flattening` here
+    // would squash an already-squashed mesh. `celestialBodies.test.ts` forbids
+    // the pairing so this cannot silently start mattering.
+    groupRef.current.scale.setScalar(s);
 
     // Rotation — same helper as `Planet.tsx` so a body's `rotationEpoch` /
     // `rotationOffsetDegrees` are honoured whether it renders as a shaded

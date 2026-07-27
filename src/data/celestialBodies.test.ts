@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SOLAR_SYSTEM_BODIES } from "./celestialBodies";
 import { getVisualAssetByBodyPath } from "./assetManifest";
-import { AstroPhysics, type CelestialBody } from "../lib/astrophysics";
+import {
+  AstroPhysics,
+  KM_TO_3D_UNITS,
+  type CelestialBody,
+} from "../lib/astrophysics";
 import { getOrbitalMetadata } from "../lib/orbital/registry";
 
 const getBody = (id: string) => {
@@ -228,6 +232,92 @@ describe("minor-body visual provenance", () => {
     const earth = getBody("earth");
     expect(earth.textures?.normal).toMatch(/8k_earth_normal_map\.jpg$/);
     expect(earth.textures?.roughness).toMatch(/8k_earth_roughness_map\.jpg$/);
+  });
+
+  // W5 — the body-figure contracts. These are the asserts no visual check can
+  // stand in for: the axis-order one because the WRONG mapping renders a more
+  // convincing silhouette than the right one, and the exclusivity ones because
+  // their failure mode is a silently double-applied or shear-composed figure.
+  describe("body figure", () => {
+    it("spins a triaxial body about its short axis", () => {
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        if (!body.shapeScale) continue;
+        const ratio = AstroPhysics.resolveBodyFigureRatio(body);
+        // `shapeScale` is publication order [a, b, c]; the resolver must map
+        // (x, y, z) = (a, c, b) so the SHORT axis is the spin axis. Feeding the
+        // triple straight through would put the intermediate axis at the pole,
+        // which no relaxed rotator does.
+        expect(ratio[1]).toBe(Math.min(...ratio));
+        expect(Math.max(...ratio)).toBe(1);
+      }
+    });
+
+    it("keeps the largest semi-axis equal to the semantic radius", () => {
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        for (const scaleMode of ["realistic", "didactic"] as const) {
+          const axes = AstroPhysics.resolveBodyAxisScale({ body, scaleMode });
+          const semantic = AstroPhysics.resolveSemanticBodyRadius({
+            body,
+            scaleMode,
+          });
+          expect(Math.max(...axes)).toBeCloseTo(semantic, 9);
+        }
+      }
+    });
+
+    it("describes a body's figure exactly one way", () => {
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        expect(
+          body.flattening !== undefined && body.shapeScale !== undefined,
+          `${body.id} carries both flattening and shapeScale`
+        ).toBe(false);
+      }
+    });
+
+    it("never pairs a non-spherical figure with an atmosphere shell", () => {
+      // The Nishita integrator in `atmosphereShader.ts` assumes a unit sphere.
+      // This is also the recorded reason Earth is left unflagged.
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        if (!body.atmosphereScattering) continue;
+        expect(body.flattening, `${body.id}`).toBeUndefined();
+        expect(body.shapeScale, `${body.id}`).toBeUndefined();
+      }
+    });
+
+    it("leaves the figure to the asset on the model path", () => {
+      for (const body of SOLAR_SYSTEM_BODIES) {
+        if (!body.model) continue;
+        expect(body.flattening, `${body.id}`).toBeUndefined();
+        expect(body.shapeScale, `${body.id}`).toBeUndefined();
+      }
+    });
+
+    it("reproduces published equatorial and polar radii from flattening", () => {
+      // Independent of the stored `flattening`: these equatorial radii come
+      // from JPL SSD's Planetary Physical Parameters table, a different
+      // published quantity than the one the constant was derived through.
+      const publishedEquatorialKm: Record<string, number> = {
+        mars: 3396.19,
+        jupiter: 71492,
+        uranus: 25559,
+        neptune: 24764,
+      };
+      for (const [id, equatorialKm] of Object.entries(publishedEquatorialKm)) {
+        const body = getBody(id);
+        expect(body.flattening).toBeDefined();
+        const axes = AstroPhysics.resolveBodyAxisScale({
+          body,
+          scaleMode: "realistic",
+        });
+        const renderedEquatorialKm = axes[0] / KM_TO_3D_UNITS;
+        expect(renderedEquatorialKm / equatorialKm).toBeCloseTo(1, 3);
+        // Volume preservation against the catalog's mean radius: Re² · Rp = R̄³.
+        const renderedPolarKm = axes[1] / KM_TO_3D_UNITS;
+        expect(
+          (renderedEquatorialKm ** 2 * renderedPolarKm) / body.radiusKm ** 3
+        ).toBeCloseTo(1, 6);
+      }
+    });
   });
 
   it("uses observational upgrades where the handoff calls for them", () => {
