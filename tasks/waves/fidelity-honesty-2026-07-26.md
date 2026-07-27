@@ -440,14 +440,57 @@ mechanism exactly: the gate measured the distance from the live camera to the
 the growing measured distance eventually crosses `STELLAR_MESH_EXIT_RAD` and tears
 the mesh down with the star still in frame.
 
-Order-of-magnitude for who was affected, from the real landing clamp
-(`ENTER × 5`) and gate thresholds, using modelled radii and pm × distance for the
-transverse velocity — **simulated years until the mesh dropped**: Kapteyn 0.08,
-Barnard 0.09, Proxima 0.14, Sirius 4.4, Betelgeuse 775, Rigel 3919. The ordering
-is counterintuitive and worth keeping: the **nearby high-proper-motion dwarfs**
-broke almost immediately under any warp, while distant supergiants effectively
-never did, because their landing distance is enormous and their proper motion
-tiny. So "does this affect every star" is **no** — it was steeply per-star.
+**Who was affected — corrected 2026-07-26 after the owner named a counterexample.**
+The first pass sampled six famous stars, read "nearby high-proper-motion dwarfs
+break immediately, distant supergiants effectively never", and generalised that
+to _distance_. That is wrong, and the owner falsified it by reporting drift on
+**52 Ori** (HIP 27386) — 165 pc away with a proper motion of 0.0224 "/yr, which
+the wrong rule says should be immune.
+
+The actual driver, read out of the shipped catalog with the app's own parser:
+transverse motion in **world units** is `pm × d_pc × 1000`, so distance
+_multiplies_ the speed while the despawn distance (`R / EXIT`) depends only on the
+**radius**. The timescale is therefore `∝ R☉ / (pm × d_pc)` — distance appears in
+the denominator, not the numerator. 52 Ori's 0.0224 "/yr at 165 pc gives
+**3690 wu/yr**, essentially the same as Sirius's 1.34 "/yr at 2.6 pc (3532 wu/yr).
+
+Simulated years until the mesh dropped, from catalog values:
+Barnard 0.03 · Proxima 0.15 · Sirius 4.4 · **52 Ori 7.6** · Rigel 3620.
+
+Rigel is the outlier and the _only_ reason is that it is a supergiant: 230 R☉
+puts its despawn distance at 2.1 M wu. **The vulnerable population is small
+stars, at any distance — i.e. most of the catalog.** Do not re-derive the
+distance-based rule; it is recorded here as refuted.
+
+For scale on how fast this bites: 52 Ori's landing distance is 858 wu and it
+moves 3690 wu per simulated year, so at 1 year/second the star traverses its
+**entire** landing distance in 0.23 s of wall time.
+
+**A SECOND INSTANCE IS STILL OPEN, and F-06 did not touch it — `CameraController`
+freezes the FLIGHT target.** `setupCameraHyg` resolves `targetPos` once
+(`CameraController.tsx:335`) and hands that frozen vector to both channels:
+`HygPhysicsFlight.start()` copies it into a private field
+(`hygPhysicsFlight.ts:272`) and `update(dt)` takes only `dt`, and `AimLerp.start()`
+does the same (`aimLerp.ts:169`). Neither exposes a way to feed a live target.
+So for the whole flight the camera integrates and aims at where the star **was**
+when focus landed, while the vertex shader keeps drawing the sprite where it
+**is** — and the moment the flight completes, focus-tracking (which _does_
+re-resolve every frame, `:744`) snaps `controls.target` from the stale point to
+the live one.
+
+That is a discontinuity at flight end whose size is the simulated time elapsed
+**during the flight**, so it is invisible at live speed and severe under warp: at
+1 year/second a ~5 s flight moves 52 Ori roughly 21× its own landing distance.
+It is the better explanation for "drift on some flybys" than the mesh freeze,
+because it fires on the transition itself rather than after seconds of warp.
+
+Fixing it needs a live-target API on both flight classes (`HygPhysicsFlight`
+recomputes `tmpToTarget` and the angular gate from `targetPos` every `update`,
+so a per-frame setter is enough; `AimLerp` derives its aim direction from
+`starWorldPos` each frame and needs the same). Both have unit tests that pin the
+frozen-target behaviour and will need extending, not deleting. **Not attempted in
+W4** — it is a camera-flight change, not a mesh change, and it deserves its own
+commit and its own smoke.
 
 Not the cause, checked and cleared: the gate carries 2× hysteresis with the
 boundary as a no-op zone, the landing is clamped to `ENTER × 5` (a 10× margin over
