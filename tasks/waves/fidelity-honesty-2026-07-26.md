@@ -63,7 +63,7 @@ darkening)** belongs beside it.
 | W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell |
 | W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                 |
 | W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                             |
-| W5 Body figure                          | not started                       | —                                                                                                                     |
+| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                       |
 | W6 One pole, one spin                   | not started                       | —                                                                                                                     |
 | W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                     |
 | W8 Reach and discovery                  | not started                       | —                                                                                                                     |
@@ -642,6 +642,59 @@ meaningfully points at Mars once W6 fixes phase, both render as spheres today
 directly under catalog prose calling them irregular, and both are focusable
 close-ups where the figure dominates the silhouette. Two catalog triples in the
 convention above plus Quaoar-style provenance blocks. Zero new code.
+
+#### Stage A shipped — what was decided and what stage B inherits (2026-07-26)
+
+**The bake-into-geometry option was taken.** `usePlanetMaterials` now owns a
+memoised `figureGeometry` (`SphereGeometry` + `applyMatrix4(makeScale(ratio))`,
+disposed beside `ringGeometry`), shared by the planet, cloud and atmosphere
+meshes; spherical bodies keep their plain `<sphereGeometry>` and R3F's disposal,
+so the ~40 unflagged records allocate nothing. **Stage B therefore does not need
+the `vPos.y` normalisation or the `vObjectNormal` change** — `applyMatrix4`
+re-derives normals through the normal matrix, so both varyings already describe
+the ellipsoid. What stage B still owns: the planet-as-occluder solve on the ring
+(duplicated in `planetShadowFragmentPatch` **and**
+`planetShadowEmissivePatch`), F-09's ring ratios, and
+`astrophysics.ts`'s `ringOuterPhysicalAU`. **The Z-not-Y trap still applies in
+full** to that solve.
+
+**Flattening came from JPL SSD, not the fact-sheet flattening row.** The NSSDC
+fact sheet now 307-redirects to a landing page and is not machine-readable, so
+the values were derived from JPL's _Planetary Physical Parameters_ table
+(https://ssd.jpl.nasa.gov/planets/phys_par.html, read 2026-07-26) as
+`f = 1 − (R̄/Re)³` — two measured quantities from one table, so nothing is
+transcribed and the check does not pass through `f`. Stored: mars 0.0058979,
+jupiter 0.064887, uranus 0.022945, neptune 0.017104. **Saturn's, for stage B, is
+0.097962 by the same route** (Re 60268, R̄ 58232) — re-read the table rather than
+copying that from here. Round-trip error against the published equatorial radius:
+Jupiter and Saturn to the metre, Uranus and Neptune to 0.05 km, Mars 0.5 km
+(0.015%) because the catalog's `radiusKm` is rounded from 3389.50 and `f` is a
+difference of near-equal cubes — taking `f` from the rounded mean would have
+inflated it 7.5%.
+
+**Measured focus-extent deltas**, both scale modes: equatorial radius grows
+**2.26% Jupiter, 0.78% Uranus, 0.58% Neptune, 0.20% Mars**. Note the wave's
+earlier "3.5% Saturn / 2.2% Jupiter / 0.8% Uranus / 0.6% Neptune" was right to
+one digit. This moves every moon of a flattened planet in **didactic** mode
+(subsystem distance is a multiple of the parent's semantic radius); realistic
+separations come from orbital elements and do not move — which is what the
+"Io's separation unchanged" smoke line is actually asserting, and it needs the
+scale mode named or it reads as contradicting this paragraph.
+
+**Four catalog contracts are now enforced**, all in `celestialBodies.test.ts`:
+one figure description per record; never a figure alongside
+`atmosphereScattering`; no figure on a `model` record (the asset owns it); and
+`max(resolveBodyAxisScale) === resolveSemanticBodyRadius` in both modes. Plus the
+order-sensitive `ratio.y === min(...)` for every triaxial rotator.
+
+**What the smoke could and could not do.** Jupiter, Uranus, Mars and Quaoar were
+flown to in Chromium: all render, console clean of errors, so the shared geometry
+and the deleted double-applies are runtime-safe. It could **not** confirm the
+elliptical limb, because selecting a body that owns satellites frames the whole
+satellite system — all four stage-A bodies have moons, so each draws a few dozen
+pixels wide and a 2.26% oblateness is sub-pixel there. Same camera obstacle
+recorded in W4. **The elliptical-limb and pole-lock readings are owed by a
+human**, and they are the ones that would catch a shear.
 
 **Verification.** `npm run test:run -- astrophysics celestialBodies cameraNearPlane moonSceneFrame && npm run lint && npm run build`.
 Add a real assert in `astrophysics.test.ts`: `resolveSemanticBodyRadius(saturn,'realistic') / KM_TO_3D_UNITS` equals 60 268 ± 0.1% and Jupiter 71 492 — `cameraNearPlane.test.ts` is built entirely on Deimos, which has neither `shapeScale` nor flattening, so it is **structurally blind** to this wave and must not be described as the gate (lesson M5). Post-stage-B arithmetic gate: `resolveRingOuterRadius(saturn,'realistic') / KM_TO_3D_UNITS` still equals 140 180 km within 1%. Smoke per commit: Quaoar through one 17.68 h period; Jupiter limb plus spin-axis lock (a wobble means the scale went on the wrong group); Uranus; stage B, Saturn's ring shadow still tracking the drawn ring at three sub-solar latitudes, and didactic Saturnian moons still outside the rings. **Confirm Weywot's separation from Quaoar and Io's from Jupiter are unchanged from main at the same timestamp** — if either moved, the scale went on `groupRef`. Record the measured focus-extent deltas here: the equatorial radius grows 3.5% for Saturn, 2.2% Jupiter, 0.8% Uranus, 0.6% Neptune, in both scale modes, which shifts every moon of every flattened planet in didactic mode. Then `npm run test:e2e`.

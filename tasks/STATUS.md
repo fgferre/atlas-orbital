@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (W1–W4 code-complete, smoke pending; W5 next)._
+_Last updated: 2026-07-26 (W1–W4 + W5 stage A code-complete, smoke pending; W5 stage B next)._
 
 ---
 
@@ -14,11 +14,14 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1 through W4 are code-complete on `main` (through `8ec84bb`); all four owe a
-browser smoke. W5 (body figure) is next — medium risk, and the first wave where
-an implementer can pass every gate with a wrong answer, so read its "Third
-round" subsection before touching the resolver.** Per-item commits are in the
-wave file's progress table.
+**W1 through W4 plus W5 stage A are code-complete on `main` (through `2d26f5e`);
+all owe a browser smoke. W5 stage B (Saturn, F-09, the ring shaders) is next** —
+the riskiest remaining increment in tranche 1, and stage A deliberately stopped
+short of it because the wave declares stage A a valid stopping point. Read W5's
+"Stage A shipped" subsection first: the bake-into-geometry decision **removes two
+of stage B's three shader edits**, but the "in the ring shaders the pole is Z, not
+Y" trap still applies in full to the planet-as-occluder solve, which is duplicated
+across two patches. Per-item commits are in the wave file's progress table.
 
 Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is
