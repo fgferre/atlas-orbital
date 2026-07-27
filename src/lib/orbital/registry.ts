@@ -13,6 +13,8 @@
  *   Iapetus (2020-2030 validity)
  * - UranianOsculating2Body: Miranda, Ariel, Umbriel, Titania, Oberon
  *   (2020-2030 validity)
+ * - NeptunianOsculating2Body: Triton (2020-2030 validity)
+ * - PlutoSatOsculating2Body: Charon (2020-2030 validity)
  * - AsteroidOsculating: Ceres, Pallas, Vesta (2000-2050 validity)
  * - Kepler: all remaining bodies without a maintained analytical theory
  *
@@ -61,7 +63,9 @@ export const VALIDITY_RANGES: Record<string, ValidityRange> = {
   // scale. Crossing the window makes `engine.ts` route the body to the coarse
   // Kepler fallback.
   //
-  // PROVENANCE: 4 of the 18 mean motions are PUBLISHED (`pub`: Phobos, Mimas,
+  // PROVENANCE (the 18 bodies in these four families; Triton and Charon are
+  // covered by `neptunian` / `plutoSat` below and both use published rates):
+  // 4 of the 18 mean motions are PUBLISHED (`pub`: Phobos, Mimas,
   // Tethys, Io — JPL SSD Planetary Satellite Mean Orbital Parameters); the
   // other 14 are FITTED (`fix`) in-sample against the 2025-07-01 / 2026-01-01
   // fixtures. For the fitted bodies the two 2024 fixtures are genuinely
@@ -87,6 +91,21 @@ export const VALIDITY_RANGES: Record<string, ValidityRange> = {
     startYear: 2020,
     endYear: 2030,
     note: "Two-body Kepler from 2025-01-01 osculating elements; worst 1.3° over epoch ±1 yr measured both sides (Miranda), unvalidated beyond",
+  },
+  // Added in W6 stage B, when Triton and Charon stopped being legacy Kepler
+  // children with fabricated nodes. Same two-body treatment and the same
+  // epoch ±5 yr window as the four families above; the degree figures are the
+  // worst residual over the fixtures on disk, and both bodies are nearly
+  // circular and un-resonant, which is why they hold better than Mimas does.
+  neptunian: {
+    startYear: 2020,
+    endYear: 2030,
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 0.16° at epoch +1 yr (one-sided — no pre-epoch fixture), unvalidated beyond",
+  },
+  plutoSat: {
+    startYear: 2020,
+    endYear: 2030,
+    note: "Two-body Kepler from 2025-01-01 osculating elements; worst 0.01° at epoch +1 yr (one-sided — no pre-epoch fixture), unvalidated beyond",
   },
   vsop87: {
     startYear: -2000,
@@ -373,19 +392,24 @@ export const ORBITAL_METADATA_REGISTRY: Record<string, BodyOrbitalMetadata> = {
       "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
 
-  // === FALLBACK BODIES (Kepler only) ===
   triton: {
-    primaryModel: "Kepler",
-    primaryProvider: "kepler",
+    primaryModel: "NeptunianOsculating2Body",
+    primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "Keplerian elements - no maintained analytical theory available",
+    validityRange: VALIDITY_RANGES.neptunian,
+    notes:
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
   charon: {
-    primaryModel: "Kepler",
-    primaryProvider: "kepler",
+    primaryModel: "PlutoSatOsculating2Body",
+    primaryProvider: "ephem",
     fallbackProvider: "kepler",
-    notes: "Keplerian elements - no maintained analytical theory available",
+    validityRange: VALIDITY_RANGES.plutoSat,
+    notes:
+      "Horizons-derived osculating elements at 2025-01-01, two-body Kepler propagation",
   },
+
+  // === FALLBACK BODIES (Kepler only) ===
   hygiea: {
     primaryModel: "Kepler",
     primaryProvider: "kepler",

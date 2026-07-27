@@ -6,6 +6,8 @@
  *   - Galilean: Io, Europa, Ganymede, Callisto
  *   - Major Saturnian: Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Iapetus
  *   - Major Uranian: Miranda, Ariel, Umbriel, Titania, Oberon
+ *   - Neptunian: Triton        (added W6 stage B)
+ *   - Pluto system: Charon     (added W6 stage B)
  *
  * All elements are expressed in the **J2000 mean ecliptic, parent-centered**
  * frame so no body-equatorial rotation is needed at runtime. Every entry
@@ -54,6 +56,13 @@ const MU_PARENT: Record<string, number> = {
   jupiter: 9.54791915e-4 * K2,
   saturn: 2.8588567e-4 * K2,
   uranus: 4.366244e-5 * K2,
+  // W6 stage B. `BODY<n>_GM / BODY10_GM` from NAIF `gm_de440.tpc`; the same
+  // division reproduces the four ratios above, which came from an unrelated
+  // source, to better than 1.5e-6 relative — the independent check standing
+  // law 3 asks for. System values like the others, which matters unusually
+  // much for Pluto because Charon is ~12% of its mass.
+  neptune: 5.151383773e-5 * K2,
+  pluto: 7.350478973e-9 * K2,
 };
 
 interface EclipticElements {
@@ -411,6 +420,60 @@ const SATELLITES: Record<string, SatelliteEntry> = {
       M0Deg: 214.738022,
       // fix: fitted in-sample to the 2025-07-01 / 2026-01-01 fixtures.
       nDegPerDay: 26.739978,
+    },
+  },
+
+  // --- Neptunian ---
+  // Triton: P=5.88 d, retrograde. Added in W6 stage B; before it, Triton was a
+  // legacy Kepler child whose catalog `i = 156.8°` was measured against
+  // NEPTUNE'S EQUATOR while its Ω was fabricated, so no scene-graph state
+  // reproduced the true orbit pole (the disclosed envelope was ~150°). The
+  // ecliptic inclination inverted from the Horizons vector is 129.17°.
+  triton: {
+    parent: "neptune",
+    elements: {
+      epochJD: EPOCH_2025_JD,
+      aAU: 0.002371478,
+      e: 0.000027,
+      iDeg: 129.170264,
+      OmegaDeg: 222.392859,
+      omegaDeg: 340.984172,
+      M0Deg: 29.625503,
+      // pub: Triton is synchronously locked, so its orbital mean motion IS the
+      // IAU prime-meridian rate |Ẇ| = 61.2572637°/day (`BODY801_PM` in
+      // `pck00011.tpc`) — a published constant, not a fit. Cross-checked
+      // against Kepler III on the osculating `a` above: 61.2544°/day, agreeing
+      // to 4.6e-5 relative. Two unrelated routes, so this also *measures* the
+      // lock rather than assuming it.
+      nDegPerDay: 61.2572637,
+    },
+  },
+
+  // --- Pluto system ---
+  // Charon: P=6.39 d. Also new in W6 stage B, and the more consequential fix —
+  // its legacy record carried `O: 0, w: 0, M0: 0` (fabricated) against a true
+  // `n` of 56.36, i.e. 22.8° of orbital phase invented per year. That made the
+  // mutual-lock check undecidable, which is exactly the setup where somebody
+  // nudges a transcribed constant to make a smoke look right.
+  charon: {
+    parent: "pluto",
+    elements: {
+      epochJD: EPOCH_2025_JD,
+      aAU: 0.00013098,
+      e: 0.000096,
+      // 112.89° to the ecliptic. Independent confirmation that this element
+      // set is sane: Pluto's IAU pole (α₀ 132.993 / δ₀ −6.163) puts its
+      // equator 112.8° from the ecliptic, and Charon orbits in that plane.
+      // The old record's `i: 0` was that same fact expressed in an
+      // undeclared frame.
+      iDeg: 112.887853,
+      OmegaDeg: 227.39293,
+      omegaDeg: 154.718896,
+      M0Deg: 41.025066,
+      // pub: the Pluto-Charon lock is double-synchronous, so this is Pluto's
+      // own IAU Ẇ (`BODY999_PM`, 56.3625225°/day). Kepler III on the
+      // osculating `a` gives 56.3710°/day, agreeing to 1.5e-4.
+      nDegPerDay: 56.3625225,
     },
   },
 };

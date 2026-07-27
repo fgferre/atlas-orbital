@@ -1,10 +1,11 @@
 {
-  "generatedAt": "2026-07-27T12:35:02.002Z",
-  "totalFixtures": 121,
+  "generatedAt": "2026-07-27T15:25:30.780Z",
+  "totalFixtures": 124,
   "bodies": [
     "ariel",
     "callisto",
     "ceres",
+    "charon",
     "deimos",
     "dione",
     "earth",
@@ -109,6 +110,21 @@
       "bodyId": "ceres",
       "date": "2026-01-01T00:00:00Z",
       "file": "ceres-2026-01-01.json"
+    },
+    {
+      "bodyId": "charon",
+      "date": "2025-01-01T00:00:00Z",
+      "file": "charon-2025-01-01.json"
+    },
+    {
+      "bodyId": "charon",
+      "date": "2025-07-01T00:00:00Z",
+      "file": "charon-2025-07-01.json"
+    },
+    {
+      "bodyId": "charon",
+      "date": "2026-01-01T00:00:00Z",
+      "file": "charon-2026-01-01.json"
     },
     {
       "bodyId": "deimos",

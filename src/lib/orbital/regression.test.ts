@@ -69,11 +69,14 @@ const REPRESENTATIVE_BODIES = [
   "phobos",
   "deimos",
   "pallas",
+  // W6 stage B: Charon gained Horizons fixtures when it became an analytical
+  // satellite. Triton was already in the list above, held to a 150° envelope.
+  "charon",
 ] as const;
 const PREFERRED_BASELINE_DATE = "2025-01-01T00:00:00Z";
 
 /**
- * Multi-epoch coverage is the full 28-body representative set. Keeping
+ * Multi-epoch coverage is the full 29-body representative set. Keeping
  * these two constants as aliases is the cheapest invariant against a
  * recurrence of the 12-vs-28 drift that created the Phase 3 tail.
  */
@@ -94,7 +97,7 @@ const MULTI_EPOCH_DATES = [
 
 /**
  * Negative-side epochs (a half-year and a full-year BEFORE the 2025-01-01
- * element epoch). These fixtures were generated only for the 18 analytical
+ * element epoch). These fixtures were generated only for the 18 original analytical
  * satellites, so the ±1 yr drift envelope for those bodies is measured on
  * BOTH sides of the epoch instead of extrapolated across it. Crucially the
  * two 2024 instants are also OUT-OF-SAMPLE for the 14 `fix` satellites, whose
@@ -107,7 +110,7 @@ const NEGATIVE_SIDE_DATES = [
 ] as const;
 
 /**
- * The 18 analytical satellites — the only bodies with negative-side (2024)
+ * Those 18 satellites — the only bodies with negative-side (2024)
  * fixtures on disk. Planets (VSOP87D, valid over millennia), asteroids and
  * the Kepler-only bodies keep the universal three-epoch coverage.
  */
@@ -191,8 +194,16 @@ const TOLERANCES: Record<
   ceres: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
   pallas: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
   vesta: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
-  // Kepler-only bodies keep the original coarse envelope
-  triton: { maxAngularErrorDeg: 150, maxDistanceErrorRatio: 0.6 },
+  // W6 stage B retired Triton's 150° / 60% envelope. It was that wide because
+  // its catalog `i` was referred to Neptune's equator while `Ω` was fabricated,
+  // so no scene state reproduced the orbit pole. With Horizons-derived ecliptic
+  // elements it joins the analytical families at the same bound as the rest;
+  // measured worst residual over the fixtures on disk is 0.159° / 0.002%.
+  triton: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
+  // Charon, likewise — and it is the tightest body in this table at 0.011° /
+  // 0.011%, because its orbit is nearly circular, un-resonant, and its mean
+  // motion is the published Pluto-Charon lock rate rather than a fit.
+  charon: { maxAngularErrorDeg: 0.5, maxDistanceErrorRatio: 0.01 },
 } as const;
 
 const KEPLER_COARSE_TOLERANCES = {
@@ -285,7 +296,19 @@ function loadAllFixtures(): HorizonsFixture[] {
   }
 
   return readdirSync(FIXTURES_DIR)
-    .filter((file) => file.endsWith(".json") && file !== "index.json")
+    .filter(
+      (file) =>
+        file.endsWith(".json") &&
+        file !== "index.json" &&
+        // `subsolar-*` are ORIENTATION fixtures (`subSolarPoint.test.ts`) and
+        // carry no state vector. They share `bodyId` and `date` with the
+        // vectors fixtures and sort ahead of them, so an unfiltered read makes
+        // every `find()` below return the wrong record — as `undefined`
+        // positions rather than as a missing file. `rebuildIndexFromDisk` in
+        // `scripts/generate-horizons-fixtures.js` excludes them for the same
+        // reason; this reader was the half that never got the memo.
+        !file.startsWith("subsolar-")
+    )
     .map((file) =>
       JSON.parse(readFileSync(join(FIXTURES_DIR, file), "utf8"))
     ) as HorizonsFixture[];
@@ -409,7 +432,12 @@ describe("Numerical Regression Tests vs Horizons", () => {
 
     it("reports Kepler honestly for bodies without an analytical branch", () => {
       const date = new Date("2020-01-01");
-      const keplerBodies = ["triton", "charon", "eris"];
+      // Triton and Charon left this list in W6 stage B: both now carry
+      // Horizons-derived ecliptic elements and route through `ephem`. What is
+      // left here are bodies with genuinely no analytical branch, and the
+      // point of the assertion is unchanged — the engine must say "Kepler"
+      // out loud rather than let a fallback pass for a theory.
+      const keplerBodies = ["eris", "sedna", "vanth"];
 
       for (const bodyId of keplerBodies) {
         const provenance = orbitalEngine.getProvenance(bodyId, date);

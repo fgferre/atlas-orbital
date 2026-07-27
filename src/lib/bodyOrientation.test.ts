@@ -3,8 +3,13 @@ import * as THREE from "three";
 import {
   computeBodyPoleQuaternion,
   computeSpinAngleRad,
+  resolveBodyIauOrientation,
   resolveIauOrientation,
 } from "./bodyOrientation";
+import {
+  getSatelliteOsculatingElements,
+  SATELLITE_IDS,
+} from "./orbital/analytical/satellites";
 import { SOLAR_SYSTEM_BODIES } from "../data/celestialBodies";
 import type { CelestialBody } from "./astrophysics";
 import {
@@ -305,4 +310,73 @@ describe("the texture meridian lines up with the model's meridian", () => {
 
     geometry.dispose();
   });
+});
+
+/**
+ * The pole, checked against a source that has never heard of the pole tables.
+ *
+ * W6's stated risk is mistranscription, and its two clean anchors — GMST and
+ * the sub-solar fixtures — are either Earth-only or evaluate *the same IAU
+ * model* JPL does. Neither can see a swapped digit that happens to tilt a pole
+ * along the line to the Sun. This can: every element block in
+ * `analytical/satellites.ts` was least-squares inverted from a Horizons state
+ * vector and never touched Archinal, so the angle between a transcribed spin
+ * axis and a fitted orbit normal is computed from two datasets with no shared
+ * input.
+ *
+ * The physics that makes it a gate: all twenty are tidally locked in Cassini
+ * state 1, where the spin axis, the orbit normal and the parent's pole stay
+ * coplanar and the obliquity is a small fraction of a degree. So the expected
+ * answer is ~0 for reasons entirely outside this repo, while a single wrong
+ * digit in α₀ or δ₀ moves the pole by degrees to tens of degrees.
+ *
+ * Measured worst case is Tethys at 0.688°, and most sit under 0.05° — across
+ * inclinations from 1.95° (Callisto) to 129.17° (Triton), so the agreement is
+ * not the degenerate kind you get from two near-ecliptic vectors.
+ */
+describe("transcribed poles vs independently fitted orbit normals", () => {
+  // Cassini-state obliquity plus the noise in a two-body osculating element
+  // set. Not fitted to the residuals: it is 2.2× the worst of them and roughly
+  // an order of magnitude below the error a mistranscribed pole produces.
+  const MAX_POLE_VS_ORBIT_DEG = 1.5;
+
+  for (const bodyId of SATELLITE_IDS) {
+    it(`${bodyId}: spin axis lies on its orbit normal`, () => {
+      const elements = getSatelliteOsculatingElements(bodyId, J2000_JD);
+      expect(elements, `${bodyId} has no analytical elements`).not.toBeNull();
+
+      const inc = THREE.MathUtils.degToRad(elements!.i);
+      const node = THREE.MathUtils.degToRad(elements!.O);
+      const orbitNormal = new THREE.Vector3(
+        Math.sin(inc) * Math.sin(node),
+        -Math.sin(inc) * Math.cos(node),
+        Math.cos(inc)
+      );
+
+      const orientation = resolveBodyIauOrientation(body(bodyId));
+      expect(orientation, `${bodyId} has no rotation solution`).not.toBeNull();
+
+      // At the ELEMENTS' epoch, not J2000. `i` and `Ω` are frozen at
+      // 2025-01-01 while IAU poles precess, so pairing a 2025 orbit normal
+      // with a J2000 pole compares two different instants: it costs 8.4° on
+      // Miranda and 5.2° on Triton, which reads exactly like the
+      // mistranscription this test is for.
+      const [px, py, pz] = resolveIauOrientation(
+        orientation!,
+        elements!.epoch
+      ).poleEcl;
+      const spinAxis = new THREE.Vector3(px, py, pz);
+      // Angular momentum, not the IAU north pole — they are antiparallel for a
+      // retrograde rotator, which is half this list (every Uranian moon, plus
+      // Triton and the Martian pair are prograde). Same correction
+      // `resolveObliquityDeg` makes, and for the same reason.
+      if (orientation!.spinRateDegPerDay < 0) spinAxis.negate();
+
+      const angle = THREE.MathUtils.radToDeg(spinAxis.angleTo(orbitNormal));
+      expect(
+        angle,
+        `${bodyId}: pole is ${angle.toFixed(3)}° off its fitted orbit normal — for a Cassini-state moon that is a transcription error, not physics`
+      ).toBeLessThan(MAX_POLE_VS_ORBIT_DEG);
+    });
+  }
 });

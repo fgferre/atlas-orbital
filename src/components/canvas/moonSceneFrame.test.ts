@@ -193,8 +193,16 @@ describe("satelliteUsesParentEquatorialFrame — frame comes from the source, no
 
   it("is true for the legacy Kepler satellites whose elements declare no frame", () => {
     // Data gap, not a modelled property — see the JSDoc on the predicate.
-    for (const id of ["charon", "triton", "vanth", "weywot"]) {
+    //
+    // W6 stage B emptied most of this list: Charon and Triton were given
+    // Horizons-derived ecliptic elements and left the equatorial mount. What
+    // remains is the two TNO moons, which have no measured orbit to derive
+    // from — the gap here is now genuinely a gap rather than a backlog item.
+    for (const id of ["vanth", "weywot"]) {
       expect(satelliteUsesParentEquatorialFrame(id), id).toBe(true);
+    }
+    for (const id of ["charon", "triton"]) {
+      expect(satelliteUsesParentEquatorialFrame(id), id).toBe(false);
     }
   });
 
@@ -261,44 +269,47 @@ describe("scene graph points at the Horizons truth direction", () => {
   }
 });
 
-describe("legacy Kepler satellites — documented state after the frame fix", () => {
-  it("charon: the pole rotation is what puts it on Pluto's equator", () => {
-    // Pluto still has no rotation solution of any tier, so the quaternion
-    // falls back to axialTilt = 122.53°. Charon's legacy elements (i = 0) are
-    // only meaningful in that equatorial frame: dropping the rotation would
-    // flatten its orbit onto the ecliptic, a ~112.8° regression.
+describe("Charon and Triton after W6 stage B", () => {
+  it("charon: measured elements replaced the pole rotation, and the orbit still lies on Pluto's equator", () => {
+    // The previous version of this test asserted the *gap*: Pluto had no
+    // rotation solution, Charon's legacy elements were `i: 0, O: 0, w: 0,
+    // M0: 0` — an equatorial-frame orbit with a fabricated phase — and the
+    // parent's `axialTilt` quaternion was what tilted it into place.
     //
-    // This asserts the *gap*, and the gap is scheduled: when W6's second stage
-    // gives Pluto its IAU pole (α₀ 132.993 / δ₀ −6.163), this expectation
-    // flips and Charon's mount has to be re-derived with it — Pluto's pole
-    // moves Charon, because the same quaternion rotates its Kepler elements.
+    // Both halves are now real. Pluto carries its IAU pole and Charon carries
+    // Horizons-derived ECLIPTIC elements, so it mounts unrotated like every
+    // other analytical moon. The physics that the old mount faked is now a
+    // *prediction* that can fail: Charon's measured orbit normal must still
+    // land on Pluto's measured spin axis, from two independently sourced sets
+    // of numbers that never touch each other.
     const pluto = getBody("pluto");
-    expect(resolveBodyIauOrientation(pluto)).toBeNull();
-    expect(satelliteUsesParentEquatorialFrame("charon")).toBe(true);
+    expect(resolveBodyIauOrientation(pluto)).not.toBeNull();
+    expect(satelliteUsesParentEquatorialFrame("charon")).toBe(false);
 
     const spinAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(
       computeBodyPoleQuaternion(pluto, dateToTDB(EPOCH))
     );
     const normal = sceneOrbitNormal("charon", EPOCH);
-    // Orbit normal aligned with Pluto's spin axis ⇒ equatorial orbit.
-    expect(angleDeg(normal, spinAxis)).toBeLessThan(1e-6);
+    // 1° is the tidal-alignment budget, not a fitted bound: a mutually locked
+    // pair's orbit and primary spin are coplanar to well under that, while the
+    // failure this guards — a mistranscribed pole or a bad element block —
+    // moves the two apart by tens of degrees.
+    expect(angleDeg(normal, spinAxis)).toBeLessThan(1);
 
-    // And the mounted offset is genuinely rotated away from the raw
-    // engine vector — that rotation is load-bearing here, unlike for the
-    // analytical moons above.
+    // And the mount no longer rotates it: the scene offset IS the engine
+    // vector, which is what leaving `equatorialChildren` means.
     expect(
       angleDeg(sceneOffset("charon", EPOCH), engineOffset("charon", EPOCH))
-    ).toBeGreaterThan(10);
+    ).toBeLessThan(1e-4);
   });
 
-  it("triton: still equatorial-framed, and still off Horizons in both states", () => {
-    // KNOWN GAP: i = 156.8° in `celestialBodies.ts` is Triton's
-    // inclination to NEPTUNE'S EQUATOR while Ω = 0 is fabricated, so
-    // neither state reproduces the true orbit pole. Removing the rotation
-    // would not fix it (129.81° is the ecliptic truth; the rotated state
-    // gives 158.69°, the unrotated one 156.80°). Locked here so the next
-    // person sees it is a data problem, not a scene-graph one.
-    expect(satelliteUsesParentEquatorialFrame("triton")).toBe(true);
+  it("triton: the fabricated node is gone and it now points at Horizons", () => {
+    // This assertion is inverted from its previous form, exactly as its own
+    // comment predicted. It used to assert a FLOOR — that Triton was more
+    // than 5° off the truth in both mounted states — because `i = 156.8°` was
+    // measured against Neptune's equator while `Ω` was invented, so no scene
+    // graph arrangement could recover the orbit pole.
+    expect(satelliteUsesParentEquatorialFrame("triton")).toBe(false);
 
     const truth = ecliptic2ThreeJs(
       new THREE.Vector3(
@@ -308,14 +319,12 @@ describe("legacy Kepler satellites — documented state after the frame fix", ()
       )
     );
     const scene = sceneOffset("triton", EPOCH);
-    expect(angleDeg(scene, truth)).toBeGreaterThan(MAX_TRITON_TRUTH_FLOOR_DEG);
+    expect(angleDeg(scene, truth)).toBeLessThan(MAX_TRUTH_AT_EPOCH_DEG);
   });
 });
 
 /**
- * Triton's direction error at epoch is dominated by the fabricated node,
- * not by the scene graph. The floor documents the known-bad state; when
- * Triton gets real ecliptic elements this assertion is expected to be
- * inverted into an upper bound.
+ * Same envelope the analytical moons above are held to. Triton's measured
+ * residual at epoch is 0.002°, three orders below this.
  */
-const MAX_TRITON_TRUTH_FLOOR_DEG = 5;
+const MAX_TRUTH_AT_EPOCH_DEG = 1.0;

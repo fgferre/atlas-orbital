@@ -1,0 +1,18 @@
+{
+  "kind": "subpoint",
+  "bodyId": "pluto",
+  "horizonsCommand": "999",
+  "name": "Pluto",
+  "date": "2025-01-01T00:00:00Z",
+  "center": "500@10",
+  "timeScale": "UT",
+  "targetFrame": "IAU_PLUTO",
+  "longitudeSense": "east",
+  "subSolarLonDeg": 300.20198,
+  "subSolarLatDeg": 59.484442,
+  "rangeAU": 35.1710636330992,
+  "lightTimeSeconds": 17550.529005522367,
+  "generatedAt": "2026-07-27T14:13:59.575Z",
+  "source": "NASA JPL Horizons API (OBSERVER, QUANTITIES 14,20)",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27999%27&OBJ_DATA=%27NO%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27OBSERVER%27&CENTER=%27500%4010%27&START_TIME=%272025-01-01T00%3A00%3A00%27&STOP_TIME=%272025-01-01T00%3A01%3A00%27&STEP_SIZE=%271m%27&QUANTITIES=%2714%2C20%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}

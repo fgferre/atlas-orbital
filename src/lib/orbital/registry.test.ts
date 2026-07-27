@@ -21,9 +21,9 @@ describe("Orbital Registry", () => {
     });
 
     it("should return metadata for Kepler-only bodies", () => {
-      const triton = getOrbitalMetadata("triton");
-      expect(triton).not.toBeNull();
-      expect(triton?.primaryModel).toBe("Kepler");
+      const eris = getOrbitalMetadata("eris");
+      expect(eris).not.toBeNull();
+      expect(eris?.primaryModel).toBe("Kepler");
     });
 
     it("should return null for unregistered bodies", () => {
@@ -53,8 +53,8 @@ describe("Orbital Registry", () => {
     });
 
     it("should return false for Kepler-only bodies", () => {
-      expect(hasAnalyticalEphemeris("triton")).toBe(false);
-      expect(hasAnalyticalEphemeris("charon")).toBe(false);
+      expect(hasAnalyticalEphemeris("eris")).toBe(false);
+      expect(hasAnalyticalEphemeris("vanth")).toBe(false);
       expect(hasAnalyticalEphemeris("eris")).toBe(false);
     });
 
@@ -167,15 +167,15 @@ describe("Orbital Registry", () => {
     });
 
     it("should not include Kepler-only bodies", () => {
-      expect(ANALYTICAL_EPHEMERIS_BODIES).not.toContain("triton");
-      expect(ANALYTICAL_EPHEMERIS_BODIES).not.toContain("charon");
+      expect(ANALYTICAL_EPHEMERIS_BODIES).not.toContain("eris");
+      expect(ANALYTICAL_EPHEMERIS_BODIES).not.toContain("vanth");
     });
   });
 
   describe("KEPLER_ONLY_BODIES", () => {
     it("should include bodies without analytical models", () => {
-      expect(KEPLER_ONLY_BODIES).toContain("triton");
-      expect(KEPLER_ONLY_BODIES).toContain("charon");
+      expect(KEPLER_ONLY_BODIES).toContain("eris");
+      expect(KEPLER_ONLY_BODIES).toContain("vanth");
       expect(KEPLER_ONLY_BODIES).toContain("eris");
     });
 

@@ -715,8 +715,8 @@ export class AstroPhysics {
    *
    * Four inputs: the IAU pole, the obliquity of the ecliptic (to rotate that
    * pole into the frame the orbit lives in), the orbit normal from the record's
-   * own `i`/`Ω`, and the rotation sense for the retrograde convention, which
-   * `rotationPeriodHours` already carries as its sign.
+   * own `i`/`Ω`, and the rotation sense — taken from the IAU model's own Ẇ,
+   * for the reason spelled out at the return statement.
    *
    * Returns null when the body has no measured pole, or when its orbit is
    * referred to a plane the catalog does not record — every satellite today.
@@ -746,7 +746,19 @@ export class AstroPhysics {
     );
 
     const angle = THREE.MathUtils.radToDeg(pole.angleTo(orbitNormal));
-    return body.rotationPeriodHours < 0 ? 180 - angle : angle;
+    // Obliquity is the angle between the **angular momentum** vector and the
+    // orbit normal, and the IAU north pole is not always the angular-momentum
+    // direction: the convention picks the pole on the north side of the
+    // invariable plane, so a retrograde rotator spins clockwise about it and
+    // its angular momentum points the other way. Hence the 180° complement.
+    //
+    // The sign must come from the IAU model's own Ẇ, not from
+    // `rotationPeriodHours`. The two disagree for Pluto — the catalog marks it
+    // −153.3 h (retrograde, true **of its orbit**) while `BODY999_PM` advances
+    // at +56.36°/day (prograde about the IAU pole, also true) — and reading
+    // the catalog field returned 60.38° for a body whose obliquity is 119.59°.
+    // Venus and Uranus are unaffected: their kernel rates are negative too.
+    return orientation.spinRateDegPerDay < 0 ? 180 - angle : angle;
   }
 
   /**

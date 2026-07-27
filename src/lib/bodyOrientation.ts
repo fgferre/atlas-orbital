@@ -43,8 +43,9 @@
  * ## Provenance
  *
  * Every constant consumed here comes from a body's {@link IauOrientation}
- * record in `src/data/celestialBodies.ts`; see that file for the source and
- * the per-body disclosure of dropped periodic terms.
+ * record in `src/data/celestialBodies.ts`; see that file for the source, the
+ * script that emits the records, and the three bodies that still ship a
+ * disclosed truncation.
  */
 
 import * as THREE from "three";
@@ -57,17 +58,28 @@ const DEG2RAD = Math.PI / 180;
 /**
  * One periodic term of an IAU rotation model.
  *
- * The argument is θ = `phaseDeg` + `rateDegPerCentury`·T, with T in Julian
- * centuries TDB from J2000.0. Following the IAU/WGCCRE convention, right
- * ascension and prime-meridian terms enter as A·sin θ and declination terms
- * as A·cos θ — which is why the three amplitudes are separate optional fields
- * on one shared argument rather than a single signed number.
+ * The argument is θ = `phaseDeg` + `rateDegPerCentury`·T
+ * (+ `rateDegPerCentury2`·T²), with T in Julian centuries TDB from J2000.0.
+ * Following the IAU/WGCCRE convention, right ascension and prime-meridian
+ * terms enter as A·sin θ and declination terms as A·cos θ — which is why the
+ * three amplitudes are separate optional fields on one shared argument rather
+ * than a single signed number.
  */
 export interface IauNutPrecTerm {
   /** θ at J2000.0, degrees. */
   phaseDeg: number;
   /** dθ/dT, degrees per Julian century. */
   rateDegPerCentury: number;
+  /**
+   * d²θ/dT², degrees per Julian century squared. Absent = 0.
+   *
+   * Only the Mars system uses it (`BODY4_MAX_PHASE_DEGREE = 2` in the kernel),
+   * and only Phobos consumes the accelerating angle — but it does so with the
+   * largest single amplitude in its model (−1.143° on W), so this is a
+   * load-bearing field for exactly one body rather than generality for its
+   * own sake.
+   */
+  rateDegPerCentury2?: number;
   /** Amplitude added to α₀ as A·sin θ, degrees. */
   raAmpDeg?: number;
   /** Amplitude added to δ₀ as A·cos θ, degrees. */
@@ -98,6 +110,16 @@ export interface IauOrientation {
   primeMeridianDeg: number;
   /** Ẇ, degrees per day. Negative for retrograde rotators. */
   spinRateDegPerDay: number;
+  /**
+   * Ẅ, degrees per day **squared** — note the unit break: the pole rates above
+   * are per century while the spin terms are per day, exactly as the kernel
+   * publishes them. Absent = 0.
+   *
+   * Phobos is the case that needs it: 9.5e-9°/day² looks like rounding noise
+   * and is 12.7° of prime meridian per century, because it is the tidal
+   * secular acceleration of a moon spiralling into Mars.
+   */
+  spinAccelDegPerDay2?: number;
   /** Periodic corrections. Absent = the secular model only. */
   nutPrec?: readonly IauNutPrecTerm[];
 }
@@ -140,7 +162,7 @@ export function resolveIauOrientation(
 
   if (orientation.nutPrec) {
     for (const term of orientation.nutPrec) {
-      const theta = (term.phaseDeg + term.rateDegPerCentury * T) * DEG2RAD;
+      const theta = nutPrecArgumentRad(term, T);
       if (term.raAmpDeg) raDeg += term.raAmpDeg * Math.sin(theta);
       if (term.decAmpDeg) decDeg += term.decAmpDeg * Math.cos(theta);
     }
@@ -157,6 +179,13 @@ export function resolveIauOrientation(
   };
 }
 
+/** θ of one periodic term, in radians, at T Julian centuries from J2000. */
+function nutPrecArgumentRad(term: IauNutPrecTerm, T: number): number {
+  let deg = term.phaseDeg + term.rateDegPerCentury * T;
+  if (term.rateDegPerCentury2) deg += term.rateDegPerCentury2 * T * T;
+  return deg * DEG2RAD;
+}
+
 /**
  * W in degrees, unwrapped. Shared by {@link resolveIauOrientation} and
  * {@link computeSpinAngleRad} so the render path can ask for the spin alone
@@ -166,13 +195,14 @@ function evaluateSpinDeg(orientation: IauOrientation, jdTDB: number): number {
   const d = jdTDB - J2000_JD;
   let spinDeg =
     orientation.primeMeridianDeg + orientation.spinRateDegPerDay * d;
+  if (orientation.spinAccelDegPerDay2) {
+    spinDeg += orientation.spinAccelDegPerDay2 * d * d;
+  }
   if (orientation.nutPrec) {
     const T = d / DAYS_PER_JULIAN_CENTURY;
     for (const term of orientation.nutPrec) {
       if (!term.pmAmpDeg) continue;
-      spinDeg +=
-        term.pmAmpDeg *
-        Math.sin((term.phaseDeg + term.rateDegPerCentury * T) * DEG2RAD);
+      spinDeg += term.pmAmpDeg * Math.sin(nutPrecArgumentRad(term, T));
     }
   }
   return spinDeg;

@@ -25,11 +25,16 @@ import { hasAnalyticalEphemeris } from "../../lib/orbital";
  * vector.
  *
  * The satellites that still need the rotation are the ones served by the
- * legacy Keplerian elements in `src/data/celestialBodies.ts` (Charon,
- * Triton, and the `axialTilt: 0` pairs Vanth/Weywot). Those element sets are
- * de-facto parent-EQUATORIAL — Charon's `i: 0.0` only makes sense against
- * Pluto's equator (≈112.8° from the ecliptic) — but they declare no frame at
- * all, which is a data gap, not a modelled property.
+ * legacy Keplerian elements in `src/data/celestialBodies.ts`. W6 stage B cut
+ * that list to the TNO moons **Vanth and Weywot**: Charon and Triton were
+ * given Horizons-derived ecliptic elements and left it.
+ *
+ * Charon is worth remembering as the shape of the gap. Its legacy `i: 0.0`
+ * only made sense against Pluto's equator, and the inversion confirms it —
+ * the real ecliptic inclination is 112.89°, which is exactly where Pluto's
+ * IAU pole puts its equator. The number was never wrong, it just declared no
+ * frame, which is a data gap rather than a modelled property. Vanth and
+ * Weywot have no measured orbit to invert, so for them the gap stands.
  * `hasAnalyticalEphemeris` is the honest, derivable stand-in until those
  * entries either declare a frame or get ecliptic-J2000 elements like the
  * analytical families; an unregistered/unknown satellite conservatively

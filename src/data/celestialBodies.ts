@@ -18,14 +18,22 @@ import { type CelestialBody } from "../lib/astrophysics";
  * removes the "read a number out of a PDF table" step that this wave's risk
  * section is entirely about.
  *
- * **Dropped periodic terms are disclosed per body.** Where a body's IAU model
- * carries `NUT_PREC` trigonometric corrections, each record below either
- * transcribes them into `nutPrec` or states the peak amplitude it omits, so
- * the truncation is auditable instead of silent.
+ * **The satellite records below were not typed by a human at all.** W6 stage B
+ * added twenty-two bodies carrying up to twenty-six periodic terms each,
+ * indexed *positionally* into a shared angle table, and at that size reading
+ * by eye is how one amplitude ends up on the wrong argument. They are emitted
+ * by `scripts/derive-iau-orientation.js`, which parses the kernel. That script
+ * also re-emits the nine bodies stage A transcribed by hand, and reproduces
+ * all 54 of their secular coefficients exactly — two independent routes to the
+ * same numbers, which is what makes the other twenty-two trustworthy.
  *
- * **What is NOT here yet:** the satellites, Pluto and Charon. They still carry
- * `poleRA`/`poleDec` at best, i.e. a measured axis with an unconstrained phase
- * origin, which `bodyOrientation.ts` models honestly rather than papering over.
+ * **Periodic terms are transcribed in full for those twenty-two.** The draft
+ * plan called for dropping them and disclosing each amplitude against a ~1°
+ * budget; the parser made that unnecessary, and the measured amplitudes show
+ * it would have been badly wrong — Mimas's prime meridian librates **44.85°**,
+ * Triton's pole **32.35°**, Tethys 9.66°, Miranda 4.41°. The only truncations
+ * left are the three stage A recorded (Mercury 0.012°, Jupiter 0.005°, and
+ * Mars's M1–M5 terms at 0.0004°), each disclosed in its own record.
  */
 const TEXTURE_PATH = (import.meta.env.BASE_URL || "/") + "textures/";
 const MODEL_PATH = (import.meta.env.BASE_URL || "/") + "models/";
@@ -373,7 +381,51 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#B0A090",
     orbit: { a: 0.0000627, e: 0.0151, i: 1.093, O: 0, w: 0, M0: 0, n: 1128.8 },
     rotationPeriodHours: 7.65,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 317.67071657,
+      poleRaRateDegPerCentury: -0.10844326,
+      poleDecDeg: 52.88627266,
+      poleDecRateDegPerCentury: -0.06134706,
+      primeMeridianDeg: 35.1877444,
+      spinRateDegPerDay: 1128.84475928,
+      spinAccelDegPerDay2: 9.536137031212154e-9,
+      nutPrec: [
+        {
+          phaseDeg: 190.72646643,
+          rateDegPerCentury: 15917.10818695,
+          raAmpDeg: -1.78428399,
+          decAmpDeg: -1.07516537,
+          pmAmpDeg: 1.42421769,
+        },
+        {
+          phaseDeg: 21.4689247,
+          rateDegPerCentury: 31834.27934054,
+          raAmpDeg: 0.02212824,
+          decAmpDeg: 0.00668626,
+          pmAmpDeg: -0.02273783,
+        },
+        {
+          phaseDeg: 332.86082793,
+          rateDegPerCentury: 19139.89694742,
+          raAmpDeg: -0.01028251,
+          decAmpDeg: -0.0064874,
+          pmAmpDeg: 0.00410711,
+        },
+        {
+          phaseDeg: 394.93256437,
+          rateDegPerCentury: 38280.79631835,
+          raAmpDeg: -0.00475595,
+          decAmpDeg: 0.00281576,
+          pmAmpDeg: 0.00631964,
+        },
+        {
+          phaseDeg: 189.6327156,
+          rateDegPerCentury: 41215158.1842005,
+          rateDegPerCentury2: 12.711923222,
+          pmAmpDeg: -1.143,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.06 × 10¹⁶ kg",
     gravity: "0.0057 m/s²",
@@ -408,7 +460,51 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#C0B0A0",
     orbit: { a: 0.000156, e: 0.0002, i: 0.93, O: 0, w: 0, M0: 0, n: 285.1 },
     rotationPeriodHours: 30.3,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 316.65705808,
+      poleRaRateDegPerCentury: -0.10518014,
+      poleDecDeg: 53.50992033,
+      poleDecRateDegPerCentury: -0.05979094,
+      primeMeridianDeg: 79.39932954,
+      spinRateDegPerDay: 285.16188899,
+      nutPrec: [
+        {
+          phaseDeg: 121.46893664,
+          rateDegPerCentury: 660.22803474,
+          raAmpDeg: 3.09217726,
+          decAmpDeg: 1.83936004,
+          pmAmpDeg: -2.73954829,
+        },
+        {
+          phaseDeg: 231.05028581,
+          rateDegPerCentury: 660.9912354,
+          raAmpDeg: 0.22980637,
+          decAmpDeg: 0.1432532,
+          pmAmpDeg: -0.39968606,
+        },
+        {
+          phaseDeg: 251.37314025,
+          rateDegPerCentury: 1320.50145245,
+          raAmpDeg: 0.06418655,
+          decAmpDeg: 0.01911409,
+          pmAmpDeg: -0.06563259,
+        },
+        {
+          phaseDeg: 217.98635955,
+          rateDegPerCentury: 38279.9612555,
+          raAmpDeg: 0.02533537,
+          decAmpDeg: -0.0148259,
+          pmAmpDeg: -0.0291294,
+        },
+        {
+          phaseDeg: 196.19729402,
+          rateDegPerCentury: 19139.83628608,
+          raAmpDeg: 0.00778695,
+          decAmpDeg: 0.0019243,
+          pmAmpDeg: 0.0169916,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.48 × 10¹⁵ kg",
     gravity: "0.003 m/s²",
@@ -718,6 +814,97 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0.00257, e: 0.055, i: 5.14, O: 0, w: 0, M0: 0, n: 13.176 },
     rotationPeriodHours: 655.7,
     axialTilt: 6.68,
+    iauOrientation: {
+      poleRaDeg: 269.9949,
+      poleRaRateDegPerCentury: 0.0031,
+      poleDecDeg: 66.5392,
+      poleDecRateDegPerCentury: 0.013,
+      primeMeridianDeg: 38.3213,
+      spinRateDegPerDay: 13.17635815,
+      spinAccelDegPerDay2: -1.4e-12,
+      nutPrec: [
+        {
+          phaseDeg: 125.045,
+          rateDegPerCentury: -1935.5364525,
+          raAmpDeg: -3.8787,
+          decAmpDeg: 1.5419,
+          pmAmpDeg: 3.561,
+        },
+        {
+          phaseDeg: 250.089,
+          rateDegPerCentury: -3871.072905,
+          raAmpDeg: -0.1204,
+          decAmpDeg: 0.0239,
+          pmAmpDeg: 0.1208,
+        },
+        {
+          phaseDeg: 260.008,
+          rateDegPerCentury: 475263.3328725,
+          raAmpDeg: 0.07,
+          decAmpDeg: -0.0278,
+          pmAmpDeg: -0.0642,
+        },
+        {
+          phaseDeg: 176.625,
+          rateDegPerCentury: 487269.629985,
+          raAmpDeg: -0.0172,
+          decAmpDeg: 0.0068,
+          pmAmpDeg: 0.0158,
+        },
+        {
+          phaseDeg: 357.529,
+          rateDegPerCentury: 35999.0509575,
+          pmAmpDeg: 0.0252,
+        },
+        {
+          phaseDeg: 311.589,
+          rateDegPerCentury: 964468.49931,
+          raAmpDeg: 0.0072,
+          decAmpDeg: -0.0029,
+          pmAmpDeg: -0.0066,
+        },
+        {
+          phaseDeg: 134.963,
+          rateDegPerCentury: 477198.869325,
+          decAmpDeg: 0.0009,
+          pmAmpDeg: -0.0047,
+        },
+        {
+          phaseDeg: 276.617,
+          rateDegPerCentury: 12006.300765,
+          pmAmpDeg: -0.0046,
+        },
+        {
+          phaseDeg: 34.226,
+          rateDegPerCentury: 63863.5132425,
+          pmAmpDeg: 0.0028,
+        },
+        {
+          phaseDeg: 15.134,
+          rateDegPerCentury: -5806.6093575,
+          raAmpDeg: -0.0052,
+          decAmpDeg: 0.0008,
+          pmAmpDeg: 0.0052,
+        },
+        {
+          phaseDeg: 119.743,
+          rateDegPerCentury: 131.84064,
+          pmAmpDeg: 0.004,
+        },
+        {
+          phaseDeg: 239.961,
+          rateDegPerCentury: 6003.1503825,
+          pmAmpDeg: 0.0019,
+        },
+        {
+          phaseDeg: 25.053,
+          rateDegPerCentury: 473327.79642,
+          raAmpDeg: 0.0043,
+          decAmpDeg: -0.0009,
+          pmAmpDeg: -0.0044,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "7.35 × 10²² kg",
     gravity: "1.62 m/s²",
@@ -764,6 +951,37 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0.007155, e: 0.0013, i: 0.2, O: 0, w: 0, M0: 0, n: 50.317 },
     rotationPeriodHours: 171.7,
     axialTilt: 0.33,
+    iauOrientation: {
+      poleRaDeg: 268.2,
+      poleRaRateDegPerCentury: -0.009,
+      poleDecDeg: 64.57,
+      poleDecRateDegPerCentury: 0.003,
+      primeMeridianDeg: 44.064,
+      spinRateDegPerDay: 50.3176081,
+      nutPrec: [
+        {
+          phaseDeg: 355.8,
+          rateDegPerCentury: 1191.3,
+          raAmpDeg: -0.037,
+          decAmpDeg: -0.016,
+          pmAmpDeg: 0.033,
+        },
+        {
+          phaseDeg: 119.9,
+          rateDegPerCentury: 262.1,
+          raAmpDeg: 0.431,
+          decAmpDeg: 0.186,
+          pmAmpDeg: -0.389,
+        },
+        {
+          phaseDeg: 229.8,
+          rateDegPerCentury: 64.3,
+          raAmpDeg: 0.091,
+          decAmpDeg: 0.039,
+          pmAmpDeg: -0.082,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.48 × 10²³ kg",
     gravity: "1.428 m/s²",
@@ -798,7 +1016,37 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     airlessRegolith: true,
     orbit: { a: 0.012585, e: 0.0074, i: 0.2, O: 0, w: 0, M0: 0, n: 21.57 },
     rotationPeriodHours: 400.5,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 268.72,
+      poleRaRateDegPerCentury: -0.009,
+      poleDecDeg: 64.83,
+      poleDecRateDegPerCentury: 0.003,
+      primeMeridianDeg: 259.51,
+      spinRateDegPerDay: 21.5710715,
+      nutPrec: [
+        {
+          phaseDeg: 119.9,
+          rateDegPerCentury: 262.1,
+          raAmpDeg: -0.068,
+          decAmpDeg: -0.029,
+          pmAmpDeg: 0.061,
+        },
+        {
+          phaseDeg: 229.8,
+          rateDegPerCentury: 64.3,
+          raAmpDeg: 0.59,
+          decAmpDeg: 0.254,
+          pmAmpDeg: -0.533,
+        },
+        {
+          phaseDeg: 113.35,
+          rateDegPerCentury: 6070,
+          raAmpDeg: 0.01,
+          decAmpDeg: -0.004,
+          pmAmpDeg: -0.009,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.08 × 10²³ kg",
     gravity: "1.235 m/s²",
@@ -833,7 +1081,30 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     airlessRegolith: true,
     orbit: { a: 0.002819, e: 0.0041, i: 0.05, O: 0, w: 0, M0: 0, n: 203.48 },
     rotationPeriodHours: 42.5,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 268.05,
+      poleRaRateDegPerCentury: -0.009,
+      poleDecDeg: 64.5,
+      poleDecRateDegPerCentury: 0.003,
+      primeMeridianDeg: 200.39,
+      spinRateDegPerDay: 203.4889538,
+      nutPrec: [
+        {
+          phaseDeg: 283.9,
+          rateDegPerCentury: 4850.7,
+          raAmpDeg: 0.094,
+          decAmpDeg: 0.04,
+          pmAmpDeg: -0.085,
+        },
+        {
+          phaseDeg: 355.8,
+          rateDegPerCentury: 1191.3,
+          raAmpDeg: 0.024,
+          decAmpDeg: 0.011,
+          pmAmpDeg: -0.022,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "8.93 × 10²² kg",
     gravity: "1.796 m/s²",
@@ -869,6 +1140,44 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0.004486, e: 0.0094, i: 0.47, O: 0, w: 0, M0: 0, n: 101.37 },
     rotationPeriodHours: 85.2,
     axialTilt: 0.1,
+    iauOrientation: {
+      poleRaDeg: 268.08,
+      poleRaRateDegPerCentury: -0.009,
+      poleDecDeg: 64.51,
+      poleDecRateDegPerCentury: 0.003,
+      primeMeridianDeg: 36.022,
+      spinRateDegPerDay: 101.3747235,
+      nutPrec: [
+        {
+          phaseDeg: 355.8,
+          rateDegPerCentury: 1191.3,
+          raAmpDeg: 1.086,
+          decAmpDeg: 0.468,
+          pmAmpDeg: -0.98,
+        },
+        {
+          phaseDeg: 119.9,
+          rateDegPerCentury: 262.1,
+          raAmpDeg: 0.06,
+          decAmpDeg: 0.026,
+          pmAmpDeg: -0.054,
+        },
+        {
+          phaseDeg: 229.8,
+          rateDegPerCentury: 64.3,
+          raAmpDeg: 0.015,
+          decAmpDeg: 0.007,
+          pmAmpDeg: -0.014,
+        },
+        {
+          phaseDeg: 352.25,
+          rateDegPerCentury: 2382.6,
+          raAmpDeg: 0.009,
+          decAmpDeg: 0.002,
+          pmAmpDeg: -0.008,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "4.80 × 10²² kg",
     gravity: "1.314 m/s²",
@@ -905,7 +1214,12 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#E0C060",
     orbit: { a: 0.008168, e: 0.0288, i: 0.348, O: 0, w: 0, M0: 0, n: 22.577 },
     rotationPeriodHours: 382.7,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 39.4827,
+      poleDecDeg: 83.4279,
+      primeMeridianDeg: 186.5855,
+      spinRateDegPerDay: 22.5769768,
+    },
     classification: "Natural Satellite",
     mass: "1.35 × 10²³ kg",
     gravity: "1.352 m/s²",
@@ -953,7 +1267,23 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 79.69,
     },
     rotationPeriodHours: 108.4,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 40.38,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.55,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 235.16,
+      spinRateDegPerDay: 79.6900478,
+      nutPrec: [
+        {
+          phaseDeg: 345.2,
+          rateDegPerCentury: -1016.3,
+          raAmpDeg: 3.1,
+          decAmpDeg: -0.35,
+          pmAmpDeg: -3.08,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "2.31 × 10²¹ kg",
     gravity: "0.264 m/s²",
@@ -987,7 +1317,14 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#807060",
     orbit: { a: 0.02381, e: 0.0283, i: 15.47, O: 0, w: 0, M0: 0, n: 4.538 },
     rotationPeriodHours: 1903.9,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 318.16,
+      poleRaRateDegPerCentury: -3.949,
+      poleDecDeg: 75.03,
+      poleDecRateDegPerCentury: -1.143,
+      primeMeridianDeg: 355.2,
+      spinRateDegPerDay: 4.5379572,
+    },
     classification: "Natural Satellite",
     mass: "1.81 × 10²¹ kg",
     gravity: "0.223 m/s²",
@@ -1029,7 +1366,14 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 131.53,
     },
     rotationPeriodHours: 65.7,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 40.66,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.52,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 357.6,
+      spinRateDegPerDay: 131.5349316,
+    },
     classification: "Natural Satellite",
     mass: "1.10 × 10²¹ kg",
     gravity: "0.232 m/s²",
@@ -1071,7 +1415,28 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 190.7,
     },
     rotationPeriodHours: 45.3,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 40.66,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.52,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 8.95,
+      spinRateDegPerDay: 190.6979085,
+      nutPrec: [
+        {
+          phaseDeg: 300,
+          rateDegPerCentury: -7225.9,
+          raAmpDeg: 9.66,
+          decAmpDeg: -1.09,
+          pmAmpDeg: -9.6,
+        },
+        {
+          phaseDeg: 316.45,
+          rateDegPerCentury: 506.2,
+          pmAmpDeg: 2.23,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "6.17 × 10²⁰ kg",
     gravity: "0.146 m/s²",
@@ -1114,7 +1479,14 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 262.73,
     },
     rotationPeriodHours: 32.9,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 40.66,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.52,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 6.32,
+      spinRateDegPerDay: 262.7318996,
+    },
     classification: "Natural Satellite",
     mass: "1.08 × 10²⁰ kg",
     gravity: "0.113 m/s²",
@@ -1156,7 +1528,28 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 381.99,
     },
     rotationPeriodHours: 22.6,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 40.66,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.52,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 333.46,
+      spinRateDegPerDay: 381.994555,
+      nutPrec: [
+        {
+          phaseDeg: 177.4,
+          rateDegPerCentury: -36505.5,
+          raAmpDeg: 13.56,
+          decAmpDeg: -1.53,
+          pmAmpDeg: -13.48,
+        },
+        {
+          phaseDeg: 316.45,
+          rateDegPerCentury: 506.2,
+          pmAmpDeg: -44.85,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "3.75 × 10¹⁹ kg",
     gravity: "0.064 m/s²",
@@ -1191,7 +1584,75 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#D0E0E0",
     orbit: { a: 0.00236, e: 0.0, i: 156.8, O: 0, w: 0, M0: 0, n: 61.25 },
     rotationPeriodHours: -141,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 299.36,
+      poleDecDeg: 41.17,
+      primeMeridianDeg: 296.53,
+      spinRateDegPerDay: -61.2572637,
+      nutPrec: [
+        {
+          phaseDeg: 177.85,
+          rateDegPerCentury: 52.316,
+          raAmpDeg: -32.35,
+          decAmpDeg: 22.55,
+          pmAmpDeg: 22.25,
+        },
+        {
+          phaseDeg: 355.7,
+          rateDegPerCentury: 104.632,
+          raAmpDeg: -6.28,
+          decAmpDeg: 2.1,
+          pmAmpDeg: 6.73,
+        },
+        {
+          phaseDeg: 533.55,
+          rateDegPerCentury: 156.948,
+          raAmpDeg: -2.08,
+          decAmpDeg: 0.55,
+          pmAmpDeg: 2.05,
+        },
+        {
+          phaseDeg: 711.4,
+          rateDegPerCentury: 209.264,
+          raAmpDeg: -0.74,
+          decAmpDeg: 0.16,
+          pmAmpDeg: 0.74,
+        },
+        {
+          phaseDeg: 889.25,
+          rateDegPerCentury: 261.58,
+          raAmpDeg: -0.28,
+          decAmpDeg: 0.05,
+          pmAmpDeg: 0.28,
+        },
+        {
+          phaseDeg: 1067.1,
+          rateDegPerCentury: 313.896,
+          raAmpDeg: -0.11,
+          decAmpDeg: 0.02,
+          pmAmpDeg: 0.11,
+        },
+        {
+          phaseDeg: 1244.95,
+          rateDegPerCentury: 366.212,
+          raAmpDeg: -0.07,
+          decAmpDeg: 0.01,
+          pmAmpDeg: 0.05,
+        },
+        {
+          phaseDeg: 1422.8,
+          rateDegPerCentury: 418.528,
+          raAmpDeg: -0.02,
+          pmAmpDeg: 0.02,
+        },
+        {
+          phaseDeg: 1600.65,
+          rateDegPerCentury: 470.844,
+          raAmpDeg: -0.01,
+          pmAmpDeg: 0.01,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "2.14 × 10²² kg",
     gravity: "0.779 m/s²",
@@ -1226,7 +1687,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#E0E0E0",
     orbit: { a: 0.00292, e: 0.0011, i: 0.34, O: 0, w: 0, M0: 0, n: 41.35 },
     rotationPeriodHours: 208.9,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 257.43,
+      poleDecDeg: -15.1,
+      primeMeridianDeg: 77.74,
+      spinRateDegPerDay: -41.3514316,
+      nutPrec: [
+        {
+          phaseDeg: 340.82,
+          rateDegPerCentury: -75.32,
+          raAmpDeg: 0.29,
+          decAmpDeg: 0.28,
+          pmAmpDeg: 0.08,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "3.53 × 10²¹ kg",
     gravity: "0.379 m/s²",
@@ -1260,7 +1735,21 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#D0C0C0",
     orbit: { a: 0.0039, e: 0.0014, i: 0.058, O: 0, w: 0, M0: 0, n: 26.75 },
     rotationPeriodHours: 323.1,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 257.43,
+      poleDecDeg: -15.1,
+      primeMeridianDeg: 6.77,
+      spinRateDegPerDay: -26.7394932,
+      nutPrec: [
+        {
+          phaseDeg: 259.14,
+          rateDegPerCentury: -504.81,
+          raAmpDeg: 0.16,
+          decAmpDeg: 0.16,
+          pmAmpDeg: 0.04,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "3.01 × 10²¹ kg",
     gravity: "0.346 m/s²",
@@ -1294,7 +1783,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#808080",
     orbit: { a: 0.00178, e: 0.0039, i: 0.128, O: 0, w: 0, M0: 0, n: 86.86 },
     rotationPeriodHours: 99.5,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 257.43,
+      poleDecDeg: -15.1,
+      primeMeridianDeg: 108.05,
+      spinRateDegPerDay: -86.8688923,
+      nutPrec: [
+        {
+          phaseDeg: 316.41,
+          rateDegPerCentury: 2863.96,
+          pmAmpDeg: -0.09,
+        },
+        {
+          phaseDeg: 308.71,
+          rateDegPerCentury: -93.17,
+          raAmpDeg: 0.21,
+          decAmpDeg: 0.2,
+          pmAmpDeg: 0.06,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.17 × 10²¹ kg",
     // Derived from the catalog GM/R²; the mass + mean radius pair here
@@ -1331,7 +1839,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#E0E0E0",
     orbit: { a: 0.00128, e: 0.0012, i: 0.26, O: 0, w: 0, M0: 0, n: 142.8 },
     rotationPeriodHours: 60.5,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 257.43,
+      poleDecDeg: -15.1,
+      primeMeridianDeg: 156.22,
+      spinRateDegPerDay: -142.8356681,
+      nutPrec: [
+        {
+          phaseDeg: 316.41,
+          rateDegPerCentury: 2863.96,
+          pmAmpDeg: 0.05,
+        },
+        {
+          phaseDeg: 304.01,
+          rateDegPerCentury: -51.94,
+          raAmpDeg: 0.29,
+          decAmpDeg: 0.28,
+          pmAmpDeg: 0.08,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "1.35 × 10²¹ kg",
     gravity: "0.266 m/s²",
@@ -1365,7 +1892,38 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#D0D0D0",
     orbit: { a: 0.00086, e: 0.0013, i: 4.23, O: 0, w: 0, M0: 0, n: 254.69 },
     rotationPeriodHours: 33.9,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 257.43,
+      poleDecDeg: -15.08,
+      primeMeridianDeg: 30.7,
+      spinRateDegPerDay: -254.6906892,
+      nutPrec: [
+        {
+          phaseDeg: 102.23,
+          rateDegPerCentury: -2024.22,
+          raAmpDeg: 4.41,
+          decAmpDeg: 4.25,
+          pmAmpDeg: 1.15,
+        },
+        {
+          phaseDeg: 316.41,
+          rateDegPerCentury: 2863.96,
+          pmAmpDeg: -1.27,
+        },
+        {
+          phaseDeg: 204.46,
+          rateDegPerCentury: -4048.44,
+          raAmpDeg: -0.04,
+          decAmpDeg: -0.02,
+          pmAmpDeg: -0.09,
+        },
+        {
+          phaseDeg: 632.82,
+          rateDegPerCentury: 5727.92,
+          pmAmpDeg: 0.15,
+        },
+      ],
+    },
     classification: "Natural Satellite",
     mass: "6.59 × 10¹⁹ kg",
     gravity: "0.079 m/s²",
@@ -1397,7 +1955,25 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       n: 0.003,
     },
     rotationPeriodHours: -153.3,
-    axialTilt: 122.53,
+    /**
+     * Obliquity **to the orbit**, 119.59°, which is the quantity every other
+     * body in this catalog carries and the one `resolveObliquityDeg`
+     * reproduces from the IAU pole.
+     *
+     * It read 122.53° until W6 stage B, which is Pluto's tilt to the
+     * **ecliptic** — a real published number for a different quantity. Nothing
+     * could catch the mix-up while Pluto had no pole: the obliquity
+     * cross-check skipped it for want of a rotation solution, and 122.53°
+     * beside 119.59° looks like a rounding difference rather than a change of
+     * reference plane.
+     */
+    axialTilt: 119.59,
+    iauOrientation: {
+      poleRaDeg: 132.993,
+      poleDecDeg: -6.163,
+      primeMeridianDeg: 302.695,
+      spinRateDegPerDay: 56.3625225,
+    },
     classification: "Dwarf Planet",
     mass: "1.303 × 10²² kg",
     gravity: "0.62 m/s²",
@@ -1931,7 +2507,12 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     color: "#A09080",
     orbit: { a: 0.00013, e: 0.0, i: 0.0, O: 0, w: 0, M0: 0, n: 56.3 },
     rotationPeriodHours: 153.3,
-    axialTilt: 0,
+    iauOrientation: {
+      poleRaDeg: 132.993,
+      poleDecDeg: -6.163,
+      primeMeridianDeg: 122.695,
+      spinRateDegPerDay: 56.3625225,
+    },
     classification: "Natural Satellite",
     mass: "1.59 × 10²¹ kg",
     gravity: "0.288 m/s²",

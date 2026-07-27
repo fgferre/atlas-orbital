@@ -84,6 +84,7 @@ export { initializeOrbitalEngine } from "./setup";
 // Integration
 export {
   resolveOrbitalDisplayPosition,
+  resolveBinaryBarycentreOffset,
   getOrbitalDisplayOrbitPoints,
 } from "./integration";
 

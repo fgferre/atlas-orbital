@@ -36,6 +36,18 @@ const MU_PARENT = {
   jupiter: 9.54791915e-4 * K2,
   saturn: 2.8588567e-4 * K2,
   uranus: 4.366244e-5 * K2,
+  // Added in W6 stage B, when Triton and Charon stopped being legacy Kepler
+  // children. Both are BODY<n>_GM / BODY10_GM from NAIF `gm_de440.tpc`, and
+  // that same division reproduces the four ratios above — which predate this
+  // file's use of that kernel — to better than 1.5e-6 relative. That is the
+  // independent check: the formula is confirmed on constants it did not
+  // produce.
+  //
+  // System (barycentre) values, matching the four above: relative two-body
+  // motion is governed by G(M_primary + M_secondary), which matters here far
+  // more than usual because Charon is ~12% of Pluto's mass.
+  neptune: 5.151383773e-5 * K2,
+  pluto: 7.350478973e-9 * K2,
 };
 
 // Body → parent mapping. Pairs must match `satellites.ts` / `asteroids.ts`.
@@ -62,6 +74,10 @@ const BODIES = {
   umbriel: { parent: "uranus", epoch: "2025-01-01" },
   titania: { parent: "uranus", epoch: "2025-01-01" },
   oberon: { parent: "uranus", epoch: "2025-01-01" },
+  // Neptunian
+  triton: { parent: "neptune", epoch: "2025-01-01" },
+  // Pluto system
+  charon: { parent: "pluto", epoch: "2025-01-01" },
   // Asteroids
   ceres: { parent: "sun", epoch: "2025-01-01" },
   pallas: { parent: "sun", epoch: "2025-01-01" },

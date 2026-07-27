@@ -16,10 +16,15 @@ import { dateToTDB } from "./orbital/time";
  *
  * **Why this file exists.** Every other test in the orbital suite answers "is
  * the body in the right PLACE". None answered "is it FACING the right way", so
- * W6 shipped ~29 transcribed IAU rotation constants with a human being asked to
+ * W6 shipped transcribed IAU rotation constants with a human being asked to
  * judge a terminator by eye as the only check. That is not a gate: a wrong W₀
- * renders as a perfectly plausible planet, and 0.06° of longitude — the actual
- * residual measured here — is about 7 km at Earth's equator.
+ * renders as a perfectly plausible planet, and 0.06° of longitude — Earth's
+ * residual here — is about 7 km at its equator.
+ *
+ * Coverage is **127 fixtures across 30 bodies**: the Sun-lit hemisphere of
+ * every planet, the Moon, the eighteen analytical satellites, Triton, Pluto
+ * and Charon. Stage A shipped it for the planets alone; stage B only had to
+ * add fixtures, because the suite globs whatever is on disk.
  *
  * **What makes it independent.** The sub-solar point is a pure orientation
  * quantity: it moves if and only if the pole, W₀, Ẇ or the time scale is wrong.
@@ -128,16 +133,95 @@ const MAX_LON_ERROR_DEG = 0.1;
 const MAX_LON_ERROR_EXTRAPOLATED_DEG = 2.0;
 
 /**
- * Latitude is a **coarse** guard and is labelled as one. Horizons reports
- * planetodetic sub-observer latitude while this model produces planetocentric,
- * and the two differ by the body's flattening — negligible for Mercury and
- * Venus, but ~1.1° for Saturn. Converting would mean pulling each body's
- * flattening into the comparison and testing that too. Longitude already
- * carries the whole spin signal and cannot be right if the pole is wrong, so
- * latitude here only has to catch a grossly misplaced pole, which moves it by
- * tens of degrees.
+ * Latitude, after the figure difference is taken out.
+ *
+ * Horizons reports **planetodetic** sub-observer latitude; this model produces
+ * **planetocentric**. On a sphere they are the same number, which is why the
+ * planets sailed through when only they had fixtures. On Phobos they differ by
+ * **20°** — its axes are 13.0 × 11.4 × 9.1 km — and W6 stage B briefly read
+ * that as a mistranscribed pole. It is not: converting the model value with
+ * the body's own polar flattening reproduces JPL to **0.000° for Miranda** and
+ * 0.14° for Mimas, i.e. exactly, for every body whose figure is a spheroid.
+ *
+ * So the conversion is done rather than tolerated (which also *tightens*
+ * Saturn, whose disclosed ~1.1° gap was this effect). What survives it is
+ * triaxiality — a spheroid conversion cannot know that Deimos's equator is an
+ * ellipse — and that residual is bounded per body by {@link triaxialSpreadDeg}
+ * from the same published axes. Nothing here is tuned to a measured residual.
  */
 const MAX_LAT_ERROR_DEG = 1.5;
+
+/**
+ * Published triaxial radii (a ≥ b ≥ c, km) for every body in this fixture set
+ * whose figure is far enough from a sphere to move the comparison.
+ *
+ * Source: `BODY<n>_RADII` in NAIF `pck00011.tpc` — the same kernel the
+ * rotational elements come from, read by
+ * `scripts/derive-iau-orientation.js --radii`.
+ *
+ * Emitted verbatim by that script's `--radii` mode, which skips anything
+ * spherical to within 1e-4 — so this is the complete set, not a judgement
+ * call about which bodies matter. Hand-picking it missed Iapetus, which is
+ * 4.5% flattened. Absence still means "treat as a sphere", which can only
+ * make a bound tighter, so the failure mode of an omission is a loud test
+ * rather than a silently permissive one.
+ */
+const BODY_AXES: Record<string, readonly [number, number, number]> = {
+  mercury: [2440.53, 2440.53, 2438.26],
+  earth: [6378.1366, 6378.1366, 6356.7519],
+  phobos: [13, 11.4, 9.1],
+  deimos: [7.8, 6, 5.1],
+  mars: [3396.19, 3396.19, 3376.2],
+  io: [1829.4, 1819.4, 1815.7],
+  europa: [1562.6, 1560.3, 1559.5],
+  jupiter: [71492, 71492, 66854],
+  mimas: [207.8, 196.7, 190.6],
+  enceladus: [256.6, 251.4, 248.3],
+  tethys: [538.4, 528.3, 526.3],
+  dione: [563.4, 561.3, 559.6],
+  rhea: [765, 763.1, 762.4],
+  titan: [2575.15, 2574.78, 2574.47],
+  iapetus: [745.7, 745.7, 712.1],
+  saturn: [60268, 60268, 54364],
+  ariel: [581.1, 577.9, 577.7],
+  miranda: [240.4, 234.2, 232.9],
+  uranus: [25559, 25559, 24973],
+  neptune: [24764, 24764, 24341],
+};
+
+/** Planetocentric → planetodetic latitude on the body's own spheroid. */
+function planetodeticLatDeg(bodyId: string, centricLatDeg: number): number {
+  const axes = BODY_AXES[bodyId];
+  if (!axes) return centricLatDeg;
+  const squash = (axes[2] / axes[0]) ** 2;
+  return (
+    (Math.atan(Math.tan((centricLatDeg * Math.PI) / 180) / squash) * 180) /
+    Math.PI
+  );
+}
+
+/**
+ * How far a triaxial equator can push the planetodetic latitude away from what
+ * the spheroid conversion above predicts.
+ *
+ * Same closed form as the polar term, applied to b/a, and evaluated where it
+ * peaks (45°). Zero for every body with a circular equator — which is all of
+ * them except the Martian moons and the small Saturnians — so this widens
+ * nothing that does not physically need it.
+ */
+function triaxialSpreadDeg(bodyId: string): number {
+  const axes = BODY_AXES[bodyId];
+  if (!axes) return 0;
+  return (Math.atan(1 / (axes[1] / axes[0]) ** 2) * 180) / Math.PI - 45;
+}
+
+/**
+ * The instant the analytical satellite elements are osculating at, and the
+ * window `src/lib/orbital/analytical/satellites.ts` states them good for
+ * ("the worst ±1-year angular error is 5.2°").
+ */
+const SATELLITE_ELEMENT_EPOCH = new Date("2025-01-01T00:00:00Z");
+const SATELLITE_ELEMENT_VALIDITY_MS = 366 * 86_400_000;
 
 /** ΔT in 2026, i.e. the size of the error a UT-driven spin would make. */
 const DELTA_T_SECONDS_2026 = 72;
@@ -214,6 +298,39 @@ function longitudeErrorDeg(fixture: SubSolarFixture): number {
   );
 }
 
+/**
+ * The floor a **stale satellite position** puts under the longitude check.
+ *
+ * A satellite's sub-solar point depends on where the Sun is *from the
+ * satellite*, so putting the satellite on the wrong side of its parent rotates
+ * that direction by the angle its orbit subtends from the Sun. The analytical
+ * elements are two-body and osculating at 2025-01-01; a quarter-century out,
+ * the phase is simply gone, so at those epochs this — not the pole — sets the
+ * accuracy.
+ *
+ * Callisto is the case that forced it: 0.184° at 2000-01-01, and 0.030° at
+ * 2025. Its orbit subtends 0.29° from the Sun. The allowance is `2a/d`,
+ * because a wrong phase can displace the body by a full diameter, and it is
+ * computed from the model's own vectors rather than from a table.
+ *
+ * Inside the elements' stated validity window this returns 0: the phase is
+ * pinned there, so the tight bound is physically earned and stays.
+ */
+function stalePositionAllowanceDeg(fixture: SubSolarFixture): number {
+  const body = BODIES_BY_ID.get(fixture.bodyId);
+  if (!body?.parentId) return 0;
+
+  const at = new Date(fixture.date);
+  const age = Math.abs(at.getTime() - SATELLITE_ELEMENT_EPOCH.getTime());
+  if (age <= SATELLITE_ELEMENT_VALIDITY_MS) return 0;
+
+  const satellite = resolveHeliocentricPositionAU(fixture.bodyId, at);
+  const parent = resolveHeliocentricPositionAU(body.parentId, at);
+  const orbitRadiusAU = satellite.distanceTo(parent);
+
+  return (Math.asin((2 * orbitRadiusAU) / satellite.length()) * 180) / Math.PI;
+}
+
 function spinRateDegPerDay(bodyId: string): number {
   const orientation = resolveBodyIauOrientation(BODIES_BY_ID.get(bodyId)!);
   if (!orientation) throw new Error(`${bodyId} has no rotation solution`);
@@ -231,21 +348,25 @@ describe("sub-solar point vs JPL Horizons", () => {
 
       const jplEast = eastLongitudeDeg(fixture);
       const lonError = signedDeltaDeg(model.lonDeg, jplEast);
-      const latError = model.latDeg - fixture.subSolarLatDeg;
+      const modelLat = planetodeticLatDeg(fixture.bodyId, model.latDeg);
+      const latError = modelLat - fixture.subSolarLatDeg;
       const extrapolated = new Date(fixture.date) > OBSERVED_DELTA_T_UNTIL;
+
+      const lonBound =
+        (extrapolated ? MAX_LON_ERROR_EXTRAPOLATED_DEG : MAX_LON_ERROR_DEG) +
+        stalePositionAllowanceDeg(fixture);
 
       expect(
         Math.abs(lonError),
         `${fixture.bodyId} sub-solar longitude: model ${model.lonDeg.toFixed(4)}°E vs JPL ${jplEast.toFixed(4)}°E ` +
-          `(reported ${fixture.subSolarLonDeg.toFixed(4)}° ${fixture.longitudeSense}, frame ${fixture.targetFrame}) — Δ ${lonError.toFixed(4)}°`
-      ).toBeLessThan(
-        extrapolated ? MAX_LON_ERROR_EXTRAPOLATED_DEG : MAX_LON_ERROR_DEG
-      );
+          `(reported ${fixture.subSolarLonDeg.toFixed(4)}° ${fixture.longitudeSense}, frame ${fixture.targetFrame}) — Δ ${lonError.toFixed(4)}°, bound ${lonBound.toFixed(4)}°`
+      ).toBeLessThan(lonBound);
 
       expect(
         Math.abs(latError),
-        `${fixture.bodyId} sub-solar latitude: model ${model.latDeg.toFixed(4)}° vs JPL ${fixture.subSolarLatDeg.toFixed(4)}° (Δ ${latError.toFixed(4)}°)`
-      ).toBeLessThan(MAX_LAT_ERROR_DEG);
+        `${fixture.bodyId} sub-solar latitude: model ${modelLat.toFixed(4)}° planetodetic ` +
+          `(${model.latDeg.toFixed(4)}° planetocentric) vs JPL ${fixture.subSolarLatDeg.toFixed(4)}° (Δ ${latError.toFixed(4)}°)`
+      ).toBeLessThan(MAX_LAT_ERROR_DEG + triaxialSpreadDeg(fixture.bodyId));
     });
   }
 });
@@ -285,6 +406,23 @@ describe("the residual is a shared clock offset, not a per-body error", () => {
     (MAX_LON_ERROR_DEG / Math.abs(spinRateDegPerDay(bodyId))) * 86400 <
     MIN_CLOCK_RESOLUTION_SECONDS;
 
+  /**
+   * A satellite far from its element epoch cannot vote, for the same reason it
+   * gets a looser longitude bound: its own orbital phase has drifted, and that
+   * drift is not a clock. Mimas is the case — 0.016° of orbit-subtended angle
+   * at 2000-01-01 is 3.6 s of Mimas rotation, three times the agreement this
+   * suite asserts, so including it would have read as "a per-body constant is
+   * wrong" when nothing about Mimas's rotation is.
+   *
+   * The threshold is the suite's own agreement bound rather than a new number:
+   * a body may vote only if its irreducible position uncertainty is smaller
+   * than the disagreement being tested for.
+   */
+  const positionNoiseSeconds = (fixture: SubSolarFixture) =>
+    (stalePositionAllowanceDeg(fixture) /
+      Math.abs(spinRateDegPerDay(fixture.bodyId))) *
+    86400;
+
   const byDate = new Map<string, SubSolarFixture[]>();
   for (const fixture of FIXTURES) {
     if (fixture.bodyId === "earth") continue;
@@ -294,10 +432,17 @@ describe("the residual is a shared clock offset, not a per-body error", () => {
     byDate.set(fixture.date, list);
   }
 
-  for (const [date, fixtures] of byDate) {
-    if (fixtures.length < 2) continue;
+  for (const [date, candidates] of byDate) {
+    if (candidates.length < 2) continue;
 
     it(`${date} — every body implies the same clock`, () => {
+      // Applied here rather than while grouping: it needs the orbital engine,
+      // which `beforeAll` has not booted at collection time.
+      const fixtures = candidates.filter(
+        (f) => positionNoiseSeconds(f) < MAX_CLOCK_DISAGREEMENT_SECONDS
+      );
+      if (fixtures.length < 2) return;
+
       const offsets = fixtures.map((fixture) => ({
         bodyId: fixture.bodyId,
         seconds:

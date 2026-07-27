@@ -40,6 +40,7 @@ import { AstroPhysics, AU_TO_3D_UNITS } from "../astrophysics";
 import type { CelestialBody, ScaleMode } from "../astrophysics";
 import {
   resolveOrbitalDisplayPosition,
+  resolveBinaryBarycentreOffset,
   getOrbitalDisplayOrbitPoints,
   initializeOrbitalEngine,
   ORBITAL_METADATA_REGISTRY,
@@ -177,6 +178,26 @@ const SEGMENTS = 1024;
 // 1e-8 AU (≈ 1.5 km at 1 AU) as a comfortable ceiling that still bites if
 // the numerical pipeline regresses by orders of magnitude, without being
 // so tight that it picks up JIT-dependent jitter on CI.
+/**
+ * How far a binary primary legitimately sits off its own orbit line.
+ *
+ * Not a tolerance and not tuned: `getOrbitalDisplayOrbitPoints` draws the
+ * **barycentre's** ellipse, because that is what the heliocentric series
+ * returns, while `resolveOrbitalDisplayPosition` now draws Pluto on its own
+ * centre — 2 127 km away, and far more than that once didactic exaggeration
+ * scales Charon's orbit up. Zero for every other body, so the invariant stays
+ * exactly as tight as it was everywhere else, and on Pluto it still catches
+ * anything beyond the modelled epicycle.
+ */
+function barycentreOffset(
+  body: CelestialBody,
+  date: Date,
+  scaleMode: ScaleMode
+): number {
+  const offset = resolveBinaryBarycentreOffset({ body, date, scaleMode });
+  return offset ? offset.length() : 0;
+}
+
 const EPSILON_A_AU = 1e-8;
 
 const TEST_DATES = [
@@ -223,7 +244,10 @@ describe("orbital alignment / (A) orbit[t] contains position(t)", () => {
           const scale = displayScaleAU(body, scaleMode, parentBody);
           const chord =
             chordSagittaAU(body.orbit.a, body.orbit.e, SEGMENTS) * scale;
-          const epsilon = chord + EPSILON_A_AU * scale;
+          const epsilon =
+            chord +
+            EPSILON_A_AU * scale +
+            barycentreOffset(body, date, scaleMode);
 
           const d = minDistanceToPolyline(P, line);
           expect(d).toBeLessThan(epsilon);
@@ -262,7 +286,10 @@ describe("orbital alignment / (B) orbit[tBucket] contains position(tBucket+Δt)"
           // the polyline is bounded by it, up to propagation noise.
           const chord =
             chordSagittaAU(body.orbit.a, body.orbit.e, SEGMENTS) * scale;
-          const epsilon = chord + EPSILON_A_AU * scale;
+          const epsilon =
+            chord +
+            EPSILON_A_AU * scale +
+            barycentreOffset(body, base, scaleMode);
 
           for (const frac of DELTA_FRACTIONS) {
             const sampleDate = new Date(

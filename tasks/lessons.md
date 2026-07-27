@@ -682,6 +682,21 @@ solvers, two rotations = two truths.
   `R_x(23.4°)` is 136.8° away from `equatorialToEcliptic` +
   `ecliptic2ThreeJs`. If the repo exports the conversion, call it.
 
+- **A transcribed constant needs a check that does not pass through it —
+  and if the source is machine-readable, do not transcribe at all.**
+  W6's risk was mistyping IAU rotation elements; stage B needed 22 bodies
+  with up to 26 positionally-indexed periodic terms each. Parsing NAIF's
+  `pck00011.tpc` removed the typing step, and re-emitting the nine bodies
+  stage A had entered _by hand_ reproduced all 54 secular coefficients
+  exactly — the parser validated against a different method, on data it
+  did not produce. Two things only the machine read caught: Mimas's prime
+  meridian librates **44.85°** and Triton's pole **32.35°**, both of which
+  the plan had scheduled for deletion as "periodic detail" under a ~1°
+  budget. Independent checks for the derived constants followed the same
+  shape (μ from `gm_de440.tpc` reproduced four ratios already in the repo
+  to 1.5e-6; 20 transcribed poles landed within 0.69° of orbit normals
+  fitted from Horizons vectors that never touched the pole tables).
+
 **Fires when:** writing a numerical value alongside a time/frame field;
 adopting a new tooling contract (tsconfig, test harness, CI); finding
 yourself typing a second implementation of a shared math op.

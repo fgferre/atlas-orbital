@@ -634,8 +634,19 @@ describe("resolveObliquityDeg", () => {
     // W6 moved the discriminator from `poleRA` to a full `iauOrientation`
     // record; `resolveBodyIauOrientation` is the one place that knows the
     // ladder, so the filter asks it rather than sniffing a field.
+    //
+    // Satellites are excluded, and the exclusion is a property of the data
+    // rather than a convenience: `resolveObliquityDeg` measures the pole
+    // against the **orbit normal**, and a satellite's catalog `orbit.i` is
+    // referred to a Laplace or parent-equatorial plane that no field names.
+    // W6 stage B gave twenty satellites real IAU poles, so without this the
+    // Moon — whose 6.68° is quoted to the ecliptic, a different quantity
+    // entirely — would be asserted against a normal that cannot be built.
     const poled = SOLAR_SYSTEM_BODIES.filter(
-      (b) => resolveBodyIauOrientation(b) !== null && b.axialTilt !== undefined
+      (b) =>
+        !b.parentId &&
+        resolveBodyIauOrientation(b) !== null &&
+        b.axialTilt !== undefined
     );
     expect(poled.length).toBeGreaterThanOrEqual(9);
 

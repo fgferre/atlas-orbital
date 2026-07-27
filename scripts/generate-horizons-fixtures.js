@@ -94,6 +94,10 @@ const TARGET_BODIES = [
   { id: "oberon", command: "704", center: "500@799", name: "Oberon" },
   // Neptunian moons
   { id: "triton", command: "801", center: "500@899", name: "Triton" },
+  // Pluto system. Centered on Pluto's BODY centre (999), not the system
+  // barycentre (9): Charon's rendered offset is measured from Pluto itself,
+  // and the two differ by ~2 100 km — the whole point of OPP-PC.
+  { id: "charon", command: "901", center: "500@999", name: "Charon" },
   // Asteroids (heliocentric)
   { id: "ceres", command: "1;", center: "500@10", name: "Ceres" },
   { id: "pallas", command: "2;", center: "500@10", name: "Pallas" },
@@ -476,7 +480,9 @@ function rebuildIndexFromDisk() {
   };
 
   const indexPath = path.join(FIXTURES_DIR, "index.json");
-  fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+  // Trailing newline: without it every run leaves a one-character diff on a
+  // file whose content did not change.
+  fs.writeFileSync(indexPath, JSON.stringify(index, null, 2) + "\n");
   console.log(`\nIndex saved: ${indexPath} (${fixtures.length} fixtures)`);
 }
 

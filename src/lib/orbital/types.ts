@@ -26,6 +26,8 @@ export type AnalyticalModel =
   | "SaturnianOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
   | "UranianOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
   | "MartianSatOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "NeptunianOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
+  | "PlutoSatOsculating2Body" // Two-body propagation of J2000 ecliptic osculating elements
   | "AsteroidOsculating" // Two-body propagation of J2000 ecliptic osculating elements (2000–2050 window)
   | "Kepler"; // Fallback Keplerian solver
 

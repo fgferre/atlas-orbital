@@ -700,10 +700,16 @@ const inclinationToEcliptic = (b: CelestialBody): string | undefined =>
 /**
  * Obliquity, or nothing.
  *
- * Twenty-seven records carry `axialTilt: 0` as a placeholder rather than a
- * measurement — no moon in the catalog has a measured obliquity — and the cell
- * used to print all of them as a confident "0°", claiming every moon spins bolt
- * upright. A placeholder zero now renders N/A.
+ * Records used to carry `axialTilt: 0` as a placeholder rather than a
+ * measurement, and the cell printed all of them as a confident "0°", claiming
+ * every moon spins bolt upright. A placeholder zero renders N/A.
+ *
+ * W6 stage B removed eighteen of those placeholders outright, because the
+ * bodies carrying them gained real IAU poles — and the guard below is what
+ * made the removal *necessary* rather than tidy: `axialTilt === 0` only reads
+ * as a placeholder while the body has no rotation solution, so leaving the
+ * zeros in place would have flipped eighteen honest "N/A" cells into confident
+ * "0°" claims the moment the poles landed.
  *
  * The template is also guarded: `${b.axialTilt}°` on an absent field produces
  * the string "undefined°", which is truthy and sails straight past StatBox's

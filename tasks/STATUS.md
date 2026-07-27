@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-27 (W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-27 (W1–W6 code-complete; browser smokes BATCHED to the end of the wave; **W7 next**)._
 
 ---
 
@@ -20,38 +20,48 @@ smokes are batched into one pass at the end of the wave** — owner decision,
 increment waits on it. The consolidated checklist is the wave's **Deferred smoke
 gate** section; do not rebuild it from the per-wave prose.
 
-**W6 stage A is code-complete** — `src/lib/bodyOrientation.ts` is now the single
-orientation source, Earth's hand-tuned +140° is gone, and the Sun plus all eight
-planets carry measured IAU rotational elements transcribed from NAIF's
-`pck00011.tpc` (which cites Archinal 2018 **and** its erratum). Read W6's
-"Stage A shipped" subsection before continuing — it records two things a later
-session must not re-derive: **the drafted 0.1°-at-2026 gate cannot pass for a
-correct model** (IAU W is ICRF, GMST is mean-equinox-of-date, precession
-separates them by 0.34° — the gate now runs at J2000 plus a separate rate
-check), and **Mars's 1.59° periodic term is a fixed offset, not a wobble**, so
-dropping it would have shipped a 1.6° pole error that looked right.
+**W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
+source, and the Sun, all eight planets, the Moon, the eighteen analytical
+satellites, Triton, Pluto and Charon now carry measured IAU rotational elements.
+Read W6's **"Stage B shipped"** subsection before touching orientation again —
+it records what a later session must not re-derive.
 
-**The verification story changed on 2026-07-27 and stage B inherits the new
-one.** The owner said plainly that he cannot technically evaluate whether the
-orientation is right — and he was correct to, because the residual is 0.06° and
-the defect class is 0.3°, both far below what an eye resolves. The human smoke
-was never a gate. It is replaced by **JPL Horizons sub-observer fixtures**
-(`HORIZONS_MODE=subpoint` in the existing script) and
-[`subSolarPoint.test.ts`](../src/lib/subSolarPoint.test.ts): 74 assertions, all
-eight planets, epochs from 1900 to 2100. Read that file's header before adding
-bodies — it records the west-vs-east longitude trap, the light-time treatment,
-and why the residual growth after 2025 is a ΔT-model divergence rather than a
-bad Ẇ. **Do not "fix" the app's ΔT toward JPL**: Horizons freezes it beyond the
-observed record, the app extrapolates with Espenak-Meeus, and future Earth
-rotation is unknowable.
+**The satellite constants were not typed by a human.**
+`scripts/derive-iau-orientation.js` parses NAIF's `pck00011.tpc`; it re-emits
+the nine bodies stage A entered by hand and reproduces all 54 of their secular
+coefficients exactly, which is what validates the other 22. **Do not
+hand-transcribe additions** — and do not restore the plan's "drop periodic
+terms, disclose the amplitude" prescription: Mimas's prime meridian librates
+44.85° and Triton's pole 32.35°, so that instruction would have shipped gross
+errors under a ~1° budget.
 
-**W6 stage B is next:** the 18 analytical satellites plus the Moon, Pluto and
-Charon, the Triton decision, and OPP-PC. The sub-observer instrument the "Third
-round" subsection asks for now **exists and works** — stage B only has to add
-bodies to it. Pole-vs-orbit-normal and running the lock check at every fixture
-epoch are still owed for the 20 bodies with no independent anchor. `moonSceneFrame.test.ts` now asserts Pluto has no
-rotation solution; stage B flips that assertion and must re-derive Charon's
-mount with it.
+**Triton and Charon are analytical satellites now**, with Horizons-derived
+ecliptic elements, and both left the parent-equatorial mount. Their fabricated
+nodes are gone (Charon's `O/w/M0` were zeros; Triton carried a disclosed 150°
+envelope) and both sit inside the 0.5° family bound. **Pluto's obliquity was
+also corrected**, 122.53° → 119.59°: the old figure was measured to the ecliptic
+where the rest of the catalog uses the orbit. The retrograde sign in
+`resolveObliquityDeg` now comes from the IAU Ẇ, not `rotationPeriodHours` —
+those two genuinely disagree for Pluto and both are true.
+
+**Verification, and what it is not.** Orientation is checked against **JPL
+Horizons sub-solar points** (127 fixtures, 30 bodies, 1900–2100) in
+[`subSolarPoint.test.ts`](../src/lib/subSolarPoint.test.ts), and every satellite
+pole is checked against an **independently fitted orbit normal** in
+`bodyOrientation.test.ts` — 20 bodies, all within 0.69°, from two datasets that
+share no input. Read those files' headers before adding bodies: they record the
+west-vs-east longitude trap, light-time treatment, the planetocentric-vs-
+planetodetic latitude conversion, and why a stale satellite phase — not a bad Ẇ
+— loosens the 2000-01-01 longitude bound. **Do not "fix" the app's ΔT toward
+JPL**: Horizons freezes it beyond the observed record, the app extrapolates with
+Espenak-Meeus, and future Earth rotation is unknowable.
+
+**Nothing is owed for W6.** The pixel-gate re-bless both stages predicted is
+not needed: `npm run test:e2e` passes 12/12 including `boot visual identity`,
+unchanged at 1% tolerance, so no baseline was regenerated. Do not read that as
+"Earth's orientation did not move" — it did, and `subSolarPoint.test.ts` is what
+proves it now matches JPL. It means the frozen boot frame is a wide shot with no
+planet surface in it, which is W3's finding, not a new one.
 
 Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is

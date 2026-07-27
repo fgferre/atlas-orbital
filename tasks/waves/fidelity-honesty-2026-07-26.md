@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status                            | Commit                                                                                                                                                 |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                              |
-| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                  |
-| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                  |
-| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                              |
-| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                                                        |
-| W6 One pole, one spin                   | **stage A done**, stage B open    | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (moons, Pluto/Charon, Triton, OPP-PC) not started |
-| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                      |
-| W8 Reach and discovery                  | not started                       | —                                                                                                                                                      |
-| W9 The rings transmit                   | not started                       | —                                                                                                                                                      |
-| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                      |
-| — CHECKPOINT —                          | —                                 | —                                                                                                                                                      |
-| W11 J2 secular precession               | not decided                       | —                                                                                                                                                      |
-| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                      |
-| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                      |
+| Wave                                    | Status                            | Commit                                                                                                                                                                   |
+| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                                                |
+| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                                    |
+| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                                    |
+| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                                                |
+| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                                                                          |
+| W6 One pole, one spin                   | **done**                          | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (Moon + 20 satellites, Pluto/Charon, Triton, OPP-PC, kernel parser) |
+| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                                        |
+| W8 Reach and discovery                  | not started                       | —                                                                                                                                                                        |
+| W9 The rings transmit                   | not started                       | —                                                                                                                                                                        |
+| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                                        |
+| — CHECKPOINT —                          | —                                 | —                                                                                                                                                                        |
+| W11 J2 secular precession               | not decided                       | —                                                                                                                                                                        |
+| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                                        |
+| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                                        |
 
 ---
 
@@ -139,6 +139,12 @@ worked. If not, option B (re-origin the field) is next and C was insufficient.
   and Weywot–Quaoar separations unchanged; in **didactic** mode moons of flattened
   planets do shift slightly, by design.
 
+- **W6B** — nothing new is owed. Stage B's whole surface is numeric and is
+  asserted against JPL (127 sub-solar fixtures over 30 bodies) or against
+  independently fitted orbit normals (20 satellites). The one thing worth a
+  five-second look, because no number decides it: **Pluto now visibly circles
+  a point in open space** every 6.39 days — obvious in didactic mode, sub-pixel
+  in realistic, and that difference is by design.
 - **W6A** — **most of what was drafted here is now machine-checked** and has been
   deleted from this list rather than left as busywork. Where Earth faces, whether
   the poles and spin rates are right, and whether they stay right from 1900 to
@@ -1362,6 +1368,150 @@ continents. Split in two and treated differently:
   edge, Alaska at the left), and the two agree column for column, so the city
   lights fall on the continents the daymap draws. **A replacement Earth map must
   be re-checked the same way** — nothing in the suite will catch a re-projection.
+
+#### Stage B shipped — the transcription was never done by hand (2026-07-27)
+
+**Scope shipped:** the Moon, the eighteen analytical satellites, Triton, Pluto
+and Charon; Triton and Charon promoted to analytical satellites; OPP-PC; the
+`axialTilt` scrub; the third round's pole-vs-orbit-normal instrument. W6 is
+closed except for the pixel-gate re-bless stage A also owes.
+
+**The plan's central instruction was replaced, and the numbers say the plan was
+wrong.** It asked for satellite elements "transcribed from Archinal et al. 2018,
+Tables 1 and 2, read out of the source at edit time", with periodic terms
+dropped and each dropped amplitude disclosed against a ~1° lock budget. Twenty-two
+bodies carry up to **26 periodic terms each**, indexed _positionally_ into a
+shared angle table that nothing in the record names — the exact shape where one
+amplitude lands on the wrong argument and renders as a plausible planet.
+So `scripts/derive-iau-orientation.js` parses NAIF's `pck00011.tpc` instead.
+
+Two consequences, both load-bearing:
+
+- **The parser is validated against the hand transcription.** It re-emits the
+  nine bodies stage A entered by hand and reproduces **all 54 secular
+  coefficients exactly**. Two methods, no shared step, same numbers — which is
+  what makes the other 22 bodies trustworthy without a second human pass.
+- **The drop-and-disclose prescription would have shipped gross errors.** Peak
+  amplitudes the plan would have deleted as "periodic detail": **Mimas 44.85°**
+  of prime meridian, **Triton 32.35°** of pole, Tethys 9.66°, Miranda 4.41°,
+  Rhea 3.10°, Deimos 3.09°, Phobos 1.78°, Europa 1.09°. Transcribing everything
+  is free once a parser reads it, so nothing is dropped for these bodies; the
+  only truncations left are stage A's three, still disclosed. Phobos also needed
+  two schema fields the plan did not anticipate — a **quadratic W** (9.5e-9°/day²,
+  which is 12.7°/century of tidal spin-up) and an **accelerating periodic
+  argument**, the latter carrying its single largest term (−1.143°).
+
+**The Moon's E-series decision is reversed, and the reversal costs nothing.**
+Third round chose a mean Ẇ because "~50 more transcribed numbers buy accuracy no
+learner can see" — a **transcription-cost** argument, and that cost is now zero.
+All 13 E-terms ship. The JSDoc promising a ~5° sub-Earth error is gone with them.
+
+**Charon and Triton are analytical satellites, resolving both open questions.**
+Charon took the fixture route (option b), which the third round preferred and
+which its own trap confirms: the mount discriminator is `!hasAnalyticalEphemeris`,
+so only registry promotion moves a body out of `equatorialChildren`. Triton was
+taken, not declined — F-02 does not stay open. Both retired fabricated data:
+Charon's `O: 0, w: 0, M0: 0` against a true `n` of 56.36 (22.8° of invented phase
+per year) and Triton's fabricated node behind a disclosed **150°** envelope. Both
+now sit inside the analytical families' 0.5° bound — measured **0.159°** (Triton)
+and **0.011°** (Charon) at epoch +1 yr, Charon being the tightest body in the
+regression table.
+
+**The mutual lock is measured rather than assumed.** The wave feared a smoke that
+could only be passed by un-transcribing a constant. Instead: Charon's mean motion
+is Pluto's published IAU Ẇ (the lock is double-synchronous), and Kepler III on the
+fixture-inverted `a` gives the same rate to **1.5e-4** — two unrelated routes, so
+the lock is a confirmed prediction. Same for Triton at 4.6e-5. And Charon's
+inverted ecliptic inclination is **112.89°**, which is exactly where Pluto's IAU
+pole puts its equator: the old `i: 0` was never wrong, it declared no frame.
+
+**The pole-vs-orbit-normal instrument is the strongest result in the wave.** All
+twenty analytical satellites have their IAU spin axis within **0.69°** of an
+orbit normal least-squares fitted from Horizons state vectors — most within
+0.05°, across inclinations from 1.95° to 129.17°. The two datasets share no
+input, so this is the check the third round called for and it closes the
+"δ₀ digit-swap along the parent line" blind spot for all 20 bodies at once.
+**Trap recorded:** evaluate the pole at the _elements'_ epoch, not J2000 — the
+elements are frozen at 2025-01-01 while poles precess, and pairing them across
+25 years costs 8.4° on Miranda, which reads exactly like the error being hunted.
+
+**Three bugs the new data exposed, none of them in stage B's own diff:**
+
+- **`regression.test.ts` globbed every fixture.** `subsolar-*` files share
+  `bodyId` and `date` with the vectors fixtures and sort ahead of them, so the
+  new orientation fixtures silently shadowed the position fixtures for five
+  bodies. The generator had excluded them since stage A; the reader never got
+  the memo. Latent since stage A, invisible until a satellite got both kinds.
+- **Pluto's obliquity was quoted against the wrong plane.** The catalog said
+  122.53° — Pluto's tilt to the **ecliptic** — where every other body carries
+  tilt to its **orbit**. Now 119.59°. Nothing could catch it while Pluto had no
+  pole, and 122.53 beside 119.59 reads as rounding, not as a changed reference
+  plane.
+- **`resolveObliquityDeg` took its retrograde sign from `rotationPeriodHours`.**
+  That disagrees with the IAU model for Pluto — catalog −153.3 h (retrograde
+  **of its orbit**, true) versus `BODY999_PM` at +56.36°/day (prograde about the
+  IAU pole, also true) — and returned 60.38° for a 119.59° body. The sign now
+  comes from the model's own Ẇ. Venus and Uranus were unaffected; their kernel
+  rates are negative too.
+
+**The sub-solar instrument needed two derived bounds, and getting there required
+not "fixing" the constants.** Adding 84 satellite fixtures produced failures that
+looked like transcription errors and were not:
+
+- **Latitude, off by 20° on Phobos.** Horizons reports **planetodetic**
+  sub-observer latitude; the model produces **planetocentric**. Converting with
+  the body's own polar flattening reproduces JPL to **0.000° on Miranda** and
+  0.14° on Mimas — exactly, for any spheroid — so the conversion is now done
+  rather than tolerated, which also _tightens_ Saturn (its disclosed ~1.1° gap
+  was this effect). Only triaxiality survives, bounded per body from the same
+  published axes. The radii table is emitted by the same script (`--radii`);
+  hand-picking it had already missed Iapetus, which is 4.5% flattened.
+- **Longitude, at the 2000-01-01 baseline, on Callisto/Ganymede/Iapetus.** A
+  satellite's sub-solar point depends on where the Sun is _from the satellite_,
+  so a stale orbital phase rotates it by the angle the orbit subtends from the
+  Sun. Twenty-five years past the element epoch that phase is gone. The
+  allowance is `asin(2a/d)` computed from the model's own vectors, and it is
+  **zero inside the elements' stated validity window**, so the tight 0.1° bound
+  survives where it is physically earned. Mimas needed the same exclusion from
+  the clock-consistency panel: 0.016° of orbit-subtended angle is 3.6 s of Mimas
+  rotation, and that is not a clock.
+
+**OPP-PC shipped as a table, not a branch.** `BINARY_BARYCENTRE` in
+`integration.ts` keyed by body id, offset taken from Charon's **rendered** vector
+so the pair cannot desync and the wobble inherits didactic exaggeration. Mass
+fraction is `BODY901_GM / (BODY999_GM + BODY901_GM)` = 0.108540 from
+`gm_de440.tpc`; multiplied by Charon's fixture-derived semi-major axis it gives
+**2 127 km / 1.79 Pluto radii**, reproducing figures this file computed
+independently from published masses. `regression.test.ts`'s Pluto tolerance was
+**not** widened, as required.
+**One interaction the plan did not foresee:** the orbit line is the
+**barycentre's** ellipse, so Pluto legitimately sits off its own drawn orbit —
+1.09 display units in didactic mode, which broke `orbitAlignment.test.ts`. That
+is the feature, not a defect, so the invariant now admits exactly the modelled
+epicycle (via an exported `resolveBinaryBarycentreOffset`) and stays as tight as
+before everywhere else, including on Pluto beyond that offset.
+
+**`axialTilt` scrubbed on 18 bodies, kept on 4, and the scrub was mandatory
+rather than tidy.** `Sidebar.tsx`'s guard reads a placeholder as
+`axialTilt === 0 && no rotation solution` — so the moment the poles landed, 18
+honest "N/A" cells would have flipped to confident "0°". The Moon, Europa,
+Ganymede and Pluto keep measured values. `astrophysics.test.ts`'s obliquity
+cross-check now excludes satellites, because `resolveObliquityDeg` measures
+against the **orbit normal** and a satellite's catalog `orbit.i` is referred to
+a Laplace or parent-equatorial plane no field names — the Moon's 6.68° is quoted
+to the ecliptic, a different quantity.
+
+**Gates:** `test:run` 2381 passed (117 files), `test:coverage` thresholds hold,
+`lint` clean, `tsc --noEmit` clean, `build` clean, **`test:e2e` 12/12 passed**.
+
+**The pixel-gate re-bless stage A owed turns out not to be owed.** Both stages
+predicted the boot baseline would move — Earth came off a hand-tuned +140° — and
+`boot visual identity (frozen sim)` **passes unchanged** at its 1% tolerance, so
+no baseline was regenerated and standing law 5's human gate is never reached.
+That is not evidence the orientation held still; it is W3's recorded finding
+arriving on schedule: the frozen boot frame is a wide shot with no planet surface
+in it, so it is structurally blind to exactly this class of change. What proves
+Earth moved _and_ is now right is `subSolarPoint.test.ts`, not this.
 
 ---
 
