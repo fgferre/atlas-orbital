@@ -1583,13 +1583,10 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 1353,
     color: "#D0E0E0",
     /**
-     * Ecliptic-J2000 Kepler-fallback ellipse; see Charon's record for why this
-     * had to change when stage B promoted these two to analytical satellites.
-     *
-     * Triton's old `i: 156.8` was its inclination to **Neptune's equator** and
-     * its `Ω` was fabricated — the pair behind the disclosed ~150° envelope.
-     * The ecliptic values below are inverted from the same Horizons vector the
-     * analytical block uses, re-referenced to J2000.
+     * Ecliptic J2000, inverted from the Horizons vector and re-referenced to
+     * J2000 — see Charon's record. Triton's old `i: 156.8` was its inclination
+     * to **Neptune's equator** and its `Ω` was fabricated: the pair behind the
+     * disclosed ~150° envelope W6 stage B retired.
      */
     orbit: {
       a: 0.002371478,
@@ -2523,27 +2520,15 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 606,
     color: "#A09080",
     /**
-     * The **Kepler-fallback** ellipse, in ecliptic J2000 — the frame
-     * `keplerProvider` declares (`outputFrame = "J2000_ECLIPTIC"`) and, until
-     * W6 stage B, did not receive. This record read
-     * `{ i: 0, O: 0, w: 0, M0: 0, n: 56.3 }`: parent-EQUATORIAL elements with a
-     * fabricated phase, which used to be tilted into place by the mount
-     * applying Pluto's quaternion.
+     * Ecliptic J2000. This record read `{ i: 0, O: 0, w: 0, M0: 0, n: 56.3 }`
+     * until W6 stage B — parent-EQUATORIAL elements with a fabricated phase,
+     * which only ever worked because the mount tilted them into place. The
+     * values below are inverted from the same Horizons vector
+     * `analytical/satellites.ts` uses, re-referenced to J2000.
      *
-     * Stage B moved Charon to the analytical provider, and that mount is
-     * registry-driven and **date-blind** — so outside `plutoSat`'s 2020-2030
-     * validity window the engine drops to this fallback and it is no longer
-     * rotated. Left as it was, Charon's orbit lay **67.2° off Pluto's equator**
-     * at 2019 and 2031 and snapped there as the user scrubbed across the window
-     * edge, silently breaking the mutual lock the wave exists to show.
-     *
-     * These are the same fixture-derived elements as
-     * `analytical/satellites.ts`, re-referenced from the 2025-01-01 epoch to
-     * J2000 (`M0 − n·(epochJD − J2000)`), which the Kepler provider assumes. So
-     * the fallback is now geometrically identical to the analytical path
-     * instead of a different orbit: what degrades outside the window is the
-     * *accuracy* nobody has characterised, which is what the fallback label
-     * has always claimed — not the plane.
+     * Nothing reads the orientation fields any more: `setup.ts` registers the
+     * Kepler fallback from the analytical block directly, for the reasons
+     * documented there. What survives here is the panel's display source.
      */
     orbit: {
       a: 0.00013098,

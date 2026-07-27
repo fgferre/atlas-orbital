@@ -39,6 +39,7 @@ import {
   resolveOrbitalDisplayPosition,
 } from "../../lib/orbital";
 import { ecliptic2ThreeJs } from "../../lib/orbital/analytical/coordUtils";
+import { SATELLITE_IDS } from "../../lib/orbital/analytical/satellites";
 
 import phobosFixture from "../../test/fixtures/horizons/phobos-2025-01-01.json";
 import deimosFixture from "../../test/fixtures/horizons/deimos-2025-01-01.json";
@@ -304,26 +305,23 @@ describe("Charon and Triton after W6 stage B", () => {
     ).toBeLessThan(1e-4);
   });
 
-  it("charon and triton keep their orbit plane outside the validity window", () => {
+  it("every analytical satellite keeps its orbit plane outside the validity window", () => {
     // The analytical mount discriminator is registry-driven and **date-blind**,
-    // but the ENGINE is not: outside `plutoSat` / `neptunian` (2020-2030) it
-    // drops to the Kepler fallback and reads `body.orbit`. Those fields used to
-    // hold parent-EQUATORIAL elements that only made sense under a rotation the
-    // mount no longer applies, so scrubbing across the window edge swung
-    // Charon's orbit **67.2°** off Pluto's equator — breaking the mutual lock
-    // this wave exists to demonstrate, at a date no fixture covers.
+    // but the ENGINE is not: outside each family's validity window it drops to
+    // the Kepler fallback. That fallback used to read `body.orbit`, whose
+    // parent-referred `i`/`Ω` only made sense under a rotation the mount no
+    // longer applies — so scrubbing across the window edge laid Miranda's orbit
+    // **104.6°** over onto the ecliptic, drawn orbit line and all, and swung
+    // Charon **67.2°** off Pluto's equator. `setup.ts` now registers each
+    // analytical satellite's own elements as its fallback, so the two paths are
+    // geometrically identical and only the disclosed accuracy degrades.
     //
-    // They now hold the same fixture-derived ecliptic elements re-referenced to
-    // J2000, so the fallback is geometrically identical to the analytical path
-    // and only its (uncharacterised) accuracy degrades. This asserts the plane,
-    // which is the part that was wrong; `isFallback` still flips, by design.
+    // This asserts the plane, which is the part that was wrong; `isFallback`
+    // still flips at the boundary, by design.
     const IN_WINDOW = new Date("2025-01-01T00:00:00Z");
     const OUT_OF_WINDOW = new Date("2035-01-01T00:00:00Z");
 
-    for (const [id, parent] of [
-      ["charon", "pluto"],
-      ["triton", "neptune"],
-    ] as const) {
+    for (const [id, parent] of ANALYTICAL_SATELLITE_PARENTS) {
       const shift = angleDeg(
         engineOrbitNormal(id, parent, IN_WINDOW),
         engineOrbitNormal(id, parent, OUT_OF_WINDOW)
@@ -375,3 +373,15 @@ function engineOrbitNormal(
     .crossVectors(at(date), at(new Date(date.getTime() + 3_600_000)))
     .normalize();
 }
+
+/**
+ * Every analytical satellite with its parent, for the validity-window check.
+ * Derived from the registry rather than listed, so a satellite added later
+ * cannot quietly skip the assertion.
+ */
+const ANALYTICAL_SATELLITE_PARENTS: ReadonlyArray<readonly [string, string]> =
+  SATELLITE_IDS.map((id) => {
+    const parent = BODIES_BY_ID.get(id)?.parentId;
+    if (!parent) throw new Error(`${id} has no parentId`);
+    return [id, parent] as const;
+  });
