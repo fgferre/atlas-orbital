@@ -229,3 +229,67 @@ describe("the spin angle is unwrapped", () => {
     );
   });
 });
+
+/**
+ * The map has to land where the model says it does.
+ *
+ * `subSolarPoint.test.ts` proves the orientation against JPL, but it proves it
+ * about the *geometry* — a mirrored or 90°-rotated texture would sail through
+ * all 74 of those assertions while drawing the terminator across the wrong
+ * continents. Two separate links close that gap, and they need different
+ * treatment:
+ *
+ * 1. **Mesh → axis.** Which way `SphereGeometry` runs its u coordinate. This is
+ *    a three.js implementation detail that a version bump can silently flip, so
+ *    it is asserted here rather than trusted.
+ * 2. **Texture → longitude.** Whether the shipped map puts longitude 0 at
+ *    u = 0.5. That is a property of the image file, not of any code, so it
+ *    cannot be unit-tested without a JPEG decoder. It was verified by
+ *    inspection on 2026-07-27 against `public/textures/2k_earth_daymap.jpg` and
+ *    `2k_earth_nightmap.jpg`: both are standard NASA equirectangular plates
+ *    with Greenwich on the centre column — Britain immediately left of centre,
+ *    the Gulf of Guinea on it, New Zealand at the right edge, Alaska at the
+ *    left — and the two agree column for column, so the city lights fall on the
+ *    same continents the daymap draws. **A new Earth map must be re-checked the
+ *    same way**; nothing in the suite will catch a re-projected replacement.
+ */
+describe("the texture meridian lines up with the model's meridian", () => {
+  it("puts SphereGeometry's u = 0.5 seam on local +X", () => {
+    const geometry = new THREE.SphereGeometry(1, 64, 32);
+    const position = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+
+    const equatorVertexNearest = (u: number) => {
+      let best = -1;
+      let bestDistance = Infinity;
+      for (let i = 0; i < uv.count; i++) {
+        const d = Math.abs(uv.getX(i) - u) + Math.abs(uv.getY(i) - 0.5);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = i;
+        }
+      }
+      return new THREE.Vector3(
+        position.getX(best),
+        position.getY(best),
+        position.getZ(best)
+      );
+    };
+
+    // The leading minus on `vertex.x` in SphereGeometry's builder is what makes
+    // this mapping, and it is the whole reason no per-texture seam-offset field
+    // exists: the equirectangular convention (longitude 0 at u = 0.5) and the
+    // mesh convention (u = 0.5 at +X) already agree, so the residual is zero by
+    // construction rather than by a tuned constant.
+    expect(equatorVertexNearest(0.5).x).toBeCloseTo(1, 6);
+
+    // And u increases the same way the spin does: `rotation.y = W` applies
+    // R_y(+W), which carries +X toward −Z. u = 0.75 sitting on −Z is what makes
+    // increasing W equal increasing east longitude rather than decreasing it.
+    expect(equatorVertexNearest(0.75).z).toBeCloseTo(-1, 6);
+    expect(equatorVertexNearest(0.25).z).toBeCloseTo(1, 6);
+    expect(equatorVertexNearest(0).x).toBeCloseTo(-1, 6);
+
+    geometry.dispose();
+  });
+});

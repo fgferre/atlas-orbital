@@ -31,12 +31,25 @@ separates them by 0.34° — the gate now runs at J2000 plus a separate rate
 check), and **Mars's 1.59° periodic term is a fixed offset, not a wobble**, so
 dropping it would have shipped a 1.6° pole error that looked right.
 
+**The verification story changed on 2026-07-27 and stage B inherits the new
+one.** The owner said plainly that he cannot technically evaluate whether the
+orientation is right — and he was correct to, because the residual is 0.06° and
+the defect class is 0.3°, both far below what an eye resolves. The human smoke
+was never a gate. It is replaced by **JPL Horizons sub-observer fixtures**
+(`HORIZONS_MODE=subpoint` in the existing script) and
+[`subSolarPoint.test.ts`](../src/lib/subSolarPoint.test.ts): 74 assertions, all
+eight planets, epochs from 1900 to 2100. Read that file's header before adding
+bodies — it records the west-vs-east longitude trap, the light-time treatment,
+and why the residual growth after 2025 is a ΔT-model divergence rather than a
+bad Ẇ. **Do not "fix" the app's ΔT toward JPL**: Horizons freezes it beyond the
+observed record, the app extrapolates with Espenak-Meeus, and future Earth
+rotation is unknowable.
+
 **W6 stage B is next:** the 18 analytical satellites plus the Moon, Pluto and
-Charon, the Triton decision, and OPP-PC. Everything the "Third round" subsection
-prescribes still applies and matters more now that the Earth-only anchor is
-spent — the Horizons sub-observer fixtures, pole-vs-orbit-normal, and running
-the lock check at every fixture epoch are the instruments for the 20 bodies that
-have no independent anchor. `moonSceneFrame.test.ts` now asserts Pluto has no
+Charon, the Triton decision, and OPP-PC. The sub-observer instrument the "Third
+round" subsection asks for now **exists and works** — stage B only has to add
+bodies to it. Pole-vs-orbit-normal and running the lock check at every fixture
+epoch are still owed for the 20 bodies with no independent anchor. `moonSceneFrame.test.ts` now asserts Pluto has no
 rotation solution; stage B flips that assertion and must re-derive Charon's
 mount with it.
 

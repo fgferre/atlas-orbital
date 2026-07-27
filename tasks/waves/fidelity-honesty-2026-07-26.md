@@ -139,19 +139,20 @@ worked. If not, option B (re-origin the field) is next and C was insufficient.
   and Weywot–Quaoar separations unchanged; in **didactic** mode moons of flattened
   planets do shift slightly, by design.
 
-- **W6A** — the one with a right answer you can check against a clock. Set
-  **2026-03-20T12:00:00Z** and look at Earth: the sub-solar point must sit near
-  Greenwich, ~1.9° **west** of it (the equation of time — this is correct, not
-  drift), and at 00:00Z it must sit near the antipode. Africa in daylight at
-  noon UTC is the coarse version. Compare against your memory of the old build,
-  where the terminator was ~280° out and the 8k night-lights map lit the wrong
-  continents. Then run **two simulated days at high speed watching the cloud
-  layer**: no once-per-day snap (NEW-2). Then a **GLB body** — Vesta, Pallas or
-  Haumea — which has flipped azimuth by 2× its tilt (up to 168° for Pallas) now
-  that both render paths share one basis; confirm it still looks lit and
-  oriented sanely, since no automated check covers the model path's meridian.
-  Finally: Uranus should still lie on its side (97.77° now comes from δ₀, not
-  from `axialTilt`), and Venus and Uranus must still turn **backwards**.
+- **W6A** — **most of what was drafted here is now machine-checked** and has been
+  deleted from this list rather than left as busywork. Where Earth faces, whether
+  the poles and spin rates are right, and whether they stay right from 1900 to
+  2100 are all asserted against JPL in `subSolarPoint.test.ts`; the texture
+  meridian is asserted in `bodyOrientation.test.ts`. Do **not** re-eyeball the
+  terminator — you cannot resolve 0.06°, and that was the point.
+  What is left is genuinely visual, i.e. things no number decides:
+  **(a)** two simulated days at high speed watching Earth's cloud layer — the
+  once-per-day snap must be gone (NEW-2); **(b)** one **GLB body** (Vesta,
+  Pallas or Haumea), whose azimuth flipped by 2× its tilt — up to 168° for
+  Pallas — now that both render paths share one basis; confirm it still reads as
+  lit and sane, since no automated check covers a GLB's own meridian;
+  **(c)** Uranus still lying on its side and Venus/Uranus still turning
+  backwards, which is a five-second sanity look, not a measurement.
 - **W6A / pixel gate** — Earth's azimuth changed, so `npm run test:e2e` is
   expected to fail the boot baseline. **It was not run and not re-blessed.** Per
   standing law 5 that re-bless needs a human confirming a correct populated
@@ -1296,6 +1297,71 @@ baseline once, deterministically") is **still unverified** — that re-bless is
 owed and belongs with the batched smoke. Earth now draws at its measured
 orientation rather than the +140° that was tuned for one country's afternoon, so
 the boot frame is expected to move.
+
+#### The eyeball was never a gate — replaced with JPL (2026-07-27)
+
+**Owner objection, and it was correct:** "I can't technically evaluate whether
+this is right." This section's verification plan asked a human to judge a
+terminator. The measured residual is **0.06°** — 7 km at Earth's equator — and
+the defect class it had to catch is ~0.3°, roughly Portugal's width on a globe.
+That is below the perceptual threshold, so the step was theatre. Rule filed in
+[`../lessons.md`](../lessons.md) M5.
+
+**Replacement:** `subSolarPoint.test.ts`, 74 assertions against **JPL Horizons
+sub-observer points** (`HORIZONS_MODE=subpoint` in the existing fixture script,
+OBSERVER + QUANTITIES 14,20). The sub-solar point is a pure orientation quantity
+— it moves if and only if the pole, W₀, Ẇ or the time scale is wrong — and JPL
+evaluates the same IAU model from **its own** copy of the tables, so it
+falsifies this repo's transcription rather than confirming it. This is the
+third round's "Horizons sub-observer fixtures" instrument, built early because
+stage A needed it; **stage B inherits it working** and only has to add bodies.
+
+Measured longitude residuals, all eight planets, three 2025–2026 epochs:
+
+    mercury 0.011°  venus 0.0002°  earth 0.061°  mars 0.024°
+    jupiter 0.056°  saturn 0.055°  uranus 0.034°  neptune 0.037°
+
+Earth is loosest because Horizons drives it with **ITRF93**, not the IAU
+expression — a better model than the one the catalog ships. Its 0.0605° is
+constant to four decimals, i.e. an offset, not drift.
+
+**Over time, which three epochs 15 months apart cannot answer.** Earth, Mars and
+Jupiter carry fixtures at 1900/1950/2000/2050/2100. Longitude error grows (Mars
+0.002° → 0.541°, Jupiter 0.006° → 1.342° by 2100) and that is **not** a bad Ẇ:
+divided by each body's own spin rate the two agree on one clock offset to under
+a second at every epoch (2100: −133.3 s vs −133.2 s). Two mistranscribed
+constants cannot produce errors proportional to two unrelated rates. Adding that
+offset back to the app's ΔT recovers JPL's: 69.5 s at 2025, 69.7 s at 2050,
+69.5 s at 2100 — **Horizons freezes ΔT beyond the observed record while the app
+extrapolates with Espenak-Meeus.** Future Earth rotation is unknowable; this is
+a disclosed divergence between two defensible models and must **not** be "fixed"
+toward JPL. Sub-finding: Espenak-Meeus already over-predicts today's ΔT by ~5 s,
+worth 0.02° of Earth rotation.
+
+**Two traps this nearly shipped past**, both now read from the source:
+IAU planetographic longitude runs **west** for prograde rotators and **east**
+for retrograde ones — Mars came back "wrong" by 162°/39°/47°, which reads as a
+rate error and was a _sign_, and a hard-coded "west except Earth" rule would
+still have broken Venus and Uranus. And Horizons reports the point as it was
+when the light left, so the model is evaluated at `t − range/c`; Earth turns
+2.08° in those 8.3 minutes.
+
+**The one thing a numeric oracle cannot reach: the texture.** A mirrored or
+rotated map passes all 74 assertions while drawing the terminator on the wrong
+continents. Split in two and treated differently:
+
+- **Mesh → axis** is asserted (`bodyOrientation.test.ts`): `SphereGeometry` puts
+  u = 0.5 on local **+X**, u = 0.75 on −Z. A three.js bump could flip that
+  silently, so it is pinned rather than trusted. This is also the measured
+  confirmation of this section's no-seam-offset claim — the two conventions
+  already agree, so the residual is zero by construction, not by tuning.
+- **Texture → longitude** cannot be unit-tested without a JPEG decoder and was
+  **verified by inspection**: `2k_earth_daymap.jpg` and `2k_earth_nightmap.jpg`
+  are standard NASA equirectangular plates with Greenwich on the centre column
+  (Britain just left of centre, Gulf of Guinea on it, New Zealand at the right
+  edge, Alaska at the left), and the two agree column for column, so the city
+  lights fall on the continents the daymap draws. **A replacement Earth map must
+  be re-checked the same way** — nothing in the suite will catch a re-projection.
 
 ---
 

@@ -435,6 +435,23 @@ blind spot:
   caused which visual delta. PNG file-size delta (e.g. 333 → 130 KB) is
   a first-pass "scene complexity changed substantially" signal worth
   closer inspection.
+- **If a gate's oracle is a human eye on a quantity below the perceptual
+  threshold, it is not a gate.** W6 planned to validate ~29 transcribed
+  IAU rotation constants by asking the owner whether Earth's terminator
+  looked right. The real residual is 0.06° — 7 km at the equator — and
+  the defect it had to catch was ~0.3°, about Portugal's width on a
+  globe. Nobody answers that from a screenshot, and the owner said so.
+  The fix was not a better screenshot but a different oracle: JPL
+  Horizons sub-observer points (`subSolarPoint.test.ts`), which turned
+  "does this look right" into 74 assertions over 200 years. **Before
+  writing a human step into a plan, state the quantity and its
+  magnitude; if a person cannot resolve it, find an external source of
+  truth.** Keep humans for what only they can judge — is it beautiful,
+  is it confusing, did it flicker.
+  Corollary from the same pass: a numeric oracle validates the geometry,
+  not the asset mounted on it. A mirrored texture passes every one of
+  those 74 tests. Split the claim into machine-checkable links and
+  inspect-once links, and say in writing which is which.
 - **A constant is only checked by a reference that (a) does not pass
   through it and (b) is in the same frame.** (a) is standing law 3: W6's
   Earth W₀ is falsified by GMST because GMST comes from the IERS
