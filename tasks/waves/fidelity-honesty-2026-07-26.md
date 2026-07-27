@@ -76,6 +76,70 @@ darkening)** belongs beside it.
 
 ---
 
+## Deferred smoke gate — one pass at the end of the wave
+
+**Owner decision, 2026-07-26: the per-ship browser smokes are batched and run
+once, at the end, instead of blocking each increment.** So "smoke pending" in the
+table above is not a blocker and must not be treated as one. This section is the
+single checklist; each wave's own subsection keeps the _reasoning_, this keeps the
+_actions_. Do not re-derive the list from the per-wave prose.
+
+**Camera obstacle, read this first.** Selecting a body that owns satellites frames
+the whole satellite system, so Earth, Mars, Jupiter, Saturn and Uranus each draw a
+few dozen pixels wide and wheel-dolly does not override it. Anything below needing
+a close-up requires manual approach after the fly-to. This is why the automated
+passes could not confirm the limb, the terminator or the oblateness.
+
+**The five that can actually reveal a defect** — do these first:
+
+1. **Sirius at 1 year/second for 20+ s** (W4/F-06). Disc stays centred, no lateral
+   slide, no sprite↔mesh pop. Then defocus/refocus: the ramp restarts from 0.
+2. **Jupiter close up, spinning** (W5A). Limb visibly elliptical and the bulge
+   **locked to the pole**. A bulge that _wobbles_ means the scale reached a group
+   above a rotation — the worst outcome this wave can produce. Uranus's bulge must
+   lie across the disc at 97.77°.
+3. **Earth's limb** (W3/F-05). Smooth fade, same hue, less opaque. A **hard outer
+   ring** is the failure; if it rings, the only knob is the per-body `alpha`, never
+   `fKrESun`/`fKmESun`.
+4. **Full Moon** (W3/BRDF-B). Disc reads flat to a hard edge, no limb darkening.
+5. **Mercury's panel** (W2). Grid "Rotation Period 58.6 Earth days" above a Fact
+   saying a Mercurian solar day is 176 days — two different, both-true statements.
+
+**Plus NEW-6, which is the one the owner reported and the one my A/B could not
+prove:** re-run the original repro (fly to 52 Ori — searchable as `hd 38710`, since
+Flamsteed names are not indexed — in **live** mode) and watch the ~300 ms
+cross-fade for the sprite sitting beside the mesh. If it is gone, `084a26b`
+worked. If not, option B (re-origin the field) is next and C was insufficient.
+
+**The rest, by wave:**
+
+- **W1** — Ctrl+Shift+T to tutorial step 6 (names the gear button; all three
+  features findable). Titan's Orbit Model block at desktop and 390 px. Ceres
+  dragged to 1890 flips the provenance note to Kepler-fallback framing.
+- **W2** — Venus, Moon, Io, Titan, Iapetus, Pluto, Sedna, Mimas, Earth. Earth
+  "23h 56min (sidereal)". **Iapetus shows no inclination cell.** Pluto: e 0.248 and
+  one full-width "29.70 – 49.26 AU". Mimas: no mass badge, not "0.00×". The 27
+  poleless bodies read "N/A", never "0°" and never "undefined°". Venus at greatest
+  elongation ≈ 50% dichotomy; new moon ≈ 0°; Mercury never exceeds ~28.3° across a
+  simulated year. Repeat at 390 px.
+- **W3** — Sun filling the viewport: granulation still moving after 15 s, and frame
+  time. First frame after boot lit, not black. Vesta (GLB path) not blown out.
+  Globally everything ~1.43× brighter in diffuse — hunt for anything newly clipped.
+- **W4** — Rigel reads Luminosity (visual) ~50 722 × Sun; Proxima ~5.7e-5, not
+  "0.00"; constellations by name. A spect-less star hides the est. rows **and** the
+  footer together while Luminosity survives. Re-check the Sun (must be unchanged).
+  pt-BR with no raw keys.
+- **W5A** — Quaoar through one 17.68 h period: silhouette visibly changes width.
+  **Counterintuitive:** the _wrong_ axis mapping would swing it 37%, the correct one
+  19% — "looks like less" is the correct reading. In **realistic** mode Io–Jupiter
+  and Weywot–Quaoar separations unchanged; in **didactic** mode moons of flattened
+  planets do shift slightly, by design.
+
+**A/B against `main` is no longer available** for the W3 items — five waves have
+landed since, so those readings are absolute judgement now, not comparisons.
+
+---
+
 ## Standing law
 
 Applies to every wave. Violations are defects, not style notes.
@@ -303,13 +367,7 @@ with the flat disc and hard terminator the law predicts, and the run logged
 **zero console errors** — which is the GLSL-compile smoke standing law 8 is
 actually about. The spec was deleted after use; it is not a gate.
 
-**Still owed, and owed by a human, not by CI:** the three interactive readings no
-script can take. Granulation A/B against main after 15 s at ultra; frame time with
-the Sun filling the viewport before and after P-01; and Earth's lit limb and
-terminator at close range for F-05. On the last one the camera is the obstacle,
-not the renderer: selecting a body that owns satellites frames the **whole
-satellite system**, so Earth and Saturn draw ~14 px wide and wheel-dolly does not
-override it. Worth knowing before anyone else tries to script a close-up.
+**Owed observations** are batched into the wave's **Deferred smoke gate** section — per owner decision the browser smokes run once at the end, not per increment. Do not duplicate the checklist here.
 
 **F-05 was therefore verified numerically instead, which for a one-character
 swizzle is the stronger check.** With Rec.709 weights against a blue-dominant
@@ -576,12 +634,7 @@ instead of flipping, only the focused star ever mounts a mesh, and the
 "index K means a different star after a tier change" hazard is neutralised by HYG
 tiers being a brightness-sorted prefix.
 
-**Still owed by a human:** the temporal half of F-06 — Sirius at 1 year/second
-for 20+ s, watching for lateral slide and sprite/mesh pop, and the
-defocus/refocus ramp restart. `e2e/hyg-focus.spec.ts` passes and covers the
-fly-to contract, but a single scripted screenshot cannot see multi-frame
-drift (lesson M5). Also owed: a spect-less star, which needs one picked out of
-the catalog by hand — the unit test covers the branch, the smoke does not.
+**Owed observations** are batched into the wave's **Deferred smoke gate** section — per owner decision the browser smokes run once at the end, not per increment. Do not duplicate the checklist here.
 
 **Verification.** `npm run test:run -- hygFocusResolver HygStarPanel i18n stellarPhysics && npm run build`.
 Smoke: search Sirius, fly in until the disc appears, set 1 year/second and play —
@@ -811,9 +864,9 @@ flown to in Chromium: all render, console clean of errors, so the shared geometr
 and the deleted double-applies are runtime-safe. It could **not** confirm the
 elliptical limb, because selecting a body that owns satellites frames the whole
 satellite system — all four stage-A bodies have moons, so each draws a few dozen
-pixels wide and a 2.26% oblateness is sub-pixel there. Same camera obstacle
-recorded in W4. **The elliptical-limb and pole-lock readings are owed by a
-human**, and they are the ones that would catch a shear.
+pixels wide and a 2.26% oblateness is sub-pixel there. Same camera obstacle recorded in W4.
+
+**Owed observations** are batched into the wave's **Deferred smoke gate** section — per owner decision the browser smokes run once at the end, not per increment. Do not duplicate the checklist here.
 
 **Verification.** `npm run test:run -- astrophysics celestialBodies cameraNearPlane moonSceneFrame && npm run lint && npm run build`.
 Add a real assert in `astrophysics.test.ts`: `resolveSemanticBodyRadius(saturn,'realistic') / KM_TO_3D_UNITS` equals 60 268 ± 0.1% and Jupiter 71 492 — `cameraNearPlane.test.ts` is built entirely on Deimos, which has neither `shapeScale` nor flattening, so it is **structurally blind** to this wave and must not be described as the gate (lesson M5). Post-stage-B arithmetic gate: `resolveRingOuterRadius(saturn,'realistic') / KM_TO_3D_UNITS` still equals 140 180 km within 1%. Smoke per commit: Quaoar through one 17.68 h period; Jupiter limb plus spin-axis lock (a wobble means the scale went on the wrong group); Uranus; stage B, Saturn's ring shadow still tracking the drawn ring at three sub-solar latitudes, and didactic Saturnian moons still outside the rings. **Confirm Weywot's separation from Quaoar and Io's from Jupiter are unchanged from main at the same timestamp** — if either moved, the scale went on `groupRef`. Record the measured focus-extent deltas here: the equatorial radius grows 3.5% for Saturn, 2.2% Jupiter, 0.8% Uranus, 0.6% Neptune, in both scale modes, which shifts every moon of every flattened planet in didactic mode. Then `npm run test:e2e`.
