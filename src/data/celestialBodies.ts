@@ -1730,13 +1730,13 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Eris is the most massive and second-largest known dwarf planet in the Solar System. It is a trans-Neptunian object (TNO) in the scattered disk and has a high-eccentricity orbit. Eris was discovered in January 2005 by a Palomar Observatory-based team led by Mike Brown and verified later that year.",
     distanceFromParent: "10,120,000,000 km",
     info: "Massive dwarf.",
-    textures: { map: TEXTURE_PATH + "2k_eris.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_eris_fictional.jpg" },
     visualProvenance: {
       fidelity: "interpretive",
       summary:
-        "The shipped map is a community-authored artist rendering of Eris; only the very high albedo and methane-ice colour are observationally grounded.",
+        "The shipped map is explicitly fictional at its source - Solar System Scope publish it as an imagined Eris. Only the very high albedo and the methane-ice colour are observationally grounded; every surface feature is invented.",
       limitationReason:
-        "Eris has only ever been observed as a point source plus stellar occultations, so no measured global surface map exists; the file's licence is recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (eris-map-active).",
+        "Eris has only ever been observed as a point source plus stellar occultations, so no measured global surface map exists and none can until a spacecraft or a far larger telescope resolves it. Licensed CC BY 4.0 (eris-map-active).",
       sources: [
         {
           label: "NASA Science - Eris",

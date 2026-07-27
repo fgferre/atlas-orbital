@@ -212,11 +212,11 @@ export const VISUAL_ASSET_MANIFEST: VisualAssetManifestEntry[] = [
       "Runtime map, but explicitly fictional at the source. Surface detail is invented; only the reddish methane-ice tone is observationally grounded. Body carries a matching interpretive visualProvenance.",
   },
   // --- Placeholders, declared as such (2026-07-27) ---------------------------
-  // These four still render files from the same undocumented 1264x632 set that
-  // supplied the io/phobos/deimos DeviantArt uploads. The 2026-07-27 source
-  // sweep found no replacement that is better on every axis, so they stay —
-  // but they stay *labelled*. Each carries the best documented alternative
-  // found, and why it was not promoted. See
+  // These three still render files from the same undocumented 1264x632 set that
+  // supplied the io/phobos/deimos DeviantArt uploads. Two source sweeps
+  // (NASA 3D Resources, CelestiaContent, Stellarium) found no replacement that
+  // is better on every axis, so they stay — but they stay *labelled*. Each
+  // carries the best documented alternative found, and why it lost. See
   // `tasks/waves/texture-inventory-2026-07-27.md`.
   {
     id: "ceres-map-active",
@@ -277,19 +277,18 @@ export const VISUAL_ASSET_MANIFEST: VisualAssetManifestEntry[] = [
     bodyId: "eris",
     assetRole: "texture",
     channel: "map",
-    filePath: "public/textures/2k_eris.jpg",
+    filePath: "public/textures/4k_eris_fictional.jpg",
     format: "jpg",
-    diskSizeBytes: 128219,
-    resolution: "1264x632",
-    sourceLabel:
-      "Repo-local Eris map, placeholder (artist rendering, source unresolved)",
-    sourceUrl: null,
-    license: "not documented in repo",
+    diskSizeBytes: 3542916,
+    resolution: "4096x2048",
+    sourceLabel: "Solar System Scope fictional Eris texture",
+    sourceUrl: "https://www.solarsystemscope.com/textures/",
+    license: "CC BY 4.0",
     attributionRequired: true,
     status: "active",
     verifiedAt: "2026-07-27",
     notes:
-      "PLACEHOLDER, and permanently so. Eris has never been resolved into a surface map by any instrument, so no measured replacement can exist; the 2026-07-27 sweep confirmed neither NASA 3D Resources nor USGS has one. Same undocumented 1264x632 set as the ceres/dione/rhea files. Any future swap is a choice between artist renderings.",
+      "Explicitly fictional at the source: Eris has never been resolved into a surface map by any instrument, so no measured replacement can exist and the detail here is invented. It is still the honest choice - the file it replaces, 2k_eris.jpg, was a 1264x632 downscale of THIS image (mean |delta| 3.2/255 at matched size) carrying no source, no licence and no admission of being fictional. Same picture, a tenth of the pixels, none of the disclosure.",
   },
   {
     id: "jupiter-map-active",

@@ -79,9 +79,10 @@ const TEXTURES = [
     name: "4k_makemake_fictional.jpg",
     url: "https://www.solarsystemscope.com/textures/download/4k_makemake_fictional.jpg",
   },
-  // 4k_eris_fictional.jpg was removed 2026-07-27: `eris-map-active` in
-  // VISUAL_ASSET_MANIFEST pins 2k_eris.jpg as Eris's map, so this only ever
-  // landed on disk unreferenced.
+  {
+    name: "4k_eris_fictional.jpg",
+    url: "https://www.solarsystemscope.com/textures/download/4k_eris_fictional.jpg",
+  },
   // Pluto (New Horizons) - Keeping the Wikimedia one as it's better than fictional
   {
     name: "2k_pluto.jpg",

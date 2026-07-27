@@ -382,3 +382,71 @@ iapetus, tethys, enceladus, mimas, triton, the five Uranian moons, pluto,
 charon). Most are Solar System Scope under CC BY 4.0, but the 4k Uranian-moon
 PNGs — `4k_oberon.png` alone is 38 MB — have no recorded origin. Because they
 have no entry, the new contract cannot see them. Worth its own line.
+
+---
+
+# Source sweep — third pass, non-NASA repos
+
+Asked to look beyond NASA. Egress still allows only GitHub hosts, so this pass
+is repo-based. Licence notes are recorded verbatim; the licensing call is the
+maintainer's, but one distinction survives any purpose: **CC BY-NC and
+attribution terms are satisfied by an open, non-commercial, educational app; a
+refusal to allow redistribution is not.** That is the Björn Jónsson case and it
+stays rejected.
+
+## Repos evaluated
+
+### [`CelestiaProject/CelestiaContent`](https://github.com/CelestiaProject/CelestiaContent)
+
+REUSE-compliant, per-file SPDX sidecars — the best licence hygiene found
+anywhere. 4096×2048 maps for ceres, dione, rhea, europa, tethys, mimas,
+enceladus, iapetus; the Uranian moons at 2048–4096 px.
+
+| Asset                                                         | Licence                     | Credited                                                                     |
+| ------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| ariel, miranda, oberon, titania, umbriel                      | **CC-BY-SA-4.0**            | ItzImcool (2024-2026), Paul Schenk (2020), NASA/JPL/Ted Stryk                |
+| triton                                                        | **CC-BY-3.0**               | Askaniy Anpilogov, NASA/JPL-Caltech/ASI/USGS                                 |
+| charon                                                        | **CC-BY-NC-SA-3.0**         | Askaniy Anpilogov                                                            |
+| titan                                                         | multi-source                | Martonchik & Orton 1994, Karkoschka 2016, Seignovert 2019, NASA/JPL/ASI/USGS |
+| ceres, dione, rhea, europa, tethys, mimas, enceladus, iapetus | no SPDX sidecar in the repo | —                                                                            |
+
+**Rejected — the maps are calibrated for Celestia's renderer, not ours.**
+Rendered on a sphere under Atlas's lighting, `ceres.jpg` is a near-uniform dark
+disc (mean luma 64, detail 3.3), and dione/rhea/europa come out blown white
+(luma 203–208, detail 7.8–17.9 against our 14.5–37.5). This is not a defect in
+their work — Celestia applies its own exposure — but they are not drop-in.
+
+Tested the obvious fix on the highest-value target: level-matched Celestia's
+Europa to the luma mean and s.d. of the map we ship (gain 2.558, bias −337.5)
+and re-rendered. Structure comes back, but the lineae stay visibly softer than
+our 1264×632 file — at 4096×2048 the map is smooth, not detailed. **Even
+normalised it is not an upgrade.** Recorded so nobody repeats the experiment.
+
+### [`Stellarium/stellarium`](https://github.com/Stellarium/stellarium)
+
+Has every body we wanted, eris and haumea included. **Rejected on resolution:**
+every texture in the source tree is 512×256. Stellarium fetches hi-res
+separately at runtime, and that host is not reachable here.
+
+## The one real find, and it was a mistake of mine
+
+Restoring **`4k_eris_fictional.jpg`**, which the second commit of this line
+deleted as "superseded by 2k*eris.jpg". That was backwards. Downscaled to a
+common size the two differ by mean |Δ| **3.2/255** — `2k_eris.jpg` is a
+1264×632 downscale \_of the Solar System Scope file*, not a replacement for it.
+
+So Eris was rendering the same picture at a tenth of the pixels, with the
+source, the CC BY 4.0 licence and the word "fictional" all stripped off. Eris
+now renders the 4096×2048 original: 10× the pixels, documented licence, and the
+Sidebar says outright that every surface feature is invented — which for a body
+never resolved beyond a point source is the only honest thing to say.
+
+`2k_eris.jpg` is deleted and `scripts/download-textures.js` gets its line back.
+
+## Standing conclusion
+
+Three repos, three passes. For **ceres, dione and rhea** nothing reachable beats
+what ships; they stay placeholders and say so. The measured upgrades that do
+exist — the DLR/Dawn Ceres mosaic, USGS Cassini colour mosaics — sit behind an
+egress policy this container cannot cross, and are named in the manifest so a
+session with open network can go straight at them.
