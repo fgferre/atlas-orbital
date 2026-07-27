@@ -244,14 +244,27 @@ describe("the spin angle is unwrapped", () => {
  *    it is asserted here rather than trusted.
  * 2. **Texture → longitude.** Whether the shipped map puts longitude 0 at
  *    u = 0.5. That is a property of the image file, not of any code, so it
- *    cannot be unit-tested without a JPEG decoder. It was verified by
- *    inspection on 2026-07-27 against `public/textures/2k_earth_daymap.jpg` and
- *    `2k_earth_nightmap.jpg`: both are standard NASA equirectangular plates
- *    with Greenwich on the centre column — Britain immediately left of centre,
- *    the Gulf of Guinea on it, New Zealand at the right edge, Alaska at the
- *    left — and the two agree column for column, so the city lights fall on the
- *    same continents the daymap draws. **A new Earth map must be re-checked the
- *    same way**; nothing in the suite will catch a re-projected replacement.
+ *    cannot be unit-tested here without a JPEG decoder. Verified out-of-band on
+ *    2026-07-27, in two steps.
+ *
+ *    First by inspection of `8k_earth_daymap.jpg` — the file Earth's record
+ *    actually points at — which is a standard NASA equirectangular plate with
+ *    Greenwich on the centre column: Britain immediately left of centre, the
+ *    Gulf of Guinea on it, New Zealand at the right edge, Alaska at the left.
+ *
+ *    Then every other Earth texture was cross-correlated against it (edge
+ *    structure, 256×128 grid, best horizontal shift). All the ones carrying
+ *    geography align at **shift 0**: `8k_earth_nightmap` 0.896, `2k_earth`
+ *    0.997, `2k_earth_nightmap` 0.895, `boot_earth_daymap` 0.996 — so the city
+ *    lights and the boot frame land on the same continents the daymap draws.
+ *    The normal and roughness maps peak one grid cell off (±1.4°) but beat
+ *    shift 0 by only 0.1%, i.e. the correlation is flat at the peak: aligned to
+ *    the resolution of the check. Clouds are excluded by construction — a cloud
+ *    plate has no continental structure to correlate — so for those the only
+ *    claim is the 2:1 equirectangular framing, which holds for all twelve.
+ *
+ *    **A new Earth map must be re-checked the same way**; nothing in the suite
+ *    will catch a re-projected replacement.
  */
 describe("the texture meridian lines up with the model's meridian", () => {
   it("puts SphereGeometry's u = 0.5 seam on local +X", () => {
