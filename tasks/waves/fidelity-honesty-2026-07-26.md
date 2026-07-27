@@ -514,6 +514,28 @@ float32-friendly origin near the focused star, set `mesh.position` to that origi
 re-bake on focus change — ~1.3 MB attribute rewrite per focus change, not per
 frame). That is T4.1-γ / `cameraRelativeVector3` / `Vector3Q` finally being needed.
 
+**The repo already knew about term 2, named the threshold, and then closed it as
+moot for the one file where it matters.** `src/lib/math/cameraRelative.ts:30-39`
+states it outright: Three uploads matrix uniforms as float32, "the matrix-multiply's
+internal subtract-of-camera-position happens in float32, **losing precision at ~1e7
+world units**". 52 Ori sits at 3.4e10 — **3400× past that documented threshold.**
+Then `:46-52` reasons that `Starfield.tsx`'s `modelViewMatrix * vec4(animatedPos)`
+is "mathematically equivalent at float32 GPU precision" to Gaia's
+`particlePos - u_camPos`, and records **"T4.1-β-wire-α was therefore
+CLOSED-AS-MOOT (2026-05-04) for Starfield."**
+
+That comparison is what let this ship, and it is wrong in a specific way worth
+writing down: it compared two _equally float32-limited_ forms and concluded there
+was no gain. Both are limited, so the local conclusion held — but the option it
+never considered is the one that actually works, **compute the difference on the
+CPU in float64 and upload the small result**. A float32 subtract of two nearby
+float32 values is exact (Sterbenz); the error lives entirely in the _rounded
+inputs_, so the only cure is to subtract before either input is rounded. Neither
+Gaia's form nor Three's does that. `cameraRelativeVector3` and
+`writeCameraRelativeToFloat32` in that same file are exactly the primitives for
+it, already tested, and never wired. The CLOSED-AS-MOOT line must be reopened and
+corrected by whoever fixes this.
+
 **`hygFocusResolver.ts:148-150` currently says the opposite** — "Float32
 throughout — atlas's stellar world units max out at ~1e12 which fits float32
 comfortably. T4.1-γ would replace this ... if/when stellar zoom crosses the
