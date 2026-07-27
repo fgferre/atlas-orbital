@@ -466,8 +466,62 @@ For scale on how fast this bites: 52 Ori's landing distance is 858 wu and it
 moves 3690 wu per simulated year, so at 1 year/second the star traverses its
 **entire** landing distance in 0.23 s of wall time.
 
-**A SECOND INSTANCE IS STILL OPEN, and F-06 did not touch it — `CameraController`
-freezes the FLIGHT target.** `setupCameraHyg` resolves `targetPos` once
+**NEW-6 — the dominant cause is float32 precision, not frozen state, and it needs
+no simulated time at all.** The owner reported the drift in **LIVE mode** on 52 Ori
+and then that "several stars" show it. Live mode falsifies both frozen-state
+mechanisms below: each needs simulated time to elapse, and at live speed 52 Ori
+moves 0.0012 wu in ten seconds. So there is a third mechanism, and it is the
+biggest one.
+
+The sprite and the mesh reach the screen by **different numeric paths**:
+
+- **Sprite:** `Starfield.tsx:486` bakes `scaledPositions` as a **`Float32Array` of
+  absolute world coordinates**, then the vertex shader
+  (`Starfield.tsx:171-172`) computes
+  `modelViewMatrix * vec4(starPosition + velocity * years, 1.0)`. The starfield
+  mesh sits at the origin, so that matrix's translation column is the camera
+  position — ~3.4e10 wu for a star at 165 pc — and the multiply cancels it against
+  an equally large position **in float32**.
+- **Mesh:** `group.position` is a JS float64 vector, and three composes
+  `modelViewMatrix = cameraInverse × matrixWorld` **on the CPU in float64**, so the
+  matrix it uploads already has a _small_ (~10³ wu) translation. The mesh is
+  precise. `CameraController` aims at the same float64 value, so **camera and mesh
+  agree and the sprite is the odd one out.**
+
+Two error terms, and only the first was measured:
+
+1. **Storage quantisation, measured** with the app's own parser: float32 spacing at
+   52 Ori's |P| = 3.403e10 wu is **2048 wu**, and the actual round-off of its three
+   components is **197 wu**. At the landing distance that is **4.0°**, roughly
+   **14× the star's own angular radius** (5e-3 rad = 0.29°). Same 4.0° for Proxima;
+   Rigel and Betelgeuse come out at 0.1-0.4° purely because a supergiant's landing
+   distance is 10³× larger. **Small stars at any distance** again — most of the
+   catalog, which matches "several stars".
+2. **Shader transform, reasoned and NOT measured.** The uploaded `mat4` is float32,
+   so its ~3.4e10 translation column is itself rounded to ±1024 wu, and the dot
+   products cancel at that magnitude. This term is of the same order or larger than
+   (1), varies as the camera moves, and is **common to the whole sprite field** —
+   which is why it reads as drift rather than as a fixed offset. It cannot be
+   mirrored on the CPU: it happens on the GPU, per frame.
+
+Consequence for any fix: **term (1) can be closed by consistency** — have
+`resolveHygWorldPosition` return the _same_ float32-rounded value the sprite is
+drawn from, so camera, mesh and sprite agree by construction and the only residual
+is a 6e-9 relative error in the star's absolute position, far below anything the
+app claims. **Term (2) cannot**, and needs the camera-relative path this repo
+already names: re-origin the starfield mesh (store positions relative to a
+float32-friendly origin near the focused star, set `mesh.position` to that origin,
+re-bake on focus change — ~1.3 MB attribute rewrite per focus change, not per
+frame). That is T4.1-γ / `cameraRelativeVector3` / `Vector3Q` finally being needed.
+
+**`hygFocusResolver.ts:148-150` currently says the opposite** — "Float32
+throughout — atlas's stellar world units max out at ~1e12 which fits float32
+comfortably. T4.1-γ would replace this ... if/when stellar zoom crosses the
+precision floor". The floor **has** been crossed; that reassurance is false and is
+standing law 4's problem for whichever wave takes this.
+
+**A SECOND FROZEN-STATE INSTANCE IS ALSO STILL OPEN, and F-06 did not touch it —
+`CameraController` freezes the FLIGHT target.** `setupCameraHyg` resolves `targetPos` once
 (`CameraController.tsx:335`) and hands that frozen vector to both channels:
 `HygPhysicsFlight.start()` copies it into a private field
 (`hygPhysicsFlight.ts:272`) and `update(dt)` takes only `dt`, and `AimLerp.start()`
