@@ -20,6 +20,8 @@
  * Usage:
  *   node scripts/derive-iau-orientation.js                # all known bodies
  *   node scripts/derive-iau-orientation.js moon triton    # a subset
+ *   node scripts/derive-iau-orientation.js --radii        # BODY_AXES table
+ *                                                         # for subSolarPoint.test.ts
  *
  * Environment:
  *   PCK_FILE=/path/to/pck00011.tpc   use a local copy instead of fetching
