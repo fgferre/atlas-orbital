@@ -129,6 +129,10 @@ worked. If not, option B (re-origin the field) is next and C was insufficient.
   "0.00"; constellations by name. A spect-less star hides the est. rows **and** the
   footer together while Luminosity survives. Re-check the Sun (must be unchanged).
   pt-BR with no raw keys.
+- **W5B** — Saturn close up: the ring shadow must track the **drawn** ring at three
+  sub-solar latitudes, and the shadow edge must not warp along an in-plane axis
+  (that would be the Z-vs-Y trap surviving). In didactic mode the Saturnian moons
+  must still sit outside the rings.
 - **W5A** — Quaoar through one 17.68 h period: silhouette visibly changes width.
   **Counterintuitive:** the _wrong_ axis mapping would swing it 37%, the correct one
   19% — "looks like less" is the correct reading. In **realistic** mode Io–Jupiter

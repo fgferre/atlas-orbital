@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (W1–W4 + W5A code-complete; browser smokes BATCHED to the end of the wave; W5 stage B next)._
+_Last updated: 2026-07-26 (W1–W5 code-complete; browser smokes BATCHED to the end of the wave; W6 next)._
 
 ---
 
@@ -14,14 +14,17 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1 through W4 plus W5 stage A are code-complete on `main` (through `2d26f5e`);
-their browser smokes are **batched into one pass at the end of the wave** — owner decision, 2026-07-26, so "smoke pending" in the progress table is NOT a blocker and no increment waits on it. The consolidated checklist is the wave's **Deferred smoke gate** section; do not rebuild it from the per-wave prose. W5 stage B (Saturn, F-09, the ring shaders) is next** —
-the riskiest remaining increment in tranche 1, and stage A deliberately stopped
-short of it because the wave declares stage A a valid stopping point. Read W5's
-"Stage A shipped" subsection first: the bake-into-geometry decision **removes two
-of stage B's three shader edits**, but the "in the ring shaders the pole is Z, not
-Y" trap still applies in full to the planet-as-occluder solve, which is duplicated
-across two patches. Per-item commits are in the wave file's progress table.
+**W1 through W5 are code-complete on `main` (through `d5c6ebb`), and their browser
+smokes are batched into one pass at the end of the wave** — owner decision,
+2026-07-26, so "smoke pending" in the progress table is NOT a blocker and no
+increment waits on it. The consolidated checklist is the wave's **Deferred smoke
+gate** section; do not rebuild it from the per-wave prose.
+
+**W6 (one pole, one spin) is next — the plan's highest-fan-out wave and its
+largest live falsehood.** It ships ~29 transcribed IAU constants under a
+"measured" provenance tag, F-01 and F-02 cannot be split, and its own risk section
+says a wrong W0 renders as a perfectly plausible planet. Read the whole W6 section
+including "Third round" before touching `moonSceneFrame.ts`.
 
 Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is
