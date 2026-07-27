@@ -211,6 +211,67 @@ export const VISUAL_ASSET_MANIFEST: VisualAssetManifestEntry[] = [
     notes:
       "Runtime map, but explicitly fictional at the source. Surface detail is invented; only the reddish methane-ice tone is observationally grounded. Body carries a matching interpretive visualProvenance.",
   },
+  // --- Placeholders, declared as such (2026-07-27) ---------------------------
+  // These four still render files from the same undocumented 1264x632 set that
+  // supplied the io/phobos/deimos DeviantArt uploads. The 2026-07-27 source
+  // sweep found no replacement that is better on every axis, so they stay —
+  // but they stay *labelled*. Each carries the best documented alternative
+  // found, and why it was not promoted. See
+  // `tasks/waves/texture-inventory-2026-07-27.md`.
+  {
+    id: "ceres-map-active",
+    bodyId: "ceres",
+    assetRole: "texture",
+    channel: "map",
+    filePath: "public/textures/2k_ceres.jpg",
+    format: "jpg",
+    diskSizeBytes: 139724,
+    resolution: "1264x632",
+    sourceLabel: "Repo-local Ceres map, placeholder (source unresolved)",
+    sourceUrl: null,
+    license: "not documented in repo",
+    attributionRequired: true,
+    status: "active",
+    verifiedAt: "2026-07-27",
+    notes:
+      "PLACEHOLDER. Structure follows Dawn Framing Camera imagery; the colour balance is not measured. No NASA 3D Resources texture exists for Ceres. The documented upgrade is the DLR/Dawn FC controlled global mosaic at USGS Astrogeology (ceres_dawn_fc_global_mosaic_140m), which this session could not fetch — the network policy denies astrogeology.usgs.gov.",
+  },
+  {
+    id: "dione-map-active",
+    bodyId: "dione",
+    assetRole: "texture",
+    channel: "map",
+    filePath: "public/textures/2k_dione.jpg",
+    format: "jpg",
+    diskSizeBytes: 170574,
+    resolution: "1264x632",
+    sourceLabel: "Repo-local Dione map, placeholder (source unresolved)",
+    sourceUrl: null,
+    license: "not documented in repo",
+    attributionRequired: true,
+    status: "active",
+    verifiedAt: "2026-07-27",
+    notes:
+      "PLACEHOLDER. Colour-graded over Cassini structure; the wispy-terrain detail is real, the colour is not measured. NASA 3D Resources ships a Dione map at 1440x720 but it is pure greyscale (0.0% saturation) and carries less detail than this file (mean |laplacian| 12.6 vs 37.5), so promoting it would trade colour for nothing.",
+  },
+  {
+    id: "rhea-map-active",
+    bodyId: "rhea",
+    assetRole: "texture",
+    channel: "map",
+    filePath: "public/textures/2k_rhea.jpg",
+    format: "jpg",
+    diskSizeBytes: 154325,
+    resolution: "1264x632",
+    sourceLabel: "Repo-local Rhea map, placeholder (source unresolved)",
+    sourceUrl: null,
+    license: "not documented in repo",
+    attributionRequired: true,
+    status: "active",
+    verifiedAt: "2026-07-27",
+    notes:
+      "PLACEHOLDER. Same set as the Dione file. NASA 3D Resources ships a Rhea map at 1440x720, but it is greyscale and visibly flatter — mean luma 190 with |laplacian| 9.5 against this file's 157 / 29.2, i.e. washed out. Not promoted.",
+  },
   {
     id: "eris-map-active",
     bodyId: "eris",
@@ -220,14 +281,15 @@ export const VISUAL_ASSET_MANIFEST: VisualAssetManifestEntry[] = [
     format: "jpg",
     diskSizeBytes: 128219,
     resolution: "1264x632",
-    sourceLabel: "Repo-local Eris map (artist rendering, source unresolved)",
+    sourceLabel:
+      "Repo-local Eris map, placeholder (artist rendering, source unresolved)",
     sourceUrl: null,
     license: "not documented in repo",
     attributionRequired: true,
     status: "active",
-    verifiedAt: "2026-07-23",
+    verifiedAt: "2026-07-27",
     notes:
-      "Runtime map with weak documented provenance. Eris has never been resolved into a surface map, so this is interpretive by construction.",
+      "PLACEHOLDER, and permanently so. Eris has never been resolved into a surface map by any instrument, so no measured replacement can exist; the 2026-07-27 sweep confirmed neither NASA 3D Resources nor USGS has one. Same undocumented 1264x632 set as the ceres/dione/rhea files. Any future swap is a choice between artist renderings.",
   },
   {
     id: "jupiter-map-active",
@@ -247,6 +309,46 @@ export const VISUAL_ASSET_MANIFEST: VisualAssetManifestEntry[] = [
     verifiedAt: "2026-07-27",
     notes:
       "Jupiter's runtime map at ultra/focus. Higher pixel count than the documented Solar System Scope alternative, but source/license still need tightening. Declared active since 2026-04-06 yet unreachable until 2026-07-27: its untiered basename kept it off the tier ladder, so every profile served 2k_jupiter.jpg (2048x1024) instead.",
+  },
+  {
+    id: "phobos-map-active",
+    bodyId: "phobos",
+    assetRole: "texture",
+    channel: "map",
+    filePath: "public/textures/phobos_nasa_3d_resource.jpg",
+    format: "jpg",
+    diskSizeBytes: 601584,
+    resolution: "1440x720",
+    sourceLabel: "NASA 3D Resources - Mars: Phobos global map (Viking)",
+    sourceUrl:
+      "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures/Mars%20-%20Phobos",
+    license:
+      "NASA images and media usage guidelines; the source repo states its assets are free and without copyright",
+    attributionRequired: true,
+    status: "active",
+    verifiedAt: "2026-07-27",
+    notes:
+      "Replaces 2k_phobos.jpg, a 1264x632 file from the same undocumented 1264x632 set as the io/deimos DeviantArt uploads. Same underlying Viking imagery and the same Stickney/groove structure, but +14% linear resolution, a documented source, and no colour cast: the previous file carried 21% mean saturation on a body that is spectrally near-neutral, so its warmth was invented.",
+  },
+  {
+    id: "deimos-map-active",
+    bodyId: "deimos",
+    assetRole: "texture",
+    channel: "map",
+    filePath: "public/textures/deimos_nasa_3d_resource.jpg",
+    format: "jpg",
+    diskSizeBytes: 480429,
+    resolution: "1440x720",
+    sourceLabel: "NASA 3D Resources - Mars: Deimos global map (Viking)",
+    sourceUrl:
+      "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures/Mars%20-%20Deimos",
+    license:
+      "NASA images and media usage guidelines; the source repo states its assets are free and without copyright",
+    attributionRequired: true,
+    status: "active",
+    verifiedAt: "2026-07-27",
+    notes:
+      "Replaces 2k_deimos.jpg, which was byte-identical to a DeviantArt upload. Higher resolution, more surface detail (mean |laplacian| 5.15 vs 3.76 at matched size), documented source, and no invented 18% colour cast on a near-neutral body.",
   },
   {
     id: "io-map-active",

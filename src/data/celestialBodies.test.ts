@@ -191,6 +191,27 @@ describe("non-measured visual assets declare provenance", () => {
       }
     }
   );
+
+  // The regex above reads the *filename*, and that is exactly the signal the
+  // 2026-07-27 texture inventory found to be worthless. A DeviantArt upload
+  // renamed `2k_io.jpg` passes it clean; six bodies were rendering files from
+  // one undocumented 1264x632 set with no caveat shown to anyone. So this
+  // asks the manifest instead: whatever we ship, if its licence is not
+  // documented, the user has to be told — either it gets real provenance or
+  // it gets labelled a placeholder. Those are the only two honest states.
+  it.each(CATALOG_CASES)("%s discloses an undocumented map", (id, body) => {
+    const map = body.textures?.map;
+    if (!map) return;
+
+    const entry = getVisualAssetByBodyPath(id, map, "texture");
+    if (!entry || entry.license !== "not documented in repo") return;
+
+    expect(
+      body.visualProvenance,
+      `${id} renders ${entry.filePath}, whose licence is "not documented in repo", but shows the user no visualProvenance. Either resolve the provenance or declare it a placeholder.`
+    ).toBeDefined();
+    expect(body.visualProvenance!.fidelity).not.toBe("measured");
+  });
 });
 
 describe("minor-body visual provenance", () => {

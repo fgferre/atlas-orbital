@@ -397,7 +397,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Phobos is the larger and closer of the two natural satellites of Mars. It is a small, irregularly shaped object with a mean radius of 11 km. Phobos orbits Mars much closer than any other major moon orbits its planet, completing an orbit in just 7 hours and 39 minutes. As a result, it rises in the west, moves across the sky in 4 hours and 15 minutes, and sets in the east, twice each Martian day.",
     distanceFromParent: "9,376 km",
     info: "Mars moon.",
-    textures: { map: TEXTURE_PATH + "2k_phobos.jpg" },
+    textures: { map: TEXTURE_PATH + "phobos_nasa_3d_resource.jpg" },
   },
   {
     id: "deimos",
@@ -432,7 +432,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Deimos is the smaller and outer of the two natural satellites of Mars. It has a mean radius of 6.2 km and takes 30.3 hours to orbit Mars. Like Phobos, Deimos has a lumpy, non-spherical shape and is heavily cratered, though its craters are generally smaller and filled with regolith, giving it a smoother appearance.",
     distanceFromParent: "23,463 km",
     info: "Mars moon.",
-    textures: { map: TEXTURE_PATH + "2k_deimos.jpg" },
+    textures: { map: TEXTURE_PATH + "deimos_nasa_3d_resource.jpg" },
   },
   {
     id: "jupiter",
@@ -493,6 +493,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "778,330,000 km",
     info: "Gas giant.",
     textures: { map: TEXTURE_PATH + "jupiter_vgr1_2025.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Jupiter's belts, zones and Great Red Spot follow Voyager imagery, but this is a processed 7200x3600 map whose exact origin is unresolved, so treat the fine cloud structure as illustrative rather than a measured epoch.",
+      limitationReason:
+        "The shipped file's source and licence are recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (jupiter-map-active). The 2026-07-27 sweep found no better replacement: NASA's own Jupiter texture is 720x360, a hundredth of the pixel count.",
+      sources: [
+        {
+          label: "NASA Science - Jupiter",
+          url: "https://science.nasa.gov/jupiter/",
+        },
+      ],
+    },
   },
   {
     id: "saturn",
@@ -1013,6 +1026,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "527,000 km",
     info: "Icy body.",
     textures: { map: TEXTURE_PATH + "2k_rhea.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The cratering follows Cassini imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The 2026-07-27 source sweep found no better shippable map: NASA's Rhea texture is greyscale and visibly flatter than this one, and the licence on the best community maps forbids redistribution.",
+      sources: [
+        {
+          label: "NASA 3D Resources - textures collection",
+          url: "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures",
+        },
+      ],
+    },
   },
   {
     id: "iapetus",
@@ -1089,6 +1115,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "377,400 km",
     info: "Cratered ice.",
     textures: { map: TEXTURE_PATH + "2k_dione.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The wispy fault terrain follows Cassini imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The 2026-07-27 source sweep found no better shippable map: NASA's Dione texture is greyscale and carries less surface detail than this one.",
+      sources: [
+        {
+          label: "NASA 3D Resources - textures collection",
+          url: "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures",
+        },
+      ],
+    },
   },
   {
     id: "tethys",
@@ -1502,6 +1541,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "413,700,000 km",
     info: "Asteroid belt.",
     textures: { map: TEXTURE_PATH + "2k_ceres.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The crater pattern follows Dawn Framing Camera imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The measured upgrade is the DLR/Dawn controlled global mosaic at USGS Astrogeology; it has not been integrated yet.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Ceres Dawn FC global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/ceres_dawn_fc_global_mosaic_140m",
+        },
+      ],
+    },
   },
   {
     id: "haumea",

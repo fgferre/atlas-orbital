@@ -297,3 +297,88 @@ the other seven pass on both. No baseline was blessed; the repo tracks only a
 canvas and was discarded. **The boot pixel gate still needs a human run on real
 hardware.** One change can move it: `saturn.ring` now serves 2k rather than
 boot in the overview band.
+
+---
+
+# Source sweep — 2026-07-27, second pass
+
+Follow-up to the inventory: find better maps for the bodies left unpromoted or
+without one, artistic included, provided the origin can be named. What could
+not be improved is now **labelled a placeholder in the UI**, which was the
+agreed fallback.
+
+## Network reality
+
+This container's egress policy denies every planetary-data host —
+`astrogeology.usgs.gov`, `planetarymaps.usgs.gov`, `science.nasa.gov`,
+`solarsystemscope.com`, `photojournal.jpl.nasa.gov`, Wikimedia — for `curl`
+and `WebFetch` alike. GitHub is allowed, which is the only reason this pass
+produced anything. Anything below marked _not fetchable here_ is a real
+candidate that a session with open egress can act on.
+
+## Sources evaluated
+
+| Source                                                                | Licence                                                                                          | Verdict                                                                                                                           |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| [`nasa/NASA-3D-Resources`](https://github.com/nasa/NASA-3D-Resources) | NASA Open Source Agreement 1.3; README: "free and without copyright"                             | **Used.** Global maps for 27 bodies. Reachable over `raw.githubusercontent.com`.                                                  |
+| [USGS Astrogeology](https://astrogeology.usgs.gov/)                   | product-specific; "cite the authors"                                                             | Best measured source, _not fetchable here_                                                                                        |
+| [Solar System Scope](https://www.solarsystemscope.com/textures/)      | CC BY 4.0                                                                                        | Already the repo's backbone; catalogue is planets + Moon/Ceres/Haumea/Makemake/Eris only, _not fetchable here_                    |
+| [Björn Jónsson](https://bjj.mmedia.is/planetary_maps.html)            | attribution OK, **redistribution refused** — the author asks that copies not be hosted elsewhere | **Rejected on licence.** Highest-quality option; unusable for an app that must ship the file. Recorded so nobody re-litigates it. |
+
+## Promoted
+
+| Body   | From                                                            | To                                     | Why                                                                                                                                                                               |
+| ------ | --------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| phobos | `2k_phobos.jpg` 1264×632, undocumented                          | `phobos_nasa_3d_resource.jpg` 1440×720 | Same Viking imagery and Stickney/groove structure, +14% linear res, documented, and no invented tint — the old file carried 21% mean saturation on a spectrally near-neutral body |
+| deimos | `2k_deimos.jpg` 1264×632, byte-identical to a DeviantArt upload | `deimos_nasa_3d_resource.jpg` 1440×720 | Same, plus _more_ detail (mean \|∇²\| 5.15 vs 3.76)                                                                                                                               |
+
+## Rejected, with the measurement
+
+Every NASA candidate below is greyscale — `sat = 0.0%`. Promoting them would
+repeat the mistake the first pass caught with the USGS mosaics: trading a
+body's real colour for provenance. Phobos and Deimos are the exception
+precisely because they _are_ grey.
+
+| Body    | NASA candidate | Measurement                                                | Verdict                                                                                                             |
+| ------- | -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| dione   | 1440×720       | greyscale, detail 12.6 vs 37.5                             | reject — loses colour _and_ detail                                                                                  |
+| rhea    | 1440×720       | greyscale, luma 190 / detail 9.5 vs 157 / 29.2             | reject — washed out                                                                                                 |
+| europa  | 1440×720       | greyscale, but contrast 39.8 vs 25.6 and **no polar gore** | reject as-is; **best colourisation base found** — better than the USGS mosaic, which has the 68 px black south gore |
+| titan   | 720×360        | flat orange, sat 97.6%, detail 0.25                        | reject — worse on every axis                                                                                        |
+| jupiter | 720×360        | 1/100 the pixel count, detail 3.15 vs 8.72                 | reject                                                                                                              |
+
+## Bodies with no better map anywhere
+
+- **ceres** — no NASA 3D texture. Real upgrade is the DLR/Dawn FC controlled
+  mosaic at USGS, not fetchable here. Labelled placeholder.
+- **eris** — never resolved into a surface map by any instrument. No measured
+  replacement _can_ exist. Labelled a permanent placeholder.
+- **gonggong, quaoar, orcus, sedna, salacia, vanth, weywot, pallas** — no map,
+  by design. These are unresolved point sources; the procedural surface driven
+  by their measured colour indices is more honest than any invented map would
+  be, and each already carries structured `visualProvenance`. Left alone
+  deliberately — "artistic is fine" does not make a fabricated surface better
+  than a disclosed procedural one.
+
+## Placeholder labelling, and the contract behind it
+
+`ceres`, `dione`, `rhea`, `eris` and `jupiter` now carry a user-facing
+`visualProvenance` naming them placeholders, plus manifest entries recording
+the alternative and why it lost.
+
+The existing provenance test keyed off the **filename** (`/fictional|artist|by_|deviant/`).
+That is the signal this whole line proved worthless — a DeviantArt upload
+renamed `2k_io.jpg` passes it clean, which is how six bodies came to render one
+undocumented 1264×632 set with no caveat shown to anyone. The contract now asks
+the manifest instead: **if what we ship has a licence of "not documented in
+repo", the body must show the user provenance.** It caught Jupiter immediately
+— a 7.6 MB map, unresolved origin, no disclosure anywhere.
+
+## Residual gap, not closed here
+
+21 bodies still render maps with no `VISUAL_ASSET_MANIFEST` entry at all
+(mercury, venus, earth, mars, saturn, neptune, moon, ganymede, callisto,
+iapetus, tethys, enceladus, mimas, triton, the five Uranian moons, pluto,
+charon). Most are Solar System Scope under CC BY 4.0, but the 4k Uranian-moon
+PNGs — `4k_oberon.png` alone is 38 MB — have no recorded origin. Because they
+have no entry, the new contract cannot see them. Worth its own line.
