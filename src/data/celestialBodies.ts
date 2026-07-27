@@ -856,7 +856,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Io is the innermost and third-largest of the four Galilean moons of the planet Jupiter. It is the fourth-largest moon in the Solar System, has the highest density of all the moons, and has the lowest amount of water (by atomic ratio) of any known astronomical object in the Solar System. With over 400 active volcanoes, Io is the most geologically active object in the Solar System.",
     distanceFromParent: "421,800 km",
     info: "Volcanic world.",
-    textures: { map: TEXTURE_PATH + "2k_io.jpg" },
+    textures: { map: TEXTURE_PATH + "jupiter_nasa_io_b_3d_resource.jpg" },
   },
   {
     id: "europa",
@@ -891,8 +891,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Europa is the smallest of the four Galilean moons orbiting Jupiter, and the sixth-closest to the planet of all the 95 known moons of Jupiter. It is also the sixth-largest moon in the Solar System. Europa has the smoothest surface of any known solid object in the Solar System. The apparent youth and smoothness of the surface have led to the hypothesis that a water ocean exists beneath the surface.",
     distanceFromParent: "670,900 km",
     info: "Subsurface ocean.",
+    // The USGS Voyager/Galileo mosaic is on disk and is the better *data*, but
+    // it cannot be the render map as shipped: it is single-channel and carries
+    // a 68 px (3.3%) solid-black no-data gore at the south pole, which maps to
+    // a black hole over Europa's south polar cap on a UV sphere. Recorded as
+    // `europa-mosaic-reference`; promoting it needs the gore filled first.
     textures: {
-      map: TEXTURE_PATH + "europa_voyager_galileo_global_mosaic_500m.jpg",
+      map: TEXTURE_PATH + "2k_europa.jpg",
+    },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Europa's surface here is a colourised repo-local map. The lineae pattern follows the Voyager/Galileo mosaic, but the colour and the polar fill are artistic, not measured radiometry.",
+      limitationReason:
+        "The official USGS Voyager/Galileo global mosaic shipped alongside it is monochrome and has a solid no-data gore at the south pole, so it is kept as a documented reference (europa-mosaic-reference) rather than rendered.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Europa Voyager/Galileo SSI global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/europa_voyager_galileo_ssi_global_mosaic_500m",
+        },
+      ],
     },
   },
   // Saturn's Major Moons
@@ -932,8 +950,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Titan is the largest moon of Saturn and the second-largest natural satellite in the Solar System. It is the only moon known to have a dense atmosphere, and the only known body in space, other than Earth, where clear evidence of stable bodies of surface liquid has been found. Titan is 50% larger (in diameter) than Earth's Moon and 80% more massive.",
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
+    // Cassini's ISS mosaic images the surface *through* the methane window;
+    // it is monochrome and its tile seams are plainly visible on a sphere.
+    // Titan seen from space is an orange haze ball, which is what this map
+    // shows, so the mosaic stays a documented reference (titan-mosaic-reference)
+    // instead of the render map.
     textures: {
-      map: TEXTURE_PATH + "titan_cassini_iss_global_mosaic_4km.jpg",
+      map: TEXTURE_PATH + "2k_titan.jpg",
+    },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Titan is rendered from a repo-local haze map. The overall colour and the smooth, featureless disc are right - Titan's surface is not visible through its atmosphere - but the cloud detail is artistic, not measured.",
+      limitationReason:
+        "The official Cassini ISS / USGS global mosaic shipped alongside it is a single-channel surface product with visible mosaic seams; it shows what lies under the haze, not what Titan looks like, so it is kept as a documented reference (titan-mosaic-reference) rather than rendered.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Titan Cassini ISS global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/titan_cassini_iss_global_mosaic_4005m",
+        },
+      ],
     },
   },
   {

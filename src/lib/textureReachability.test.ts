@@ -133,6 +133,49 @@ describe("progressive texture ladder", () => {
     ).toEqual([]);
   });
 
+  it("can reach every map a body declares as its canonical", () => {
+    // The 2026-07-27 inventory found four bodies — jupiter, uranus, europa,
+    // titan — whose declared `textures.map` no profile or salience could ever
+    // select. `inferCanonicalTier` reads the tier off the *basename*, so an
+    // untiered name like `jupiter_vgr1_2025.jpg` lands only under the
+    // `canonical` key, and `canonical` appears in no preference order. If the
+    // body also had a manifest 2k variant, `pickVariant` matched that and
+    // returned before the canonical was ever considered. Jupiter's declared
+    // 7200x3600 map was shadowed by a 2048x1024 one, on ultra, on focus.
+    //
+    // Nothing caught it: the sibling test above only asserts that requestable
+    // files exist, and `availablePaths` counts a path as reachable that the
+    // loader never asks for — `usePlanetAssets` fetches `selectedPath` alone.
+    // So this asserts the direction that actually matters: declared means
+    // reachable.
+    const unreachable: string[] = [];
+
+    for (const body of SOLAR_SYSTEM_BODIES) {
+      const canonical = body.textures?.map;
+      if (!canonical) continue;
+
+      const selectable = PROFILES.some((profile) =>
+        SALIENCES.some(
+          (salience) =>
+            resolveTextureRequest(
+              body,
+              "map",
+              profile,
+              salience,
+              TEXTURE_VARIANT_MANIFEST
+            ).selectedPath === canonical
+        )
+      );
+
+      if (!selectable) unreachable.push(`${body.id} -> ${canonical}`);
+    }
+
+    expect(
+      unreachable,
+      `these bodies declare a canonical map that no (profile, salience) can select, so the declared asset never renders and a lesser tier is served in its place:\n  ${unreachable.join("\n  ")}`
+    ).toEqual([]);
+  });
+
   it("serves a small tier in the overview band for every profile", () => {
     // Guards the VRAM fix itself, not just file existence: if this regresses,
     // ultra allocates full-res for every body at boot again.

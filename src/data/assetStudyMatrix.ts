@@ -181,8 +181,10 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     bodyId: "jupiter",
     bodyLabel: "Jupiter",
     currentRepoAsset: "jupiter_vgr1_2025.jpg",
-    runtimeAssetToday: "Esfera com mapa atual de 7200x3600",
-    candidateAsset: "jupiter_nasa_io_b_3d_resource.jpg",
+    runtimeAssetToday:
+      "Esfera com o mapa de 7200x3600 no foco em ultra; abaixo disso a escada serve 8k_jupiter.jpg (4096x2048) e 2k_jupiter.jpg. Ate 2026-07-27 o mapa declarado nunca era carregado e todo perfil recebia 2048x1024.",
+    candidateAsset:
+      "Nenhum. O antigo candidato jupiter_nasa_io_b_3d_resource.jpg e um mapa de Io, nao de Jupiter",
     primarySource:
       "NASA Science 3D Resources no candidato; mapa atual segue sem fonte fechada no repo",
     license:
@@ -191,14 +193,14 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     diskSize: "7.60 MiB -> 632.9 KiB",
     format: "JPG",
     scientificFidelityNote:
-      "O candidato oficial tem proveniencia muito melhor, mas perde bastante resolucao frente ao mapa atual.",
+      "A comparacao original era invalida: o arquivo tratado como candidato de Jupiter e um mapa global de Io publicado numa pagina da NASA sobre Jupiter. O veredito 'mole demais' media a coisa errada.",
     regressionRisk:
-      "Alto. O candidato oficial pode ficar visualmente mole demais apesar da boa governanca.",
+      "n/a enquanto nao houver um candidato de Jupiter de verdade. O mapa atual segue sem fonte fechada no repo.",
     verdict: "manter",
     recommendation:
-      "Decisao fechada: manter o mapa atual e guardar o oficial apenas como referencia de proveniencia.",
+      "Manter o mapa atual. O antigo candidato foi reclassificado como io-map-active e agora e o mapa de runtime de Io; Jupiter fica sem candidato externo.",
     currentAssetIds: ["jupiter-map-active"],
-    candidateAssetIds: ["jupiter-map-candidate"],
+    candidateAssetIds: [],
     comparison: {
       current: {
         label: "Runtime atual",
@@ -206,19 +208,14 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
         mapAssetId: "jupiter-map-active",
         note: "Mapa atual ativo em producao.",
       },
-      candidate: {
-        label: "Candidato documentado",
-        mode: "sphere",
-        mapAssetId: "jupiter-map-candidate",
-        note: "Melhor candidato oficial encontrado na NASA 3D Resources durante a varredura externa.",
-      },
     },
   },
   {
     bodyId: "uranus",
     bodyLabel: "Uranus",
     currentRepoAsset: "uranus_texture_map_8k_by_floridaemojicat_dj4s9vd.jpg",
-    runtimeAssetToday: "Esfera com mapa comunitario de 8000x4336",
+    runtimeAssetToday:
+      "Esfera com o mapa comunitario de 8000x4336 no foco em ultra; nos demais perfis a escada serve 2k_uranus.jpg. Ate 2026-07-27 o mapa declarado nunca era carregado e todo perfil recebia 2k_uranus.jpg.",
     candidateAsset: "Nenhum replacement externo forte encontrado",
     primarySource:
       "A varredura em NASA, USGS e ESO nao encontrou um mapa global livre e forte o bastante para superar o atual",
@@ -248,7 +245,8 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     bodyId: "titan",
     bodyLabel: "Titan",
     currentRepoAsset: "titan_map__2010__by_mapperpro_dg0iw6y.png",
-    runtimeAssetToday: "Esfera com mosaico oficial Cassini/USGS de 4040x2020",
+    runtimeAssetToday:
+      "Esfera com 2k_titan.jpg (1264x632) em todo perfil e salience. O mosaico Cassini/USGS nunca chegou ao runtime: e monocromatico e mostra emendas de mosaico visiveis na esfera.",
     candidateAsset: "titan_cassini_iss_global_mosaic_4km.jpg",
     primarySource: "USGS Astrogeology / Cassini ISS Team",
     license: "USGS use constraints: please cite authors",
@@ -256,26 +254,26 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     diskSize: "7.30 MiB -> 1.57 MiB",
     format: "PNG -> JPG",
     scientificFidelityNote:
-      "O candidato externo e um mosaico oficial de Cassini ISS, com qualidade observacional e governanca muito melhores que o mapa comunitario atual.",
+      "O candidato externo e um mosaico oficial de Cassini ISS, com governanca muito melhor - mas e monocromatico e mostra a superficie atraves da janela de metano, nao a bruma laranja que se ve de fora.",
     regressionRisk:
-      "Medio. A atmosfera de Titan pode fazer o mosaico oficial parecer menos dramatico, apesar de ser cientificamente mais forte.",
-    verdict: "substituir",
+      "Alto, medido em 2026-07-27: renderizado em esfera o mosaico fica cinza e com emendas de mosaico visiveis. A promocao de 2026-04-06 foi registrada mas nunca chegou ao runtime.",
+    verdict: "manter como alternativa",
     recommendation:
-      "Promovido: o mosaico oficial Cassini/USGS passa a ser o mapa ativo de Titan.",
-    currentAssetIds: ["titan-map-fallback"],
-    candidateAssetIds: ["titan-map-active"],
+      "Manter titan-mosaic-reference como referencia medida. Promover so depois de colorizacao e tratamento de emendas.",
+    currentAssetIds: ["titan-map-active"],
+    candidateAssetIds: ["titan-mosaic-reference"],
     comparison: {
       current: {
-        label: "Baseline anterior",
-        mode: "sphere",
-        mapAssetId: "titan-map-fallback",
-        note: "Mapa comunitario anterior, mantido apenas como fallback e referencia visual.",
-      },
-      candidate: {
-        label: "Runtime promovido",
+        label: "Runtime atual",
         mode: "sphere",
         mapAssetId: "titan-map-active",
-        note: "Mosaico oficial da USGS/Cassini agora promovido para o runtime.",
+        note: "2k_titan.jpg - o mapa que a escada de fato serve em todo perfil.",
+      },
+      candidate: {
+        label: "Referencia medida",
+        mode: "sphere",
+        mapAssetId: "titan-mosaic-reference",
+        note: "Mosaico oficial USGS/Cassini: monocromatico e com emendas visiveis, mantido como referencia e nao como runtime.",
       },
     },
   },
@@ -284,7 +282,7 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     bodyLabel: "Europa",
     currentRepoAsset: "4k_europa_gemini.png",
     runtimeAssetToday:
-      "Esfera com mosaico oficial Voyager/Galileo de 4096x2048",
+      "Esfera com 2k_europa.jpg (1264x632) em todo perfil e salience. O mosaico Voyager/Galileo nunca chegou ao runtime: e monocromatico e tem 68 linhas de no-data preto no polo sul.",
     candidateAsset: "europa_voyager_galileo_global_mosaic_500m.jpg",
     primarySource: "USGS Astrogeology / Voyager + Galileo SSI",
     license: "USGS use constraints: please cite authors",
@@ -292,26 +290,26 @@ export const ASSET_STUDY_MATRIX: AssetStudyMatrixRow[] = [
     diskSize: "5.59 MiB -> 1.92 MiB",
     format: "PNG -> JPG",
     scientificFidelityNote:
-      "O candidato externo ganha em proveniencia e tambem sobe a resolucao util para o runtime, vindo de um mosaico oficial Voyager/Galileo.",
+      "O candidato externo ganha em proveniencia e resolucao, mas e monocromatico e as 68 ultimas linhas sao no-data preto solido.",
     regressionRisk:
-      "Baixo a medio. O maior risco e ajuste de contraste, nao falta de detalhe ou de fonte.",
-    verdict: "substituir",
+      "Alto, medido em 2026-07-27: em esfera o no-data vira um buraco preto sobre a calota sul. A promocao de 2026-04-06 foi registrada mas nunca chegou ao runtime.",
+    verdict: "manter como alternativa",
     recommendation:
-      "Promovido: o mosaico oficial Voyager/Galileo passa a ser o mapa ativo de Europa.",
-    currentAssetIds: ["europa-map-fallback"],
-    candidateAssetIds: ["europa-map-active"],
+      "Manter europa-mosaic-reference como referencia medida. Promover so depois de preencher o gore polar e dar um passe de cor - vale a pena, porque o runtime esta travado em 1264x632.",
+    currentAssetIds: ["europa-map-active"],
+    candidateAssetIds: ["europa-mosaic-reference"],
     comparison: {
       current: {
-        label: "Baseline anterior",
-        mode: "sphere",
-        mapAssetId: "europa-map-fallback",
-        note: "Mapa anterior mantido apenas como fallback e referencia visual.",
-      },
-      candidate: {
-        label: "Runtime promovido",
+        label: "Runtime atual",
         mode: "sphere",
         mapAssetId: "europa-map-active",
-        note: "Mosaico oficial Voyager/Galileo agora promovido para o runtime.",
+        note: "2k_europa.jpg - o mapa que a escada de fato serve em todo perfil.",
+      },
+      candidate: {
+        label: "Referencia medida",
+        mode: "sphere",
+        mapAssetId: "europa-mosaic-reference",
+        note: "Mosaico oficial Voyager/Galileo: monocromatico e com no-data no polo sul, mantido como referencia e nao como runtime.",
       },
     },
   },
