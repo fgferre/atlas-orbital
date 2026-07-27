@@ -8,8 +8,8 @@ import {
 } from "../shaders/atmosphereShader";
 import {
   planetShadowVertexPatch,
-  planetShadowFragmentPatch,
-  planetShadowEmissivePatch,
+  buildPlanetShadowFragmentPatch,
+  buildPlanetShadowEmissivePatch,
 } from "../shaders/planetShadowShader";
 import {
   ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY,
@@ -692,18 +692,28 @@ export function usePlanetMaterials({
         ${shader.vertexShader}
       `.replace("#include <begin_vertex>", planetShadowVertexPatch);
 
+      // W5 stage B — the occluder follows the planet's real figure. Both
+      // copies of the solve are generated from one builder so a fix cannot
+      // reach one and miss the other.
+      const flattening = body.flattening ?? 0;
       shader.fragmentShader = `
         uniform vec3 uSunPosition;
         uniform float uShadowIntensity;
         varying vec3 vPos;
         ${shader.fragmentShader}
       `
-        .replace("#include <map_fragment>", planetShadowFragmentPatch)
-        .replace("#include <emissivemap_fragment>", planetShadowEmissivePatch);
+        .replace(
+          "#include <map_fragment>",
+          buildPlanetShadowFragmentPatch(flattening)
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          buildPlanetShadowEmissivePatch(flattening)
+        );
     };
 
     return mat;
-  }, [textureRing, ringEmissive, ringShadowIntensity]);
+  }, [textureRing, ringEmissive, ringShadowIntensity, body.flattening]);
 
   useEffect(() => {
     return () => {

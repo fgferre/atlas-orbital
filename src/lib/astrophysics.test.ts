@@ -534,6 +534,33 @@ describe("body figure in world units", () => {
     }
   });
 
+  // W5 stage B / F-09. Saturn is the only `ringSystem`, and the ratios are
+  // published against its IAU EQUATORIAL radius — which is only the
+  // object-space unit because `resolveSemanticBodyRadius` returns the largest
+  // semi-axis. If anyone reverts that to the mean radius, the drawn rings fall
+  // 3.5% short of the published reach and this catches it.
+  it("puts Saturn's rings where the published radii say", () => {
+    const saturn = getBody("saturn");
+    const equatorialKm =
+      AstroPhysics.resolveSemanticBodyRadius({
+        body: saturn,
+        scaleMode: "realistic",
+      }) / KM_TO_3D_UNITS;
+    expect(equatorialKm / 60_268).toBeCloseTo(1, 3);
+
+    const ringOuterKm =
+      AstroPhysics.resolveRingOuterRadius(saturn, "realistic") / KM_TO_3D_UNITS;
+    // F ring outer edge, ~140 180 km.
+    expect(ringOuterKm / 140_180).toBeCloseTo(1, 2);
+
+    // The ring shader treats the occluder as an ellipsoid with polar radius
+    // (1 - f) in a space where the equator is 1.0. Pin that identity here so
+    // the shader literal and the figure resolver cannot drift apart.
+    const ratio = AstroPhysics.resolveBodyFigureRatio(saturn);
+    expect(ratio[1]).toBeCloseTo(1 - saturn.flattening!, 9);
+    expect(ratio[0]).toBe(1);
+  });
+
   it("leaves an unflagged body perfectly spherical", () => {
     for (const id of ["earth", "venus", "mercury", "moon"]) {
       expect(AstroPhysics.resolveBodyFigureRatio(getBody(id))).toEqual([

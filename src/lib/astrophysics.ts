@@ -966,8 +966,23 @@ export class AstroPhysics {
     let minimumDistance = parentSemanticRadius + childSemanticRadius + 2;
 
     if (parentBody.ringSystem) {
+      // W5 stage B / F-09 — ring ratios are published against the parent's
+      // EQUATORIAL radius, so the reach must be measured from the equatorial
+      // radius too. `radiusKm` is the volumetric mean, which for Saturn is
+      // 3.5% smaller and put the didactic ring reach short by the same amount.
+      // `resolveSemanticBodyRadius` in realistic mode IS the equatorial radius
+      // in world units, so dividing by `KM_TO_3D_UNITS` recovers it in km
+      // without a second copy of the figure math.
+      //
+      // Deliberately NOT the same fix as `physicalParentRadii` above, which
+      // wants the mean radius for moon-distance compression and is correct.
+      const parentEquatorialKm =
+        this.resolveSemanticBodyRadius({
+          body: parentBody,
+          scaleMode: "realistic",
+        }) / KM_TO_3D_UNITS;
       const ringOuterPhysicalAU =
-        (parentBody.radiusKm * parentBody.ringSystem.outerRadius) / AU_IN_KM;
+        (parentEquatorialKm * parentBody.ringSystem.outerRadius) / AU_IN_KM;
 
       if (distanceAU > ringOuterPhysicalAU) {
         minimumDistance = Math.max(

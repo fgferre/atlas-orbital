@@ -387,6 +387,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     type: "planet",
     name: { en: "SATURN", pt: "SATURNO" },
     radiusKm: 58232,
+    flattening: 0.097962,
     color: "#EBD795",
     orbit: {
       a: 9.582,
@@ -431,8 +432,17 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       ring: TEXTURE_PATH + "8k_saturn_ring_alpha.png",
     },
     ringSystem: {
-      innerRadius: 1.11, // Start of D ring
-      outerRadius: 2.33, // End of F ring
+      // F-09 — ring ratios are published radii divided by the IAU
+      // EQUATORIAL radius, 60 268 km. That is now the object-space unit:
+      // `resolveSemanticBodyRadius` returns the largest semi-axis, so a
+      // flattened body's unit sphere is its equator. Before W5 stage B the
+      // unit was the mean radius (58 232 km) and the drawn rings fell ~3.2%
+      // short of the published reach. Settled invariant, not a conditional:
+      // ratios stay against the equatorial radius and the unit stays
+      // equatorial. D-ring inner 66 900 km / 60 268 = 1.110;
+      // F-ring outer 140 180 km / 60 268 = 2.326.
+      innerRadius: 1.11, // D ring inner edge
+      outerRadius: 2.326, // F ring outer edge
     },
   },
   {
