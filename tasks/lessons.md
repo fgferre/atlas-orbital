@@ -435,6 +435,25 @@ blind spot:
   caused which visual delta. PNG file-size delta (e.g. 333 → 130 KB) is
   a first-pass "scene complexity changed substantially" signal worth
   closer inspection.
+- **A constant is only checked by a reference that (a) does not pass
+  through it and (b) is in the same frame.** (a) is standing law 3: W6's
+  Earth W₀ is falsified by GMST because GMST comes from the IERS
+  Earth-rotation convention, not from Archinal's tables. (b) is the trap
+  that (a) alone walks into — the drafted W6 gate compared IAU W (ICRF)
+  against GMST (mean equinox **of date**) at a 2026 epoch, and precession
+  in RA separates those by 0.34° by 2026, so a **correct** model failed a
+  0.1° bound. Either run the check where the frames coincide (J2000) or
+  transform; do not widen the tolerance, which readmits the error the
+  gate exists to catch. Corollary that pays for itself: a periodic term
+  is not automatically a wobble — check its argument's rate before
+  dropping it. Mars's 1.59° δ₀ term has a ~71 000-year period, so it is a
+  fixed bias, and dropping it would have shipped a 1.6° pole error.
+- **An `eslint-disable` can silence far more than the rule it names.**
+  A `react-hooks/exhaustive-deps` disable on one `useMemo` made the React
+  Compiler skip the entire component, hiding a `react-hooks/immutability`
+  violation elsewhere in the same file. Deleting the hook surfaced an
+  error in code nobody had touched. When a suppressed rule is
+  compiler-backed, treat its scope as the whole function, not the line.
 - **Claude Preview HMR** state accumulates across in-session edits —
   multiple WebSocket clients, frozen canvas at boot stage, screenshot
   timeouts. `preview_stop` + `preview_start` resets; don't bisect

@@ -25,10 +25,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import * as THREE from "three";
 
+import { satelliteUsesParentEquatorialFrame } from "./moonSceneFrame";
 import {
-  computePoleOrientationQuaternion,
-  satelliteUsesParentEquatorialFrame,
-} from "./moonSceneFrame";
+  computeBodyPoleQuaternion,
+  resolveBodyIauOrientation,
+} from "../../lib/bodyOrientation";
+import { dateToTDB } from "../../lib/orbital/time";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import type { CelestialBody } from "../../lib/astrophysics";
 import {
@@ -36,7 +38,6 @@ import {
   resolveOrbitalDisplayPosition,
 } from "../../lib/orbital";
 import { ecliptic2ThreeJs } from "../../lib/orbital/analytical/coordUtils";
-import { dateToTDB } from "../../lib/orbital/time";
 
 import phobosFixture from "../../test/fixtures/horizons/phobos-2025-01-01.json";
 import deimosFixture from "../../test/fixtures/horizons/deimos-2025-01-01.json";
@@ -113,7 +114,9 @@ function sceneOffset(moonId: string, date: Date): THREE.Vector3 {
 
   const container = new THREE.Group();
   if (satelliteUsesParentEquatorialFrame(moon.id)) {
-    container.quaternion.copy(computePoleOrientationQuaternion(parent));
+    container.quaternion.copy(
+      computeBodyPoleQuaternion(parent, dateToTDB(date))
+    );
   }
   parentGroup.add(container);
 
@@ -260,16 +263,21 @@ describe("scene graph points at the Horizons truth direction", () => {
 
 describe("legacy Kepler satellites — documented state after the frame fix", () => {
   it("charon: the pole rotation is what puts it on Pluto's equator", () => {
-    // Pluto has no poleRA/poleDec, so the quaternion falls back to
-    // axialTilt = 122.53°. Charon's legacy elements (i = 0) are only
-    // meaningful in that equatorial frame: dropping the rotation would
+    // Pluto still has no rotation solution of any tier, so the quaternion
+    // falls back to axialTilt = 122.53°. Charon's legacy elements (i = 0) are
+    // only meaningful in that equatorial frame: dropping the rotation would
     // flatten its orbit onto the ecliptic, a ~112.8° regression.
+    //
+    // This asserts the *gap*, and the gap is scheduled: when W6's second stage
+    // gives Pluto its IAU pole (α₀ 132.993 / δ₀ −6.163), this expectation
+    // flips and Charon's mount has to be re-derived with it — Pluto's pole
+    // moves Charon, because the same quaternion rotates its Kepler elements.
     const pluto = getBody("pluto");
-    expect(pluto.poleRA).toBeUndefined();
+    expect(resolveBodyIauOrientation(pluto)).toBeNull();
     expect(satelliteUsesParentEquatorialFrame("charon")).toBe(true);
 
     const spinAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(
-      computePoleOrientationQuaternion(pluto)
+      computeBodyPoleQuaternion(pluto, dateToTDB(EPOCH))
     );
     const normal = sceneOrbitNormal("charon", EPOCH);
     // Orbit normal aligned with Pluto's spin axis ⇒ equatorial orbit.

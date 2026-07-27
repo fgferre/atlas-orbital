@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 
+import { resolveBodyIauOrientation } from "./bodyOrientation";
 import { SOLAR_SYSTEM_BODIES } from "../data/celestialBodies";
 import { AstroPhysics, AU_TO_3D_UNITS, KM_TO_3D_UNITS } from "./astrophysics";
 import { resolveHeliocentricPositionAU } from "./orbital/heliocentric";
@@ -630,14 +631,19 @@ describe("resolveObliquityDeg", () => {
   // and measured against the orbit normal built from the record's own i and Ω.
   // Neither number feeds the other, so a typo in either shows up here.
   it("reproduces every catalog obliquity from the IAU pole and the orbit", () => {
-    const poled = SOLAR_SYSTEM_BODIES.filter((b) => b.poleRA !== undefined);
+    // W6 moved the discriminator from `poleRA` to a full `iauOrientation`
+    // record; `resolveBodyIauOrientation` is the one place that knows the
+    // ladder, so the filter asks it rather than sniffing a field.
+    const poled = SOLAR_SYSTEM_BODIES.filter(
+      (b) => resolveBodyIauOrientation(b) !== null && b.axialTilt !== undefined
+    );
     expect(poled.length).toBeGreaterThanOrEqual(9);
 
     for (const body of poled) {
       const derived = AstroPhysics.resolveObliquityDeg(body);
       expect(derived, `${body.id} has no derivable obliquity`).not.toBeNull();
       expect(
-        Math.abs((derived as number) - body.axialTilt),
+        Math.abs((derived as number) - (body.axialTilt as number)),
         `${body.id}: derived ${derived?.toFixed(2)}° vs catalog ${body.axialTilt}°`
       ).toBeLessThan(0.1);
     }

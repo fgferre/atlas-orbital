@@ -6,10 +6,16 @@
  * graphics-tuning half of that panel (lighting / bloom / grading —
  * all multiplier overrides on top of `VISUAL_PRESETS`). What Leva
  * still held were calibration-level values tuned once by the author
- * and then left alone: Earth's rotation alignment to its texture,
- * the night-lights intensity, Saturn's ring shadow opacity, the
- * sun / ring emissive multipliers, and generic planet PBR
- * roughness / metalness fallbacks.
+ * and then left alone: the night-lights intensity, Saturn's ring
+ * shadow opacity, the sun / ring emissive multipliers, and generic
+ * planet PBR roughness / metalness fallbacks.
+ *
+ * One value has since left: `EARTH_ROTATION_OFFSET_DEG`, which aligned
+ * Earth's texture by hand. W6 replaced it with Earth's measured IAU
+ * prime-meridian constant, so the alignment is now derived rather than
+ * calibrated. Nothing in this file may re-acquire that role — a
+ * hand-tuned angle on a body with a published rotation model is a
+ * fidelity regression, not a calibration.
  *
  * Moved here so the Leva dependency can be retired without losing
  * the values. Future tuning: change the constant, commit, ship.
@@ -20,9 +26,6 @@
  * Numeric baselines match the Leva defaults shipped in the
  * `useSceneDebugControls.ts` revision that this file replaces.
  */
-
-/** Rotation offset (degrees) applied to Earth so its texture aligns with geography. */
-export const EARTH_ROTATION_OFFSET_DEG = 0;
 
 /** Multiplier on Earth night-side city-lights emissive contribution. */
 export const EARTH_NIGHT_LIGHT_INTENSITY = 0.2;

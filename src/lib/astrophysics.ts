@@ -1,4 +1,12 @@
 import * as THREE from "three";
+// `bodyOrientation` imports only the `CelestialBody` *type* from this module,
+// so the pair erases at compile time and forms no runtime import cycle.
+import {
+  resolveBodyIauOrientation,
+  resolveIauOrientation,
+  type IauOrientation,
+} from "./bodyOrientation";
+import { J2000_JD } from "./orbital/time";
 
 export const AU_IN_KM = 149597870.7;
 export const AU_TO_3D_UNITS = 1000;
@@ -145,9 +153,25 @@ export interface CelestialBody {
   color: string;
   orbit: OrbitParams;
   rotationPeriodHours: number; // Sidereal rotation period in hours (negative for retrograde)
-  axialTilt: number; // Axial tilt in degrees
-  rotationOffsetDegrees?: number; // Rotation offset at epoch for time synchronization (optional, default 0)
-  rotationEpoch?: string; // ISO date for rotation reference (optional, default J2000.0)
+  /**
+   * Axial tilt in degrees — a **legacy display field**, superseded by
+   * `iauOrientation` and retained only for records with no measured pole.
+   *
+   * It is still load-bearing: Vanth, Weywot and the TNO moons have a measured
+   * obliquity but no published pole solution, so deleting the field would
+   * destroy real data. Where a body has a pole, this value is not consulted.
+   */
+  axialTilt?: number;
+  /**
+   * Measured IAU rotational elements — pole direction **and** prime-meridian
+   * phase. Its presence is the discriminator for "this body has a full
+   * rotation solution"; see `src/lib/bodyOrientation.ts`.
+   *
+   * A record with `poleRA`/`poleDec` but no `iauOrientation` has a measured
+   * spin axis and an **unconstrained phase origin** — an honest gap, not a
+   * modelled value.
+   */
+  iauOrientation?: IauOrientation;
   poleRA?: number; // Right Ascension of North Pole in degrees (IAU)
   poleDec?: number; // Declination of North Pole in degrees (IAU)
 
@@ -698,25 +722,20 @@ export class AstroPhysics {
    * referred to a plane the catalog does not record — every satellite today.
    */
   static resolveObliquityDeg(body: CelestialBody): number | null {
-    const { poleRA, poleDec } = body;
-    if (poleRA === undefined || poleDec === undefined) return null;
+    const orientation = resolveBodyIauOrientation(body);
+    if (!orientation) return null;
     // Satellite inclinations are referred to a mix of Laplace and
     // parent-equatorial planes with no field saying which, so the orbit normal
     // cannot be built for them.
     if (body.parentId) return null;
 
-    const ra = THREE.MathUtils.degToRad(poleRA);
-    const dec = THREE.MathUtils.degToRad(poleDec);
-    // ICRF equatorial unit vector for the pole, then rotate into ecliptic.
-    const eps = THREE.MathUtils.degToRad(23.4392911);
-    const xq = Math.cos(dec) * Math.cos(ra);
-    const yq = Math.cos(dec) * Math.sin(ra);
-    const zq = Math.sin(dec);
-    const pole = new THREE.Vector3(
-      xq,
-      yq * Math.cos(eps) + zq * Math.sin(eps),
-      -yq * Math.sin(eps) + zq * Math.cos(eps)
-    );
+    // The pole comes from `bodyOrientation`, which is the one place that turns
+    // (α₀, δ₀) into an ecliptic vector. This function used to hand-roll that
+    // rotation with its own copy of the obliquity — the same duplication the
+    // W6 helper exists to end. Evaluated at J2000, matching the epoch the
+    // catalog's `axialTilt` values are quoted at.
+    const [px, py, pz] = resolveIauOrientation(orientation, J2000_JD).poleEcl;
+    const pole = new THREE.Vector3(px, py, pz);
 
     const inc = THREE.MathUtils.degToRad(body.orbit.i);
     const node = THREE.MathUtils.degToRad(body.orbit.O);
@@ -1239,104 +1258,5 @@ export class AstroPhysics {
     const r = radiusKm * 1000; // meters
     const v = Math.sqrt((2 * G * massKg) / r);
     return v / 1000; // km/s
-  }
-
-  /**
-   * Calculate rotation angle synchronized with real astronomical time
-   * @param date Current date/time
-   * @param rotationPeriodHours Sidereal rotation period in hours (negative for retrograde)
-   * @param rotationOffsetDegrees Rotation offset at epoch in degrees (default 0)
-   * @param rotationEpoch Reference date for the offset (default J2000.0)
-   * @returns Rotation angle in radians
-   */
-  static calculateRotationAngle(
-    date: Date,
-    rotationPeriodHours: number,
-    rotationOffsetDegrees: number = 0,
-    rotationEpoch: Date = new Date("2000-01-01T12:00:00Z")
-  ): number {
-    const elapsed = date.getTime() - rotationEpoch.getTime();
-    const elapsedHours = elapsed / 3600000;
-    const rotations = elapsedHours / rotationPeriodHours;
-    const angle = (rotations * 360 + rotationOffsetDegrees) % 360;
-    return (angle * Math.PI) / 180; // Convert to radians
-  }
-
-  /**
-   * Convert Equatorial Coordinates (RA, Dec) to Ecliptic Cartesian Vector
-   * Used for orienting planetary poles correctly in the scene.
-   * @param ra Right Ascension in degrees
-   * @param dec Declination in degrees
-   * @returns Normalized Vector3 representing the pole direction in Ecliptic space
-   */
-  static equatorialToEcliptic(ra: number, dec: number): THREE.Vector3 {
-    const rad = Math.PI / 180;
-    const alpha = ra * rad;
-    const delta = dec * rad;
-
-    // 1. Convert to Equatorial Cartesian (ICRF)
-    // x points to Vernal Equinox
-    // z points to Celestial North Pole
-    const x = Math.cos(delta) * Math.cos(alpha);
-    const y = Math.cos(delta) * Math.sin(alpha);
-    const z = Math.sin(delta);
-
-    // 2. Rotate to Ecliptic System
-    // Rotate around X-axis by Earth's obliquity (epsilon)
-    // epsilon ~ 23.43928 degrees
-    const epsilon = 23.43928 * rad;
-    const cosE = Math.cos(epsilon);
-    const sinE = Math.sin(epsilon);
-
-    // Rotation Matrix (X-axis rotation)
-    // [ 1    0      0    ]
-    // [ 0   cosE   sinE  ]
-    // [ 0  -sinE   cosE  ]
-
-    // However, we want to go from Equatorial TO Ecliptic.
-    // The Ecliptic is tilted relative to Equatorial.
-    // Usually, we define Ecliptic as the "flat" plane (XZ in our scene).
-    // So we need to rotate the Equatorial vector by -epsilon (or +epsilon depending on definition).
-    // Let's verify: North Celestial Pole (0, 0, 1) should become tilted by 23.44 deg.
-    // If we rotate by -epsilon around X:
-    // y' = y*cos(-e) - z*sin(-e) = y*cos(e) + z*sin(e)
-    // z' = y*sin(-e) + z*cos(-e) = -y*sin(e) + z*cos(e)
-    // For NCP (0,0,1): y'=sin(e), z'=cos(e). This tilts it "back" towards +Y.
-    // Wait, in Three.js usually Y is up.
-    // Let's assume our Scene: XZ is orbital plane (Ecliptic). Y is Ecliptic North.
-    // So (0, 1, 0) is Ecliptic North Pole.
-    // Earth's axis is tilted 23.44 deg from this.
-    // The NCP (Equatorial North) is tilted 23.44 deg from Ecliptic North.
-
-    // Let's stick to standard conversion:
-    // Equatorial (x, y, z) -> Ecliptic (x', y', z')
-    // x' = x
-    // y' = y * cos(e) + z * sin(e)
-    // z' = -y * sin(e) + z * cos(e)
-
-    const y_ecl = y * cosE + z * sinE;
-    const z_ecl = -y * sinE + z * cosE;
-
-    // Now map to Three.js coordinates
-    // Standard Astronomy: X=Vernal Equinox, Y=90deg East, Z=North Pole
-    // Three.js Scene: X=Right, Y=Up, Z=Back (or similar)
-    // In our app:
-    // XZ plane is the orbit plane.
-    // Y is Up (Ecliptic North).
-    // So we map:
-    // Astro X -> Three X
-    // Astro Y -> Three -Z (since Z is usually "depth") or just Z?
-    // Let's check calculateLocalPosition:
-    // const posAU = new THREE.Vector3(x, z, -y);
-    // It maps Astro X -> Three X
-    // Astro Z (Up/North) -> Three Y
-    // Astro Y -> Three -Z
-
-    // So for our pole vector:
-    // Astro x' -> Three X
-    // Astro z' (Ecliptic North component) -> Three Y
-    // Astro y' -> Three -Z
-
-    return new THREE.Vector3(x, z_ecl, -y_ecl).normalize();
   }
 }

@@ -45,10 +45,12 @@ import { useOrbitalSalience } from "./planet/useOrbitalSalience";
 import { usePlanetAssets } from "./planet/usePlanetAssets";
 import { usePlanetMaterials } from "./planet/usePlanetMaterials";
 import { PlanetOrbitLine } from "./planet/PlanetOrbitLine";
+import { satelliteUsesParentEquatorialFrame } from "./moonSceneFrame";
 import {
-  computePoleOrientationQuaternion,
-  satelliteUsesParentEquatorialFrame,
-} from "./moonSceneFrame";
+  computeBodyPoleQuaternion,
+  computeSpinAngleRad,
+} from "../../lib/bodyOrientation";
+import { dateToTDB } from "../../lib/orbital/time";
 import { PlanetMotionOverlays } from "./planet/PlanetMotionOverlays";
 // T5.1 — per-frame atmosphere dynamic-uniform recompute. Mirrors
 // Gaia's `updateAtmosphericScatteringParams` at
@@ -116,7 +118,6 @@ interface PlanetProps {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
-  earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
@@ -129,7 +130,6 @@ const PlanetVisual = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
-  earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
   sunRenderMode,
@@ -142,7 +142,6 @@ const PlanetVisual = ({
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
-  earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
@@ -173,12 +172,12 @@ const PlanetVisual = ({
     cameraInterest,
   });
 
-  const orientationQuaternion = useMemo(
-    () => computePoleOrientationQuaternion(body),
-    // Only the pole/tilt fields feed the quaternion.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [body.poleRA, body.poleDec, body.axialTilt]
-  );
+  // The pole is NOT memoised. IAU poles are functions of time — Earth's α₀
+  // moves 0.641°/century, Mars's δ₀ carries a 1.6° periodic term — so freezing
+  // the quaternion in a `useMemo` keyed on scalars would pin the axis at
+  // whatever instant the component last reconciled. It is written in the same
+  // `useFrame` that writes the spin, from the same `jdTDB`.
+  const poleRef = useRef<THREE.Group>(null);
 
   // T5.1 — pre-resolve the atmosphere dynamic-config primitives
   // once per body. The per-frame `computeDynamicAtmosphereUniforms`
@@ -220,6 +219,19 @@ const PlanetVisual = ({
 
   const ringRef = useRef<THREE.Mesh>(null);
 
+  /* eslint-disable react-hooks/immutability --
+   * Writing shader uniforms on a material returned by `usePlanetMaterials` is
+   * what this callback is for: `atmoUniforms.*.value = …` and the eclipse
+   * uniforms below are per-frame GPU writes, and lesson L26 records that
+   * hoisting them to static values flickers against the cloud layer's
+   * transparent sort. Three.js materials are mutable objects by design and
+   * `useFrame` is outside React's render, so no render output depends on them.
+   *
+   * This is unmasked, not new. HEAD carried an `exhaustive-deps` disable on
+   * the pole `useMemo` this wave deleted, which made the compiler skip the
+   * whole component; removing it let the analysis reach code that has been
+   * here since T5.1. The narrow fix is this scoped disable, not putting the
+   * suppression comment back on a hook that no longer exists. */
   useFrame(({ camera, scene }) => {
     if (!groupRef.current) return;
 
@@ -236,24 +248,25 @@ const PlanetVisual = ({
 
     // 2. Rotation & Shader Uniforms
     if (rotationRef.current) {
-      // Rotation (synchronized with astronomical time using offset)
-      if (body.rotationPeriodHours) {
-        const rotationEpoch = body.rotationEpoch
-          ? new Date(body.rotationEpoch)
-          : new Date("2000-01-01T12:00:00Z");
-        const currentRotation = AstroPhysics.calculateRotationAngle(
-          simulationClock.getNow(),
-          body.rotationPeriodHours,
-          body.id === "earth"
-            ? earthRotationOffset
-            : body.rotationOffsetDegrees || 0,
-          rotationEpoch
-        );
-        rotationRef.current.rotation.y = currentRotation;
-        if (cloudRotationRef.current) {
-          cloudRotationRef.current.rotation.y =
-            currentRotation * CLOUD_SUPER_ROTATION_FACTOR;
-        }
+      // One `dateToTDB` per body per frame, shared by the pole and the spin.
+      // `calculateDeltaT` allocates a Date, so calling it twice here would be
+      // needless churn in a file that otherwise uses TMP_ scratch religiously.
+      const jdTDB = dateToTDB(simulationClock.getNow());
+
+      if (poleRef.current) {
+        computeBodyPoleQuaternion(body, jdTDB, poleRef.current.quaternion);
+      }
+
+      const spin = computeSpinAngleRad(body, jdTDB);
+      rotationRef.current.rotation.y = spin;
+      if (cloudRotationRef.current) {
+        // NEW-2: the super-rotation multiplies the **rate**, which is what
+        // multiplying an unwrapped angle means. The previous form multiplied
+        // an angle already wrapped to [0, 360), so every wrap moved the clouds
+        // by (factor − 1) × 360° = 10.8° in one frame — a snap once per
+        // simulated day. See `computeSpinAngleRad`.
+        cloudRotationRef.current.rotation.y =
+          spin * CLOUD_SUPER_ROTATION_FACTOR;
       }
 
       // Shader Uniforms (Analytical Shadows & Day/Night)
@@ -432,6 +445,7 @@ const PlanetVisual = ({
       }
     }
   });
+  /* eslint-enable react-hooks/immutability */
 
   return (
     <group
@@ -444,8 +458,10 @@ const PlanetVisual = ({
       onPointerOver={() => (document.body.style.cursor = "pointer")}
       onPointerOut={() => (document.body.style.cursor = "auto")}
     >
-      {/* Axial Tilt Group - Now using Quaternion for accurate orientation */}
-      <group quaternion={orientationQuaternion}>
+      {/* Pole group — written per frame from the body's IAU pole, so local +Y
+          is the spin axis and local +X is node Q, the origin W is measured
+          from. The spin group below turns inside it. */}
+      <group ref={poleRef}>
         {/* Rotation Group */}
         <group ref={rotationRef}>
           {/* 1. Base Planet Sphere */}
@@ -554,7 +570,6 @@ const PlanetVisualWrapper = (props: {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
-  earthRotationOffset: number; // Added this prop
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
@@ -652,7 +667,6 @@ export const Planet = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
-  earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
   sunRenderMode,
@@ -669,13 +683,6 @@ export const Planet = ({
     interest: CameraAssetInterest;
     since: number;
   } | null>(null);
-
-  const orientationQuaternion = useMemo(
-    () => computePoleOrientationQuaternion(body),
-    // Only the pole/tilt fields feed the quaternion.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [body.poleRA, body.poleDec, body.axialTilt]
-  );
 
   // Split the satellites by the frame their position source uses, so each
   // group lands under the right container below. Memoised on the `children`
@@ -713,6 +720,21 @@ export const Planet = ({
   // inside useFrame use simulationClock.getNow() directly so the
   // component does not re-render at 60 Hz.
   const displayedDatetime = useStore((state) => state.displayedDatetime);
+
+  /**
+   * Parent pole for the legacy parent-equatorial satellites (Charon, Triton,
+   * Vanth, Weywot), applied by React on reconciliation rather than per frame.
+   *
+   * Documented approximation: this evaluates the parent's pole at the 4 Hz
+   * store tick instead of at 60 Hz. IAU poles move by degrees per *century*,
+   * so the error is unmeasurable; what this buys is not re-rendering every
+   * moon subtree at frame rate. The visual body's own pole, which must track
+   * the spin exactly, is written in `useFrame` instead — see `PlanetVisual`.
+   */
+  const satelliteMountQuaternion = useMemo(
+    () => computeBodyPoleQuaternion(body, dateToTDB(displayedDatetime)),
+    [body, displayedDatetime]
+  );
   const vectorIntensity = VISUAL_PRESETS[visualPreset]?.vectorIntensity ?? 1;
 
   const progradeColors = useMemo(() => {
@@ -1061,7 +1083,6 @@ export const Planet = ({
           sunEmissive={sunEmissive}
           ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
-          earthRotationOffset={earthRotationOffset} // Passed down
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}
           sunRenderMode={sunRenderMode}
@@ -1080,7 +1101,9 @@ export const Planet = ({
         */}
         {eclipticChildren.length > 0 && <group>{eclipticChildren}</group>}
         {equatorialChildren.length > 0 && (
-          <group quaternion={orientationQuaternion}>{equatorialChildren}</group>
+          <group quaternion={satelliteMountQuaternion}>
+            {equatorialChildren}
+          </group>
         )}
       </group>
     </>

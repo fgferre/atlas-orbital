@@ -88,7 +88,6 @@ import {
   DEFAULT_PLANET_METALNESS,
   DEFAULT_PLANET_ROUGHNESS,
   EARTH_NIGHT_LIGHT_INTENSITY,
-  EARTH_ROTATION_OFFSET_DEG,
   RING_EMISSIVE_POWER,
   RING_SHADOW_INTENSITY,
   SUN_EMISSIVE_POWER,
@@ -763,7 +762,6 @@ export const Scene = () => {
             sunEmissive={SUN_EMISSIVE_POWER}
             ringEmissive={RING_EMISSIVE_POWER}
             ringShadowIntensity={RING_SHADOW_INTENSITY}
-            earthRotationOffset={EARTH_ROTATION_OFFSET_DEG}
             nightLightIntensity={EARTH_NIGHT_LIGHT_INTENSITY}
             qualityProfileName={qualityProfile.name}
             sunRenderMode={resolvedSunRenderMode}

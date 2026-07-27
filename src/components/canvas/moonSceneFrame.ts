@@ -7,8 +7,6 @@
  * uses — same split as `cameraNearPlane.ts` / `hygMeshFadeRamp.ts`.
  */
 
-import * as THREE from "three";
-import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
 import { hasAnalyticalEphemeris } from "../../lib/orbital";
 
 /**
@@ -41,31 +39,4 @@ export function satelliteUsesParentEquatorialFrame(
   satelliteId: string
 ): boolean {
   return !hasAnalyticalEphemeris(satelliteId);
-}
-
-/**
- * Rotation taking scene up (ecliptic north) to the body's spin axis, from
- * IAU pole data when available and from `axialTilt` otherwise.
- */
-export function computePoleOrientationQuaternion(
-  body: CelestialBody
-): THREE.Quaternion {
-  if (body.poleRA !== undefined && body.poleDec !== undefined) {
-    // Get pole direction in Ecliptic space
-    const poleDir = AstroPhysics.equatorialToEcliptic(
-      body.poleRA,
-      body.poleDec
-    );
-
-    // Default Up is (0, 1, 0) in our scene (Ecliptic North)
-    const defaultUp = new THREE.Vector3(0, 1, 0);
-
-    // Create quaternion to rotate Up to Pole Direction
-    return new THREE.Quaternion().setFromUnitVectors(defaultUp, poleDir);
-  }
-
-  // Fallback to simple axial tilt (around Z axis)
-  return new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(0, 0, -(body.axialTilt || 0) * (Math.PI / 180))
-  );
 }

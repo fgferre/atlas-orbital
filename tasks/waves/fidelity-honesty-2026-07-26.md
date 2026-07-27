@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status                            | Commit                                                                                                                |
-| --------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                             |
-| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell |
-| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                 |
-| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                             |
-| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                       |
-| W6 One pole, one spin                   | not started                       | —                                                                                                                     |
-| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                     |
-| W8 Reach and discovery                  | not started                       | —                                                                                                                     |
-| W9 The rings transmit                   | not started                       | —                                                                                                                     |
-| W10 Atmosphere on the disc              | not started                       | —                                                                                                                     |
-| — CHECKPOINT —                          | —                                 | —                                                                                                                     |
-| W11 J2 secular precession               | not decided                       | —                                                                                                                     |
-| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                     |
-| W13 Enceladus erupts                    | not decided                       | —                                                                                                                     |
+| Wave                                    | Status                            | Commit                                                                                                                                                 |
+| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                              |
+| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                  |
+| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                  |
+| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                              |
+| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                                                        |
+| W6 One pole, one spin                   | **stage A done**, stage B open    | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (moons, Pluto/Charon, Triton, OPP-PC) not started |
+| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                      |
+| W8 Reach and discovery                  | not started                       | —                                                                                                                                                      |
+| W9 The rings transmit                   | not started                       | —                                                                                                                                                      |
+| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                      |
+| — CHECKPOINT —                          | —                                 | —                                                                                                                                                      |
+| W11 J2 secular precession               | not decided                       | —                                                                                                                                                      |
+| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                      |
+| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                      |
 
 ---
 
@@ -138,6 +138,25 @@ worked. If not, option B (re-origin the field) is next and C was insufficient.
   19% — "looks like less" is the correct reading. In **realistic** mode Io–Jupiter
   and Weywot–Quaoar separations unchanged; in **didactic** mode moons of flattened
   planets do shift slightly, by design.
+
+- **W6A** — the one with a right answer you can check against a clock. Set
+  **2026-03-20T12:00:00Z** and look at Earth: the sub-solar point must sit near
+  Greenwich, ~1.9° **west** of it (the equation of time — this is correct, not
+  drift), and at 00:00Z it must sit near the antipode. Africa in daylight at
+  noon UTC is the coarse version. Compare against your memory of the old build,
+  where the terminator was ~280° out and the 8k night-lights map lit the wrong
+  continents. Then run **two simulated days at high speed watching the cloud
+  layer**: no once-per-day snap (NEW-2). Then a **GLB body** — Vesta, Pallas or
+  Haumea — which has flipped azimuth by 2× its tilt (up to 168° for Pallas) now
+  that both render paths share one basis; confirm it still looks lit and
+  oriented sanely, since no automated check covers the model path's meridian.
+  Finally: Uranus should still lie on its side (97.77° now comes from δ₀, not
+  from `axialTilt`), and Venus and Uranus must still turn **backwards**.
+- **W6A / pixel gate** — Earth's azimuth changed, so `npm run test:e2e` is
+  expected to fail the boot baseline. **It was not run and not re-blessed.** Per
+  standing law 5 that re-bless needs a human confirming a correct populated
+  render first; do it as part of this pass, with one sentence saying Earth's
+  orientation is what moved and that nothing else did.
 
 **A/B against `main` is no longer available** for the W3 items — five waves have
 landed since, so those readings are absolute judgement now, not comparisons.
@@ -1185,6 +1204,98 @@ zero tests, so nothing on disk pins the behaviour being replaced. Any body whose
 numbers cannot be sourced stays on the `rotationPeriodHours` fallback with W₀ = 0
 and a JSDoc line stating its phase origin is unconstrained — **an honest gap beats
 a confident invention.**
+
+#### Stage A shipped — what was decided and what stage B inherits (2026-07-27)
+
+**Scope shipped:** the orientation machinery, the schema, and the Sun plus all
+eight planets. F-01 + F-02 (one change to one function), NEW-2, the
+`axialTilt` schema change, the second render path, and every deletion the
+section calls for. **Not shipped:** the satellites, the Moon, Pluto, Charon,
+Triton and OPP-PC. Those are stage B and nothing about them was pre-decided
+here.
+
+**"~29 recalled constants" is no longer the risk, because nothing was
+recalled.** The transcription source is NAIF's `pck00011.tpc`, whose own header
+cites Archinal et al. 2018 **and the "Correction to:"** — so the erratum this
+section demands is satisfied by the source itself rather than by a citation
+line. `BODY<n>_POLE_RA` / `_POLE_DEC` / `_PM` map one-to-one onto the schema
+fields, which removes the read-a-number-out-of-a-PDF step entirely. Stage B
+should use the same file; it already contains every satellite this wave needs.
+
+**The step-1 gate is corrected, and the correction is load-bearing.** As
+drafted — "sub-solar longitude vs the GMST-derived value within 0.1° at a 2026
+date" — the gate **cannot pass for a correct model.** IAU W is referred to the
+ICRF; GMST is referred to the **mean equinox of date**; precession in right
+ascension separates them by 0.34° by 2026. Measured residuals against a
+correctly transcribed Earth: **−0.047° at J2000, −0.41° in 2026.** The drafted
+gate would have failed, and the predictable response — widen to 0.5° — is
+exactly what this section forbids, because 0.5° readmits both time-scale
+errors. Closing the gap properly means importing an IAU 2006 precession
+polynomial, i.e. a fresh block of unsourced constants inside the wave whose
+entire risk is unsourced constants.
+**Resolution: run the gate at J2000, where the two frames coincide by
+construction, and check Ẇ separately.** Both wrong-pairing tests still fail as
+required (`bodyOrientation.test.ts`), so the 0.1° bound keeps every bit of its
+discriminating power against the ΔT confusion. The rate is checked against
+GMST's own linear coefficient, which catches a typo anywhere in the first six
+places of 360.9856235 — that is the single-epoch blind spot the risk section
+names, closed without a fixture.
+Everything else in the third round's instrument list still stands for stage B
+and is **more** necessary now: the sub-observer fixtures, pole-vs-orbit-normal,
+and running the lock check at every fixture epoch.
+
+**A periodic term is not automatically a wobble — check the argument's rate.**
+Mars carries amplitudes of 0.419° (α₀), 1.591° (δ₀) and 0.585° (W) whose
+arguments advance 0.5042615°/**century**: a ~71 000-year period, so across every
+date this app renders they are fixed offsets, not oscillations. Dropping them
+as "periodic detail" would have shipped Mars's pole 1.6° wrong — past the ~1°
+lock budget — and it would have looked correct. They are transcribed. Neptune's
+single N term (0.70 / 0.51 / 0.48) is transcribed for the same reason. Mercury's
+0.012° librations and Jupiter's 0.005° terms are dropped and disclosed in the
+records' JSDoc, per the prescription.
+**Free confirmation the plan did not anticipate:** the catalog already carried
+rounded poles for Mars (317.68 / 52.89) and Neptune (δ₀ 42.95) from an unrelated
+source, and those are exactly what the new records reproduce at J2000 **once the
+periodic terms are applied**. That independently pins the sin-for-α₀/W,
+cos-for-δ₀ convention — a swap moves Mars's declination 3.1°. Pinned in
+`bodyOrientation.test.ts`.
+
+**Three layers, not two, and the reason is `equatorialToEcliptic`.** The section
+called the two-function API frame-mislayered; the concrete instance was that
+`AstroPhysics.equatorialToEcliptic` did the equatorial→ecliptic rotation **and**
+the Y-up scene remap under a name claiming one job, with `ecliptic2ThreeJs`'s
+body hand-inlined at its return. It is deleted. `coordUtils` now owns
+`equatorial2Ecliptic` / `raDecToEclipticUnit` (astro frame only) and callers
+compose the remap explicitly. `resolveObliquityDeg` had its own third copy of
+that rotation with its own obliquity constant; it now reads through the core.
+
+**The pole is no longer time-blind.** Both render paths write the quaternion in
+the same `useFrame` that writes the spin, from one `dateToTDB` per body per
+frame. The satellite mount stays reconciliation-static on `displayedDatetime`,
+with the documented "parent pole at the 4 Hz tick" approximation.
+
+**Unmasked, not caused:** deleting the pole `useMemo` removed an
+`eslint-disable-next-line react-hooks/exhaustive-deps` that had been making the
+React Compiler skip all of `PlanetVisual`, which surfaced a
+`react-hooks/immutability` error on a T5.1-era atmosphere-uniform write. Scoped
+disable with the reasoning on the `useFrame`; the suppression was **not** put
+back on a hook that no longer exists. Recorded in `../lessons.md` M5.
+
+**Gate results:** `npm run test:run` 2178 passed (115 files), `test:coverage`
+thresholds hold, `lint` clean, `build` clean, `tsc --noEmit` clean. The four
+tests that failed mid-migration were the two `moonSceneFrame.test.ts` uses of
+the deleted helper and the two `astrophysics.test.ts` obliquity tests pinned to
+the `poleRA !== undefined` discriminator; all four were rewritten to the new
+invariant rather than worked around, and `moonSceneFrame.test.ts`'s Pluto
+assertion now reads `resolveBodyIauOrientation(pluto) === null` with a note that
+stage B flips it.
+
+**What stage B must not assume.** `e2e` and the boot pixel gate were **not** run
+for stage A, so the Earth-azimuth change this section predicts ("shifts that
+baseline once, deterministically") is **still unverified** — that re-bless is
+owed and belongs with the batched smoke. Earth now draws at its measured
+orientation rather than the +140° that was tuned for one country's afternoon, so
+the boot frame is expected to move.
 
 ---
 

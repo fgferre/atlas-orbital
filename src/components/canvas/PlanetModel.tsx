@@ -8,6 +8,11 @@ import { useProgressiveDeferredTexture } from "../../hooks/useProgressiveDeferre
 import type { ResolvedQualityName } from "../../lib/qualityProfile";
 import { TEXTURE_VARIANT_MANIFEST } from "../../lib/textureVariantManifest";
 import { simulationClock } from "../../lib/simulationClock";
+import {
+  computeBodyPoleQuaternion,
+  computeSpinAngleRad,
+} from "../../lib/bodyOrientation";
+import { dateToTDB } from "../../lib/orbital/time";
 import { resolveTextureRequest } from "../../lib/textureVariants";
 import { useStore } from "../../store";
 import {
@@ -225,6 +230,7 @@ export const PlanetModel = ({
   textureSalience,
 }: PlanetModelProps) => {
   const groupRef = useRef<THREE.Group>(null);
+  const poleRef = useRef<THREE.Group>(null);
   const rotationRef = useRef<THREE.Group>(null);
   const selectId = useStore((state) => state.selectId);
   const scaleMode = useStore((state) => state.scaleMode);
@@ -268,17 +274,18 @@ export const PlanetModel = ({
     // the pairing so this cannot silently start mattering.
     groupRef.current.scale.setScalar(s);
 
-    // Rotation — same helper as `Planet.tsx` so a body's `rotationEpoch` /
-    // `rotationOffsetDegrees` are honoured whether it renders as a shaded
-    // sphere or as a GLB model. The raw `Date.now()/period` form this
-    // replaced silently ignored both fields.
-    if (rotationRef.current && body.rotationPeriodHours) {
-      rotationRef.current.rotation.y = AstroPhysics.calculateRotationAngle(
-        simulationClock.getNow(),
-        body.rotationPeriodHours,
-        body.rotationOffsetDegrees || 0,
-        body.rotationEpoch ? new Date(body.rotationEpoch) : undefined
-      );
+    // Orientation — the same two functions `Planet.tsx` uses, so both render
+    // paths now read one source. Before this they disagreed on the tilt SIGN:
+    // this file used `Euler(0, 0, +tilt)` while the sphere path used −tilt, so
+    // the four model bodies rendered at an azimuth 2× their tilt away from
+    // their shaded-sphere counterparts — up to 168° for Pallas. Both azimuths
+    // were arbitrary, so unifying them is correct rather than a tie-break.
+    const jdTDB = dateToTDB(simulationClock.getNow());
+    if (poleRef.current) {
+      computeBodyPoleQuaternion(body, jdTDB, poleRef.current.quaternion);
+    }
+    if (rotationRef.current) {
+      rotationRef.current.rotation.y = computeSpinAngleRad(body, jdTDB);
     }
   });
 
@@ -292,8 +299,13 @@ export const PlanetModel = ({
       onPointerOver={() => (document.body.style.cursor = "pointer")}
       onPointerOut={() => (document.body.style.cursor = "auto")}
     >
-      {/* Axial Tilt Group */}
-      <group rotation={[0, 0, (body.axialTilt || 0) * (Math.PI / 180)]}>
+      {/* Pole group — written per frame, same basis as the sphere path.
+          Note the meridian caveat: a GLB's own axes are unaudited, so model
+          bodies deliberately stay on the `axialTilt` fallback inside
+          `computeBodyPoleQuaternion` even where the IAU publishes a W row.
+          Transcribing W₀ onto a mesh whose prime meridian is unknown would
+          convert a measured number into a false claim. */}
+      <group ref={poleRef}>
         {/* Rotation Group */}
         <group ref={rotationRef}>
           {/* Model Rotation Offset */}

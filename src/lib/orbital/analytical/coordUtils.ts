@@ -61,6 +61,61 @@ export function sphericalEclipticToCartesian(
 }
 
 /**
+ * Obliquity of the J2000 mean ecliptic to the ICRF equator, in radians —
+ * 23° 26′ 21.406″ = 23.4392808° (IAU 2006 value at J2000.0).
+ *
+ * `src/lib/starfield/hygFrame.ts` carries the same number as
+ * `HYG_OBLIQUITY_RAD` with precomputed sin/cos for the per-star hot path;
+ * that copy is deliberate (it is a module-local optimisation), and the two
+ * must stay equal. This is the one the orbital engine uses.
+ */
+export const OBLIQUITY_J2000_RAD = (23.4392808 * Math.PI) / 180;
+
+const COS_OBLIQUITY_J2000 = Math.cos(OBLIQUITY_J2000_RAD);
+const SIN_OBLIQUITY_J2000 = Math.sin(OBLIQUITY_J2000_RAD);
+
+/**
+ * Rotate an ICRF/equatorial J2000 vector into the **ecliptic J2000 astro
+ * frame** (x toward the vernal equinox, z toward ecliptic north).
+ *
+ * This is one job, and that is the point. The function it replaces —
+ * `AstroPhysics.equatorialToEcliptic` — did the equatorial→ecliptic rotation
+ * *and* the three.js Y-up remap under a name that claimed only the first,
+ * with `ecliptic2ThreeJs`'s body hand-inlined at its return. Callers that
+ * need a scene vector compose the two explicitly:
+ * `ecliptic2ThreeJs(equatorial2Ecliptic(v))`.
+ */
+export function equatorial2Ecliptic(equ: THREE.Vector3): THREE.Vector3 {
+  return new THREE.Vector3(
+    equ.x,
+    equ.y * COS_OBLIQUITY_J2000 + equ.z * SIN_OBLIQUITY_J2000,
+    -equ.y * SIN_OBLIQUITY_J2000 + equ.z * COS_OBLIQUITY_J2000
+  );
+}
+
+/**
+ * Unit vector toward an ICRF right ascension / declination, expressed in the
+ * **ecliptic J2000 astro frame**. Convenience wrapper over
+ * `equatorial2Ecliptic` for the IAU pole/node tables, which are published as
+ * (α, δ) pairs.
+ */
+export function raDecToEclipticUnit(
+  raDeg: number,
+  decDeg: number
+): THREE.Vector3 {
+  const alpha = (raDeg * Math.PI) / 180;
+  const delta = (decDeg * Math.PI) / 180;
+  const cosDelta = Math.cos(delta);
+  return equatorial2Ecliptic(
+    new THREE.Vector3(
+      cosDelta * Math.cos(alpha),
+      cosDelta * Math.sin(alpha),
+      Math.sin(delta)
+    )
+  ).normalize();
+}
+
+/**
  * Remap an ecliptic J2000 vector (x toward vernal eq., z toward ecl. north)
  * into the three.js Y-up convention used across the engine: (x, z, −y).
  */

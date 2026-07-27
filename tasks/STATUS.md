@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-26 (W1–W5 code-complete; browser smokes BATCHED to the end of the wave; W6 next)._
+_Last updated: 2026-07-27 (W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -20,11 +20,25 @@ smokes are batched into one pass at the end of the wave** — owner decision,
 increment waits on it. The consolidated checklist is the wave's **Deferred smoke
 gate** section; do not rebuild it from the per-wave prose.
 
-**W6 (one pole, one spin) is next — the plan's highest-fan-out wave and its
-largest live falsehood.** It ships ~29 transcribed IAU constants under a
-"measured" provenance tag, F-01 and F-02 cannot be split, and its own risk section
-says a wrong W0 renders as a perfectly plausible planet. Read the whole W6 section
-including "Third round" before touching `moonSceneFrame.ts`.
+**W6 stage A is code-complete** — `src/lib/bodyOrientation.ts` is now the single
+orientation source, Earth's hand-tuned +140° is gone, and the Sun plus all eight
+planets carry measured IAU rotational elements transcribed from NAIF's
+`pck00011.tpc` (which cites Archinal 2018 **and** its erratum). Read W6's
+"Stage A shipped" subsection before continuing — it records two things a later
+session must not re-derive: **the drafted 0.1°-at-2026 gate cannot pass for a
+correct model** (IAU W is ICRF, GMST is mean-equinox-of-date, precession
+separates them by 0.34° — the gate now runs at J2000 plus a separate rate
+check), and **Mars's 1.59° periodic term is a fixed offset, not a wobble**, so
+dropping it would have shipped a 1.6° pole error that looked right.
+
+**W6 stage B is next:** the 18 analytical satellites plus the Moon, Pluto and
+Charon, the Triton decision, and OPP-PC. Everything the "Third round" subsection
+prescribes still applies and matters more now that the Earth-only anchor is
+spent — the Horizons sub-observer fixtures, pole-vs-orbit-normal, and running
+the lock check at every fixture epoch are the instruments for the 20 bodies that
+have no independent anchor. `moonSceneFrame.test.ts` now asserts Pluto has no
+rotation solution; stage B flips that assertion and must re-derive Charon's
+mount with it.
 
 Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is

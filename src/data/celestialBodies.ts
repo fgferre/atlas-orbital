@@ -1,5 +1,32 @@
 import { type CelestialBody } from "../lib/astrophysics";
 
+/**
+ * ## Provenance of every `iauOrientation` record below
+ *
+ * Source: **NAIF/JPL generic planetary constants kernel `pck00011.tpc`**
+ * (https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/), whose own header
+ * cites Archinal, B.A. et al., "Report of the IAU Working Group on
+ * Cartographic Coordinates and Rotational Elements: 2015", *Celestial
+ * Mechanics and Dynamical Astronomy* **130**, 22 (2018),
+ * DOI 10.1007/s10569-017-9805-5, **together with its published "Correction
+ * to:"** — the erratum matters, since it revised table entries, so citing a
+ * bare "IAU/WGCCRE 2015" would name the wrong document.
+ *
+ * The kernel is the transcription source rather than the paper because it is
+ * machine-readable: `BODY<n>_POLE_RA`, `_POLE_DEC` and `_PM` map one-to-one
+ * onto `poleRaDeg`/`poleDecDeg`/`primeMeridianDeg` plus their rates, which
+ * removes the "read a number out of a PDF table" step that this wave's risk
+ * section is entirely about.
+ *
+ * **Dropped periodic terms are disclosed per body.** Where a body's IAU model
+ * carries `NUT_PREC` trigonometric corrections, each record below either
+ * transcribes them into `nutPrec` or states the peak amplitude it omits, so
+ * the truncation is auditable instead of silent.
+ *
+ * **What is NOT here yet:** the satellites, Pluto and Charon. They still carry
+ * `poleRA`/`poleDec` at best, i.e. a measured axis with an unconstrained phase
+ * origin, which `bodyOrientation.ts` models honestly rather than papering over.
+ */
 const TEXTURE_PATH = (import.meta.env.BASE_URL || "/") + "textures/";
 const MODEL_PATH = (import.meta.env.BASE_URL || "/") + "models/";
 const VESTA_DAWN_TEXTURE = TEXTURE_PATH + "vesta_dawn_embedded.png";
@@ -15,8 +42,13 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 0, e: 0, i: 0, O: 0, w: 0, M0: 0, n: 0 },
     rotationPeriodHours: 600,
     axialTilt: 7.25,
-    poleRA: 286.13,
-    poleDec: 63.87,
+    /** No periodic terms in the IAU model for the Sun. */
+    iauOrientation: {
+      poleRaDeg: 286.13,
+      poleDecDeg: 63.87,
+      primeMeridianDeg: 84.176,
+      spinRateDegPerDay: 14.1844,
+    },
     classification: "Star",
     mass: "1.989 × 10³⁰ kg",
     gravity: "274 m/s²",
@@ -68,8 +100,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: 1407.6,
     axialTilt: 0.03,
-    poleRA: 281.01,
-    poleDec: 61.45,
+    /**
+     * Drops the five libration terms on W (arguments M1–M5), whose amplitudes
+     * sum to 0.012°. That is two orders below the ~1° budget any check in this
+     * wave uses, and it does not touch the 3:2 spin–orbit resonance itself,
+     * which lives in the 6.1385108°/day rate.
+     */
+    iauOrientation: {
+      poleRaDeg: 281.0103,
+      poleRaRateDegPerCentury: -0.0328,
+      poleDecDeg: 61.4155,
+      poleDecRateDegPerCentury: -0.0049,
+      primeMeridianDeg: 329.5988,
+      spinRateDegPerDay: 6.1385108,
+    },
     classification: "Terrestrial Planet",
     mass: "3.301 × 10²³ kg",
     gravity: "3.7 m/s²",
@@ -115,8 +159,13 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: -5832.5,
     axialTilt: 177.3,
-    poleRA: 272.76,
-    poleDec: 67.16,
+    /** No periodic terms; W is negative because Venus rotates retrograde. */
+    iauOrientation: {
+      poleRaDeg: 272.76,
+      poleDecDeg: 67.16,
+      primeMeridianDeg: 160.2,
+      spinRateDegPerDay: -1.4813688,
+    },
     classification: "Terrestrial Planet",
     mass: "4.867 × 10²⁴ kg",
     gravity: "8.87 m/s²",
@@ -157,13 +206,28 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     orbit: { a: 1.0, e: 0.016, i: 0.0, O: 0.0, w: 102.9, M0: 357.5, n: 0.985 },
     rotationPeriodHours: 23.93,
     axialTilt: 23.44,
-    poleRA: 0.0,
-    poleDec: 90.0,
-    // Rotation offset calibrated so that at J2000.0 (2000-01-01 12:00 UTC),
-    // the Prime Meridian (0° longitude) faces the sun at solar noon.
-    // Adjusted to 140 degrees to align Brazil with late afternoon sun at ~17:30 local time.
-    rotationOffsetDegrees: 140,
-    rotationEpoch: "2000-01-01T12:00:00Z",
+    /**
+     * The one body whose phase origin is independently falsifiable, and the
+     * reason this record replaced a hand-tuned constant: the field that used
+     * to sit here was `rotationOffsetDegrees: 140`, whose own comment admitted
+     * it was "adjusted to align Brazil with late afternoon sun". W₀ = 190.147°
+     * is measured, and `bodyOrientation.test.ts` checks it against Greenwich
+     * mean sidereal time — a quantity from the IERS Earth-rotation
+     * convention that shares no constant with Archinal's tables.
+     *
+     * No periodic terms in the IAU model. Note this is a deliberately coarse
+     * Earth-rotation model (the report says so): it drifts a few tenths of a
+     * degree per century against the full IERS series, which is why the gate
+     * measures ~0.06° rather than ~0.
+     */
+    iauOrientation: {
+      poleRaDeg: 0.0,
+      poleRaRateDegPerCentury: -0.641,
+      poleDecDeg: 90.0,
+      poleDecRateDegPerCentury: -0.557,
+      primeMeridianDeg: 190.147,
+      spinRateDegPerDay: 360.9856235,
+    },
     classification: "Terrestrial Planet",
     mass: "5.972 × 10²⁴ kg",
     gravity: "9.8 m/s²",
@@ -231,8 +295,45 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: 24.62,
     axialTilt: 25.19,
-    poleRA: 317.68,
-    poleDec: 52.89,
+    /**
+     * Mars is the one body here where the periodic terms are **not** optional.
+     * Three of them carry amplitudes of 0.419° (α₀), 1.591° (δ₀) and 0.585°
+     * (W) on arguments whose rate is 0.5042615°/century — a ~71 000-year
+     * period, so over any date this app renders they act as near-constant
+     * offsets rather than as a wobble. Dropping them would bias the pole by
+     * 1.6°, past the ~1° budget, and would look like a correct model.
+     *
+     * Independent confirmation that the sign convention here is right (sin for
+     * α₀/W, cos for δ₀): evaluating this record at J2000 reproduces 317.68° /
+     * 52.89°, the rounded pole this catalog previously carried from an
+     * unrelated source. The remaining M1–M5-driven terms are dropped; their
+     * amplitudes peak at 0.0004°.
+     */
+    iauOrientation: {
+      poleRaDeg: 317.269202,
+      poleRaRateDegPerCentury: -0.10927547,
+      poleDecDeg: 54.432516,
+      poleDecRateDegPerCentury: -0.05827105,
+      primeMeridianDeg: 176.049863,
+      spinRateDegPerDay: 350.891982443297,
+      nutPrec: [
+        {
+          phaseDeg: 79.398797,
+          rateDegPerCentury: 0.5042615,
+          raAmpDeg: 0.419057,
+        },
+        {
+          phaseDeg: 166.325722,
+          rateDegPerCentury: 0.5042615,
+          decAmpDeg: 1.591274,
+        },
+        {
+          phaseDeg: 95.391654,
+          rateDegPerCentury: 0.5042615,
+          pmAmpDeg: 0.584542,
+        },
+      ],
+    },
     classification: "Terrestrial Planet",
     mass: "6.417 × 10²³ kg",
     gravity: "3.71 m/s²",
@@ -352,8 +453,20 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: 9.93,
     axialTilt: 3.13,
-    poleRA: 268.05,
-    poleDec: 64.49,
+    /**
+     * W is System III (the magnetic-field rotation), which is what "Jupiter's
+     * rotation period" conventionally means for a body with no surface.
+     * Drops the Ja–Je periodic terms: 0.005° peak on α₀, 0.002° on δ₀, and
+     * exactly zero on W.
+     */
+    iauOrientation: {
+      poleRaDeg: 268.056595,
+      poleRaRateDegPerCentury: -0.006499,
+      poleDecDeg: 64.495303,
+      poleDecRateDegPerCentury: 0.002413,
+      primeMeridianDeg: 284.95,
+      spinRateDegPerDay: 870.536,
+    },
     classification: "Gas Giant",
     mass: "1.898 × 10²⁷ kg",
     gravity: "24.7 m/s²",
@@ -400,8 +513,15 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: 10.7,
     axialTilt: 26.73,
-    poleRA: 40.58,
-    poleDec: 83.54,
+    /** No periodic terms. W is System III, as for Jupiter. */
+    iauOrientation: {
+      poleRaDeg: 40.589,
+      poleRaRateDegPerCentury: -0.036,
+      poleDecDeg: 83.537,
+      poleDecRateDegPerCentury: -0.004,
+      primeMeridianDeg: 38.9,
+      spinRateDegPerDay: 810.7939024,
+    },
     classification: "Gas Giant",
     mass: "5.683 × 10²⁶ kg",
     gravity: "10.4 m/s²",
@@ -464,8 +584,17 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: -17.24,
     axialTilt: 97.77,
-    poleRA: 257.31,
-    poleDec: -15.17,
+    /**
+     * No periodic terms, and no pole rates — Uranus's 97.77° obliquity is
+     * carried entirely by δ₀ = −15.175°, not by `axialTilt`. W is negative:
+     * Uranus rotates retrograde with respect to its orbit.
+     */
+    iauOrientation: {
+      poleRaDeg: 257.311,
+      poleDecDeg: -15.175,
+      primeMeridianDeg: 203.81,
+      spinRateDegPerDay: -501.1600928,
+    },
     classification: "Gas Giant",
     mass: "8.681 × 10²⁵ kg",
     gravity: "8.87 m/s²",
@@ -527,8 +656,30 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     },
     rotationPeriodHours: 16.11,
     axialTilt: 28.32,
-    poleRA: 299.36,
-    poleDec: 42.95,
+    /**
+     * The single periodic argument N = 357.85° + 52.316°·T is transcribed
+     * rather than dropped: at 0.70° / 0.51° / 0.48° it is the largest
+     * correction on any body in this file, and it is one term.
+     *
+     * Independent confirmation of the sin/cos convention, same as Mars:
+     * evaluated at J2000 this record gives δ₀ = 42.950°, reproducing the
+     * rounded pole the catalog previously carried from an unrelated source.
+     */
+    iauOrientation: {
+      poleRaDeg: 299.36,
+      poleDecDeg: 43.46,
+      primeMeridianDeg: 249.978,
+      spinRateDegPerDay: 541.1397757,
+      nutPrec: [
+        {
+          phaseDeg: 357.85,
+          rateDegPerCentury: 52.316,
+          raAmpDeg: 0.7,
+          decAmpDeg: -0.51,
+          pmAmpDeg: -0.48,
+        },
+      ],
+    },
     classification: "Gas Giant",
     mass: "1.024 × 10²⁶ kg",
     gravity: "11.15 m/s²",

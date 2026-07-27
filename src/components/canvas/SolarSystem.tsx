@@ -11,7 +11,6 @@ interface SolarSystemProps {
   sunEmissive: number;
   ringEmissive: number;
   ringShadowIntensity: number;
-  earthRotationOffset: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
   sunRenderMode: ResolvedSunRenderMode;
@@ -23,7 +22,6 @@ export const SolarSystem = ({
   sunEmissive,
   ringEmissive,
   ringShadowIntensity,
-  earthRotationOffset,
   nightLightIntensity,
   qualityProfileName,
   sunRenderMode,
@@ -70,7 +68,6 @@ export const SolarSystem = ({
           sunEmissive={sunEmissive}
           ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
-          earthRotationOffset={earthRotationOffset}
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}
           sunRenderMode={sunRenderMode}

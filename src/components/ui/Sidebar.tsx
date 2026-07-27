@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "../../store";
 import { BODIES_BY_ID } from "../../data/celestialBodies";
 import { AstroPhysics, AU_IN_KM } from "../../lib/astrophysics";
+import { resolveBodyIauOrientation } from "../../lib/bodyOrientation";
 import type { CelestialBody } from "../../lib/astrophysics";
 import { resolveHeliocentricPositionAU } from "../../lib/orbital/heliocentric";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -706,14 +707,21 @@ const inclinationToEcliptic = (b: CelestialBody): string | undefined =>
  *
  * The template is also guarded: `${b.axialTilt}°` on an absent field produces
  * the string "undefined°", which is truthy and sails straight past StatBox's
- * `value || "N/A"` fallback. W6 makes the field optional, so the guard has to
- * exist before then.
+ * `value || "N/A"` fallback. W6 made the field optional, so the guard is now
+ * load-bearing rather than defensive.
+ *
+ * "Does this body have a measured spin axis" is asked through
+ * `resolveBodyIauOrientation` and not by sniffing `poleRA`: W6 moved nine
+ * bodies up to a full `iauOrientation` record and off that field, and a stale
+ * check here would have started hiding a real 0° as if it were a placeholder.
  */
 const axialTiltLabel = (b: CelestialBody): string | undefined => {
   if (b.axialTilt === undefined || !Number.isFinite(b.axialTilt)) {
     return undefined;
   }
-  if (b.axialTilt === 0 && b.poleRA === undefined) return undefined;
+  if (b.axialTilt === 0 && resolveBodyIauOrientation(b) === null) {
+    return undefined;
+  }
   return `${b.axialTilt}°`;
 };
 
