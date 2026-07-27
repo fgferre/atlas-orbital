@@ -431,6 +431,32 @@ Constellation reads **Orion** in both locales (IAU names stay Latin — recorded
 in `CONSTELLATION_NAMES`' JSDoc, not left implicit). pt-BR renders every new
 string with no raw keys. Console clean across the run.
 
+**F-06's symptom was independently observed, so it is not a paper defect.** The
+owner reported having already noticed the drift / misalignment on this transition
+during flybys, before the fix and without prompting (2026-07-26). That matches the
+mechanism exactly: the gate measured the distance from the live camera to the
+**frozen** mesh point, so the drawn sprite (live position) and the drawn mesh
+(frozen position) separate during the cross-fade, the disc slides off centre, and
+the growing measured distance eventually crosses `STELLAR_MESH_EXIT_RAD` and tears
+the mesh down with the star still in frame.
+
+Order-of-magnitude for who was affected, from the real landing clamp
+(`ENTER × 5`) and gate thresholds, using modelled radii and pm × distance for the
+transverse velocity — **simulated years until the mesh dropped**: Kapteyn 0.08,
+Barnard 0.09, Proxima 0.14, Sirius 4.4, Betelgeuse 775, Rigel 3919. The ordering
+is counterintuitive and worth keeping: the **nearby high-proper-motion dwarfs**
+broke almost immediately under any warp, while distant supergiants effectively
+never did, because their landing distance is enormous and their proper motion
+tiny. So "does this affect every star" is **no** — it was steeply per-star.
+
+Not the cause, checked and cleared: the gate carries 2× hysteresis with the
+boundary as a no-op zone, the landing is clamped to `ENTER × 5` (a 10× margin over
+EXIT), `stepRampToward` snaps to exactly 0 or 1 so the ramp cannot dither
+`ProceduralSun3D` in and out of mount, a NaN solid angle holds the previous state
+instead of flipping, only the focused star ever mounts a mesh, and the
+"index K means a different star after a tier change" hazard is neutralised by HYG
+tiers being a brightness-sorted prefix.
+
 **Still owed by a human:** the temporal half of F-06 — Sirius at 1 year/second
 for 20+ s, watching for lateral slide and sprite/mesh pop, and the
 defocus/refocus ramp restart. `e2e/hyg-focus.spec.ts` passes and covers the
