@@ -88,6 +88,18 @@ port onda. Work the active wave in order, or prefer user-stated tasks.
 
 ---
 
+## Parallel line — texture inventory
+
+**[`tasks/waves/texture-inventory-2026-07-27.md`](./waves/texture-inventory-2026-07-27.md)**
+— runs independently of the fidelity-honesty wave, intended for its own
+worktree. 28 assets in `public/textures/` cannot be reached by any code path.
+The question is **why**, not how fast they can be deleted: one of the three
+categories is a wiring bug, where the good asset is on disk and the app serves
+something worse. That brief carries the four measurement traps that already
+produced wrong answers, so do not re-derive the orphan list from scratch.
+
+---
+
 ## Carryover (parked — do not auto-expand)
 
 | ID           | Pri | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
