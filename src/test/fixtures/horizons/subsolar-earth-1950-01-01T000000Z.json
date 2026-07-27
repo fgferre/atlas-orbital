@@ -1,0 +1,18 @@
+{
+  "kind": "subpoint",
+  "bodyId": "earth",
+  "horizonsCommand": "399",
+  "name": "Earth",
+  "date": "1950-01-01T00:00:00Z",
+  "center": "500@10",
+  "timeScale": "UT",
+  "targetFrame": "ITRF93",
+  "longitudeSense": "east",
+  "subSolarLonDeg": 182.85972,
+  "subSolarLatDeg": -23.209812,
+  "rangeAU": 0.98324373511995,
+  "lightTimeSeconds": 490.6433275017857,
+  "generatedAt": "2026-07-27T12:34:39.534Z",
+  "source": "NASA JPL Horizons API (OBSERVER, QUANTITIES 14,20)",
+  "apiUrl": "https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND=%27399%27&OBJ_DATA=%27NO%27&MAKE_EPHEM=%27YES%27&EPHEM_TYPE=%27OBSERVER%27&CENTER=%27500%4010%27&START_TIME=%271950-01-01T00%3A00%3A00%27&STOP_TIME=%271950-01-01T00%3A01%3A00%27&STEP_SIZE=%271m%27&QUANTITIES=%2714%2C20%27&TIME_TYPE=%27UT%27&CAL_FORMAT=%27CAL%27"
+}
