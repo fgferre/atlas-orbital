@@ -905,6 +905,33 @@ with an asserted positive determinant, and `computeSpinAngleRad` returning
 `earthRotationOffset` prop chain and the `rotationOffsetDegrees`/`rotationEpoch`
 schema fields are deleted in this wave.
 
+#### The instrument is already built — do not rebuild it (2026-07-27)
+
+`greenwichMeanSiderealTimeDeg(jdUT)` ships in `src/lib/orbital/time.ts`
+(`569fd27`), with tests in `time.test.ts`. It is the IAU 1982 / Meeus eq. 12.4
+expression, **verified against Meeus Example 12.a** (1987 April 10.0 UT → GMST
+13h 10m 46.3668s) to 9e-8 degrees — a published worked example, so the check does
+not pass through its own leading coefficient.
+
+Three things it settles for this wave, so nobody re-derives them:
+
+- **The argument is UT.** Feed it `dateToJD(date)`, never `dateToTDB`. The
+  companion test asserts that ΔT in 2026 is 0.2-0.4° of Earth rotation, i.e. the
+  0.1° gate sits a factor of ~3 inside the error it exists to catch. That test is
+  there specifically so a later session cannot widen the gate to 0.5° without
+  tripping over the reason it is 0.1°.
+- **Scale, for judging any residual:** 0.1° of Earth rotation is 23.9 s of time
+  and 11.1 km at the equator.
+- **The 360.98564736629°/day rate is pinned** — it is why a sidereal day is ~236 s
+  short of 24 h, and the first casualty of anyone "simplifying" the formula.
+
+Still true and still the limit: the Greenwich sub-solar smoke stays a **smoke**,
+because the equation of time puts the point ~1.9° west of Greenwich on
+2026-03-20, so a tight assert there would fail a _correct_ model. And **only Earth
+has this anchor** — the other 20 bodies need the Horizons sub-observer fixtures
+described in the third round, which is the difference between "equals what JPL
+computes" and "≈ 0 within an amplitude I also assumed".
+
 **Step-1 gate, before any satellite data lands.** The sub-solar longitude from
 pole quaternion + W at a 2026 date matches the GMST-derived value within 0.1° —
 GMST at J2000.0 = 280.46061837° is an anchor that passes through **no**
