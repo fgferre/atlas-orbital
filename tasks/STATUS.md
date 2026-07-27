@@ -98,6 +98,12 @@ categories is a wiring bug, where the good asset is on disk and the app serves
 something worse. That brief carries the four measurement traps that already
 produced wrong answers, so do not re-derive the orphan list from scratch.
 
+**Already running, do not re-open it.** A worktree exists at
+`../atlas-textures` on branch `texture-inventory` (from `9cc4fb0`) with a
+session working that brief. A `main` session should leave `public/textures/`,
+`src/lib/textureVariants.ts` and `src/lib/textureVariantManifest.ts` alone
+until that branch merges, or the two lines will conflict.
+
 ---
 
 ## Carryover (parked — do not auto-expand)
