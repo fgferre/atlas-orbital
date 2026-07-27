@@ -12,6 +12,7 @@ import {
   convertTime,
   calculateDeltaT,
   jdTTToTDB,
+  greenwichMeanSiderealTimeDeg,
 } from "./time";
 
 describe("Time Utilities", () => {
@@ -201,6 +202,52 @@ describe("Time Utilities", () => {
       expect(() => dateToJD(date2100)).not.toThrow();
       expect(() => dateToTDB(date1900)).not.toThrow();
       expect(() => dateToTDB(date2100)).not.toThrow();
+    });
+  });
+
+  // W6's measuring instrument. Its value is that it shares no constant with the
+  // ~29 IAU rotation constants W6 transcribes, so it can FALSIFY a
+  // transcription error rather than agree with one. Verified against a
+  // published worked example, not against its own leading coefficient.
+  describe("Greenwich Mean Sidereal Time", () => {
+    it("reproduces Meeus Example 12.a", () => {
+      // 1987 April 10.0 UT (JD 2446895.5) -> GMST 13h 10m 46.3668s.
+      const expectedDeg = (13 + 10 / 60 + 46.3668 / 3600) * 15;
+      expect(greenwichMeanSiderealTimeDeg(2446895.5)).toBeCloseTo(
+        expectedDeg,
+        5
+      );
+    });
+
+    it("is normalised to [0, 360) on both sides of the epoch", () => {
+      for (const jd of [2446895.5, 2451545.0, 2461000.25, 2300000.0]) {
+        const g = greenwichMeanSiderealTimeDeg(jd);
+        expect(g).toBeGreaterThanOrEqual(0);
+        expect(g).toBeLessThan(360);
+      }
+    });
+
+    it("advances one sidereal day per solar day, not one solar day", () => {
+      // The Earth turns 360.98564736629 deg per UT day relative to the equinox,
+      // which is the whole reason a sidereal day is ~236 s short of 24 h. If
+      // someone "simplifies" the rate to 360, this catches it.
+      const a = greenwichMeanSiderealTimeDeg(2461000.0);
+      const b = greenwichMeanSiderealTimeDeg(2461001.0);
+      let advance = b - a;
+      if (advance < 0) advance += 360;
+      expect(advance).toBeCloseTo(360.98564736629 - 360, 5);
+    });
+
+    it("keeps the 0.1 deg gate tighter than the deltaT it must catch", () => {
+      // The W6 gate compares a TDB-driven spin against this UT quantity at
+      // 0.1 deg. deltaT in 2026 is ~72 s of Earth rotation, so a wrong
+      // time-scale pairing misses by ~0.3 deg — three times the tolerance.
+      // This asserts the SEPARATION, so nobody widens the gate past the error
+      // it exists to detect.
+      const deltaTSeconds = calculateDeltaT(new Date("2026-07-01T00:00:00Z"));
+      const degreesOfRotation = (deltaTSeconds / 86164.0905) * 360;
+      expect(degreesOfRotation).toBeGreaterThan(0.2);
+      expect(degreesOfRotation).toBeLessThan(0.4);
     });
   });
 });

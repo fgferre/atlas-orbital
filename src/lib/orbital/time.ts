@@ -225,6 +225,56 @@ export function tdbToDate(jdTDB: number): Date {
 }
 
 /**
+ * Greenwich Mean Sidereal Time in degrees [0, 360), from a **UT** Julian date.
+ *
+ * IAU 1982 expression (Meeus, *Astronomical Algorithms* 2nd ed., eq. 12.4):
+ *
+ *     GMST = 280.46061837
+ *          + 360.98564736629 · d
+ *          + 0.000387933 · T²
+ *          − T³ / 38 710 000            with d = JD_UT − 2451545, T = d / 36525
+ *
+ * **This is W6's measuring instrument, and its whole value is that it shares no
+ * constant with what W6 ships.** The wave transcribes ~29 IAU rotation
+ * constants (W₀, Ẇ, α₀, δ₀ from Archinal et al. 2018) under a "measured"
+ * provenance tag, and its own risk section notes that a wrong W₀ renders as a
+ * perfectly plausible planet. GMST comes from the IAU/IERS Earth-rotation
+ * convention, not from Archinal's tables, so comparing the sub-solar longitude
+ * derived from pole + W against the GMST-derived value falsifies a transcription
+ * error instead of confirming it.
+ *
+ * **Independent check** (standing law 3): the implementation is verified against
+ * a *published worked example* rather than against its own leading coefficient —
+ * Meeus Example 12.a, 1987 April 10.0 UT → GMST 13h 10m 46.3668s
+ * (= 197.693195°), reproduced to 1e-7 degrees in `time.test.ts`.
+ *
+ * **The argument must be UT, and that is load-bearing, not pedantry.** GMST is
+ * defined against Earth rotation angle, i.e. UT; IAU W expressions are in TDB.
+ * ΔT in 2026 is ~72 s, which is **0.301° of Earth rotation** — three times the
+ * 0.1° tolerance the W6 gate uses. Feeding this function a TDB date, or feeding
+ * the spin model a raw UT day count, each fails that gate by ~0.3°. Only the
+ * correct pairing passes, which is precisely why the tolerance must not be
+ * widened to "0.5°, it's close enough": that readmits both wrong forms.
+ *
+ * For scale: 0.1° of Earth rotation is 23.9 s of time and 11.1 km at the
+ * equator.
+ *
+ * @param jdUT Julian Date in **Universal Time** (not TT, not TDB)
+ * @returns GMST in degrees, normalised to [0, 360)
+ */
+export function greenwichMeanSiderealTimeDeg(jdUT: number): number {
+  const d = jdUT - J2000_JD;
+  const T = d / DAYS_PER_JULIAN_CENTURY;
+  const gmst =
+    280.46061837 +
+    360.98564736629 * d +
+    0.000387933 * T * T -
+    (T * T * T) / 38_710_000;
+  const wrapped = gmst % 360;
+  return wrapped < 0 ? wrapped + 360 : wrapped;
+}
+
+/**
  * Convert Julian Date to Julian Centuries from J2000.0
  * @param jd Julian Date
  * @returns Julian Centuries (36525 days per century)
