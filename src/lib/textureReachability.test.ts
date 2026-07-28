@@ -205,3 +205,55 @@ describe("progressive texture ladder", () => {
     expect(focused.selectedPath).toContain("8k_earth_daymap");
   });
 });
+
+describe("texture VRAM ceiling", () => {
+  // The 2026-07-28 VRAM audit found the overview band — the tier every body
+  // sits in when nothing is focused — had no light rung for eris (4096x2048,
+  // 42.7 MB decoded) or haumea. That is 133% of the entire 32 MB `constrained`
+  // texture budget, for one dwarf planet nobody is looking at, on the weakest
+  // hardware we ship to.
+  //
+  // The rule is deliberately keyed on MEASURED PIXELS, not on the `2k_`/`8k_`
+  // filename token. This repo has files whose names understate their real size
+  // by up to 7.6x (`4k_enceladus.jpg` is 15960x7980), so a name-based ceiling
+  // would pass while the GPU allocates ten times the budget.
+  const MAX_OVERVIEW_PIXELS = 2048 * 1024;
+
+  it("gives every body a rung small enough for the overview band", async () => {
+    const sharp = (await import("sharp")).default;
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve("public/textures");
+
+    const oversized: string[] = [];
+
+    for (const body of SOLAR_SYSTEM_BODIES) {
+      for (const profile of PROFILES) {
+        const selected = resolveTextureRequest(
+          body,
+          "map",
+          profile,
+          0.5, // overview: below OVERVIEW_SALIENCE_THRESHOLD
+          TEXTURE_VARIANT_MANIFEST
+        ).selectedPath;
+        if (!selected) continue;
+
+        const file = path.join(dir, selected.split("/").pop()!);
+        if (!fs.existsSync(file)) continue;
+
+        const { width = 0, height = 0 } = await sharp(file).metadata();
+        const pixels = width * height;
+        if (pixels > MAX_OVERVIEW_PIXELS) {
+          oversized.push(
+            `${body.id}/${profile}: ${selected.split("/").pop()} is ${width}x${height} = ${(pixels / 1e6).toFixed(1)} Mpx (${((pixels * 4 * 4) / 3 / 1048576).toFixed(1)} MB decoded)`
+          );
+        }
+      }
+    }
+
+    expect(
+      oversized,
+      `these bodies have no rung light enough for the overview band, so an unfocused body allocates full-resolution VRAM:\n  ${oversized.join("\n  ")}`
+    ).toEqual([]);
+  }, 120_000);
+});

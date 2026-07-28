@@ -52,6 +52,15 @@ export interface WindowLike {
 export interface ResolvedQualityProfile {
   name: ResolvedQualityName;
   antialias: boolean;
+  /**
+   * MSAA sample count for the `EffectComposer`'s internal HalfFloat render
+   * targets. Explicit because @react-three/postprocessing defaults to 8, and
+   * that default was never a decision here: two full-resolution HalfFloat
+   * buffers at 8x MSAA cost ~1.6 GB of VRAM on a 4K desktop, which is an order
+   * of magnitude more than every planetary texture in the app combined. It
+   * scales with devicePixelRatio squared, so desktop pays the most.
+   */
+  composerMultisampling: number;
   dprMax: number;
   shadowMapSize: number;
   environmentResolution: number;
@@ -88,6 +97,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   ultra: {
     name: "ultra",
     antialias: true,
+    composerMultisampling: 4,
     dprMax: 2,
     shadowMapSize: 4096,
     environmentResolution: 256,
@@ -98,6 +108,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   high: {
     name: "high",
     antialias: true,
+    composerMultisampling: 2,
     dprMax: 1.75,
     shadowMapSize: 4096,
     environmentResolution: 256,
@@ -108,6 +119,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   balanced: {
     name: "balanced",
     antialias: false,
+    composerMultisampling: 0,
     dprMax: 1.5,
     shadowMapSize: 2048,
     environmentResolution: 128,
@@ -118,6 +130,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   constrained: {
     name: "constrained",
     antialias: false,
+    composerMultisampling: 0,
     dprMax: 1,
     shadowMapSize: 1024,
     environmentResolution: 64,

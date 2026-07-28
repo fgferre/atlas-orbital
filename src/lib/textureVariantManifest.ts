@@ -110,6 +110,25 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
       },
     },
   },
+  // Eris's canonical is a 4096x2048 plate — 42.7 MB decoded, which is 133% of
+  // the entire 32 MB constrained texture budget, and the overview band had no
+  // lighter rung to fall back to. Restoring the canonical without this line
+  // made Eris 10.5x heavier at *every* profile and salience.
+  eris: {
+    map: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_eris_fictional.jpg`,
+      },
+    },
+  },
+  // Same defect, pre-existing: Haumea's only rung was the 4096x2048 plate.
+  haumea: {
+    map: {
+      variants: {
+        "2k": `${TEXTURE_PATH}2k_haumea_fictional.jpg`,
+      },
+    },
+  },
   // Europa and Titan are deliberately absent: their canonical basenames now
   // carry a `2k_` prefix, so `inferCanonicalTier` places them on the ladder by
   // itself. Re-listing them here would be the same fact in two places.

@@ -444,7 +444,14 @@ export const Scene = () => {
     () => resolveSunRenderMode(sunRenderMode, qualityProfile.name),
     [qualityProfile.name, sunRenderMode]
   );
-  const [rendererAntialias] = useState(() => qualityProfile.antialias);
+  // When `PostProcessingPipeline` is mounted it owns antialiasing: the scene
+  // is drawn into the composer's own multisampled render target and reaches the
+  // default framebuffer as a fullscreen quad, which has no geometry edges for
+  // context MSAA to resolve. Asking for both allocates a second full-resolution
+  // multisampled backbuffer that provably cannot change a pixel.
+  const [rendererAntialias] = useState(
+    () => qualityProfile.antialias && qualityProfile.name === "constrained"
+  );
   const canvasDpr = useMemo(
     () => [1, qualityProfile.dprMax] as [number, number],
     [qualityProfile.dprMax]
@@ -830,6 +837,7 @@ export const Scene = () => {
               effectiveGraphics.bloomIntensity
             )}
             toneMapping={effectiveGraphics.toneMapping}
+            composerMultisampling={qualityProfile.composerMultisampling}
           />
         ) : (
           <DirectRenderPass />

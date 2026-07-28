@@ -332,12 +332,22 @@ export const resolveEffectiveGraphics = (
  * `effective` (caller provides it since `EffectiveGraphics` itself is
  * name-less after the merge).
  */
+const COMPOSER_MULTISAMPLING: Record<ResolvedQualityName, number> = {
+  ultra: 4,
+  high: 2,
+  balanced: 0,
+  constrained: 0,
+};
+
 export const projectToLegacyShape = (
   effective: EffectiveGraphics,
   presetName: Exclude<GraphicsPresetName, "custom">
 ): ResolvedQualityProfile => ({
   name: mapPresetToTier(presetName),
   antialias: effective.antialias,
+  // Derived from the tier rather than carried on EffectiveGraphics: composer
+  // MSAA is a VRAM budget decision, not a user-facing graphics slider.
+  composerMultisampling: COMPOSER_MULTISAMPLING[mapPresetToTier(presetName)],
   dprMax: effective.resolutionScale,
   shadowMapSize: effective.shadowMapSize,
   environmentResolution: effective.environmentResolution,
