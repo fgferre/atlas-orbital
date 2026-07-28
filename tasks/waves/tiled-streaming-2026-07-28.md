@@ -230,18 +230,41 @@ corrected several of them. Re-deriving these costs hours; they are exact.
 
 ### Where the VRAM actually goes at ultra on a 4K desktop
 
-| Consumer                                              |       MiB | Note                                                                                                                         |
-| ----------------------------------------------------- | --------: | ---------------------------------------------------------------------------------------------------------------------------- |
-| Composer MSAA (2 full-res HalfFloat RTs @ 8x)         |     1,645 | **fixed 2026-07-28** — was the pmndrs default, never a decision. Now tier-driven: ultra 4, high 2, else 0. Scales with DPR². |
-| Context `antialias: true` under an active composer    |  ~265-300 | **fixed 2026-07-28** — the composer resolves through a fullscreen quad, so this could not change a pixel.                    |
-| Shadow map 4096² (RGBA8 + unsampled DEPTH24)          |       128 | **open.** Same size at ultra AND high. 2048 would be 32 MiB.                                                                 |
-| drei `<Environment>` (incl. retained PMREM ping-pong) |     15.25 | `frames={1}`, so the ping-pong is retained for nothing.                                                                      |
-| ProceduralSun3D (ultra only)                          |     13.61 | perlin cubemap + ray/flare geometry.                                                                                         |
-| HYG starfield buffer                                  |      5.01 | 109,400 stars. Tier scaling works; not a problem.                                                                            |
-| **Non-texture floor before the fix**                  | **1,808** | `high` paid nearly the same, ~1,790.                                                                                         |
+| Consumer                                              |        MiB | Note                                                                                                                         |
+| ----------------------------------------------------- | ---------: | ---------------------------------------------------------------------------------------------------------------------------- |
+| Composer MSAA (2 full-res HalfFloat RTs @ 8x)         |      1,645 | **fixed 2026-07-28** — was the pmndrs default, never a decision. Now tier-driven: ultra 4, high 2, else 0. Scales with DPR². |
+| Context `antialias: true` under an active composer    |   ~265-300 | **fixed 2026-07-28** — the composer resolves through a fullscreen quad, so this could not change a pixel.                    |
+| Shadow map 4096² (RGBA8 + unsampled DEPTH24)          |      **0** | **corrected 2026-07-28 — this row was wrong. Never allocated.** See below.                                                   |
+| drei `<Environment>` (incl. retained PMREM ping-pong) |      15.25 | `frames={1}`, so the ping-pong is retained for nothing.                                                                      |
+| ProceduralSun3D (ultra only)                          |      13.61 | perlin cubemap + ray/flare geometry.                                                                                         |
+| HYG starfield buffer                                  |       5.01 | 109,400 stars. Tier scaling works; not a problem.                                                                            |
+| **Non-texture floor before the fix**                  | **~1,680** | was stated as 1,808; drops by the phantom 128. `high` ~1,662, was ~1,790.                                                    |
 
 Bloom adds 105.47 MiB the instant the slider leaves 0 — not in the boot floor
 because every preset ships `bloomIntensity: 0`.
+
+**The shadow-map row was a measurement of something that does not exist**, found
+2026-07-28 while tracing a "Iapetus renders black" report. The only
+shadow-casting light in the scene is `SmartSunLight`, and
+`SmartSunLight.tsx:74` puts it on layer 1 via `layers.set` while the render
+camera never leaves layer 0. three collects lights — and shadow casters — only
+when `object.layers.test(camera.layers)` passes
+(`WebGLRenderer.js:1323-1329`, and again at `:1729-1747`), so that light is
+never pushed. `shadowsArray` is therefore empty, `WebGLShadowMap.render`
+returns at its `if (lights.length === 0) return;`
+(`WebGLShadowMap.js:78`), and the sole allocation site — `shadow.map = new
+WebGLRenderTarget(...)` at `WebGLShadowMap.js:161` — sits inside the per-light
+loop _after_ that return. Verified against the pinned three 0.181.2.
+
+Two consequences, both load-bearing:
+
+1. **There are no shadows anywhere in the app.** `castShadow`, `shadow-bias`
+   and `qualityProfile.shadowMapSize` are dead configuration, and the
+   "Shadow Map Size" and "Shadow Light ×" controls in `DisplayPanel` are dead
+   controls. Any doc or comment describing scene shadows as shipped is wrong.
+2. **Deleting the dead light is not a VRAM win.** Nothing was allocated, so
+   there is nothing to reclaim — only the per-frame CPU solve. Do not book it
+   as a saving in this wave.
 
 ### Textures: filenames lie, in both directions
 

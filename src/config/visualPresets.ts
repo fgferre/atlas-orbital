@@ -39,14 +39,19 @@
  * `envMapIntensity = 0` mirrors Gaia's lack of a diffuse irradiance
  * cubemap — `pbr.fragment.glsl:620-621` uses the reflection skybox
  * only for specular (`finalReflection = reflectionColor * AO`), never
- * for diffuse IBL. `shadowIntensity` is the one residual atlas-only
- * supplement: Three.js DirectionalLights carry shadow maps, so the
- * focused-body helper needs a non-zero intensity to cast crater /
- * cloud self-shadows. Held at an empirical floor (0.4) that preserves
- * visible self-shadow contrast while keeping the focused-body
- * over-brightness vs Gaia ≈1.4× (down from ≈2.5× pre-T2.5) — Option 1
- * in `ROADMAP.md §T2.5`. Option 3 (point-shadow cubemap at origin)
- * would drop the drift to 0 at higher perf cost, tracked for later.
+ * for diffuse IBL. `shadowIntensity` fed the focused-body directional
+ * helper.
+ *
+ * **`shadowIntensity` currently changes nothing, 2026-07-28.** It drives
+ * `SmartSunLight`, which `SmartSunLight.tsx:74` puts on layer 1 while the
+ * render camera stays on layer 0 — and three collects lights only when
+ * `object.layers.test(camera.layers)` passes. That light therefore emits
+ * neither light nor shadow, and no shadow map is ever allocated. The
+ * earlier text here claimed the value was "held at an empirical floor
+ * (0.4) that preserves visible self-shadow contrast" with a measured
+ * "over-brightness vs Gaia ≈1.4×"; neither can be true of an inert light,
+ * so both are removed rather than restated. What self-shadowing the app
+ * does show comes from the analytical eclipse path, not from a shadow map.
  *
  * `distanceFromSun` is the body's physical heliocentric distance in AU.
  * For bodies with a parentId the engine returns parent-centered
