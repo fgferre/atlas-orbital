@@ -259,11 +259,15 @@ describe("texture VRAM ceiling", () => {
   }, 120_000);
 
   it("never ships a map above the GPU edge limit", async () => {
-    // Not a memory question. Above MAX_TEXTURE_SIZE the upload FAILS on that
-    // hardware rather than merely costing bytes, which is why the 2026-07-28
-    // blowup reproduced on some desktops and not others: on a 16384-max GPU
-    // `4k_enceladus.jpg` really allocated 647.8 MB, while an 8192-max one
-    // clamped it. 8192 is what every other map on disk already respects.
+    // Above MAX_TEXTURE_SIZE three.js does NOT fail the upload — r181's
+    // `resizeImage` redraws the HTMLImageElement through a 2D canvas at the
+    // GPU limit and logs a warning. The cost is still real and worse than it
+    // looks: the full plate is decoded at full size first, then a synchronous
+    // main-thread canvas resize throws most of it away. And the clamp only
+    // helps below the limit — on a 16384-max GPU `4k_enceladus.jpg` was under
+    // the ceiling, so it really did allocate 647.8 MB of VRAM. That hardware
+    // split is why the 2026-07-28 blowup reproduced on some desktops and not
+    // others. 8192 is what every other map on disk already respects.
     const MAX_EDGE = 8192;
     const sharp = (await import("sharp")).default;
     const fs = await import("node:fs");
@@ -286,7 +290,7 @@ describe("texture VRAM ceiling", () => {
 
     expect(
       oversized,
-      `these maps exceed the MAX_TEXTURE_SIZE of many GPUs, so they fail upload rather than merely cost memory:\n  ${oversized.join("\n  ")}`
+      `these maps exceed the MAX_TEXTURE_SIZE of many GPUs, so they are decoded at full size and then downscaled on the main thread — and on a GPU whose limit they fit under, allocated in full:\n  ${oversized.join("\n  ")}`
     ).toEqual([]);
   }, 120_000);
 });

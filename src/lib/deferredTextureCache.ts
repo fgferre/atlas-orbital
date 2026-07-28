@@ -43,6 +43,12 @@ const EMPTY_SNAPSHOT: DeferredTextureSnapshot = {
 };
 const emptySnapshotsByUrl = new Map<string, DeferredTextureSnapshot>();
 const IDLE_EVICTION_MS = 20_000;
+/**
+ * Deadline for a single texture request. Generous — the largest maps are
+ * ~12 MB over a possibly slow link — because the point is to break a
+ * permanent stall, not to police slow networks.
+ */
+const LOAD_TIMEOUT_MS = 60_000;
 const MAX_CONCURRENT_TEXTURE_LOADS = 4;
 const LOWEST_LOAD_PRIORITY = 3;
 const MIPMAP_BYTE_FACTOR = 4 / 3;
@@ -91,14 +97,14 @@ const syncEntrySnapshot = (entry: DeferredTextureEntry) => {
 };
 
 /**
- * Upper-bound long edge inferred from the filename tier token.
+ * Long edge inferred from the filename tier token.
  *
- * Deliberately pessimistic wherever it has to guess, because an admission
- * gate that under-counts is not a gate. The previous no-match default of
- * 1024 scored the untiered maps — `uranus_texture_map_8k_…jpg` (8000x4336)
- * and `jupiter_vgr1_2025.jpg` (7200x3600) — at 5.6 MB against a real
- * 176.4 / 131.8 MB, a ~30x under-count on exactly the path a gate must not
- * miss. `updateLoadedTextureEstimate` still corrects the entry to the
+ * Pessimistic where it has no token to read, because an admission gate
+ * that under-counts is not a gate. The previous no-match default of 1024
+ * scored the untiered maps — `uranus_texture_map_8k_…jpg` (8000x4336) and
+ * `jupiter_vgr1_2025.jpg` (7200x3600) — at 5.6 MB against a real
+ * 176.4 / 131.8 MB, a ~30x under-count on exactly the path a gate must
+ * not miss. `updateLoadedTextureEstimate` still corrects the entry to the
  * measured size once the image has decoded.
  */
 const inferTextureEdge = (url: string) => {
@@ -120,15 +126,26 @@ const inferTextureEdge = (url: string) => {
 };
 
 /**
- * Every planetary map in this repo is 2:1 equirectangular. The former
+ * Nearly every planetary map here is 2:1 equirectangular. The former
  * square assumption doubled every tiered estimate (`8k_earth_daymap` is
  * 8192x4096, not 8192²), which made the gate twice as strict as the
  * hardware it is protecting.
  *
- * Known residual: names understate some plates. `4k_mimas.jpg` is
- * 6356x3178, so it is still under-counted ~2.4x. That is a far smaller
- * class than the ~30x the untiered fallback used to allow, but it is not
- * zero — the pre-decode estimate is a bound, never a measurement.
+ * This is a heuristic bound, **not** a guaranteed upper bound, because a
+ * filename can lie about both the tier and the aspect. Measured
+ * exceptions on disk today, worst first:
+ *
+ * - `4k_oberon.png` / `.webp` is really 8192x4096 — charged 42.7 MiB
+ *   against a real 170.7 MiB, a 4.0x under-count.
+ * - `4k_mimas.jpg` is 6356x3178 — charged 42.7 against 102.7 MiB, 2.4x.
+ * - `uranus_texture_map_8k_…jpg` is 8000x4336, so it is 1.85:1 rather
+ *   than 2:1 and the untiered fallback charges 170.7 against a real
+ *   176.4 MiB — 3% under.
+ *
+ * Closing these properly needs measured dimensions rather than a parsed
+ * filename. Until then the gate is a good bound in the common case and a
+ * known-leaky one in these three, which is why
+ * `updateLoadedTextureEstimate` corrects the entry after decode.
  */
 export const estimateTextureByteSize = (url: string) => {
   const edge = inferTextureEdge(url);
@@ -277,6 +294,43 @@ const admitLoad = (entry: DeferredTextureEntry) =>
   activeLoadCount === 0 ||
   inFlightBytes + entry.estimatedBytes <= textureBudgetBytes;
 
+/**
+ * Liveness guard for admission control.
+ *
+ * `THREE.TextureLoader` has no timeout and no abort: a stalled socket or
+ * a backgrounded tab can leave a request that fires neither `load` nor
+ * `error`, ever. Under the old unbounded pump that cost one of four
+ * slots. Under admission control it is fatal — a single 8k-estimated
+ * entry charges more than the whole `balanced` or `constrained` budget,
+ * so while it is in flight `admitLoad` is false for everything and
+ * `activeLoadCount` never returns to zero. Nothing would load again
+ * until a reload.
+ *
+ * Rejecting on a deadline restores the invariant that every admitted
+ * load settles, which is what lets `.finally` release the reservation.
+ * The entry lands in `error`, which its consumers already handle.
+ */
+const withLoadTimeout = (
+  loaded: Promise<THREE.Texture>,
+  url: string
+): Promise<THREE.Texture> =>
+  new Promise<THREE.Texture>((resolve, reject) => {
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+      reject(new Error(`Timed out loading ${url}`));
+    }, LOAD_TIMEOUT_MS);
+
+    loaded.then(
+      (texture) => {
+        clearTimeout(timer);
+        resolve(texture);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error("Failed to load"));
+      }
+    );
+  });
+
 const scheduleBudgetEviction = () => {
   if (budgetEvictionScheduled) {
     return;
@@ -406,7 +460,7 @@ const pumpLoadQueue = () => {
     activeLoadCount += 1;
     const admittedBytes = entry.estimatedBytes;
     inFlightBytes += admittedBytes;
-    const loaded = loader.loadAsync(entry.url!);
+    const loaded = withLoadTimeout(loader.loadAsync(entry.url!), entry.url!);
     entry.promise = loaded;
 
     void loaded
@@ -451,10 +505,24 @@ const pumpLoadQueue = () => {
 };
 
 const startLoad = (entry: DeferredTextureEntry, priority: number) => {
-  entry.loadPriority = Math.min(
-    entry.loadPriority,
-    THREE.MathUtils.clamp(Math.round(priority), 0, LOWEST_LOAD_PRIORITY)
+  const requestedPriority = THREE.MathUtils.clamp(
+    Math.round(priority),
+    0,
+    LOWEST_LOAD_PRIORITY
   );
+
+  // A fresh queue admission re-stamps; a second consumer joining an
+  // already-queued entry may only raise it. Taking `Math.min`
+  // unconditionally made the stamp sticky for the lifetime of the
+  // module: a body focused once kept priority 0 after being evicted, and
+  // on its next appearance as a distant background body it outranked the
+  // genuinely focused one through the older-`lastUsedAt` tie-break. That
+  // merely wasted a slot under the old unbounded pump; with admission
+  // control serialising the low tiers it puts the wrong texture in the
+  // only slot.
+  entry.loadPriority = entry.queued
+    ? Math.min(entry.loadPriority, requestedPriority)
+    : requestedPriority;
 
   if (entry.promise || entry.status === "ready") {
     return;

@@ -218,4 +218,93 @@ describe("deferredTextureCache", () => {
       estimateTextureByteSizeFromDimensions(8192, 4096)
     );
   });
+
+  it("releases the queue when an admitted load never settles", async () => {
+    // Liveness, not politeness. One 8k entry charges more than the whole
+    // `balanced` budget, so while it is in flight nothing else can be
+    // admitted and `activeLoadCount` never returns to zero. Without a
+    // deadline a single stalled socket would freeze every texture in the
+    // app until a reload.
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(THREE.TextureLoader.prototype, "loadAsync").mockImplementation(
+        (url: string) =>
+          url.includes("stalled")
+            ? new Promise<THREE.Texture<HTMLImageElement>>(() => {})
+            : Promise.resolve(makeLoadedTexture(2048, 1024))
+      );
+      setDeferredTextureBudget(resolveDeferredTextureBudget("balanced"));
+
+      acquireDeferredTexture("/textures/8k_stalled.jpg", { priority: 0 });
+      acquireDeferredTexture("/textures/2k_behind.jpg", { priority: 1 });
+
+      expect(getDeferredTextureCacheStatsForTests()).toMatchObject({
+        activeLoadCount: 1,
+        queuedLoadCount: 1,
+      });
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(
+        getDeferredTextureSnapshot("/textures/8k_stalled.jpg").status
+      ).toBe("error");
+      expect(getDeferredTextureCacheStatsForTests().inFlightBytes).toBe(0);
+      await vi.waitFor(() =>
+        expect(
+          getDeferredTextureSnapshot("/textures/2k_behind.jpg").status
+        ).toBe("ready")
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let a stale priority stamp outrank the focused body", async () => {
+    const requested: string[] = [];
+    const pending: Array<(texture: THREE.Texture<HTMLImageElement>) => void> =
+      [];
+    vi.spyOn(THREE.TextureLoader.prototype, "loadAsync").mockImplementation(
+      (url: string) => {
+        requested.push(url);
+        return new Promise<THREE.Texture<HTMLImageElement>>((resolve) => {
+          pending.push(resolve);
+        });
+      }
+    );
+    setDeferredTextureBudget(resolveDeferredTextureBudget("balanced"));
+
+    // Body A is focused once and fully loads, then the camera leaves and
+    // the budget evicts it back to idle. Its priority-0 stamp must not
+    // survive into its next life as a distant background body.
+    acquireDeferredTexture("/textures/8k_body-a.jpg", { priority: 0 });
+    pending[0](makeLoadedTexture(8192, 4096));
+    await vi.waitFor(() =>
+      expect(getDeferredTextureSnapshot("/textures/8k_body-a.jpg").status).toBe(
+        "ready"
+      )
+    );
+    releaseDeferredTexture("/textures/8k_body-a.jpg");
+    await vi.waitFor(() =>
+      expect(getDeferredTextureSnapshot("/textures/8k_body-a.jpg").status).toBe(
+        "idle"
+      )
+    );
+
+    // One heavy decode now occupies the only slot this budget allows.
+    acquireDeferredTexture("/textures/8k_blocker.jpg", { priority: 2 });
+    // Body A returns as a background body; body B is what the user just focused.
+    acquireDeferredTexture("/textures/8k_body-a.jpg", { priority: 3 });
+    acquireDeferredTexture("/textures/8k_body-b-focused.jpg", { priority: 0 });
+
+    expect(requested).toEqual([
+      "/textures/8k_body-a.jpg",
+      "/textures/8k_blocker.jpg",
+    ]);
+
+    pending[1](makeLoadedTexture(16, 8));
+    await vi.waitFor(() => expect(requested).toHaveLength(3));
+
+    // The freed slot goes to the body the user is looking at.
+    expect(requested[2]).toBe("/textures/8k_body-b-focused.jpg");
+  });
 });

@@ -104,7 +104,13 @@ for all 82 textures would bloat the deploy artifact for nothing.
 
 Tiling is the right destination. It is **not** the fastest route out of the
 current crash, and pretending otherwise would delay the fix. Do these first,
-they are hours not weeks, and the tiled path needs them anyway:
+they are hours not weeks, and the tiled path needs them anyway.
+
+**All three shipped 2026-07-28** (`e8f24e4`, `d016860`, `b60f60d`). The
+statements below are kept as the original diagnosis; what each one actually
+turned into, including where the diagnosis was wrong, is recorded under
+"Measured baseline" and in the commit messages. A human render check on real
+desktop hardware is still owed for all three.
 
 1. **Admission control in `deferredTextureCache.ts`.** The budget is an eviction
    target checked after decode, and entries with `refCount > 0` can never be
@@ -244,15 +250,19 @@ assumes a **square** texture. Every planetary map is 2:1. Over all 82 files it
 accounts 8,114 MB for a true 5,121 MB, with per-file error from **-97% to
 +1538%**.
 
-| File               | Name says | Really is  |    Real VRAM |
-| ------------------ | --------- | ---------- | -----------: |
-| `4k_enceladus.jpg` | 4k        | 15960x7980 | **647.8 MB** |
-| `8k_tethys.jpg`    | 8k        | 13467x6734 |     461.3 MB |
-| `4k_iapetus.jpg`   | 4k        | 11741x5871 |     350.6 MB |
+| File                         | Name says | Really is  |    Real VRAM |
+| ---------------------------- | --------- | ---------- | -----------: |
+| `4k_enceladus.jpg`           | 4k        | 15960x7980 | **647.8 MB** |
+| `8k_tethys.jpg`              | 8k        | 13467x6734 |     461.3 MB |
+| `4k_iapetus.jpg`             | 4k        | 11741x5871 |     350.6 MB |
+| `uranus_texture_map_8k_…jpg` | untiered  | 8000x4336  |     176.4 MB |
+| `4k_oberon.png`              | 4k        | 8192x4096  |     170.7 MB |
+| `jupiter_vgr1_2025.jpg`      | untiered  | 7200x3600  |     131.8 MB |
 
-**The first three rows are fixed 2026-07-28** — the measured values above are
-kept visible because they were measured and refuted once, and that is what makes
-them worth citing. What is on disk now:
+**The first three rows are fixed 2026-07-28**; the last three are untouched and
+still measure as listed. The original values are kept visible because they were
+measured and refuted once, and that is what makes them worth citing. What is on
+disk now:
 
 | Source (before)                          | Output (after)               |  On disk |
 | ---------------------------------------- | ---------------------------- | -------: |
@@ -271,15 +281,16 @@ that the uploads now succeed, not that the download shrank.
 
 New post-resize VRAM at 8192x4096: 170.7 MB each for the `8k` rungs, 42.7 MB
 for the `4k` rungs. Enceladus focused at ultra drops 647.8 → 170.7 MB.
-| `uranus_texture_map_8k_…jpg` | untiered | 8000x4336 | 176.4 MB |
-| `4k_oberon.png` | 4k | 8192x4096 | 170.7 MB |
-| `jupiter_vgr1_2025.jpg` | untiered | 7200x3600 | 131.8 MB |
 
 **Three exceed 8192 px on the long side** (15960, 13467, 11741) — above the
-`MAX_TEXTURE_SIZE` of many GPUs, so they fail upload rather than merely cost
-memory. On a 16384-max GPU Enceladus really does allocate 647.8 MB; on an
-8192-max one three.js clamps it to 170.7 MB. The failure is hardware-dependent,
-which is exactly why it reproduces on some desktops and not others.
+`MAX_TEXTURE_SIZE` of many GPUs. **Correction, 2026-07-28:** the brief said
+these "fail upload"; they do not, on the pinned three r181. `resizeImage`
+redraws the image through a 2D canvas at the GPU limit and warns. The real cost
+is still there and is worse than a clean failure would be — the full plate is
+decoded at full size, then a synchronous main-thread resize discards most of it.
+And the clamp only applies above the limit: on a 16384-max GPU Enceladus fits
+under the ceiling and really does allocate 647.8 MB. That hardware split, not an
+upload error, is why it reproduces on some desktops and not others.
 **Fixed 2026-07-28** — all three are now 8192x4096, and
 `textureReachability.test.ts` pins the ceiling so no future asset re-opens it.
 Honest trade-off: on a 16384-max GPU Enceladus previously uploaded the full
