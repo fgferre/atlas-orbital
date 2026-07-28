@@ -27,14 +27,26 @@ describe("deferredTextureCache", () => {
   });
 
   it("estimates tiered texture sizes including mipmaps", () => {
+    // Every planetary map here is 2:1 equirectangular, so the tier token
+    // names the long edge. `8k_earth_daymap.jpg` really is 8192x4096.
     expect(estimateTextureByteSize("/textures/8k_earth_daymap.jpg")).toBe(
-      Math.ceil(8192 * 8192 * 4 * (4 / 3))
+      Math.ceil(8192 * 4096 * 4 * (4 / 3))
     );
     expect(estimateTextureByteSize("/textures/boot_earth_daymap.jpg")).toBe(
-      Math.ceil(1024 * 1024 * 4 * (4 / 3))
+      Math.ceil(1024 * 512 * 4 * (4 / 3))
     );
     expect(estimateTextureByteSizeFromDimensions(8192, 4096)).toBe(
       Math.ceil(8192 * 4096 * 4 * (4 / 3))
+    );
+  });
+
+  it("bounds an untiered filename from above rather than below", () => {
+    // The admission gate reads this estimate before a byte is fetched, so
+    // the direction of the error matters more than its size. `jupiter_vgr1_2025.jpg`
+    // carries no tier token and is really 7200x3600: the old 1024 default
+    // scored it at 5.6 MB against a real 131.8 MB.
+    expect(estimateTextureByteSize("/textures/jupiter_vgr1_2025.jpg")).toBe(
+      estimateTextureByteSizeFromDimensions(8192, 4096)
     );
   });
 
@@ -103,8 +115,14 @@ describe("deferredTextureCache", () => {
         })
     );
 
+    // `2k_` fixtures, not untiered ones: an untiered basename now estimates
+    // at the 8192x4096 upper bound, and five of those would be gated by
+    // admission control rather than by the concurrency cap this test is
+    // about. At 2k the five fit the 64 MB post-reset budget, so the
+    // assertion below still proves the cap — and now also proves that
+    // admission control does not throttle a load the budget can afford.
     for (let index = 0; index < 5; index += 1) {
-      acquireDeferredTexture(`/textures/${index}.jpg`, {
+      acquireDeferredTexture(`/textures/2k_${index}.jpg`, {
         priority: index === 4 ? 0 : 2,
       });
     }
@@ -171,5 +189,33 @@ describe("deferredTextureCache", () => {
       ).toBe("idle")
     );
     expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("stops admitting decodes once in-flight bytes reach the budget", () => {
+    vi.spyOn(THREE.TextureLoader.prototype, "loadAsync").mockImplementation(
+      () => new Promise<THREE.Texture<HTMLImageElement>>(() => {})
+    );
+    setDeferredTextureBudget(resolveDeferredTextureBudget("constrained"));
+
+    for (const url of [
+      "/textures/8k_earth_daymap.jpg",
+      "/textures/8k_earth_clouds.jpg",
+      "/textures/8k_earth_nightmap.jpg",
+      "/textures/8k_earth_normal_map.jpg",
+      "/textures/8k_earth_roughness_map.jpg",
+    ]) {
+      acquireDeferredTexture(url, { priority: 0 });
+    }
+
+    // The measured defect this fixes: a 32 MB budget with 8 acquires used to
+    // report activeLoadCount 4 and readyBytes 0 — roughly 683 MB of decode
+    // in flight and entirely invisible to the budget. The progress rule still
+    // admits one so the body always renders; nothing joins it.
+    const stats = getDeferredTextureCacheStatsForTests();
+    expect(stats.activeLoadCount).toBe(1);
+    expect(stats.queuedLoadCount).toBe(4);
+    expect(stats.inFlightBytes).toBe(
+      estimateTextureByteSizeFromDimensions(8192, 4096)
+    );
   });
 });
