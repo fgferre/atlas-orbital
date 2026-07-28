@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-27 (W1–W6 code-complete; browser smokes BATCHED to the end of the wave; **W7 next**)._
+_Last updated: 2026-07-27 (W1–W4 + W6 done, **W5 stage B still open**; browser smokes BATCHED to the end of the wave; next is **W5 stage B or W7**)._
 
 ---
 
@@ -14,11 +14,18 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1 through W5 are code-complete on `main` (through `d5c6ebb`), and their browser
-smokes are batched into one pass at the end of the wave** — owner decision,
-2026-07-26, so "smoke pending" in the progress table is NOT a blocker and no
-increment waits on it. The consolidated checklist is the wave's **Deferred smoke
-gate** section; do not rebuild it from the per-wave prose.
+**W1-W4 and W6 are done on `main`; their browser smokes are batched into one
+pass at the end of the wave** — owner decision, 2026-07-26, so "smoke pending"
+in the progress table is NOT a blocker and no increment waits on it. The
+consolidated checklist is the wave's **Deferred smoke gate** section; do not
+rebuild it from the per-wave prose.
+
+**W5 stage B is still open** and is the one thing an agent could walk past,
+because W6 landing later makes the queue look finished: stage A shipped the
+body figure (`2d26f5e`), stage B — **Saturn, F-09, the ring shaders** — was
+never started. Arbitrated decision B puts F-09 in W5, first commit of stage B,
+not in W1. So the next increment is **W5 stage B or W7**, owner's pick; they do
+not depend on each other.
 
 **W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
 source, and the Sun, all eight planets, the Moon, the eighteen analytical
