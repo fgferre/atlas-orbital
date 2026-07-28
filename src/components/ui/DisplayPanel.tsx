@@ -13,10 +13,18 @@
  * Deferred from Wave 1 per Finding 7 + scope:
  *   - Exposure slider: `@react-three/postprocessing` tone mapping has
  *     no user-exposed exposure prop and `gl.toneMappingExposure` is a
- *     no-op under the renderer-level `NoToneMapping` contract.
- *     Implementing a real compositor exposure path is Wave η.6 scope;
- *     shipping the slider now would ship a dead control. Amendment
- *     note lives in tasks/graphics-settings-design.md §3.
+ *     no-op under the renderer-level `NoToneMapping` contract noted in
+ *     Scene.tsx:508. Sub-pull 1c shipped the plumbing
+ *     (`src/lib/graphics/exposureRegistry.ts` + the
+ *     `ExposureBridge` that pushes the registry scalar into
+ *     `gl.toneMappingExposure` per frame), so the path now exists.
+ *     The slider itself stays deferred until 1d (the value is
+ *     currently driven by eye-adaptation or a future photometric-EV
+ *     readout, not directly by a UI control); shipping the slider now
+ *     without 1d would expose the registry as a manual stop dial,
+ *     which is a different control than the planned canonical
+ *     exposure UI. Amendment note lives in
+ *     tasks/graphics-settings-design.md §3.
  *   - Camera Effects + Textures & LoD sections: hidden until the R1
  *     effects and LoD system land (Waves γ / η / R3).
  *
@@ -37,6 +45,7 @@ import type {
   GraphicsPresetName,
   ToneMappingName,
 } from "../../lib/graphics/resolver";
+import type { StarOpticsProfile } from "../../lib/starfieldShaderMath";
 import { Slider } from "./primitives/Slider";
 
 const PRESET_OPTIONS: Array<{
@@ -55,6 +64,23 @@ const TONE_MAPPING_OPTIONS: Array<{ id: ToneMappingName; label: string }> = [
   { id: "aces", label: "ACES" },
   { id: "reinhard", label: "Reinhard" },
   { id: "cineon", label: "Cineon" },
+];
+
+/**
+ * Simulated aperture for the star field's diffraction spikes.
+ *
+ * Labelled by the optics that produce them rather than by a look name,
+ * because the spike COUNT is real geometry — N support vanes give N
+ * spikes for even N, and JWST's hexagonal segments give six — while a
+ * star itself has none. Default is the unaided eye, so nothing is added
+ * to the sky unless the user asks for it and can see what they asked
+ * for. The Credits panel names the active profile.
+ */
+const STAR_OPTICS_OPTIONS: Array<{ id: StarOpticsProfile; label: string }> = [
+  { id: "none", label: "Unaided eye" },
+  { id: "newtonian", label: "Reflector (4-vane)" },
+  { id: "jwst", label: "Segmented (6-spike)" },
+  { id: "cinema", label: "Camera iris (8-blade)" },
 ];
 
 const SHADOW_OPTIONS = [1024, 2048, 4096] as const;
@@ -241,7 +267,7 @@ export const DisplayPanel = () => {
               ? () => setGraphicsOverride("bloomIntensity", undefined)
               : undefined
           }
-          hint="Gaia default is 0. Raise for cinematic bloom."
+          hint="Selective HDR bloom — only genuinely-bright pixels glow."
         />
 
         <Slider
@@ -268,6 +294,18 @@ export const DisplayPanel = () => {
           onReset={
             graphicsOverrides.toneMapping !== undefined
               ? () => setGraphicsOverride("toneMapping", undefined)
+              : undefined
+          }
+        />
+
+        <Select
+          label="Star Optics"
+          value={effective.starOptics}
+          options={STAR_OPTICS_OPTIONS}
+          onChange={(next) => setGraphicsOverride("starOptics", next)}
+          onReset={
+            graphicsOverrides.starOptics !== undefined
+              ? () => setGraphicsOverride("starOptics", undefined)
               : undefined
           }
         />

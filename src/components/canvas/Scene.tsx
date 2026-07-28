@@ -47,6 +47,8 @@ import { GridRecursive } from "./GridRecursive";
 import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
+import { VISUAL_PRESETS } from "../../config/visualPresets";
+import { ExposureBridge } from "./scene/ExposureBridge";
 
 // Lazy: procedural shader module only loads when sun render mode is "procedural".
 // Photo-mode users (majority) never download the shader chunk.
@@ -432,6 +434,12 @@ export const Scene = () => {
   const sunRenderMode = useStore((state) => state.sunRenderMode);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const scaleMode = useStore((state) => state.scaleMode);
+  // 1b: read the current visual context (DEEP_SPACE / PLANET_ORBIT / …)
+  // so the bloom-mount gate can fall back to the visual preset's
+  // `bloomIntensity` base when the user has not set an explicit
+  // `graphicsOverrides.bloomIntensity`. See the gate call below and
+  // `src/lib/graphics/bloomGate.ts` for the full rationale.
+  const visualPreset = useStore((state) => state.visualPreset);
   const qualityProfile = useQualityProfile(qualityMode);
   const effectiveGraphics = useEffectiveGraphics();
   // Wave α P1.1 fix: pull graphicsOverrides from the slice so the
@@ -718,6 +726,13 @@ export const Scene = () => {
           bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
           userOverrides={graphicsOverrides}
         />
+        {/* 1c — exposure registry bridge. Pushes the central
+            `sceneExposure` scalar into `gl.toneMappingExposure` per
+            frame so the AgX EffectPass scales its curve consistently.
+            No-op while registry stays at default 1.0; 1d
+            (eye-adaptation) and a future photometric-EV readout will
+            write to it. See `src/lib/graphics/exposureRegistry.ts`. */}
+        <ExposureBridge />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <GridRecursive />}
         {showEclipticGrid && <GridDecadeLabel />}
@@ -827,7 +842,18 @@ export const Scene = () => {
             brightnessRef={brightnessRef}
             bloomMounted={shouldMountBloom(
               qualityProfile.bloomEnabled,
-              effectiveGraphics.bloomIntensity
+              // 1b: when the user has set an explicit bloomIntensity
+              // override, that is authoritative (including 0 → unmount).
+              // When they have NOT (resolver yields `undefined`), fall
+              // back to the current visual context's `bloomIntensity`
+              // base — which is now non-zero (0.35 / 0.3 / 0.15 / 0.3 /
+              // 0.3) so the Bloom effect mounts on composer tiers by
+              // default instead of being permanently inert. The `??`
+              // only falls through on `undefined`, so a 0 override
+              // correctly unmounts (saving the 5-mip pass when the user
+              // explicitly asks for no bloom).
+              effectiveGraphics.bloomIntensity ??
+                VISUAL_PRESETS[visualPreset].bloomIntensity
             )}
             toneMapping={effectiveGraphics.toneMapping}
           />

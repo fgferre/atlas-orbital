@@ -34,11 +34,14 @@ describe("T5.3a shouldMountBloom — Gaia MainPostProcessor.java:335 parity", ()
     expect(shouldMountBloom(true, 1e-10)).toBe(true);
   });
 
-  it("mirrors Gaia default out-of-box (bloomEnabled=true, intensity=0 → skipped)", () => {
-    // Atlas presets ship bloomEnabled=true for ultra/high/medium AND
-    // bloomIntensity=0 for all 5 visual presets, matching Gaia's
-    // default `bloom.intensity: 0.0` in `config.yaml`. Both default
-    // paths resolve to "do not mount Bloom".
+  it("intensity=0 predicate: skips even when bloomEnabled=true", () => {
+    // 1b: this is the per-predicate behavior the gate relies on when
+    // the user drags Bloom Intensity to 0 — `shouldMountBloom` returns
+    // false, the <Bloom> component unmounts, and the 5-mip pass drops
+    // out of the frame budget. Out-of-box the visual presets are now
+    // NON-zero (0.35 / 0.3 / 0.15 / 0.3 / 0.3 — see visualPresets.ts),
+    // so the default path MOUNTS bloom; this test just verifies the
+    // "user explicitly zeroed it → skip" edge case still holds.
     expect(shouldMountBloom(true, 0)).toBe(false);
   });
 });

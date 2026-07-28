@@ -1,0 +1,103 @@
+/**
+ * Scene exposure registry — single source of truth for "this scene's
+ * current operator-stop shift" before eye adaptation (1d) and the
+ * photometric-EV readout (later waves) drive the number.
+ *
+ * ## What this IS
+ *
+ * A {@link sceneExposure} mutable singleton reference shared by every
+ * shader family that wants to participate in the SAME scene-wide
+ * exposure shift. The number multiplies into each subsystem's OWN
+ * calibrated exposure constant (AgX's `toneMappingExposure`, the
+ * starfield's `u_exposure`, atmospheres' `exposureGround`/`exposureSky`,
+ * the Sun's `sunEmissive`, the rings' `emissiveIntensity`) so the
+ * per-subsystem calibration math stays untouched and one update here
+ * propagates through every emissive surface in lockstep.
+ *
+ * ## Why a registry at all (audit fable-5)
+ *
+ * Half a dozen exposure-like constants live across the repo (atmos
+ * `1 - exp(-scatter * exposure_atmos)`, starfield `u_exposure`, Sun
+ * `SUN_EMISSIVE_POWER`, rings `RING_EMISSIVE_POWER`) — each with its
+ * own physical justification. Without a registry, an eye-adaptation
+ * pass scaling the AGX operator's `toneMappingExposure` ONLY would
+ * shift the buffer uniformly *after* every per-subsystem exposure
+ * baked in. The audit (fable-5) flagged this as the "halo da Terra
+ * descola da superfície" failure mode: atmos output is non-linear in
+ * its own exposure constant, so linear scaling at the AgX stage can
+ * move the bright limb differently from the surface and produce a
+ * visibly detached glow. The registry is the opt-in coordination
+ * surface that lets eye-adaptation reach every family's INTERNAL
+ * exposure term simultaneously, OR (current implementation) reach
+ * the AgX operator alone, depending on each family's needs.
+ *
+ * ## 1c scope — minimum viable plumbing
+ *
+ * 1c ONLY ships:
+ *   • the registry itself (this file)
+ *   • the `ExposureBridge` that pushes `sceneExposure.value` into
+ *     `gl.toneMappingExposure` every frame, so the AgX EffectPass
+ *     (`ToneMappingEffect` from `@react-three/postprocessing`) reads
+ *     it via `<tonemapping_pars_fragment>`'s `toneMappingExposure`
+ *     uniform (three.js pushes the renderer value to any material
+ *     that includes that chunk — the EffectPass does, see
+ *     `node_modules/postprocessing` src/effects/ToneMappingEffect.js).
+ *
+ * The registry starts at `1.0` — **no visual change** versus the
+ * pre-1c state. 1d (auto-eye-adaptation) will WRITE to this number;
+ * sub-pulls after 1c may opt more shaders into per-subsystem
+ * subscription if A/B testing shows the linear AgX-only scaling
+ * produces the detachment the audit foresees.
+ *
+ * ## Composition rules
+ *
+ *   • Writing `sceneExposure.value = 0.5` from any caller (1d, etc.)
+ *     propagates to every consumer the next frame via the same shared
+ *     object reference — R3F + three.js don't share uniforms across
+ *     materials by default, but a singletons `{ value }` is the
+ *     cheapest opt-in coordination.
+ *   • Setters clamp to `[1e-6, 16]` so a misbehaving caller cannot
+ *     NaN the renderer (`* 0.0` would disable AgX; `* Infinity`
+ *     would clip the buffer; both blocked defensively).
+ *   • Default `1.0` is the "operator stop middle" position — no
+ *     shift. Read `getSceneExposure()` from anywhere outside Canvas
+ *     hot path (e.g., a Display-panel "−N EV @ X AU" readout) to
+ *     surface the live value.
+ */
+
+/**
+ * The exposure shift, expressed as a multiplicative scalar on the
+ * scene's pre-tonemap luminance. `1.0` is neutral.
+ *
+ * Held as a `{ value: T }` object so multiple consumers can hold a
+ * reference and see live updates without each registering a
+ * subscription.
+ */
+export const sceneExposure: { value: number } = { value: 1.0 };
+
+/** Lower clamp — keeps the AgX pass compilable ("/0"-style paths would
+ *  divide to a non-finite everywhere). */
+export const SCENE_EXPOSURE_MIN = 1e-6;
+/** Upper clamp — keeps any single stop shift from clipping the HalfFloat
+ *  target wholesale before AgX runs (16 stops covers realistic eye
+ *  adaptation plus photometric EV across the Solar System). */
+export const SCENE_EXPOSURE_MAX = 16.0;
+
+/**
+ * Read the registry's current scalar. Pure, alloc-free; safe to call from
+ * event handlers, UI surfaces, and the post-loop.
+ */
+export const getSceneExposure = (): number => sceneExposure.value;
+
+/**
+ * Mutator with safety clamp. Convergence-rate callers (1d
+ * eye-adaptation, future photometric-EV) should route writes through
+ * this so a stray NaN/Infinity does not poison the buffer.
+ */
+export const setSceneExposure = (next: number): void => {
+  if (!Number.isFinite(next)) return;
+  sceneExposure.value = Math.max(
+    SCENE_EXPOSURE_MIN,
+    Math.min(next, SCENE_EXPOSURE_MAX)
+  );
+};

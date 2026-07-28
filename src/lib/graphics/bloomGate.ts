@@ -47,11 +47,18 @@
  * pass), which is theoretically cheaper for toggle-off/toggle-on
  * but adds to the always-compiled program count at startup.
  *
- * **Invariant**: with all five `VISUAL_PRESETS.{DEEP_SPACE,
- * PLANET_ORBIT, CLOSE_FLYBY, INNER_SYSTEM, OUTER_SYSTEM}` shipping
- * `bloomIntensity: 0.0` (Gaia-matching), a fresh atlas boot with no
- * DisplayPanel override skips Bloom entirely — the 5-mip pass that
- * was running per frame pre-T5.3a drops out of the frame budget.
+ * **1b invariant**: visual presets now ship non-zero
+ * `bloomIntensity` per context (0.35 / 0.3 / 0.15 / 0.3 / 0.3 —
+ * see `config/visualPresets.ts`), so a fresh atlas boot with no
+ * DisplayPanel override MOUNTS bloom on composer tiers (ultra /
+ * high / medium) by default. The gate call site in `Scene.tsx`
+ * passes `effectiveGraphics.bloomIntensity ?? VISUAL_PRESETS[ visualPreset
+ * ].bloomIntensity` — the `??` falls through to the visual preset base
+ * when the user has no override, so the gate sees the non-zero base.
+ * A user who drags Bloom Intensity to 0 sets
+ * `graphicsOverrides.bloomIntensity = 0`, which `shouldMountBloom`
+ * reads as `0 > 0 → false` and unmounts to save the 5-mip pass.
+ * `low` (constrained) still skips via `bloomEnabled: false`.
  */
 
 /**

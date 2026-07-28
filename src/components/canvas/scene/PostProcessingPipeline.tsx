@@ -114,9 +114,14 @@ export const PostProcessingPipeline = memo(
     // Kept matching the preset so the boot frame and the first lerp
     // tick don't disagree.
     //
-    // Gaia default tone mapping is NONE (`config.yaml`), so the
-    // ToneMapping pass is omitted unless the user explicitly selects
-    // a cinematic operator in the Display panel.
+    // Tone mapping is applied as a dedicated pass here only when the
+    // selected operator ≠ "none". As of 1a the cascade-default for
+    // composer tiers (ultra/high/medium) is AgX, which gives
+    // highlights shape against the HalfFloat target — see
+    // PRESET_DEFAULTS in src/lib/graphics/resolver.ts and the sweep
+    // note at tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
+    // Gaia itself still ships NONE in config.yaml; users who want byte
+    // parity can pick "none" from the Display panel.
     //
     // The HDR contract stays `luminanceThreshold=1.0` (prompt R1 #2):
     // only surfaces on the HDR-emissive allow-list cross the
