@@ -25,6 +25,7 @@ import type {
   ResolvedQualityProfile,
   DeviceSignals,
 } from "../qualityProfile";
+import type { StarOpticsProfile } from "../starfieldShaderMath";
 import { calculateQualityScore } from "./deviceSignals";
 
 /** User-facing preset identifier. `custom` = at least one override is set. */
@@ -64,7 +65,11 @@ export interface GraphicsOverrides {
    * additive contribution before the composer ADD blend.
    */
   lensFlareIntensityMul?: number;
-  /** User-selected tone mapping operator; defaults to Gaia's `none`. */
+  /**
+   * User-selected tone mapping operator. Default per preset is "agx" on
+   * composer-enabled tiers (ultra/high/medium) — see PRESET_DEFAULTS — and
+   * "none" on `low` because Scene.tsx unmounts the EffectComposer there.
+   */
   toneMapping?: ToneMappingName;
   /** Resolution scale override (dprMax). */
   resolutionScale?: number;
@@ -78,6 +83,17 @@ export interface GraphicsOverrides {
   bloomEnabled?: boolean;
   /** vfxHdrGain absolute override (preset base ignored). */
   vfxHdrGain?: number;
+  /**
+   * Simulated aperture for the star field's diffraction spikes.
+   *
+   * Not a look preset: a star has no spikes, they are the Fourier
+   * transform of whatever obstructs a specific instrument's aperture.
+   * Rendering them unlabelled would present an instrument artefact as
+   * sky, so the choice is the user's, it is named after the aperture it
+   * simulates, and the Credits panel states which one is active. The
+   * default is `none` — the unaided eye.
+   */
+  starOptics?: StarOpticsProfile;
 }
 
 export type ToneMappingName = "none" | "agx" | "aces" | "reinhard" | "cineon";
@@ -107,6 +123,7 @@ export interface EffectiveGraphics {
   shadowIntensityMul: number;
   envMapIntensityMul: number;
   lensFlareIntensityMul: number;
+  starOptics: StarOpticsProfile;
 }
 
 /**
@@ -128,7 +145,16 @@ export const PRESET_DEFAULTS: Record<
     vfxHdrGain: 4.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    // AgX is now the default display transform. Atlas's EffectComposer runs
+    // on a HalfFloat target end-to-end (see PostProcessingPipeline.tsx:167),
+    // so without a filmic operator every genuinely-HDR pixel — Sun disk,
+    // sun-glint, lit terminator — hard-clips to flat white. AgX preserves
+    // hue through the shoulder and gives highlights shape, which is exactly
+    // the 2-magnitude grey range the starfield black-point note in
+    // starfieldShaderMath.ts was fighting. User can switch to ACES / Reinhard
+    // / Cineon / None from the Display panel; the override composes cleanly.
+    // See tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -137,6 +163,7 @@ export const PRESET_DEFAULTS: Record<
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   high: {
     resolutionScale: 1.75,
@@ -147,7 +174,7 @@ export const PRESET_DEFAULTS: Record<
     vfxHdrGain: 3.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -156,6 +183,7 @@ export const PRESET_DEFAULTS: Record<
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   medium: {
     resolutionScale: 1.5,
@@ -166,7 +194,7 @@ export const PRESET_DEFAULTS: Record<
     vfxHdrGain: 2.5,
     bloomIntensityMul: 0.75,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
@@ -175,6 +203,7 @@ export const PRESET_DEFAULTS: Record<
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   low: {
     resolutionScale: 1,
@@ -185,6 +214,13 @@ export const PRESET_DEFAULTS: Record<
     vfxHdrGain: 1.0,
     bloomIntensityMul: 0,
     bloomIntensity: undefined,
+    // Constrained tier keeps `none`: Scene.tsx unmounts the entire
+    // EffectComposer when name === "constrained" (see Scene.tsx:522),
+    // so no ToneMapping pass ever runs here — making the field a no-op
+    // rather than a misleading default. Also preserves strict Gaia
+    // parity (config.yaml: bloom.intensity 0, tonemapping NONE) as the
+    // honest floor of the adaptive ladder, per
+    // tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
     toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
@@ -194,6 +230,7 @@ export const PRESET_DEFAULTS: Record<
     shadowIntensityMul: 1,
     envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
 };
 
@@ -318,6 +355,7 @@ export const resolveEffectiveGraphics = (
     envMapIntensityMul: base.envMapIntensityMul * (ov.envMapIntensityMul ?? 1),
     lensFlareIntensityMul:
       base.lensFlareIntensityMul * (ov.lensFlareIntensityMul ?? 1),
+    starOptics: ov.starOptics ?? base.starOptics,
   };
 };
 

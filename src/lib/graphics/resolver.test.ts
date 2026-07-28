@@ -78,10 +78,18 @@ describe("PRESET_DEFAULTS — byte-match to qualityProfile RESOLVED_PROFILES", (
     }
   });
 
-  it("every preset defaults toneMapping to Gaia NONE", () => {
-    for (const preset of ["ultra", "high", "medium", "low"] as const) {
-      expect(PRESET_DEFAULTS[preset].toneMapping).toBe("none");
-    }
+  it("filmic display transform defaults: AgX on composer tiers, none on constrained floor", () => {
+    // AgX replaced "none" as the default on ultra/high/medium in 1a — see
+    // resolver.ts:144 comment + tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
+    // Why "none" stays on constrained: Scene.tsx unmounts the EffectComposer
+    // entirely on that tier so a ToneMapping pass never runs anyway. Asserting the
+    // differential instead of a uniform value makes the contract self-documenting
+    // and means a regression on either side (composer on low, none on composer tiers)
+    // fails here on the spot.
+    expect(PRESET_DEFAULTS.ultra.toneMapping).toBe("agx");
+    expect(PRESET_DEFAULTS.high.toneMapping).toBe("agx");
+    expect(PRESET_DEFAULTS.medium.toneMapping).toBe("agx");
+    expect(PRESET_DEFAULTS.low.toneMapping).toBe("none");
   });
 });
 
