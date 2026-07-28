@@ -43,6 +43,35 @@ describe("PrivilegedPosition.calculateContextAwareDirection", () => {
       solarDirection.dot(awayFromParent)
     );
   });
+
+  it("never frames a body from its unlit side", () => {
+    // Ambient is 0.0 in every visual preset, so a camera past the terminator
+    // shows solid black rather than a dim body — focusing a moon used to land
+    // on the night side of 11 of them, Iapetus included, which reads as a
+    // texture that failed to load. The parent-framing bias may lean the shot
+    // away from the parent, but never out of the light.
+    const sun = new THREE.Vector3(0, 0, 0);
+    const target = new THREE.Vector3(12, 0, 0);
+    const litDirection = target.clone().sub(sun).normalize().negate();
+
+    // Sweep the parent all the way around the target, including the
+    // pathological case where "away from parent" points straight at the sun.
+    for (let step = 0; step < 24; step += 1) {
+      const angle = (step / 24) * Math.PI * 2;
+      const parent = target
+        .clone()
+        .add(new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)));
+
+      const direction = PrivilegedPosition.calculateContextAwareDirection(
+        target,
+        sun,
+        parent
+      );
+
+      expect(direction.length()).toBeCloseTo(1);
+      expect(direction.dot(litDirection)).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("PrivilegedPosition.calculateViewportAwareDistance", () => {
