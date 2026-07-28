@@ -534,6 +534,9 @@ export const Scene = () => {
         console.info("[atlas] WebGL renderer info:", {
           vendor,
           renderer,
+          // Beside the hardware facts that produced it, so a silent auto
+          // downgrade explains itself in a user-pasted console.
+          qualityTier: qualityProfile.name,
           maxTextureSize: webglCtx.getParameter(webglCtx.MAX_TEXTURE_SIZE),
           maxCubeMapSize: webglCtx.getParameter(
             webglCtx.MAX_CUBE_MAP_TEXTURE_SIZE
@@ -588,7 +591,11 @@ export const Scene = () => {
         import.meta.hot.dispose(detachContextLossHandlers);
       }
     },
-    [setContextLost]
+    // `qualityProfile.name` is read by the diagnostic above. R3F invokes
+    // `onCreated` once per Canvas mount and not again on prop identity
+    // change, so widening the deps costs nothing at runtime — it just
+    // keeps the compiler's inferred set and the declared set in agreement.
+    [qualityProfile.name, setContextLost]
   );
 
   const bloomRef = useRef<BloomController | null>(null);

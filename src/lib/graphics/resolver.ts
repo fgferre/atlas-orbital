@@ -15,9 +15,10 @@
  * - `graphicsOverrides = {}` yields the preset base; all *Mul fields
  *   default to 1, all *Delta fields default to 0, bare fields are
  *   absolute overrides (undefined = fall through).
- * - Auto-mode picks a preset from device signals using the existing
- *   `calculateQualityScore` heuristic; Custom keeps `customBase` in
- *   `graphicsSlice` so "Reset to High" stays meaningful.
+ * - Auto-mode picks a preset from device signals via
+ *   `resolveQualityTierFromSignals` (the score heuristic plus the GPU
+ *   capability ceiling); Custom keeps `customBase` in `graphicsSlice`
+ *   so "Reset to High" stays meaningful.
  */
 
 import type {
@@ -25,7 +26,7 @@ import type {
   ResolvedQualityProfile,
   DeviceSignals,
 } from "../qualityProfile";
-import { calculateQualityScore } from "./deviceSignals";
+import { resolveQualityTierFromSignals } from "./deviceSignals";
 
 /** User-facing preset identifier. `custom` = at least one override is set. */
 export type GraphicsPresetName = "low" | "medium" | "high" | "ultra" | "custom";
@@ -246,19 +247,15 @@ export const mapPresetToTier = (
 };
 
 /**
- * Auto-resolve a preset from device signals using the same scoring
- * heuristic that `qualityProfile.ts:resolveQualityProfile` applies in
- * `"auto"` mode. Keeps behavior identical when a user opts into Auto.
+ * Auto-resolve a preset from device signals. Delegates to
+ * `resolveQualityTierFromSignals` rather than repeating the threshold
+ * ladder, so the score cutoffs and the GPU ceiling live in exactly one
+ * place — this is the only auto path with runtime consumers.
  */
 export const autoResolvePreset = (
   signals: DeviceSignals
-): Exclude<GraphicsPresetName, "custom"> => {
-  const score = calculateQualityScore(signals);
-  if (score >= 4) return "ultra";
-  if (score >= 2) return "high";
-  if (score >= -1) return "medium";
-  return "low";
-};
+): Exclude<GraphicsPresetName, "custom"> =>
+  mapTierToPreset(resolveQualityTierFromSignals(signals));
 
 /**
  * Core resolver. Given the persisted state and live device signals,
