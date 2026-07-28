@@ -137,3 +137,79 @@ npm run lint
 npm run build
 npm run test:e2e     # cannot catch VRAM here — human render check required
 ```
+
+---
+
+## What the reference engines actually do — 2026-07-28
+
+Checked before committing to the design above, because "like Google Maps" is a
+shape, not a spec.
+
+### The lesson hiding in the Google observation
+
+Google Earth's globe streams a quadtree of **imagery** tiles (plus terrain) with
+screen-space-error LOD. What it does _not_ stream is the day/night terminator,
+the clouds or the lighting — those are a separate low-resolution layer plus
+analytic per-pixel shading. That is the whole reason its memory stays flat while
+the imagery is effectively unlimited: **only one channel is ever streamed.**
+
+Which independently confirms the "tile the map, cap the rest" call above, and
+also explains the other half of the observation — no atmosphere effects. Google
+does not do atmospheric scattering; Atlas does, via
+`shaders/atmosphereShader.ts`. So Atlas is already ahead of the reference on
+that axis and should not copy it wholesale.
+
+### The engines worth stealing from
+
+| Engine                                                                                       | Scheme                                                                                                                      | Why it matters here                                                                                                                  |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| [CesiumJS](https://cesium.com/learn/cesiumjs/ref-doc/GeographicTilingScheme.html)            | equirect quadtree, level 0 = 2x1, LOD by screen-space error in `QuadtreePrimitive`, skirts for cracks                       | Closest analogue: WebGL, browser, open source, production-proven. Validates the level scheme in `texturePyramid.ts` — same 2x1 root. |
+| [Gaia Sky SVT](https://gaia.ari.uni-heidelberg.de/gaiasky/docs/master/Virtual-textures.html) | sparse virtual texture, quadtree streamed into a buffer texture, needed tiles found by a **tile-detection fragment shader** | This repo's own north star already solved it. Applies VT to diffuse, specular, normal _and_ height.                                  |
+| Celestia                                                                                     | its own tiled virtual-texture format, equirect                                                                              | Precedent that equirect tiling is enough for planetary maps.                                                                         |
+| Space Engine, Outerra                                                                        | cube-sphere quadtree                                                                                                        | The alternative projection — see below.                                                                                              |
+
+### Two corrections to the design above
+
+**1. Tile detection should be a feedback pass, not only an analytic estimate.**
+Gaia Sky renders a small pass whose fragment shader writes which tile and level
+each pixel wants, reads it back, and streams exactly that set. It is exact:
+no over-fetch, and it handles grazing angles, partial occlusion and the horizon
+for free. `estimateResidentTiles` assumes the whole visible disc wants uniform
+detail, so at oblique angles it over-fetches.
+
+They are complementary, not competing, and both should exist:
+
+- **feedback pass** decides what to actually stream at runtime;
+- **`texturePyramid.ts`** stays the budget planner — it is what lets the memory
+  bound be proven in CI on a box with no GPU, which no feedback pass can do.
+
+**2. Equirect stands, but the poles need merging.**
+Equirect tiling has a real defect: the top tile row covers almost no surface
+while carrying a full tile of texels, so texel density explodes toward the
+poles. Cube-sphere (Space Engine, Outerra) has no singularity and uniform
+density — but every source map in this repo is equirect, and a cube-sphere needs
+offline reprojection _and_ a different mesh than the `sphereGeometry(1, 64, 64)`
+in `Planet.tsx`.
+
+Cesium and Gaia Sky both ship equirect quadtrees in production, so the pragmatic
+call stands. Mitigate with **polar row merging** — halve the column count per
+row above roughly 60 degrees latitude, the standard fix. Revisit cube-sphere
+only if close polar approaches become a product goal.
+
+### One place the reference disagrees with me
+
+Gaia Sky tiles the **normal** and **height** channels too, not just diffuse. The
+"cap the rest" decision is defensible for clouds, night lights and roughness —
+genuinely low-frequency — but Earth's normal map is the arguable case, since
+that is the channel carrying surface relief you would actually want at close
+range. Treat it as open: revisit if surface relief ever becomes a goal, and note
+that Gaia Sky is a desktop app with a VRAM budget Atlas does not have.
+
+### What does not transfer
+
+- **Hosting.** Cesium and Google stream from tile servers behind a CDN. Atlas
+  ships static files to GitHub Pages, which is why the packing decision above
+  (blobs + HTTP range requests) is load-bearing rather than an optimisation.
+- **Working set.** Google has one body at extreme zoom. Atlas has ~44 bodies,
+  almost all a few pixels wide, with one focused. That is an _advantage_: the
+  high-LOD working set is naturally one body deep, so the atlas can be small.
