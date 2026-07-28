@@ -31,7 +31,7 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 // Any additions here become part of the default `--all` batch.
 const TARGET_FILES = [
   "public/textures/4k_oberon.png", // ~38 MB PNG
-  "public/textures/4k_enceladus.jpg", // ~18 MB JPG
+  "public/textures/4k_enceladus.jpg", // ~3.8 MB JPG since the 2026-07-28 resize
   "public/textures/8k_mercury.jpg", // ~15 MB JPG
   "public/textures/8k_moon.jpg", // ~15 MB JPG
   "public/textures/2k_tethys.jpg", // ~11 MB JPG

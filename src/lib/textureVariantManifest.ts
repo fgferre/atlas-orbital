@@ -136,6 +136,11 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_iapetus.jpg`,
+        // Downscaled 2026-07-28 from the 11741x5871 plate that used to sit
+        // under this filename. The canonical moved to the `8k` key, and
+        // PROFILE_PREFERENCES.high is ["4k","2k","8k"] — without this rung
+        // `high` focus would fall all the way to 2048x1024.
+        "4k": `${TEXTURE_PATH}4k_iapetus.jpg`,
       },
     },
   },
@@ -150,6 +155,10 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_enceladus.jpg`,
+        // Same as iapetus above: downscaled from the 15960x7980 plate, and
+        // this rung is what keeps `high` focus at 4096x2048 now that the
+        // canonical sits on the `8k` key.
+        "4k": `${TEXTURE_PATH}4k_enceladus.jpg`,
       },
     },
   },

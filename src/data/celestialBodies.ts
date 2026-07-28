@@ -1072,7 +1072,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Iapetus is the third-largest natural satellite of Saturn. It is famous for its dramatic two-tone coloration; one hemisphere is bright as snow, while the other is dark as coal. Iapetus has a low density, indicating it is composed mostly of ice with a small amount of rocky materials.",
     distanceFromParent: "3,560,820 km",
     info: "Two-tone moon.",
-    textures: { map: TEXTURE_PATH + "4k_iapetus.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_iapetus.jpg" },
   },
   {
     id: "dione",
@@ -1212,7 +1212,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Enceladus is the sixth-largest moon of Saturn. It is about 500 kilometers in diameter, about a tenth of that of Saturn's largest moon, Titan. Enceladus is covered by fresh, clean ice, making it one of the most reflective bodies of the Solar System. Consequently, its surface temperature at noon only reaches −198 °C.",
     distanceFromParent: "238,020 km",
     info: "Ice geysers.",
-    textures: { map: TEXTURE_PATH + "4k_enceladus.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_enceladus.jpg" },
   },
   {
     id: "mimas",

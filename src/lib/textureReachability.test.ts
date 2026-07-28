@@ -214,9 +214,10 @@ describe("texture VRAM ceiling", () => {
   // hardware we ship to.
   //
   // The rule is deliberately keyed on MEASURED PIXELS, not on the `2k_`/`8k_`
-  // filename token. This repo has files whose names understate their real size
-  // by up to 7.6x (`4k_enceladus.jpg` is 15960x7980), so a name-based ceiling
-  // would pass while the GPU allocates ten times the budget.
+  // filename token. This repo has files whose names understate their real
+  // size — `4k_mimas.jpg` is 6356x3178 where the name claims 4096 wide — so a
+  // name-based ceiling would pass while the GPU allocates several times the
+  // budget.
   const MAX_OVERVIEW_PIXELS = 2048 * 1024;
 
   it("gives every body a rung small enough for the overview band", async () => {
@@ -254,6 +255,38 @@ describe("texture VRAM ceiling", () => {
     expect(
       oversized,
       `these bodies have no rung light enough for the overview band, so an unfocused body allocates full-resolution VRAM:\n  ${oversized.join("\n  ")}`
+    ).toEqual([]);
+  }, 120_000);
+
+  it("never ships a map above the GPU edge limit", async () => {
+    // Not a memory question. Above MAX_TEXTURE_SIZE the upload FAILS on that
+    // hardware rather than merely costing bytes, which is why the 2026-07-28
+    // blowup reproduced on some desktops and not others: on a 16384-max GPU
+    // `4k_enceladus.jpg` really allocated 647.8 MB, while an 8192-max one
+    // clamped it. 8192 is what every other map on disk already respects.
+    const MAX_EDGE = 8192;
+    const sharp = (await import("sharp")).default;
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve("public/textures");
+
+    const oversized: string[] = [];
+
+    for (const url of enumerateRequestablePaths()) {
+      const fileName = url.split("/").pop()!;
+      const file = path.join(dir, fileName);
+      if (!fs.existsSync(file)) continue;
+
+      // Dispatch on content, not extension: `8k_pluto.jpg` is really a PNG.
+      const { width = 0, height = 0 } = await sharp(file).metadata();
+      if (Math.max(width, height) > MAX_EDGE) {
+        oversized.push(`${fileName} is ${width}x${height}`);
+      }
+    }
+
+    expect(
+      oversized,
+      `these maps exceed the MAX_TEXTURE_SIZE of many GPUs, so they fail upload rather than merely cost memory:\n  ${oversized.join("\n  ")}`
     ).toEqual([]);
   }, 120_000);
 });

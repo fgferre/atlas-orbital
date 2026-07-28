@@ -244,24 +244,54 @@ assumes a **square** texture. Every planetary map is 2:1. Over all 82 files it
 accounts 8,114 MB for a true 5,121 MB, with per-file error from **-97% to
 +1538%**.
 
-| File                         | Name says | Really is  |    Real VRAM |
-| ---------------------------- | --------- | ---------- | -----------: |
-| `4k_enceladus.jpg`           | 4k        | 15960x7980 | **647.8 MB** |
-| `8k_tethys.jpg`              | 8k        | 13467x6734 |     461.3 MB |
-| `4k_iapetus.jpg`             | 4k        | 11741x5871 |     350.6 MB |
-| `uranus_texture_map_8k_…jpg` | untiered  | 8000x4336  |     176.4 MB |
-| `4k_oberon.png`              | 4k        | 8192x4096  |     170.7 MB |
-| `jupiter_vgr1_2025.jpg`      | untiered  | 7200x3600  |     131.8 MB |
+| File               | Name says | Really is  |    Real VRAM |
+| ------------------ | --------- | ---------- | -----------: |
+| `4k_enceladus.jpg` | 4k        | 15960x7980 | **647.8 MB** |
+| `8k_tethys.jpg`    | 8k        | 13467x6734 |     461.3 MB |
+| `4k_iapetus.jpg`   | 4k        | 11741x5871 |     350.6 MB |
+
+**The first three rows are fixed 2026-07-28** — the measured values above are
+kept visible because they were measured and refuted once, and that is what makes
+them worth citing. What is on disk now:
+
+| Source (before)                          | Output (after)               |  On disk |
+| ---------------------------------------- | ---------------------------- | -------: |
+| `4k_enceladus.jpg` 15960x7980 (18.04 MB) | `8k_enceladus.jpg` 8192x4096 | 11.85 MB |
+| `4k_enceladus.jpg` 15960x7980 (18.04 MB) | `4k_enceladus.jpg` 4096x2048 |  3.80 MB |
+| `4k_iapetus.jpg` 11741x5871 (4.76 MB)    | `8k_iapetus.jpg` 8192x4096   |  5.35 MB |
+| `4k_iapetus.jpg` 11741x5871 (4.76 MB)    | `4k_iapetus.jpg` 4096x2048   |  1.89 MB |
+| `8k_tethys.jpg` 13467x6734 (10.31 MB)    | `8k_tethys.jpg` 8192x4096    |  9.22 MB |
+
+Lanczos3, `fit: "fill"` (which also snaps tethys and iapetus from 1.9998:1 to
+exactly 2:1), JPEG q92 4:4:4 non-progressive. The one-shot script is not
+committed — this table is the reproducibility record, and the originals are
+recoverable only from git history at `e3f57b2`. Deploy artifact: removed
+33.11 MB, added 32.11 MB — **net −1.00 MB, essentially neutral.** The win is
+that the uploads now succeed, not that the download shrank.
+
+New post-resize VRAM at 8192x4096: 170.7 MB each for the `8k` rungs, 42.7 MB
+for the `4k` rungs. Enceladus focused at ultra drops 647.8 → 170.7 MB.
+| `uranus_texture_map_8k_…jpg` | untiered | 8000x4336 | 176.4 MB |
+| `4k_oberon.png` | 4k | 8192x4096 | 170.7 MB |
+| `jupiter_vgr1_2025.jpg` | untiered | 7200x3600 | 131.8 MB |
 
 **Three exceed 8192 px on the long side** (15960, 13467, 11741) — above the
 `MAX_TEXTURE_SIZE` of many GPUs, so they fail upload rather than merely cost
 memory. On a 16384-max GPU Enceladus really does allocate 647.8 MB; on an
 8192-max one three.js clamps it to 170.7 MB. The failure is hardware-dependent,
 which is exactly why it reproduces on some desktops and not others.
+**Fixed 2026-07-28** — all three are now 8192x4096, and
+`textureReachability.test.ts` pins the ceiling so no future asset re-opens it.
+Honest trade-off: on a 16384-max GPU Enceladus previously uploaded the full
+15960x7980 plate, so that hardware **loses** detail here. The exchange is that
+8192-max hardware now uploads at all, and one moon no longer exceeds the entire
+ultra budget by itself.
 
 **Per-body focus cost at ultra** (budget 512 MB): earth **853.3** (5 x 8192x4096
 channels), enceladus **647.8**, tethys 461.3, iapetus 350.6. Two bodies exceed
 the entire budget on their own, and while focused none of it is evictable.
+**Post-resize the three moons are 170.7 MB each**; earth is unchanged and is now
+the only body over the budget on its own.
 
 **Overview total is identical across all four profiles** — 440.6 MB — because
 `OVERVIEW_PREFERENCE_ORDER` in `textureVariants.ts` ignores the profile.
