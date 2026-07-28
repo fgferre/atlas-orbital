@@ -213,3 +213,85 @@ that Gaia Sky is a desktop app with a VRAM budget Atlas does not have.
 - **Working set.** Google has one body at extreme zoom. Atlas has ~44 bodies,
   almost all a few pixels wide, with one focused. That is an _advantage_: the
   high-LOD working set is naturally one body deep, so the atlas can be small.
+
+---
+
+## Measured baseline — the numbers a new session must not re-derive
+
+All measured 2026-07-28 with `sharp` against the real files and the real
+`resolveTextureRequest`, then put through an adversarial refutation pass that
+corrected several of them. Re-deriving these costs hours; they are exact.
+
+### Where the VRAM actually goes at ultra on a 4K desktop
+
+| Consumer                                              |       MiB | Note                                                                                                                         |
+| ----------------------------------------------------- | --------: | ---------------------------------------------------------------------------------------------------------------------------- |
+| Composer MSAA (2 full-res HalfFloat RTs @ 8x)         |     1,645 | **fixed 2026-07-28** — was the pmndrs default, never a decision. Now tier-driven: ultra 4, high 2, else 0. Scales with DPR². |
+| Context `antialias: true` under an active composer    |  ~265-300 | **fixed 2026-07-28** — the composer resolves through a fullscreen quad, so this could not change a pixel.                    |
+| Shadow map 4096² (RGBA8 + unsampled DEPTH24)          |       128 | **open.** Same size at ultra AND high. 2048 would be 32 MiB.                                                                 |
+| drei `<Environment>` (incl. retained PMREM ping-pong) |     15.25 | `frames={1}`, so the ping-pong is retained for nothing.                                                                      |
+| ProceduralSun3D (ultra only)                          |     13.61 | perlin cubemap + ray/flare geometry.                                                                                         |
+| HYG starfield buffer                                  |      5.01 | 109,400 stars. Tier scaling works; not a problem.                                                                            |
+| **Non-texture floor before the fix**                  | **1,808** | `high` paid nearly the same, ~1,790.                                                                                         |
+
+Bloom adds 105.47 MiB the instant the slider leaves 0 — not in the boot floor
+because every preset ships `bloomIntensity: 0`.
+
+### Textures: filenames lie, in both directions
+
+The cache estimates bytes from the filename token (`inferTextureEdge`) and
+assumes a **square** texture. Every planetary map is 2:1. Over all 82 files it
+accounts 8,114 MB for a true 5,121 MB, with per-file error from **-97% to
++1538%**.
+
+| File                         | Name says | Really is  |    Real VRAM |
+| ---------------------------- | --------- | ---------- | -----------: |
+| `4k_enceladus.jpg`           | 4k        | 15960x7980 | **647.8 MB** |
+| `8k_tethys.jpg`              | 8k        | 13467x6734 |     461.3 MB |
+| `4k_iapetus.jpg`             | 4k        | 11741x5871 |     350.6 MB |
+| `uranus_texture_map_8k_…jpg` | untiered  | 8000x4336  |     176.4 MB |
+| `4k_oberon.png`              | 4k        | 8192x4096  |     170.7 MB |
+| `jupiter_vgr1_2025.jpg`      | untiered  | 7200x3600  |     131.8 MB |
+
+**Three exceed 8192 px on the long side** (15960, 13467, 11741) — above the
+`MAX_TEXTURE_SIZE` of many GPUs, so they fail upload rather than merely cost
+memory. On a 16384-max GPU Enceladus really does allocate 647.8 MB; on an
+8192-max one three.js clamps it to 170.7 MB. The failure is hardware-dependent,
+which is exactly why it reproduces on some desktops and not others.
+
+**Per-body focus cost at ultra** (budget 512 MB): earth **853.3** (5 x 8192x4096
+channels), enceladus **647.8**, tethys 461.3, iapetus 350.6. Two bodies exceed
+the entire budget on their own, and while focused none of it is evictable.
+
+**Overview total is identical across all four profiles** — 440.6 MB — because
+`OVERVIEW_PREFERENCE_ORDER` in `textureVariants.ts` ignores the profile.
+`constrained` allocates what `ultra` does, against a 32 MB budget. This is the
+adaptive-reach pillar failing, and it is untouched.
+
+### The three cheap fixes that come before tiling
+
+1. **Admission control.** `deferredTextureCache.ts` has none: `pumpLoadQueue`
+   gates only on `activeLoadCount < 4` and never reads `textureBudgetBytes`;
+   `evictToBudget` counts only `status === "ready"`, so up to 4 concurrent
+   decodes are invisible; and `selectEvictionVictims` skips `refCount > 0`, so
+   the budget cannot bound live VRAM at all — it only controls how long
+   _unreferenced_ textures linger. Verified empirically: 32 MiB budget,
+   8 acquires, `activeLoadCount` 4, `readyBytes` 0.
+   Also: `pinCount` is inert — every pin acquire also bumps `refCount`, so the
+   four pin-conditional branches never change an outcome.
+2. **Resize the pathological files** (table above).
+3. **Give tier detection a GPU signal.** `qualityProfile.ts` uses none, so every
+   desktop scores 3-4 → ultra/high and every phone scores -5..1 →
+   constrained/balanced. Desktop is handed the largest assets by a score that
+   cannot see the GPU. (DPR _is_ clamped — dprMax 2/1.75/1.5/1 — so that is not
+   the cause.)
+
+### What the gates cannot catch
+
+Playwright runs headless Chromium with **no GPU flags**, so it renders on
+SwiftShader — software GL backed by system RAM, with no VRAM ceiling to
+exhaust. No e2e test in this repo can catch a VRAM blowup. Every stage of this
+work needs a human render check on real hardware. The boot pixel gate is also
+weaker than it looks: its 1% tolerance (9216 px) exceeds the entire bright
+content of the baseline (8679 px above 64/255), and the only committed baseline
+is `win32` while CI runs linux, so with `retries=2` it self-baselines green.

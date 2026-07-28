@@ -3,7 +3,32 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-27 (W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-28 (parallel texture-VRAM line opened; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+
+---
+
+## Parallel line — texture VRAM & tiled streaming
+
+**[`tasks/waves/tiled-streaming-2026-07-28.md`](./waves/tiled-streaming-2026-07-28.md)**
+— runs independently of the fidelity-honesty wave. Opened after the desktop
+render failure was traced to VRAM.
+
+Two things are already fixed and pushed (composer MSAA was taking the library
+default of 8, ~1.6 GB on a 4K desktop; and the context asked for `antialias`
+under an active composer, which could not change a pixel). **Three cheap fixes
+come before any tiling work** — admission control in `deferredTextureCache.ts`,
+resizing three textures that exceed `MAX_TEXTURE_SIZE`, and giving tier
+detection a GPU signal.
+
+Read the wave file's **"Measured baseline"** section first. Every number in it
+was measured against the real files and survived an adversarial refutation pass;
+re-deriving them costs hours. In particular do not re-measure: Earth focus is
+853.3 MB at ultra, `4k_enceladus.jpg` is really 15960x7980, and the overview
+band allocates the same 440.6 MB on `constrained` as on `ultra`.
+
+Closed predecessor: [`texture-inventory-2026-07-27.md`](./waves/texture-inventory-2026-07-27.md)
+— the orphan verdict table, the five measurement traps, and the source sweeps
+(NASA 3D Resources, CelestiaContent, Stellarium) with per-asset licences.
 
 ---
 
