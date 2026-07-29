@@ -126,7 +126,6 @@ interface PlanetProps {
   roughness: number;
   metalness: number;
   sunEmissive: number;
-  ringEmissive: number;
   ringShadowIntensity: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
@@ -138,7 +137,6 @@ const PlanetVisual = ({
   roughness,
   metalness,
   sunEmissive,
-  ringEmissive,
   ringShadowIntensity,
   nightLightIntensity,
   qualityProfileName,
@@ -150,7 +148,6 @@ const PlanetVisual = ({
   roughness: number;
   metalness: number;
   sunEmissive: number;
-  ringEmissive: number;
   ringShadowIntensity: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
@@ -235,7 +232,6 @@ const PlanetVisual = ({
     roughness,
     metalness,
     sunEmissive,
-    ringEmissive,
     ringShadowIntensity,
     nightLightIntensity,
     sunRenderMode,
@@ -476,24 +472,39 @@ const PlanetVisual = ({
       }
     }
 
-    // 3. Solar irradiance — Onda 2.1. ONE uniform per material carrying
-    // `irradiance(ephemeris AU) × assistGain`, multiplying the DIRECT
-    // sunlight only (`solarIrradiancePatch.ts` wraps `RE_Direct`; ambient
-    // and every emissive are deliberately outside it). A per-frame uniform
-    // write is the safe half of the pipeline: the material is never
-    // recreated, unlike the `sunEmissive` / `nightLightIntensity` family
-    // which are `useMemo` deps and would rebuild the material every tick.
+    // 3. Solar irradiance — Onda 2.1, extended to the ring material in
+    // W5-B. ONE uniform per material carrying `irradiance(ephemeris AU) ×
+    // assistGain`, multiplying the DIRECT sunlight only
+    // (`solarIrradiancePatch.ts` / `ringLightingPatch.ts` both wrap
+    // `RE_Direct`; ambient and every emissive are deliberately outside it).
+    // A per-frame uniform write is the safe half of the pipeline: the
+    // material is never recreated, unlike the `sunEmissive` /
+    // `nightLightIntensity` family which are `useMemo` deps and would
+    // rebuild the material every tick.
     //
     // The uniform lookup comes FIRST so the Sun — a `MeshBasicMaterial`
     // with no shader, and the one body whose heliocentric distance is
-    // exactly zero — never reaches the resolver.
-    const irradianceUniform = (
+    // exactly zero — never reaches the resolver. Rings share the planet's
+    // own heliocentric distance, so the SAME scalar value is correct for
+    // both — one resolver call, not two.
+    const planetIrradianceUniform = (
       planetMaterial?.userData?.shader as
         | { uniforms: { [key: string]: THREE.IUniform } }
         | undefined
     )?.uniforms?.[SOLAR_IRRADIANCE_UNIFORM];
-    if (irradianceUniform) {
-      irradianceUniform.value = readSunlightScalar();
+    const ringIrradianceUniform = (
+      ringMaterial?.userData?.shader as
+        | { uniforms: { [key: string]: THREE.IUniform } }
+        | undefined
+    )?.uniforms?.[SOLAR_IRRADIANCE_UNIFORM];
+    if (planetIrradianceUniform || ringIrradianceUniform) {
+      const sunlightScalarValue = readSunlightScalar();
+      if (planetIrradianceUniform) {
+        planetIrradianceUniform.value = sunlightScalarValue;
+      }
+      if (ringIrradianceUniform) {
+        ringIrradianceUniform.value = sunlightScalarValue;
+      }
     }
 
     // 4. Planetshine / earthshine — Onda 2.3. Magnitude comes from the pure
@@ -650,7 +661,6 @@ const PlanetVisualWrapper = (props: {
   roughness: number;
   metalness: number;
   sunEmissive: number;
-  ringEmissive: number;
   ringShadowIntensity: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
@@ -721,7 +731,6 @@ const PlanetVisualWrapper = (props: {
             roughness={props.roughness}
             metalness={props.metalness}
             sunEmissive={props.sunEmissive}
-            ringEmissive={props.ringEmissive}
             ringShadowIntensity={props.ringShadowIntensity}
             qualityProfileName={props.qualityProfileName}
             assetPriority={props.assetPriority}
@@ -747,7 +756,6 @@ export const Planet = ({
   roughness,
   metalness,
   sunEmissive,
-  ringEmissive,
   ringShadowIntensity,
   nightLightIntensity,
   qualityProfileName,
@@ -1164,7 +1172,6 @@ export const Planet = ({
           roughness={roughness}
           metalness={metalness}
           sunEmissive={sunEmissive}
-          ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}

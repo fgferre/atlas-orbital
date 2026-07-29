@@ -93,7 +93,6 @@ import {
   DEFAULT_PLANET_METALNESS,
   DEFAULT_PLANET_ROUGHNESS,
   EARTH_NIGHT_LIGHT_INTENSITY,
-  RING_EMISSIVE_POWER,
   RING_SHADOW_INTENSITY,
   SUN_EMISSIVE_POWER,
 } from "../../config/artistCalibration";
@@ -805,7 +804,6 @@ export const Scene = () => {
             roughness={DEFAULT_PLANET_ROUGHNESS}
             metalness={DEFAULT_PLANET_METALNESS}
             sunEmissive={SUN_EMISSIVE_POWER}
-            ringEmissive={RING_EMISSIVE_POWER}
             ringShadowIntensity={RING_SHADOW_INTENSITY}
             nightLightIntensity={EARTH_NIGHT_LIGHT_INTENSITY}
             qualityProfileName={qualityProfile.name}

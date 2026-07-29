@@ -30,12 +30,15 @@
  * outside the planet and `a > 0` always, so the roots share a sign and their
  * sum `-b/a` is positive exactly when `b < 0`.
  *
- * **One builder, two call sites.** The solve used to be duplicated verbatim in
- * the map_fragment and emissivemap_fragment patches, which is how a fix reaches
- * one copy and not the other. It is now generated once; the two exported
- * builders differ only in what they multiply and in their local variable names
- * (GLSL has no block scoping across the two injection points, so the names must
- * not collide).
+ * **One builder, one call site.** The solve used to be duplicated verbatim in
+ * a map_fragment patch AND an emissivemap_fragment patch (the latter darkened
+ * the ring's then-constant `emissiveIntensity` when the planet's shadow fell
+ * across it). W5-B deleted the ring's constant emissive entirely — rings are
+ * now lit through the standard direct-light path (`ringLightingPatch.ts`), so
+ * darkening `diffuseColor.rgb` here is the only shadow application the ring
+ * needs; the emissive twin would be a no-op against the zero baseline emissive
+ * every `MeshStandardMaterial` starts with. Deleted alongside it rather than
+ * left as dead code.
  */
 
 /**
@@ -50,56 +53,41 @@ const polarScaleLiteral = (flattening: number): string => {
   return (k > 0 ? k : 1).toFixed(6);
 };
 
-/**
- * Emit the ray/ellipsoid intersection test. `suffix` keeps the two injection
- * sites' locals from colliding; `hit` is the boolean name the caller branches on.
- */
-const occluderSolve = (flattening: number, suffix: string): string => {
-  const k = polarScaleLiteral(flattening);
-  return /* glsl */ `
-  // Ray from this ring fragment toward the Sun, in ring-local space.
-  vec3 diff${suffix} = uSunPosition - vPos;
-  float distSq${suffix} = dot(diff${suffix}, diff${suffix});
-  vec3 dir${suffix} = distSq${suffix} > 0.000001
-    ? diff${suffix} * inversesqrt(distSq${suffix})
-    : vec3(0.0, 1.0, 0.0);
-
-  // Scale space so the oblate planet becomes a unit sphere. Ring-local Z is
-  // the POLE (the mesh rotates this plane by -PI/2 about X), so the squash is
-  // on .z — not .y.
-  vec3 o${suffix} = vec3(vPos.x, vPos.y, vPos.z / ${k});
-  vec3 d${suffix} = vec3(dir${suffix}.x, dir${suffix}.y, dir${suffix}.z / ${k});
-
-  // d is NOT unit length after the scale, so 'a' must be carried.
-  float a${suffix} = dot(d${suffix}, d${suffix});
-  float b${suffix} = 2.0 * dot(o${suffix}, d${suffix});
-  float c${suffix} = dot(o${suffix}, o${suffix}) - 1.0;
-  float delta${suffix} = b${suffix} * b${suffix} - 4.0 * a${suffix} * c${suffix};
-
-  // c > 0 (ring is outside the planet) and a > 0, so the roots share a sign;
-  // their sum -b/a is positive exactly when b < 0, i.e. pointing at the planet.
-  bool hit${suffix} = delta${suffix} >= 0.0 && b${suffix} < 0.0;
-`;
-};
-
 export const planetShadowVertexPatch = `
   #include <begin_vertex>
   vPos = position;
 `;
 
-export const buildPlanetShadowFragmentPatch = (flattening: number): string => `
+export const buildPlanetShadowFragmentPatch = (flattening: number): string => {
+  const k = polarScaleLiteral(flattening);
+  return /* glsl */ `
   #include <map_fragment>
-${occluderSolve(flattening, "S")}
+  // Ray from this ring fragment toward the Sun, in ring-local space.
+  vec3 diffS = uSunPosition - vPos;
+  float distSqS = dot(diffS, diffS);
+  vec3 dirS = distSqS > 0.000001
+    ? diffS * inversesqrt(distSqS)
+    : vec3(0.0, 1.0, 0.0);
+
+  // Scale space so the oblate planet becomes a unit sphere. Ring-local Z is
+  // the POLE (the mesh rotates this plane by -PI/2 about X), so the squash is
+  // on .z — not .y.
+  vec3 oS = vec3(vPos.x, vPos.y, vPos.z / ${k});
+  vec3 dS = vec3(dirS.x, dirS.y, dirS.z / ${k});
+
+  // d is NOT unit length after the scale, so 'a' must be carried.
+  float aS = dot(dS, dS);
+  float bS = 2.0 * dot(oS, dS);
+  float cS = dot(oS, oS) - 1.0;
+  float deltaS = bS * bS - 4.0 * aS * cS;
+
+  // c > 0 (ring is outside the planet) and a > 0, so the roots share a sign;
+  // their sum -b/a is positive exactly when b < 0, i.e. pointing at the planet.
+  bool hitS = deltaS >= 0.0 && bS < 0.0;
+
   if (hitS) {
     // 1.0 = full shadow (black), 0.0 = no shadow.
     diffuseColor.rgb *= (1.0 - uShadowIntensity);
   }
 `;
-
-export const buildPlanetShadowEmissivePatch = (flattening: number): string => `
-  #include <emissivemap_fragment>
-${occluderSolve(flattening, "E")}
-  if (hitE) {
-    totalEmissiveRadiance *= (1.0 - uShadowIntensity);
-  }
-`;
+};

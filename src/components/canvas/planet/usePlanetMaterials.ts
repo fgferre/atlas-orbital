@@ -9,8 +9,11 @@ import {
 import {
   planetShadowVertexPatch,
   buildPlanetShadowFragmentPatch,
-  buildPlanetShadowEmissivePatch,
 } from "../shaders/planetShadowShader";
+import {
+  applyRingDirectLightCacheKey,
+  applyRingDirectLightPatch,
+} from "../shaders/ringLightingPatch";
 import {
   ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY,
   ECLIPSE_FRAGMENT_HELPERS,
@@ -43,7 +46,6 @@ interface UsePlanetMaterialsParams {
   roughness: number;
   metalness: number;
   sunEmissive: number;
-  ringEmissive: number;
   ringShadowIntensity: number;
   nightLightIntensity: number;
   sunRenderMode: ResolvedSunRenderMode;
@@ -61,7 +63,6 @@ export function usePlanetMaterials({
   roughness,
   metalness,
   sunEmissive,
-  ringEmissive,
   ringShadowIntensity,
   nightLightIntensity,
   sunRenderMode,
@@ -725,7 +726,9 @@ export function usePlanetMaterials({
     };
   }, [planetMaterial]);
 
-  // Analytical Planet Shadow on Rings Logic
+  // Analytical Planet Shadow on Rings Logic, plus (W5-B) the ring's own
+  // sunlit direct-light response — see `ringLightingPatch.ts` for why the
+  // old constant `emissive`/`emissiveMap`/`emissiveIntensity` path is gone.
   const ringMaterial = useMemo(() => {
     if (!textureRing) return null;
 
@@ -734,17 +737,26 @@ export function usePlanetMaterials({
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
-      emissive: 0xffffff,
-      emissiveMap: textureRing,
-      emissiveIntensity: ringEmissive,
       roughness: 0.8,
       metalness: 0.0,
     });
+
+    // Read once per material build, used both inside `onBeforeCompile` (the
+    // shadow occluder solve) and by the program-cache-key discriminator
+    // below, which cannot see inside that closure's generated GLSL.
+    const flattening = body.flattening ?? 0;
 
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
       shader.uniforms.uSunPosition = { value: new THREE.Vector3(0, 0, 0) };
       shader.uniforms.uShadowIntensity = { value: ringShadowIntensity };
+
+      // W5-B — rings respond to the same fused sunlight scalar the planet
+      // surfaces do, with a lit/unlit face distinction. Registers
+      // `u_solarIrradiance` and patches `lights_physical_pars_fragment`;
+      // independent anchor from the shadow patches below, so order between
+      // the two doesn't matter.
+      applyRingDirectLightPatch(shader);
 
       // Inject uniforms and varying
       shader.vertexShader = `
@@ -752,28 +764,25 @@ export function usePlanetMaterials({
         ${shader.vertexShader}
       `.replace("#include <begin_vertex>", planetShadowVertexPatch);
 
-      // W5 stage B — the occluder follows the planet's real figure. Both
-      // copies of the solve are generated from one builder so a fix cannot
-      // reach one and miss the other.
-      const flattening = body.flattening ?? 0;
+      // W5 stage B — the occluder follows the planet's real figure.
       shader.fragmentShader = `
         uniform vec3 uSunPosition;
         uniform float uShadowIntensity;
         varying vec3 vPos;
         ${shader.fragmentShader}
-      `
-        .replace(
-          "#include <map_fragment>",
-          buildPlanetShadowFragmentPatch(flattening)
-        )
-        .replace(
-          "#include <emissivemap_fragment>",
-          buildPlanetShadowEmissivePatch(flattening)
-        );
+      `.replace(
+        "#include <map_fragment>",
+        buildPlanetShadowFragmentPatch(flattening)
+      );
     };
 
+    // 66ab30f discipline — see `applyRingDirectLightCacheKey`'s docstring
+    // for why `flattening` being closure-captured rather than embedded in
+    // `onBeforeCompile`'s source text needs this.
+    applyRingDirectLightCacheKey(mat, flattening);
+
     return mat;
-  }, [textureRing, ringEmissive, ringShadowIntensity, body.flattening]);
+  }, [textureRing, ringShadowIntensity, body.flattening]);
 
   useEffect(() => {
     return () => {

@@ -9,7 +9,6 @@ interface SolarSystemProps {
   roughness: number;
   metalness: number;
   sunEmissive: number;
-  ringEmissive: number;
   ringShadowIntensity: number;
   nightLightIntensity: number;
   qualityProfileName: ResolvedQualityName;
@@ -20,7 +19,6 @@ export const SolarSystem = ({
   roughness,
   metalness,
   sunEmissive,
-  ringEmissive,
   ringShadowIntensity,
   nightLightIntensity,
   qualityProfileName,
@@ -66,7 +64,6 @@ export const SolarSystem = ({
           roughness={roughness}
           metalness={metalness}
           sunEmissive={sunEmissive}
-          ringEmissive={ringEmissive}
           ringShadowIntensity={ringShadowIntensity}
           nightLightIntensity={nightLightIntensity}
           qualityProfileName={qualityProfileName}

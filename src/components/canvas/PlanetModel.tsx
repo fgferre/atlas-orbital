@@ -40,7 +40,6 @@ interface PlanetModelProps {
   roughness?: number;
   metalness?: number;
   sunEmissive?: number;
-  ringEmissive?: number;
   ringShadowIntensity?: number;
   qualityProfileName: ResolvedQualityName;
   assetPriority: number;

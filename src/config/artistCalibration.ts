@@ -36,8 +36,10 @@ export const RING_SHADOW_INTENSITY = 0.34;
 /** Multiplier applied to the sun material's base color (HDR range). */
 export const SUN_EMISSIVE_POWER = 2.7;
 
-/** Ring material emissive glow strength. */
-export const RING_EMISSIVE_POWER = 0.2;
+// RING_EMISSIVE_POWER retired (W5-B): the ring material's constant
+// self-lit emissive is gone. Rings are now lit through the same
+// `u_solarIrradiance`-driven direct-light path the planet surfaces use —
+// see `ringLightingPatch.ts` and `usePlanetMaterials.ts`'s `ringMaterial`.
 
 /** Default roughness for planet surfaces without a dedicated roughness map. */
 export const DEFAULT_PLANET_ROUGHNESS = 0.7;
