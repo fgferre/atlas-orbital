@@ -10,6 +10,25 @@ import {
 } from "../../../lib/zodiacalLightLut";
 
 /**
+ * `useFrame` priority for the camera-recentre write below.
+ *
+ * Every camera-position writer in the tree (`CameraController`,
+ * `SurfaceModeFirstPerson`, `NormalizedWheelZoom`, `DynamicZoom`, ...)
+ * subscribes at the R3F default priority, `0` — none of them pass an
+ * explicit priority argument to `useFrame`. The render pass
+ * (`EffectComposer` via `PostProcessingPipeline`, or `DirectRenderPass`
+ * on the `constrained` tier — see `Scene.tsx:163`) subscribes at `1`.
+ * R3F executes same-priority subscribers in subscription order and
+ * sorts ascending by priority (`react-three-fiber`'s `internal.subscribe`),
+ * so a value strictly between `0` and `1` is the ONLY choice that
+ * guarantees this component's recentre runs after every same-tick
+ * camera write and before the frame is actually drawn — see the module
+ * doc's "Renderer integration" section for why that ordering is what
+ * makes the outrun bug structurally impossible instead of merely rare.
+ */
+export const ZODIACAL_RECENTER_PRIORITY = 0.5;
+
+/**
  * Zodiacal Light skybox (#3) — Leinert et al. (1998) tabulated
  * brightness model, sampled analytically against the live camera's
  * heliocentric distance and elongation.
@@ -37,6 +56,20 @@ import {
  *
  * Single icosphere (radius 1e8 scene units) with `THREE.BackSide`
  * rendered behind everything (`renderOrder = -100`, no depth-write).
+ * Re-centred on the camera every frame at `ZODIACAL_RECENTER_PRIORITY`
+ * (see below) — deliberately AFTER every priority-0 camera-position
+ * writer (`CameraController`, `SurfaceModeFirstPerson`,
+ * `NormalizedWheelZoom`, ...) and before the render pass, so the shell
+ * always uses this frame's FINAL camera position with zero lag. This
+ * matters: at MAX_VELOCITY_FACTOR = 3.0 (`hygPhysicsFlight.ts`), the
+ * HYG fly-to's per-frame stride is `distance / 20`, which exceeds the
+ * shell radius past ~9.7 pc — with even a one-frame recentre lag, the
+ * camera exits its own shell and the band vanishes for the whole
+ * middle of the flight (2026-07-29 root cause, see
+ * `tasks/waves/galaxy-volumetric-2026-07-29.md` §0.1). Recentring
+ * strictly after all same-tick camera writes makes that structurally
+ * impossible — the mesh is always exactly at camera.position for the
+ * frame that gets rasterised, independent of how large the stride was.
  * The material is a `ShaderMaterial` that:
  *   • Computes the fragment's world direction `dir`.
  *   • Resolves the helioecliptic pair (β, |λ−λ☉|) via `zodiacalAngles`
@@ -162,6 +195,19 @@ export const ZodiacalLightSkybox = () => {
   }, [material]);
 
   // Per-frame uniforms: live heliocentric distance + Sun direction.
+  //
+  // Priority `ZODIACAL_RECENTER_PRIORITY` (see top of file) — NOT the
+  // default 0 — is load-bearing. `<ZodiacalLightSkybox />` mounts
+  // before `<CameraController />` in `Scene.tsx`, so at the default
+  // priority this callback used to run BEFORE the camera's
+  // position write for the frame, re-centring the shell on stale
+  // (previous-frame) camera position. Combined with the HYG fly-to's
+  // per-frame stride (`distance / 20` at MAX_VELOCITY_FACTOR = 3.0),
+  // that one-frame lag let the camera outrun and exit its own 1e8 wu
+  // shell past ~9.7 pc, blanking the band for the whole flight
+  // (2026-07-29 root cause). Running strictly after every priority-0
+  // camera writer deletes the lag outright: the copy below always
+  // reads this frame's final camera.position.
   useFrame(() => {
     const mat = materialRef.current;
     if (!mat) return;
@@ -183,7 +229,7 @@ export const ZodiacalLightSkybox = () => {
     // of the auToWorld compression curve — see astrophysics.ts.
     const worldR = camera.position.length();
     u.u_cameraR_AU.value = AstroPhysics.worldToAu(worldR, scaleMode);
-  });
+  }, ZODIACAL_RECENTER_PRIORITY);
 
   // Dispose the LUT + material on unmount — R3F does NOT auto-dispose
   // objects created via useMemo (mirrors Starfield.tsx, ProceduralSun3D).
