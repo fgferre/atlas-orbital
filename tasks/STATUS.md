@@ -131,7 +131,10 @@ started" (`d8d9317`) was a docs regression: stage B (F-09 + ellipsoid
 ring-shadow occluder) shipped same-day as stage A, in `d5c6ebb` — see the
 wave file's "Stage B shipped `d5c6ebb`..." subsection. **Separately, `ef09f13`
 closed lighting-redesign's owed item 2** (ring emissive detaching, not F-09's
-scope), same subsection. Next up: **W7**, or user-stated tasks.
+scope), same subsection. **W7 is code done, 2026-07-29** (`9afde5a`/`a010f41`)
+— cone and needle fixed together; `test:e2e` 13/13 and a headless five-date
+pass both clean. **Scope cut:** the 13-moon `eclipsingBodyId` expansion did
+not ship. Full account: wave file's "Fourth round" subsection. Next up: **W8**.
 
 **W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
 source, and the Sun, all eight planets, the Moon, the eighteen analytical
@@ -176,15 +179,12 @@ unchanged at 1% tolerance, so no baseline was regenerated. Do not read that as
 proves it now matches JPL. It means the frozen boot frame is a wide shot with no
 planet surface in it, which is W3's finding, not a new one.
 
-Two W3 findings a later wave must not re-derive, both recorded in that wave's
-"What the gates actually proved" subsection: **the single pixel gate is
-structurally blind to planet surfaces** (the frozen boot frame is a wide shot —
-so W5/W9/W10 should not read "baseline unchanged" as a photometry result), and
-**the eclipse fragment patch has never run on three r181** — `output_fragment` was
-renamed `opaque_fragment` in r152, so three `.replace` calls in
-`usePlanetMaterials.ts` are silent no-ops. That one is logged against **W7**, not
-open for a drive-by fix: repairing the needle before the cone switches on a shadow
-that fires on ~86% of new moons.
+A W3 finding a later wave must not re-derive, recorded in that wave's "What
+the gates actually proved" subsection: **the single pixel gate is
+structurally blind to planet surfaces** (the frozen boot frame is a wide shot
+— so W5/W9/W10 should not read "baseline unchanged" as a photometry result).
+The same subsection's other finding — the eclipse needle silent no-op — is
+**fixed by W7** (see above).
 
 W4 added a third: **the wave file's own Rigel and Proxima figures were computed
 from a catalog edition that is not the one on disk.** The shipped code is right
