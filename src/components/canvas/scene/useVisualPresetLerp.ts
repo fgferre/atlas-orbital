@@ -137,10 +137,11 @@ export const useVisualPresetLerp = ({
 
     // Resolve the target values for every ref through the pure helper.
     // With `userOverrides = {}`, this is byte-identical to the
-    // pre-Wave-α per-field math (pinned by
-    // `visualPresetOverrides.test.ts`). The hook owns the imperative
-    // ref mutation; the decision of *what* to write lives in the pure
-    // module.
+    // pre-Wave-α per-field math EXCEPT `ambientIntensity`, which now
+    // composes the Onda 1.3 display floor on top of the preset's
+    // invariant 0.0 (pinned by `visualPresetOverrides.test.ts`). The
+    // hook owns the imperative ref mutation; the decision of *what* to
+    // write lives in the pure module.
     const targets = resolveLerpRefTargets(
       currentValues.current,
       userOverrides ?? {},

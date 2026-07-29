@@ -42,7 +42,14 @@
  * cubemap — `pbr.fragment.glsl:620-621` uses the reflection skybox
  * only for specular (`finalReflection = reflectionColor * AO`), never
  * for diffuse IBL. `shadowIntensity` fed the focused-body directional
- * helper.
+ * helper (now dead — see below).
+ *
+ * `ambientIntensity: 0.0` here is NOT what the app renders: a display
+ * viewing floor (`AMBIENT_VIEWING_FLOOR` in
+ * `src/components/canvas/scene/visualPresetOverrides.ts`, Onda 1.3) is
+ * composed on top of this value every frame, downstream of this table.
+ * These 0.0s stay untouched as the physically-honest baseline the
+ * floor is added to — do not "fix" them here.
  *
  * **`shadowIntensity` currently changes nothing, 2026-07-28.** It drives
  * `SmartSunLight`, which `SmartSunLight.tsx:74` puts on layer 1 while the

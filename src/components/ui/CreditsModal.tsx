@@ -105,6 +105,10 @@ export const CreditsModal = () => {
                   description="HDR scene light is mapped to the screen through the AgX display transform (Troy Sobotka's AgX, as implemented in the postprocessing library), enabled by default on composer-capable hardware tiers. AgX is a rendering choice, not a physical claim: it compresses real high-dynamic-range values the display cannot show. The Display panel's Tone Mapping control can switch operators or disable it entirely."
                 />
                 <CreditItem
+                  title="Ambient light — a display floor, not physics"
+                  description="The only physical light source in the scene is a single Sun point light with zero falloff exponent, so an unassisted render leaves every shadowed surface true black. A small ambient floor (0.02 by default) is added on top so dark terrain stays readable off a phone or projector — the same assist every comparable solar-system app ships: NASA Eyes on the Solar System defaults to 0.005, Stellarium hard-codes 0.02, OpenSpace defaults to 0.05. The Display panel's Ambient Floor × control scales it to 0 for the unassisted render."
+                />
+                <CreditItem
                   title="Zodiacal light — Leinert et al. (1998)"
                   description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted. The overall visibility factor is a calibration constant, disclosed in the source, pending a final human-eye pass."
                 />

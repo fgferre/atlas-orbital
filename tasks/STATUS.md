@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-28 (parallel starfield visual-upgrade line opened in addition to texture-VRAM; texture-VRAM line still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-28 (parallel lighting-redesign line opened — Onda 1 items 1+3 shipped — in addition to starfield visual-upgrade and texture-VRAM; both other parallel lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -23,6 +23,28 @@ tsc, lint all green but commit log = "what was coded" not "what was
 seen". The wave file's "Honest disclosure" and "Outstanding
 calibration" sections say exactly what was NOT verified — read them
 before labelling sub-pulls done.
+
+---
+
+## Parallel line — lighting redesign
+
+**[`tasks/waves/lighting-redesign-2026-07-28.md`](./waves/lighting-redesign-2026-07-28.md)**
+
+Runs in the same worktree as the starfield visual-upgrade line, source is
+the owner's `handoffiluminacao.md` (repo-worktree root, read-only). Onda 1
+items **1** (deleted the 5 dead lighting controls, kept + repurposed
+Ambient → "Ambient Floor ×") and **3** (default 0.02 ambient viewing floor,
+composed inside `resolveLerpRefTargets`, mid-industry between NASA Eyes
+0.005 / Stellarium 0.02 / OpenSpace 0.05) are **shipped**. Item 2 (per-light
+regolith photometry rewrite) is a **separate agent's** scope, not started
+here — check this pointer before picking it up in case it landed in a
+sibling worktree. Items 4 (assist)/5/6 are blocked on owner decisions (pill
+vs single fidelity surface, didactic-scale-vs-irradiance story) — read the
+wave file's own section before proposing UI for them.
+
+**E2E baseline unchanged** — the ambient floor did not move the frozen boot
+frame (wide shot, far from the Sun, per `boot.spec.ts`'s own comment); no
+re-bless spent this wave.
 
 ---
 
