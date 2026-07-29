@@ -259,15 +259,23 @@ const resolveGlTierCeiling = (signals: DeviceSignals): ResolvedQualityName => {
     return "constrained";
   }
 
-  // `high` and `ultra` promote to 4096- and 8192-wide equirect maps.
-  // Below 8192 the driver downscales that promotion anyway, so the
-  // decode and the upload are paid for nothing.
+  // `high` and `ultra` promote to 4096- and 8192-wide equirect maps
+  // respectively (the "4k" tier's canonical files are 4096x2048 on disk —
+  // e.g. `4k_enceladus.jpg` — so a 4096-limit GPU fits `high`'s promotion
+  // exactly; it just can't reach `ultra`'s 8192 one). Below each tier's
+  // own texture width the driver downscales that promotion anyway, so the
+  // decode and the upload are paid for nothing — but the ceiling must not
+  // overshoot past the tier that still fits.
   if (
     typeof signals.maxTextureSize === "number" &&
-    signals.maxTextureSize > 0 &&
-    signals.maxTextureSize < 8192
+    signals.maxTextureSize > 0
   ) {
-    return "balanced";
+    if (signals.maxTextureSize < 4096) {
+      return "balanced";
+    }
+    if (signals.maxTextureSize < 8192) {
+      return "high";
+    }
   }
 
   return "ultra";

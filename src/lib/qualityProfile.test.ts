@@ -129,12 +129,23 @@ describe("qualityProfile", () => {
       }).name
     ).toBe("constrained");
 
-    // Below 8192 the `high`/`ultra` promotion to 4k/8k maps is downscaled
-    // by the driver anyway, so it is paid for and thrown away.
+    // A 4096-limit GPU fits `high`'s 4096-wide texture promotion exactly
+    // (the "4k" tier's canonical files, e.g. `4k_enceladus.jpg`, are
+    // 4096x2048 on disk) — only `ultra`'s 8192-wide promotion is out of
+    // reach, so the ceiling should land on `high`, not skip past it.
     expect(
       resolveQualityProfile("auto", {
         ...strongDesktop,
         maxTextureSize: 4096,
+      }).name
+    ).toBe("high");
+
+    // Below 4096 even `high`'s promotion is downscaled by the driver
+    // anyway, so it is paid for and thrown away.
+    expect(
+      resolveQualityProfile("auto", {
+        ...strongDesktop,
+        maxTextureSize: 2048,
       }).name
     ).toBe("balanced");
 
