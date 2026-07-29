@@ -482,7 +482,61 @@ previous one leaves behind):
 
 ---
 
-## Item 7 — e2e baseline decision
+## Queue step 2 attempted 2026-07-29 — default-mode flip reverted, boot camera framing is the blocker
+
+**Attempted:** flipped `src/store.ts`'s `scaleMode` initial state from
+`"didactic"` to `"realistic"` (confirmed first that `scaleMode` is absent
+from the persist `partialize` allowlist, so this really is the sole boot
+default — no migration path needed either way). Ran the full gate
+(`test:run` 2454/2454, `tsc -b`, `lint`, `docs:check`, `build` all clean)
+then `npx playwright test e2e/boot.spec.ts`.
+
+**Found broken — reverted before commit.** The frozen boot frame is not a
+"whole system, different scale" shot the way the ambient-floor change in
+Item 3 was — it's a camera-framing failure. `InitialCameraAnimation`
+(`src/components/canvas/InitialCameraAnimation.tsx:91-133`,
+`resolveIntroEndPosition`) already reads `scaleMode` and asks
+`AstroPhysics.resolveFocusExtent` for how far back to park the camera once
+the 12 s intro flight ends. That function
+(`src/lib/astrophysics.ts:1151-1197`) has a didactic-only special case: for
+the Sun, it walks every direct-child planet/near-dwarf and expands the
+extent to cover the whole system
+(`src/lib/astrophysics.ts:1167-1194`); for any other `scaleMode`
+(line 1163: `if (scaleMode !== "didactic") { return extent; }`) it just
+returns the Sun's own `resolveSemanticBodyRadius` — ~4.65 world units
+(`696,000 km × KM_TO_3D_UNITS`, `AU_TO_3D_UNITS = 1000`). That "system
+overview" affordance was only ever built for the didactic path, because
+until this attempt didactic was the only mode ever reachable at boot.
+
+Net effect: the intro flight lands the camera a few units from the Sun's
+photosphere instead of an establishing shot. The captured
+`boot-frozen.png` under `"realistic"` is the Sun's surface texture filling
+~85 % of the viewport — starfield and grid lines visible at the edges, no
+planets, no orbit rings, no labels, nothing recognizable as "solar
+system." 171,705 / ~900k pixels differ from the current baseline (19 %,
+vs. the 1 % gate). This is not a benign "scene got bigger" diff; it is the
+"broken or empty" boot outcome the task brief for this session explicitly
+named as a stop-and-revert condition, not a hack-a-fix-in-this-commit one.
+
+**Reverted, not shipped.** `src/store.ts` and `src/store.test.ts` are back
+to their pre-session content (`git diff` against HEAD is empty for both).
+`npx playwright test e2e/` (all 12 specs) reruns green against a freshly
+rebuilt `dist/` on the reverted code — the branch is exactly as shippable
+as it was at the start of this attempt. No re-bless was spent (Item 7's
+budget is still unspent).
+
+**What actually blocks queue step 2, precisely:** a "solar-system overview"
+extent for the realistic scale mode does not exist yet, and building one is
+a real design problem, not a one-line port of the didactic branch — a
+naive "include every planet's true AU distance" extent would push the
+camera so far back that every planet (and the Sun) collapses to a sub-pixel
+dot, which is astronomically correct but ships nothing "populated." The
+next agent attempting the default-mode flip needs to design (and choose
+where to route through `resolveFocusExtent`, `InitialCameraAnimation`, or a
+new boot-specific framing) what a realistic-mode boot establishing shot
+actually shows — before touching `store.ts`'s default again. That decision
+was explicitly out of scope for this session (no camera/framing changes
+were made).
 
 **Anchor:** `boot-frozen-chromium-win32.png`
 (`e2e/boot.spec.ts-snapshots/`), 1% tolerance, no resolvable planet disc in
@@ -542,3 +596,11 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
    the `scaleMode` default flip, then the unified badge + assist control —
    which is the step that flips `DEFAULT_SUNLIGHT_ASSIST_POLICY` to
    `"real"`, together with its disclosure UI.
+5. **The `scaleMode` default flip (queue step 2) was attempted 2026-07-29
+   and reverted** — see "Queue step 2 attempted 2026-07-29" above. The
+   store-default edit itself is trivial and not the blocker; the boot
+   camera has no "solar-system overview" framing for `"realistic"` mode
+   (`AstroPhysics.resolveFocusExtent`'s system-wide-extent branch is
+   didactic-only), so the flip currently boots into a close-up on the
+   Sun's photosphere. Design that framing (and decide what it should even
+   show at true AU scale) before re-attempting the flip.

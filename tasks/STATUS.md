@@ -46,6 +46,15 @@ wave file's own section before proposing UI for them.
 frame (wide shot, far from the Sun, per `boot.spec.ts`'s own comment); no
 re-bless spent this wave.
 
+**Owner decision 2026-07-29 (default scale mode → realistic) attempted and
+reverted** — flipping `store.ts`'s `scaleMode` default boots the camera
+into a close-up on the Sun's photosphere instead of a system overview
+(`AstroPhysics.resolveFocusExtent`'s system-wide-extent branch only exists
+for didactic mode). `store.ts`/`store.test.ts` are back to pre-attempt
+content; nothing shipped. See the wave file's "Queue step 2 attempted
+2026-07-29" section before retrying — needs a realistic-mode boot-framing
+design first, not a resend of the same one-line default change.
+
 ---
 
 ## Parallel line — texture VRAM & tiled streaming
