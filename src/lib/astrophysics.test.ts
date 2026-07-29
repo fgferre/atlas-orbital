@@ -267,6 +267,50 @@ describe("AstroPhysics didactic geometry", () => {
     expect(sunExtent).toBeLessThan(erisReach);
   });
 
+  it("expands the REALISTIC sun focus to a true-AU system overview (owner decision 2026-07-29 boot)", () => {
+    // Queue step 2 of tasks/waves/lighting-redesign-2026-07-28.md: the app
+    // now boots into a realistic-scale system overview, so the Sun-focus
+    // extent walk (previously didactic-only) must also work in real AU.
+    // Same inclusion set as the didactic test above (planets + dwarfs with
+    // orbit.a <= 40 AU) — Pluto in, Eris out — just measured at true scale.
+    const sun = getBody("sun");
+    const neptune = getBody("neptune");
+    const pluto = getBody("pluto");
+    const eris = getBody("eris");
+    const sunExtent = AstroPhysics.resolveFocusExtent({
+      body: sun,
+      bodies: SOLAR_SYSTEM_BODIES,
+      date: TEST_DATE,
+      scaleMode: "realistic",
+    });
+
+    const reachOf = (body: typeof neptune) =>
+      AstroPhysics.resolveDisplayOrbitDistanceBounds({
+        body,
+        parentBody: sun,
+        scaleMode: "realistic",
+      }).max +
+      AstroPhysics.resolveSemanticBodyRadius({ body, scaleMode: "realistic" });
+
+    // Pluto's real aphelion (~49.3 AU) is farther than Neptune's (~30.4
+    // AU) despite Neptune's larger semi-major axis, because Pluto's orbit
+    // is far more eccentric — the walk must pick up on that, not just
+    // stop at the outermost PLANET.
+    expect(sunExtent + 1e-6).toBeGreaterThanOrEqual(reachOf(neptune));
+    expect(sunExtent + 1e-6).toBeGreaterThanOrEqual(reachOf(pluto));
+    // Eris (a = 67.8 AU) is excluded by the same >40 AU cutoff the
+    // didactic walk uses — the overview frames the classical planets +
+    // Pluto, not the scattered disk.
+    expect(sunExtent).toBeLessThan(reachOf(eris));
+
+    // Sanity bound: a real system overview should land in the tens of
+    // thousands of world units (AU_TO_3D_UNITS = 1000/AU), not blow up to
+    // the didactic-incompatible millions a bug in the AU math would
+    // produce.
+    expect(sunExtent).toBeGreaterThan(40 * AU_TO_3D_UNITS);
+    expect(sunExtent).toBeLessThan(60 * AU_TO_3D_UNITS);
+  });
+
   it("keeps didactic sun framing stable across dates by using orbital envelopes", () => {
     const sun = getBody("sun");
     const extentAtJ2000 = AstroPhysics.resolveFocusExtent({

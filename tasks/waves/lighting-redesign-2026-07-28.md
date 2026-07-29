@@ -763,6 +763,141 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
 
 ---
 
+## Queue step 2 shipped 2026-07-29 (second attempt) — realistic-mode system overview
+
+**Owner decision recorded fresh today** (relayed via the session
+coordinator): the app boots in `"realistic"` scale mode, AND the opening
+view is a system overview — camera far enough to show the planetary orbits
+with orbit lines and labels, planets appearing as the point-lights they
+really are from that distance (NASA-Eyes style). This resolves the exact
+blocker the attempt above stopped on: what a realistic-mode boot
+establishing shot should show. It shows the outer-system-collapses-to-dots
+outcome the previous attempt's author flagged as a risk — the owner
+confirmed that IS the desired look, not a defect.
+
+**The fix.** `AstroPhysics.resolveFocusExtent` (`src/lib/astrophysics.ts`)
+had a didactic-only system-extent walk for a Sun focus (guard at the top:
+`if (scaleMode !== "didactic") return extent`). Extended, NOT rewritten:
+the walk now also runs when `scaleMode === "realistic" && body.id ===
+"sun"` — every other body's realistic-mode focus extent is byte-for-byte
+unchanged (own radius/ring only), because widening the walk to every
+parent would have also re-framed e.g. "focus Jupiter" in realistic mode to
+include Callisto's true ~1.9M km orbit, a real, unrequested behavior
+change to an already-shipped mode. Inside the walk, the one literal that
+changed is the child-distance lookup: `resolveDisplayOrbitDistanceBounds`
+is now called with the ACTUAL `scaleMode` variable instead of a hardcoded
+`"didactic"` string — a no-op for the didactic path (scaleMode already
+equals `"didactic"` there) and the whole fix for the realistic path (now
+reads real max-orbit-distance-in-AU instead of the didactic-compressed
+figure). The inclusion filter itself — direct children of the Sun that are
+a planet, or a dwarf with `orbit.a <= 40` AU — was not touched; it already
+scale-mode-agnostic and is the SAME set `useOrbitalSalience.ts`'s
+`isSolarOverviewBody` uses for orbit-line emphasis in the unfocused
+overview state, which is independent confirmation this is the
+established "system overview" body set, not a new invention.
+
+**Extent numbers (`TEST_DATE` = J2000, orbital-envelope based so they are
+date-independent — same design as the didactic branch).** Direct children
+walked: the 8 planets + Pluto + Ceres (Haumea 43.2 AU, Makemake 45.7 AU,
+Eris 67.8 AU all fail the `<= 40` AU cutoff, same as the didactic branch).
+Aphelion reach in world units (`AU_TO_3D_UNITS = 1000`):
+
+| body      | aphelion AU | world units |
+| --------- | ----------- | ----------- |
+| Mercury   | 0.467       | 467         |
+| Venus     | 0.728       | 728         |
+| Earth     | 1.017       | 1 017       |
+| Mars      | 1.666       | 1 666       |
+| Jupiter   | 5.457       | 5 457       |
+| Saturn    | 10.076      | 10 076      |
+| Uranus    | 20.079      | 20 079      |
+| Neptune   | 30.381      | 30 381      |
+| Ceres     | 2.978       | 2 978       |
+| **Pluto** | **49.271**  | **~49 271** |
+
+**Pluto wins**, not Neptune — despite the smaller semi-major axis, Pluto's
+e = 0.248 (vs Neptune's 0.009) pushes its aphelion past Neptune's. The
+walk correctly picks up on this because it measures REACH (aphelion +
+body radius), not semi-major axis. `resolveFocusExtent(sun, "realistic")`
+≈ 49 271 world units. Fed through
+`PrivilegedPosition.calculateViewportAwareDistance` (45° FOV, 1.15 margin,
+no viewport composition offset at boot) that lands the camera at
+**≈ 148 000 world units (≈ 148 AU) from the Sun** — inside `camera.far =
+1e15` (`Scene.tsx`) and `OrbitControls.maxDistance = 1e12` (`Scene.tsx`)
+with enormous headroom, so no frustum/far-plane change was needed; the
+task's "verify the renderer copes" concern was already satisfied by
+existing config, not something this fix had to add.
+
+**Intro flight sanity (task item 5).** `INTRO_START_POSITION`
+(`InitialCameraAnimation.tsx`) is a fixed constant (~1e12 wu, representing
+the pre-existing deep-space "Milky Way view" start) that does **not**
+derive from `resolveFocusExtent` — confirmed by reading the component, not
+inferred — so it needed no adjustment. Only the END position changed
+(via `resolveIntroEndPosition` → `resolveFocusExtent`), and
+`interpolatePosition`'s log-lerp of distance + normalized-direction lerp
+is well-defined for any positive end distance, so a bigger end distance
+does not risk a degenerate (NaN / inside-the-Sun) path. Verified live, not
+just by inspection: an unfrozen (real 12 s) boot was screenshotted through
+the full intro (loader → t+30 s) against a `npm run dev` build — zero
+console/page errors the whole way, and the settled frame is
+pixel-equivalent to the frozen-sim boot frame below.
+
+**Boot-frame verdict — inspected, healthy.** `npx playwright test
+e2e/boot.spec.ts` diffed the new frame at 2 % against the OLD (didactic)
+baseline (`9841 / ~491k` pixels — every earlier session's 1 % gate was
+correctly tripped, this is the "legitimately changed" case the task brief
+anticipated, not the "broken" one from the first attempt). The actual PNG
+under `test-results/` was inspected before re-blessing: a populated,
+recognizable solar system — orbit ellipses for Uranus, Saturn, Neptune,
+Pluto and the outer dwarfs/TNOs (Makemake, Haumea, Gonggong, Varda,
+Salacia, Weywot, Sedna, Eris) all visible with labels, a "10 AU" grid
+ring, a dense populated starfield, and the `FidelityBadge` reading **`TRUE
+SCALE · ASSISTED`** in amber (Scale line alone is emerald/faithful now;
+Brightness still deviates by design default). Nothing resembles the first
+attempt's photosphere-filling failure — this is the requested NASA-Eyes
+overview. Re-blessed with `--update-snapshots`; the new
+`boot-frozen-chromium-win32.png` was read back and visually confirmed
+identical to the inspected actual frame.
+
+**Store default.** `src/store.ts`'s `scaleMode` initial-state literal
+flipped `"didactic"` → `"realistic"` (still absent from the persist
+`partialize` allowlist — confirmed again — so this is still the sole boot
+default, no migration path). Pinned in `src/store.test.ts` (new test:
+default is `"realistic"`, `toggleScaleMode` round-trips through
+`"didactic"` and back).
+
+**FidelityBadge — no code change needed.** It already read `scaleMode`
+generically (`isDidactic = scaleMode === "didactic"`); flipping the store
+default makes it boot on the `realisticTitle` i18n string (`"TRUE SCALE"`)
+with no edit to `FidelityBadge.tsx`. `FidelityBadge.test.tsx` force-sets
+`scaleMode: "didactic"` in its own `beforeEach`, so it was unaffected by
+the store default flip and needed no changes.
+`e2e/boot.spec.ts`'s console-error test asserts the badge text; updated
+its expected string from `"NOT TO SCALE"` to `"TRUE SCALE"` (the
+`"ASSISTED"` assertion is unchanged — the brightness default did not
+move).
+
+**New test:** `src/lib/astrophysics.test.ts` gained a realistic-mode
+counterpart to the existing didactic Sun-focus-extent test (Pluto in,
+Eris out, Neptune's reach covered, a sanity bound on the overall
+magnitude) — a product-contract test per AGENTS §6 (boot resilience that
+blocks seeing the scene).
+
+**Verification.**
+
+- `npm run test:run` — 2466 passed / 120 files (2464 → 2466, net +2: one
+  in `astrophysics.test.ts`, one in `store.test.ts`).
+- `npx tsc -b` — clean. `npm run lint` — clean. `npm run docs:check` —
+  clean. `npm run build` — clean.
+- `npx playwright test e2e/` — **12/12 passed**, including a clean
+  `hyg-focus.spec.ts` run (no repeat of the earlier session's
+  worker-contention flake).
+- **This wave's re-bless budget (§4.7 "at most 1× per wave") is now
+  SPENT** — `boot-frozen-chromium-win32.png` re-blessed from an inspected,
+  populated system-overview frame (see "Boot-frame verdict" above).
+
+---
+
 ## Verification
 
 - `npx tsc -b` — clean.
@@ -804,11 +939,14 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
    exposure-registry sweep is decided per family in `exposureRegistry.ts`'s
    JSDoc; atmosphere + clouds are the two that still structurally cannot
    follow a body's irradiance.
-5. **The `scaleMode` default flip (queue step 2) was attempted 2026-07-29
-   and reverted** — see "Queue step 2 attempted 2026-07-29" above. The
-   store-default edit itself is trivial and not the blocker; the boot
-   camera has no "solar-system overview" framing for `"realistic"` mode
-   (`AstroPhysics.resolveFocusExtent`'s system-wide-extent branch is
-   didactic-only), so the flip currently boots into a close-up on the
-   Sun's photosphere. Design that framing (and decide what it should even
-   show at true AU scale) before re-attempting the flip.
+5. **The `scaleMode` default flip (queue step 2) is DONE**, second
+   attempt, 2026-07-29 — see "Queue step 2 shipped 2026-07-29" above. The
+   first attempt (see "Queue step 2 attempted 2026-07-29" just above it,
+   kept for the record) correctly found and reverted on a real blocker: no
+   realistic-mode system-overview framing existed. That blocker is
+   resolved by an owner decision (system overview, orbits + labels,
+   planets as point-lights, NASA-Eyes style) plus a scoped extension of
+   `AstroPhysics.resolveFocusExtent`'s Sun-focus walk to realistic mode.
+   The app now boots in `"realistic"` scale mode on a populated,
+   inspected, re-blessed system-overview frame. Nothing about this queue
+   step remains open.

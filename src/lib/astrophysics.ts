@@ -1160,7 +1160,23 @@ export class AstroPhysics {
     const ringOuterRadius = this.resolveRingOuterRadius(body, scaleMode);
     let extent = Math.max(semanticBodyRadius, ringOuterRadius);
 
-    if (scaleMode !== "didactic") {
+    // The system-wide overview walk below was didactic-only until the
+    // realistic-mode boot needed one too (owner decision 2026-07-29,
+    // `tasks/waves/lighting-redesign-2026-07-28.md` "queue step 2"): the
+    // app now boots into REALISTIC scale on a system overview, camera far
+    // enough to show every planetary orbit, planets rendered as the
+    // point-lights they really are from that distance (NASA-Eyes style).
+    //
+    // The realistic branch stays scoped to the ONE caller that needs a
+    // whole-system extent — a Sun focus — rather than every body. Widening
+    // it unconditionally would also re-frame e.g. "focus Jupiter" in
+    // realistic mode to include Callisto's true ~1.9M km orbit (versus
+    // Jupiter's own ~0.48 world-unit radius), a large, unrequested
+    // behavior change to an already-shipped, user-selectable mode. Every
+    // non-Sun body's realistic-mode focus extent is therefore unchanged.
+    const isRealisticSunOverview =
+      scaleMode === "realistic" && body.id === "sun";
+    if (scaleMode !== "didactic" && !isRealisticSunOverview) {
       return extent;
     }
 
@@ -1181,14 +1197,18 @@ export class AstroPhysics {
     });
 
     for (const child of directChildren) {
+      // Mirrors the didactic walk's inclusion set exactly (same filter
+      // above); only the scale used to measure each child's reach
+      // changes, so a realistic-mode Sun overview reaches Pluto's real
+      // ~49.3 AU aphelion instead of the didactic-compressed distance.
       const childDisplayDistance = this.resolveDisplayOrbitDistanceBounds({
         body: child,
         parentBody: body,
-        scaleMode: "didactic",
+        scaleMode,
       }).max;
       const childSemanticRadius = this.resolveSemanticBodyRadius({
         body: child,
-        scaleMode: "didactic",
+        scaleMode,
       });
       extent = Math.max(extent, childDisplayDistance + childSemanticRadius);
     }

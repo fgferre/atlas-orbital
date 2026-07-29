@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (lighting-redesign Onda 2.2 shipped — assisted sunlight default + unified fidelity badge, the step where the lighting became visible; Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -58,14 +58,19 @@ now also asserts the badge is present and names both axes — the pixel gate
 provably could not catch it disappearing (its footprint is ~0.92 % of frame
 against a 1 % tolerance).
 
-**Owner decision 2026-07-29 (default scale mode → realistic) attempted and
-reverted** — flipping `store.ts`'s `scaleMode` default boots the camera
-into a close-up on the Sun's photosphere instead of a system overview
-(`AstroPhysics.resolveFocusExtent`'s system-wide-extent branch only exists
-for didactic mode). `store.ts`/`store.test.ts` are back to pre-attempt
-content; nothing shipped. See the wave file's "Queue step 2 attempted
-2026-07-29" section before retrying — needs a realistic-mode boot-framing
-design first, not a resend of the same one-line default change.
+**Owner decision 2026-07-29 (default scale mode → realistic, boot = system
+overview) SHIPPED**, second attempt same day — `store.ts`'s `scaleMode`
+default is now `"realistic"`, and `AstroPhysics.resolveFocusExtent` grew a
+realistic-mode system-overview branch (Sun focus only, mirrors the
+didactic inclusion set: planets + dwarfs with `orbit.a <= 40` AU, so Pluto
+is in and Eris is out) so the boot camera parks ≈148 AU out — orbit lines,
+labels, and the outer dwarfs/TNOs all visible, planets point-light-sized,
+NASA-Eyes style. `FidelityBadge` boots `TRUE SCALE · ASSISTED`. Boot pixel
+baseline re-blessed from an inspected, healthy frame (this wave's re-bless
+budget is now spent). See the wave file's "Queue step 2 shipped
+2026-07-29 (second attempt)" section for the extent numbers and full
+verification; "Queue step 2 attempted 2026-07-29" (kept above it) is the
+first attempt's record of the real blocker this second attempt resolved.
 
 ---
 

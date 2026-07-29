@@ -89,6 +89,22 @@ describe("store phase 4 regression guards", () => {
     expect(useStore.getState().showCredits).toBe(true);
   });
 
+  it("boots in realistic scale mode (owner decision 2026-07-29)", () => {
+    // `scaleMode` is absent from the persist `partialize` allowlist (see
+    // `partialize` further down in store.ts), so this initial-state
+    // literal is the sole boot default for every user, first-run or
+    // returning — no migration path needed either way. Flipped from
+    // "didactic" once `resolveFocusExtent` grew a realistic-mode
+    // system-overview branch for the Sun (src/lib/astrophysics.ts) so the
+    // boot camera has somewhere honest to park.
+    expect(useStore.getState().scaleMode).toBe("realistic");
+
+    useStore.getState().toggleScaleMode();
+    expect(useStore.getState().scaleMode).toBe("didactic");
+    useStore.getState().toggleScaleMode();
+    expect(useStore.getState().scaleMode).toBe("realistic");
+  });
+
   it("keeps focus history, tutorial replay, and debug actions functional", () => {
     useStore.setState({
       focusId: "earth",

@@ -267,7 +267,14 @@ export const useStore = create<AppState>()(
       showEclipticGrid: true,
       surfaceModeActive: false,
       showProgradeVector: true,
-      scaleMode: "didactic",
+      // Owner decision 2026-07-29 (tasks/waves/lighting-redesign-2026-07-28.md
+      // "Owner decisions"): boots in REAL distance ("realistic"), not the
+      // exaggerated didactic layout. Not in the persist `partialize`
+      // allowlist, so this literal is the sole boot default for everyone —
+      // see `resolveFocusExtent`'s realistic-Sun-overview branch
+      // (src/lib/astrophysics.ts) for the system-overview camera framing
+      // this default now requires at boot.
+      scaleMode: "realistic",
       // Defaults overwritten by the persist middleware's rehydration
       // step when a previously-saved (or legacy-migrated) value is
       // available in localStorage.
