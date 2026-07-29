@@ -114,7 +114,6 @@ export const StarHoverPicker = () => {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
 
-  const starfieldSource = useStore((s) => s.starfieldSource);
   const showStarfield = useStore((s) => s.showStarfield);
   const qualityMode = useStore((s) => s.qualityMode);
   const setHoveredStar = useStore((s) => s.setHoveredStar);
@@ -134,15 +133,11 @@ export const StarHoverPicker = () => {
   const qualityProfile = useQualityProfile(qualityMode);
   const tier = hygTierForQuality(qualityProfile.name);
 
-  // Hover picking is only meaningful when HYG is the live preset, the
-  // user has the starfield visible, and the device tier is not the
-  // constrained one (where we are already running with 500 stars and do
-  // not want to spend any CPU on interaction). Changing any of these
-  // flags tears the listener down.
-  const enabled =
-    starfieldSource === "hyg" &&
-    showStarfield &&
-    qualityProfile.name !== "constrained";
+  // Hover picking is only meaningful when the user has the starfield
+  // visible and the device tier is not the constrained one (where we are
+  // already running with 500 stars and do not want to spend any CPU on
+  // interaction). Changing either flag tears the listener down.
+  const enabled = showStarfield && qualityProfile.name !== "constrained";
 
   // Subscribe to the same tier-bound catalog `<Starfield />` is rendering
   // from. Going through `useStarfieldCatalog` (rather than peeking at the

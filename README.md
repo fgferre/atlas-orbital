@@ -1,6 +1,6 @@
 # Atlas Orbital
 
-A 3D solar system visualization built with React 19, Three.js, and TypeScript. Orbital positions come from analytical theories per family (VSOP87D, Pluto-Meeus, ELP/MPP02-trunc, Kepler osculating-elements), all validated against JPL Horizons fixtures. The star field uses the HYG v4.2 catalog in adaptive tiers; an optional NASA Eyes reference renderer is bundled for visual comparison.
+A 3D solar system visualization built with React 19, Three.js, and TypeScript. Orbital positions come from analytical theories per family (VSOP87D, Pluto-Meeus, ELP/MPP02-trunc, Kepler osculating-elements), all validated against JPL Horizons fixtures. The star field renders the HYG v4.2 catalog in adaptive tiers with an energy-conserving, pixel-integrated point-spread function.
 
 **Agents / AI tools:** read [`AGENTS.md`](./AGENTS.md) then [`tasks/STATUS.md`](./tasks/STATUS.md). Map of task docs: [`tasks/README.md`](./tasks/README.md). Do not treat `tasks/archive/` as current backlog.
 
@@ -29,17 +29,11 @@ node scripts/derive-elements-from-fixtures.js
 
 ## Star catalogs
 
-HYG v4.2 is the default star source. Tiered binaries live in `public/data/hyg-stars/`; the tier is picked automatically from the device quality profile.
+HYG v4.2 is the only star source. Tiered binaries live in `public/data/hyg-stars/`; the tier is picked automatically from the device quality profile.
 
 ```bash
 npm run download:hyg    # Fetches the raw CSV into scripts/.cache/
 npm run build:hyg       # Emits hyg-v1-{low,medium,high,full}.bin.gz
-```
-
-The legacy NASA Eyes star CDN is also supported for side-by-side comparison:
-
-```bash
-npm run download:nasa-stars
 ```
 
 ## Testing

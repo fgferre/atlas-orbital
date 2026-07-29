@@ -17,7 +17,7 @@ import {
 /**
  * Compat-shim hook: preserves the pre-Wave-α `ResolvedQualityProfile`
  * shape so the 5 existing call sites (Scene.tsx, Starfield.tsx,
- * NASAStarfield.tsx, StarHoverPicker.tsx, LayersPanel.tsx) keep
+ * StarHoverPicker.tsx, LayersPanel.tsx) keep
  * working unchanged while Wave α Commit 3 introduces the graphics
  * slice.
  *

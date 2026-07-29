@@ -37,10 +37,10 @@ import {
   STAR_SIZE_FACTOR,
 } from "./starPhysics";
 import {
+  computeMinQuadSolidAngle,
   gaiaBvToRgb,
   MAX_QUAD_SOLID_ANGLE_LITERAL,
   saturateStarRgb,
-  U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE,
 } from "./starfieldShaderMath";
 
 /** Shader `#define N 8` — must match `lightglow.vert.glsl` + `.frag.glsl`. */
@@ -154,9 +154,11 @@ export const clampSolidAngle = (
   rawSolidAngle: number,
   backBufferHeight: number
 ): number => {
-  const minQuad =
-    (U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE * 1440) /
-    Math.max(backBufferHeight, 1);
+  // Call the shared helper rather than re-deriving `1.8e-9 * 1440 / H`
+  // here: the two used to be duplicated and could drift apart with no
+  // failing test, since `computeMinQuadSolidAngle` had no direct
+  // coverage of its own.
+  const minQuad = computeMinQuadSolidAngle(backBufferHeight);
   return Math.max(
     minQuad,
     Math.min(rawSolidAngle, MAX_QUAD_SOLID_ANGLE_LITERAL)

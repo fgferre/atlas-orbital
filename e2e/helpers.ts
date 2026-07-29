@@ -52,6 +52,68 @@ export const screenshotWithRetry = async (
 };
 
 /**
+ * Poll until two screenshots taken `intervalMs` apart differ in fewer
+ * than `tolerance` of their pixels, then return the settled frame.
+ *
+ * The camera intro hands over to damped `OrbitControls`, so the scene
+ * converges asymptotically and the time it takes depends on the build,
+ * the machine and the GPU. A fixed `waitForTimeout` therefore encodes
+ * one machine's timing as a constant, which is what made the boot pixel
+ * gate flaky the moment the star field got dense enough for a
+ * mid-settle camera to matter (measured: 16.7 % of pixels differing
+ * across boots at +4 s, and a production build settles on a different
+ * schedule from the dev server).
+ *
+ * Two things this deliberately does NOT do. It does not require
+ * bit-exact stability, because `LightGlow` animates on the wall clock
+ * and never fully settles — its floor is ~0.01 % of pixels, two orders
+ * of magnitude under any useful tolerance. And it does not fail when
+ * the ceiling is reached: it returns the last frame so the CALLER's
+ * assertion is what reports the problem, with a real image diff
+ * attached, rather than a timeout that says nothing about what the
+ * scene looked like.
+ */
+export const waitForStableFrame = async (
+  page: Page,
+  {
+    intervalMs = 750,
+    maxWaitMs = 20_000,
+    tolerance = 0.002,
+  }: { intervalMs?: number; maxWaitMs?: number; tolerance?: number } = {}
+): Promise<Buffer> => {
+  const changedFraction = async (a: Buffer, b: Buffer): Promise<number> => {
+    const left = await sharp(a).raw().toBuffer({ resolveWithObject: true });
+    const right = await sharp(b).raw().toBuffer();
+    let changed = 0;
+    for (let i = 0; i < left.data.length; i += left.info.channels) {
+      if (
+        Math.abs(left.data[i] - right[i]) > 8 ||
+        Math.abs(left.data[i + 1] - right[i + 1]) > 8 ||
+        Math.abs(left.data[i + 2] - right[i + 2]) > 8
+      ) {
+        changed++;
+      }
+    }
+    return changed / (left.info.width * left.info.height);
+  };
+
+  const deadline = Date.now() + maxWaitMs;
+  let previous = await screenshotWithRetry(page, { animations: "disabled" });
+  let latest = previous;
+
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(intervalMs);
+    latest = await screenshotWithRetry(page, { animations: "disabled" });
+    if ((await changedFraction(previous, latest)) <= tolerance) {
+      return latest;
+    }
+    previous = latest;
+  }
+
+  return latest;
+};
+
+/**
  * Resolves to `true` when at least one `<canvas>` element exists and has
  * been sized (width and height > 10) — the cheapest visible proof that the
  * three.js renderer has mounted a real framebuffer.

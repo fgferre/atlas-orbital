@@ -46,7 +46,7 @@ describe("resolveLoaderSnapshot", () => {
       active: false,
       isSceneReady: false,
       showStarfield: true,
-      starfieldSource: "nasa",
+      starfieldSource: "hyg",
       starfieldStatus: "ready",
     });
 

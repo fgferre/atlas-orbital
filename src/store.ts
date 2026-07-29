@@ -191,13 +191,11 @@ interface AppState {
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
-  setStarfieldSource: (source: StarfieldSource) => void;
   setHoveredStar: (next: HoveredStarInfo | null) => void;
   setStarfieldProviderState: (
     source: StarfieldSource,
     nextState: Partial<StarfieldProviderState>
   ) => void;
-  toggleStarfieldImplementation: () => void;
   toggleCredits: () => void;
   focusHome: () => void;
   focusBack: () => void;
@@ -298,7 +296,6 @@ export const useStore = create<AppState>()(
       starfieldSource: "hyg",
       starfieldProviderStates: {
         hyg: { status: "idle", error: null },
-        nasa: { status: "idle", error: null },
       },
       hoveredStar: null,
       showCredits: false,
@@ -384,12 +381,6 @@ export const useStore = create<AppState>()(
         set((state) => ({ showProgradeVector: !state.showProgradeVector })),
       toggleShowStarfield: () =>
         set((state) => ({ showStarfield: !state.showStarfield })),
-      setStarfieldSource: (starfieldSource) =>
-        set((state) =>
-          state.starfieldSource === starfieldSource
-            ? state
-            : { starfieldSource }
-        ),
       setHoveredStar: (hoveredStar) =>
         set((state) =>
           state.hoveredStar === hoveredStar ? state : { hoveredStar }
@@ -416,10 +407,6 @@ export const useStore = create<AppState>()(
             },
           };
         }),
-      toggleStarfieldImplementation: () =>
-        set((state) => ({
-          starfieldSource: state.starfieldSource === "nasa" ? "hyg" : "nasa",
-        })),
       toggleCredits: () =>
         set((state) => ({ showCredits: !state.showCredits })),
       focusHome: () =>

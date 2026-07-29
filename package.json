@@ -12,7 +12,6 @@
     "preview:test": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "format": "prettier --write .",
     "prepare": "husky",
-    "download:nasa-stars": "node scripts/download-nasa-stars.js",
     "download:hyg": "node scripts/download-hyg.js",
     "build:hyg": "node --experimental-strip-types scripts/build-hyg-binary.js",
     "bake:earth-pbr": "node scripts/bake-earth-pbr.js",

@@ -2,7 +2,6 @@
 output/
 package-lock.json
 public/Docs/*
-public/data/nasa-stars/*
 public/models/*
 public/textures/*
 src/assets/solar_system_catalog_en.md

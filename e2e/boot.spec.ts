@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 import {
   freezeSimulation,
   pageHasSizedCanvas,
-  screenshotWithRetry,
   visitAtlasAndWaitForReady,
+  waitForStableFrame,
 } from "./helpers";
 
 test.describe("boot", () => {
@@ -83,9 +83,35 @@ test.describe("boot", () => {
   //   2. Intro animation settles — `INTRO_DURATION_MS = 12000` in
   //      `InitialCameraAnimation.tsx:11`, so a 13 s ceiling on the
   //      loader-exit poll gives headroom.
-  //   3. `waitForTimeout(1000)` for post-intro lerp settle (replaces
-  //      the pre-T5.6 3500 ms flat wait — intro finishes before the
-  //      loader hides, so only the lerp tail matters after exit).
+  //   3. `waitForStableFrame` polls until the frame stops changing
+  //      (replaces the pre-T5.6 3500 ms flat wait, and then the 1000 ms
+  //      one that followed it).
+  //
+  // **θ.2 (2026-07-28)** — that 1000 ms settle was not enough and no
+  // fixed number was the right answer. Measured, sim frozen, 1280×720:
+  //
+  //   • WITHIN one page: +2 s → 17.8 % of pixels still changing frame
+  //     to frame, +4 s → 0.012 %, flat out to +16 s. That residual
+  //     floor is LightGlow's wall-clock polar-mask animation, which
+  //     never settles and sits two orders of magnitude under the gate.
+  //   • ACROSS page loads, which is what this gate actually compares:
+  //     +4 s → 16.7 % different, +8 s → 0 pixels different on the dev
+  //     server. The camera is damped, so two boots reach
+  //     visually-static-but-different poses well before they converge
+  //     on the same one — a within-page stability check would have
+  //     passed at +4 s and the gate would still have been flaky.
+  //   • The production build then settled on a different schedule again
+  //     and +8 s failed at 4 %, which is what retired fixed timings
+  //     here for good.
+  //
+  // The race was always here; it only became visible when the θ.2 star
+  // field stopped being sparse and dim. The old renderer put 97.5 % of
+  // stars on the same 3.75 px quad at low opacity, so a mid-settle
+  // camera still produced a near-identical frame. A dense field with
+  // real size hierarchy does not, and the gate started failing at 3 %
+  // against a 1 % tolerance on a scene rendering perfectly. Waiting
+  // for actual convergence is the fix; loosening the tolerance would
+  // have hidden the race instead.
   test("boot visual identity (frozen sim)", async ({ page }) => {
     await freezeSimulation(page);
     await visitAtlasAndWaitForReady(page);
@@ -99,13 +125,9 @@ test.describe("boot", () => {
     await expect(page.getByTestId("atlas-loader")).toHaveCount(0, {
       timeout: 55_000,
     });
-    // Post-loader lerp settle. 1 s covers the useVisualPresetLerp
-    // convergence tail; the prior 3.5 s flat wait was also picking up
-    // the loader window, which is no longer necessary.
-    await page.waitForTimeout(1000);
-    const screenshot = await screenshotWithRetry(page, {
-      animations: "disabled",
-    });
+    // Poll until the frame stops changing, rather than guessing how
+    // long convergence takes on this machine and this build.
+    const screenshot = await waitForStableFrame(page);
     expect(screenshot).toMatchSnapshot("boot-frozen.png", {
       maxDiffPixelRatio: 0.01,
     });

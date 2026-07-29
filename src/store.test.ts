@@ -42,7 +42,6 @@ const resetStore = () => {
       visibility: { ...initialState.visibility },
       starfieldProviderStates: {
         hyg: { ...initialState.starfieldProviderStates.hyg },
-        nasa: { ...initialState.starfieldProviderStates.nasa },
       },
     },
     true
@@ -61,12 +60,6 @@ describe("store phase 4 regression guards", () => {
 
     useStore.getState().toggleShowStarfield();
     expect(useStore.getState().showStarfield).toBe(false);
-
-    useStore.getState().setStarfieldSource("nasa");
-    expect(useStore.getState().starfieldSource).toBe("nasa");
-
-    useStore.getState().toggleStarfieldImplementation();
-    expect(useStore.getState().starfieldSource).toBe("hyg");
 
     useStore.getState().setSunRenderMode("procedural");
     expect(useStore.getState().sunRenderMode).toBe("procedural");

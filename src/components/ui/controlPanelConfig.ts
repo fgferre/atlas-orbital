@@ -1,8 +1,3 @@
-import {
-  STARFIELD_SOURCE_LABELS,
-  type StarfieldSource,
-} from "../../lib/starfield";
-
 export type RightControlPanelId = "search" | "view" | "display" | "a11y";
 
 export interface RightControlPanelState {
@@ -141,11 +136,6 @@ export const SEARCH_QUICK_TARGETS = [
   { id: "titan", label: "Titan" },
   { id: "pluto", label: "Pluto" },
 ] as const;
-
-export const SCENE_SOURCE_OPTIONS = [
-  { id: "hyg", label: STARFIELD_SOURCE_LABELS.hyg },
-  { id: "nasa", label: STARFIELD_SOURCE_LABELS.nasa },
-] as const satisfies ReadonlyArray<{ id: StarfieldSource; label: string }>;
 
 export const SCENE_SCALE_OPTIONS = [
   { id: "didactic", label: "Didactic" },
