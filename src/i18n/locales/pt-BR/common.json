@@ -37,13 +37,21 @@
       "readMore": "Ler mais na Wikipédia"
     }
   },
-  "scalePill": {
+  "fidelityBadge": {
+    "toggleHint": "O que nesta vista é ajustado e o que é medido",
+    "scaleAxis": "Escala",
+    "scaleAction": "Clique para alternar o modo de escala",
     "didacticTitle": "FORA DE ESCALA",
-    "didacticDesc": "tamanhos e distâncias exagerados",
+    "didacticDesc": "Tamanhos e distâncias exagerados para tudo caber numa vista.",
     "realisticTitle": "ESCALA REAL",
-    "realisticDesc": "proporções físicas",
-    "toggleHint": "Clique para alternar o modo de escala",
-    "collapse": "Recolher selo",
-    "expand": "Expandir selo"
+    "realisticDesc": "Proporções e distâncias físicas reais.",
+    "brightnessAxis": "Brilho",
+    "brightnessAction": "Clique para alternar o modo de brilho",
+    "brightnessRealTitle": "BRILHO REAL",
+    "brightnessRealDesc": "A luz solar cai com a distância real, sem correção — os mundos externos são mesmo assim tão escuros.",
+    "brightnessAssistedTitle": "ASSISTIDO",
+    "brightnessAssistedDesc": "Distâncias reais, faixa comprimida para mundos distantes continuarem visíveis. A ordem de brilho é preservada.",
+    "brightnessEqualizedTitle": "EQUALIZADO",
+    "brightnessEqualizedDesc": "Cada mundo iluminado como se estivesse à distância da Terra — aqui a distância não diz nada."
   }
 }

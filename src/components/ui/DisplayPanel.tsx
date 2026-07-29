@@ -42,9 +42,18 @@
  * any per-frame store surface.
  */
 
+import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { useStore } from "../../store";
+import {
+  DEFAULT_SUNLIGHT_ASSIST_POLICY,
+  getSunlightAssistPolicy,
+  setSunlightAssistPolicy,
+  subscribeSunlightAssistPolicy,
+  type SunlightAssistPolicy,
+} from "../../lib/graphics/solarIrradiance";
 import {
   useActiveGraphicsPreset,
   useEffectiveGraphics,
@@ -85,6 +94,26 @@ const TONE_MAPPING_OPTIONS: Array<{ id: ToneMappingName; label: string }> = [
  * to the sky unless the user asks for it and can see what they asked
  * for. The Credits panel names the active profile.
  */
+/**
+ * How much of each body's real solar irradiance the viewer is shown.
+ *
+ * Labelled by visible consequence, never by provenance: no position may be
+ * called "Scientific" while `SceneLighting.tsx`'s `pointLight` still carries
+ * `decay = 0` (`handoffiluminacao.md` §6 item 3) — that would claim a rigour
+ * the scene light does not have. Unlike everything else in this panel these
+ * are **content** positions, not display ones, so the fidelity badge in the
+ * top-left names the active one and colours itself amber for the two that
+ * deviate. See `src/lib/graphics/solarIrradiance.ts`.
+ */
+const SUNLIGHT_ASSIST_OPTIONS: Array<{
+  id: SunlightAssistPolicy;
+  label: string;
+}> = [
+  { id: "real", label: "True" },
+  { id: "assisted", label: "Assisted" },
+  { id: "compensated", label: "Equalized" },
+];
+
 const STAR_OPTICS_OPTIONS: Array<{ id: StarOpticsProfile; label: string }> = [
   { id: "none", label: "Unaided eye" },
   { id: "newtonian", label: "Reflector (4-vane)" },
@@ -99,6 +128,7 @@ export const DisplayPanel = () => {
     graphicsOverrides,
     customBase,
     sunRenderMode,
+    visualPreset,
     setGraphicsPreset,
     setGraphicsAutoMode,
     setGraphicsOverride,
@@ -111,12 +141,23 @@ export const DisplayPanel = () => {
       graphicsOverrides: state.graphicsOverrides,
       customBase: state.customBase,
       sunRenderMode: state.sunRenderMode,
+      visualPreset: state.visualPreset,
       setGraphicsPreset: state.setGraphicsPreset,
       setGraphicsAutoMode: state.setGraphicsAutoMode,
       setGraphicsOverride: state.setGraphicsOverride,
       resetGraphicsOverrides: state.resetGraphicsOverrides,
       setSunRenderMode: state.setSunRenderMode,
     }))
+  );
+
+  // Not a store field: the render path reads this singleton imperatively from
+  // inside `useFrame`, so React subscribes to the same object instead of
+  // keeping a second copy that could drift. Same subscription the fidelity
+  // badge uses, so the two surfaces can never disagree.
+  const sunlightAssist = useSyncExternalStore(
+    subscribeSunlightAssistPolicy,
+    getSunlightAssistPolicy,
+    getSunlightAssistPolicy
   );
 
   const effective = useEffectiveGraphics();
@@ -250,9 +291,24 @@ export const DisplayPanel = () => {
           }
         />
 
+        {/* The fallback is the ACTUALLY-APPLIED value, not 0. `effective
+            .bloomIntensity` is the absolute override alone, so it is
+            `undefined` until the user drags this slider — and rendering that
+            as 0 made the control lie in the one direction a control must
+            never lie: it read "off" while bloom was running at the preset's
+            0.15–0.35, so the first drag UP (to 0.05) made the scene DARKER.
+            `resolveLerpRefTargets` composes the real value as
+            `overrides.bloomIntensity ?? preset.bloomIntensity ×
+            bloomIntensityMultiplier`, and `effective.bloomIntensityMul` is
+            that multiplier — so this expression is the same number the
+            renderer uses, read from the same two inputs. */}
         <Slider
           label="Bloom Intensity"
-          value={effective.bloomIntensity ?? 0}
+          value={
+            effective.bloomIntensity ??
+            VISUAL_PRESETS[visualPreset].bloomIntensity *
+              effective.bloomIntensityMul
+          }
           min={0}
           max={2}
           step={0.05}
@@ -352,6 +408,23 @@ export const DisplayPanel = () => {
       {/* ── Atmosphere & Sun ────────────────────────────────────────── */}
       <section className="space-y-3">
         <SectionLabel>Atmosphere &amp; Sun</SectionLabel>
+
+        {/* Onda 2.2 — the content-assist control. Unlike its neighbours this
+            one changes what the render CLAIMS, not how it is displayed, so
+            it is disclosed by the fidelity badge (top-left) rather than
+            being a silent per-device preference. */}
+        <Select
+          label="Sunlight"
+          value={sunlightAssist}
+          options={SUNLIGHT_ASSIST_OPTIONS}
+          onChange={setSunlightAssistPolicy}
+          onReset={
+            sunlightAssist !== DEFAULT_SUNLIGHT_ASSIST_POLICY
+              ? () => setSunlightAssistPolicy(DEFAULT_SUNLIGHT_ASSIST_POLICY)
+              : undefined
+          }
+          hint="How much of each world's real solar irradiance you see. True = uncorrected inverse-square (Mercury ~10×, Neptune ~1/900). Assisted (default) keeps the real ordering on a compressed range. Equalized lights every world as if it were at Earth's distance."
+        />
 
         {/* Onda 1.3 — repurposed from the pre-lighting-redesign "Ambient
             Light ×" control. Scales a display-only ambient viewing
@@ -532,6 +605,11 @@ interface SelectProps<T extends string | number> {
   disabled?: boolean;
   /** Tooltip + caption below the group when the Select is disabled. */
   disabledHint?: string;
+  /**
+   * Always-visible caption below the group, same role as `Slider`'s `hint`.
+   * Used where the option labels alone cannot carry the disclosure.
+   */
+  hint?: string;
 }
 
 const Select = <T extends string | number>({
@@ -542,6 +620,7 @@ const Select = <T extends string | number>({
   onReset,
   disabled = false,
   disabledHint,
+  hint,
 }: SelectProps<T>) => (
   <div>
     <SubsectionLabel>
@@ -578,6 +657,9 @@ const Select = <T extends string | number>({
       <div className="mt-1 text-[10px] leading-snug text-white/45">
         {disabledHint}
       </div>
+    )}
+    {!disabled && hint && (
+      <div className="mt-1 text-[10px] leading-snug text-white/45">{hint}</div>
     )}
   </div>
 );

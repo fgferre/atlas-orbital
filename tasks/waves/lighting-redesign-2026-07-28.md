@@ -362,6 +362,13 @@ material-construction sites; it was left out of this step deliberately —
 it changes a render path the no-op contract cannot protect, so it belongs with
 the flip, not before it.
 
+> **RESOLVED in Onda 2.2** — both loader paths now install the chain and the
+> four bodies joined the policy (runtime-verified: zero console errors on
+> focus, focused-Vesta luminance ×1.40 across a policy switch). See "The four
+> `PlanetModel` bodies" below. One factual correction to the §2 audit while
+> we were in there: none of the four actually carries `airlessRegolith`, so
+> they receive the irradiance wrapper alone, not Lommel-Seeliger.
+
 ### Single-multiplier audit
 
 After this change exactly **one** place multiplies irradiance by distance for
@@ -427,11 +434,10 @@ decisions — 2026-07-29" below, which supersedes both. §5.2, §5.3, §5.4,
   "analytical auto-exposure" (Onda 2).
 - **§5.4 Specular scope** — the GGX lobe still fires at grazing angles on
   regolith bodies; the regolith patch only corrects diffuse.
-- **§5.5 PlanetModel-only bodies** (haumea, vesta, pallas, hygiea) — every
-  per-material mechanism skips them; they become brightness outliers under
-  real irradiance. **Re-verified against HEAD in Onda 2.1 — still true, and
-  now quantified**: see "Exclusions found" in that section. Must be fixed in,
-  or explicitly accepted by, the change that flips the assist default.
+- ~~**§5.5 PlanetModel-only bodies**~~ (haumea, vesta, pallas, hygiea) —
+  **RESOLVED in Onda 2.2**: both `PlanetModel` loader paths now install the
+  direct-light chain, so they follow the assist policy like every other
+  body. No exclusion, no fallback. See "The four `PlanetModel` bodies".
 - ~~§5.6 Disclosure surface~~ — **resolved**, see below.
 - **§5.7 Per-device adaptation** — a 10-second step-wedge test, never
   measured, only asserted (the "projector argument").
@@ -465,20 +471,222 @@ previous one leaves behind):
 2. Default-mode change — flip `store.ts`'s `scaleMode` default from
    `"didactic"` to `"realistic"`, now that irradiance no longer silently
    diverges from what the scale mode shows.
-3. Unified badge + assist control — the single expandable fidelity badge
-   (decision 1) replacing/absorbing `ScalePill`, plus the "assist" gain
-   control from handoff §4 item 4 (now unblocked by decision 1 resolving
-   §5.6). **This step owns the default flip**: the assist default stays
-   `"compensated"` until then, and the badge agent changes
-   `DEFAULT_SUNLIGHT_ASSIST_POLICY` to `"real"` **in the same change as the
-   disclosure UI** — a content claim never ships ahead of the surface that
-   discloses it. Only the default value moves; the plumbing (resolver,
-   uniform, per-frame write, policy singleton) is already in place. That
-   change must also decide what happens to the four `PlanetModel` bodies
-   (see "Exclusions found") and to the deferred emissive families listed in
-   `exposureRegistry.ts`.
+3. ~~Unified badge + assist control~~ — **DONE**, see "Onda 2.2" below.
+   Shipped with default `"assisted"` (a third position), not `"real"`.
 4. Milky Way HDR panorama — NASA SVS Deep Star Maps 2020 (decision 3),
    licensing check owner-side before shipping.
+
+---
+
+## Onda 2.2 — unified fidelity badge + assist control, default flipped (done)
+
+Queue step 3. **This is the step where the lighting behaviour became
+visible**, and per the plan it shipped in ONE change with the surface that
+discloses it.
+
+### The third position, and why the default is not `"real"`
+
+`SunlightAssistPolicy` is now `"real" | "assisted" | "compensated"`, default
+**`"assisted"`**: `fused = E^σ`, `σ = SUNLIGHT_ASSIST_EXPONENT = 0.35`.
+
+The queue entry above anticipated flipping the default straight to `"real"`.
+That would have satisfied the letter of "light tells the true story" and
+broken the product: at real irradiance the entire display range is spent on
+bodies inside ~2 AU and everything from Jupiter out renders at or below the
+0.02 ambient viewing floor — i.e. the outer system stops being _lit_ and
+starts being _ambient-washed_, which is a worse lie than compression because
+it also destroys the shape of the terminator. `"assisted"` is the owner's
+own §1.3 decision (assisted-by-default, disclosed) applied to this axis.
+
+| body    | real E | `E^0.35` |
+| ------- | ------ | -------- |
+| Mercury | 10.4×  | 2.27×    |
+| Earth   | 1.0×   | 1.0×     |
+| Neptune | 1/900  | 1/10.8   |
+
+- **~9400:1 → ~25:1.** A range no display can show becomes one it can.
+- **σ is a discretionary display tunable and says so** in its JSDoc and in
+  the Credits entry. It is the one number in `solarIrradiance.ts` with no
+  physical derivation. Nothing downstream depends on its exact value.
+- **The honesty property is monotonicity.** `x ↦ x^0.35` is strictly
+  increasing, so every body keeps its true brightness ORDERING and the true
+  SIGN of change along its orbit. `"compensated"` destroys both; `"real"`
+  keeps both and renders the outer system black. Pinned by a test that walks
+  9 distances and asserts strict ordering.
+- **1.0 is the fixed point of all three positions** (`1^σ = 1`), so Earth —
+  the one body tuned against reference imagery — is unmoved by the choice.
+
+### Tone-mapping cap (handoff §6 checklist item 4)
+
+`"assisted"` puts Mercury at ~2.27 and `"real"` at ~10.4, both > 1. Without a
+mounted operator there is no shoulder: values above 1.0 hard-clip AND cross
+`Bloom`'s `luminanceThreshold = 1.0` contract into a halo. So the fused
+scalar is capped at `SUNLIGHT_UNMAPPED_CEILING = 1` whenever no tone-mapping
+pass is mounted — the `constrained` tier (no `EffectComposer` at all) and any
+tier where the user selects Tone Mapping "None".
+
+- **Written where the decision is made.** `PostProcessingPipeline.tsx` is the
+  component that decides whether a `ToneMapping` pass mounts, so it sets
+  `sunlightToneMappingMounted` in a `useEffect` keyed on that same
+  `toneMappingMode !== undefined` expression, with cleanup → `false`. The
+  cleanup is what covers `constrained`, where Scene.tsx unmounts the whole
+  component; the flag's initial `false` covers "never mounted at all".
+  Recomputing the condition at the consumer would have been a second copy of
+  it, free to drift.
+- **Uniform across positions, including `"real"`.** It is a
+  display-clipping guard, not a photometric statement: above 1.0 nothing is
+  representable on that path anyway, so the cap removes the bloom artefact
+  without discarding anything the viewer could have seen. Documented as such.
+- Cached per `(1 s bucket, policy, toneMapped)` so flipping either switch
+  lands on the next frame.
+
+### The four `PlanetModel` bodies — they JOINED (not excluded, no fallback)
+
+The "Exclusions found" section above (Onda 2.1) called this out as the thing
+that had to be decided here. Resolved by fixing it: both loader paths now
+install the chain.
+
+- `GLBModel` patches inside `cloneGlbSceneForRuntime`'s per-material visitor
+  (materials are already cloned there, so the loader cache is untouched);
+  `OBJModel` patches each `MeshStandardMaterial` it constructs.
+- Materials are **collected at construction**, not by traversing the scene
+  graph per frame, and the per-frame write reads
+  `material.userData.shader?.uniforms[…]` — the same idiom `Planet.tsx` uses,
+  which naturally skips a material that has not compiled yet.
+- The 1 s-bucket cache was extracted to
+  `src/components/canvas/planet/useBodySunlightScalar.ts` and is now shared
+  by both render paths instead of duplicated.
+- `regolith` is read from `body.airlessRegolith` exactly as the sphere path
+  reads it. **Correction to the handoff's §2 claim:** none of these four
+  actually carries that flag today (the seven that do — mercury, moon,
+  ganymede, callisto, io, europa, enceladus — all render through the sphere
+  path). So in practice they receive the irradiance wrapper alone and
+  Lommel-Seeliger stays off for them. Wiring it through the flag rather than
+  hard-coding `false` means flagging Vesta airless later needs no second edit.
+
+**Runtime-verified, not just typed.** A throwaway Playwright harness (not
+committed) focused all four in turn against a production build: **zero
+console errors**, which is the real GLSL-compile gate — `THREE.WebGLProgram`
+reports shader errors as `console.error`, and no committed spec frames these
+bodies. Then, driving the badge exactly as a user would (expand → click
+Brightness), focused-Vesta frame mean luminance went **5.91 (assisted) →
+8.25 (equalized), ×1.40** — correct direction, and the right order of
+magnitude for a 2.36 AU body whose surface ratio is 1/0.548 ≈ 1.82 diluted
+across a frame that is mostly black sky.
+
+### The badge — `ScalePill` → `FidelityBadge`
+
+One surface, two lines, per owner decision 1. `src/components/ui/ScalePill.tsx`
+and its test are deleted; `FidelityBadge.tsx` + `FidelityBadge.test.tsx`
+replace them, `Overlay.tsx` mounts it in the same slot, and the i18n
+`scalePill.*` block became `fidelityBadge.*` in both locales.
+
+- **Collapsed (default)** — one line naming BOTH axes by visible
+  consequence: `NOT TO SCALE · ASSISTED`. Aggregate dot is amber if ANY line
+  deviates, emerald only when all are faithful. Both defaults deviate today,
+  which is the point.
+- **Expanded (click)** — one row per axis: axis name, current position, an
+  honest one-sentence description, and the row itself is the control
+  (scale toggles; brightness cycles real → assisted → equalized). The
+  explanation and the switch are never one click apart.
+- **a11y** — the header carries `aria-expanded` + `aria-controls`; the
+  focus-visible ring and keyboard reachability match the old pill (the pill
+  had 2 focusable buttons, the badge has 1 collapsed / 3 expanded).
+  `e2e/a11y.spec.ts` never referenced the pill and is untouched and green.
+- **`data-testid` migrated** `scale-pill` → `fidelity-badge`, with its tests
+  updated in the same commit (AGENTS §6). No e2e spec referenced the old id
+  — verified by grep across `e2e/` before renaming.
+- Names never use "Scientific" — `decay = 0` still exists (§6 item 3).
+
+### Naming positions in the DisplayPanel
+
+New `Sunlight` Select in the "Atmosphere & Sun" section: **True / Assisted /
+Equalized**, following the existing `Select` idiom, with a reset arrow back
+to the default. `Select` gained an optional always-visible `hint` (mirroring
+`Slider`'s) because the option labels alone cannot carry the disclosure.
+Both this Select and the badge read the SAME policy singleton through
+`useSyncExternalStore` — no mirrored copy in the zustand store, so the two
+surfaces cannot disagree and `solarIrradiance.ts` stays store-free and
+unit-testable as a pure lib.
+
+### Emissive families (the other thing this step had to decide)
+
+Decided and written into `exposureRegistry.ts`'s JSDoc: all six stay
+body-independent, with per-family reasoning rather than "deferred". Sun disc
+is the source; night lights are not sunlight; starfield is not lit by our
+Sun. Atmosphere + clouds DO need to follow and structurally cannot yet —
+bounded today because σ keeps Earth (their only carrier) at exactly 1.0.
+Ring emissive detaches by a constant factor (Saturn only), recorded.
+
+### Defects fixed here, found by external review
+
+1. **Program-cache collision (critical, introduced by 2a20d28).**
+   `THREE.Material.customProgramCacheKey()` defaults to
+   `this.onBeforeCompile.toString()` — the callback's SOURCE TEXT (verified
+   in `three@0.181.2`, `three.core.js:16877`). Onda 2.1 routed every planet
+   branch through one hoisted `patchDirectLights` closure, so the regolith
+   flag lives in a captured variable and never appears in that text: two
+   materials agreeing on every other program parameter hashed identically
+   and three served the second one the first one's compiled program. Either
+   the airless bodies silently lost Lommel-Seeliger or venus/mars/giants/
+   titan/TNOs silently gained it, decided by render order, reported by
+   nothing. Fixed with `applyPlanetDirectLightCacheKey`, composed as
+   `default ⊕ variant` — **never the bare variant**, since the per-branch
+   callbacks (Earth day/night, ring shadow) rely on their own source text to
+   stay distinct from each other, and replacing the key outright would have
+   collapsed THOSE together, a worse bug. Applied once per material in
+   `usePlanetMaterials` (reads `onBeforeCompile` lazily, so it is correct
+   regardless of which branch assigns it) and in `PlanetModel`. Pinned by
+   one test that starts from two materials sharing a callback and asserts
+   the keys diverge while still containing the default.
+2. **CreditsModal PSF number.** Claimed a "0.95-pixel" Gaussian PSF;
+   `STAR_PSF_SIGMA_PX = 0.62` (`starfieldShaderMath.ts:398`). A factual
+   error inside the honesty panel — corrected to 0.62.
+3. **Bloom Intensity slider read 0 while bloom was running.**
+   `effective.bloomIntensity` is the absolute override alone, `undefined`
+   until dragged, and the panel rendered `?? 0` — so the control said "off"
+   while `resolveLerpRefTargets` was applying `preset.bloomIntensity ×
+bloomIntensityMultiplier` (0.15–0.35), and the first drag UP to 0.05 made
+   the scene DARKER. Fallback is now the actually-applied
+   `VISUAL_PRESETS[visualPreset].bloomIntensity × effective.bloomIntensityMul`,
+   read from the same two inputs the renderer uses. No redesign of the
+   override system.
+
+### Verification
+
+- `npx tsc -b` — clean.
+- `npm run lint` — clean (one scoped `react-hooks/immutability` disable on
+  the model-path uniform write, mirroring the one `Planet.tsx` already
+  carries for the identical write).
+- `npm run test:run` — **2464 passed / 120 files** (from 2453). Net +11: 8
+  new in `solarIrradiance.test.ts` (assisted curve, monotonicity, the cap,
+  `"real"` ≡ E exactly), 1 in `solarIrradiancePatch.test.ts` (cache-key
+  divergence), 5 in `FidelityBadge.test.tsx`, minus the 3 deleted
+  `ScalePill.test.tsx` tests.
+- `npm run docs:check` — clean. `npm run build` — clean.
+- **E2E:** `npx playwright test e2e/` — **12/12 passed.** One earlier run had
+  `hyg-focus.spec.ts` fail on its "intermediate frame" sampler under 7-worker
+  contention; it passes alone and passed in a clean full re-run — a
+  load-timing flake, not a regression.
+- **The boot pixel baseline did NOT need re-blessing.** The frozen frame is a
+  wide establishing shot, so the assisted default has no resolvable disc to
+  change, and the badge's redesign stayed inside the 1 % gate. **This wave's
+  re-bless budget is still UNSPENT.**
+- **Blind spot closed.** The pixel gate provably could NOT catch the badge
+  disappearing: the badge's own footprint is ~0.92 % of the frame, under the
+  1 % tolerance, so the app could have started making undisclosed claims with
+  the gate green. `boot.spec.ts`'s first test now asserts the badge is
+  visible and names both axes. Verified it fails-for-the-right-reason by
+  construction and passes on HEAD.
+
+### Open / handed on
+
+- **Handoff §5.2 (screenshot/export disclosure) is now more pressing**, not
+  less: there are two amber axes to not travel with an exported image.
+- σ = 0.35 has never been evaluated on a real display by a human. It is the
+  natural companion to §5.7's unmeasured step-wedge argument.
+- Queue step 2 (`scaleMode` default → `"realistic"`) remains blocked on boot
+  camera framing — see the section below, unchanged by this work.
 
 ---
 
@@ -587,15 +795,15 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
    UI against it. §5.1 and §5.6 are resolved — see "Owner decisions —
    2026-07-29" and follow its queue order (irradiance → default-mode flip →
    unified badge + assist control → Milky Way HDR panorama).
-4. Onda 2's **irradiance** step is done (see its section above); the assist
-   default deliberately still reads `"compensated"`, so the feature is live
-   but neutral. What remains of Onda 2: analytical auto-exposure (still
-   blocked on §5.3's radiometric anchor — the 1 AU anchor shipped here is
-   explicitly provisional and is NOT that decision), the exposure-registry
-   sweep, and planetshine. Per the owner-decisions queue, the next step is
-   the `scaleMode` default flip, then the unified badge + assist control —
-   which is the step that flips `DEFAULT_SUNLIGHT_ASSIST_POLICY` to
-   `"real"`, together with its disclosure UI.
+4. Onda 2's **irradiance** step and the **unified badge + assist control**
+   are both done (see their sections above). The default is now
+   `"assisted"` — a third, compressive position — and it ships disclosed by
+   `FidelityBadge`. What remains of Onda 2: analytical auto-exposure (still
+   blocked on §5.3's radiometric anchor — the 1 AU anchor is explicitly
+   provisional and is NOT that decision), and planetshine. The
+   exposure-registry sweep is decided per family in `exposureRegistry.ts`'s
+   JSDoc; atmosphere + clouds are the two that still structurally cannot
+   follow a body's irradiance.
 5. **The `scaleMode` default flip (queue step 2) was attempted 2026-07-29
    and reverted** — see "Queue step 2 attempted 2026-07-29" above. The
    store-default edit itself is trivial and not the blocker; the boot

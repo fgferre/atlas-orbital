@@ -37,13 +37,21 @@
       "readMore": "Read more on Wikipedia"
     }
   },
-  "scalePill": {
+  "fidelityBadge": {
+    "toggleHint": "What in this view is adjusted, and what is measured",
+    "scaleAxis": "Scale",
+    "scaleAction": "Click to switch scale mode",
     "didacticTitle": "NOT TO SCALE",
-    "didacticDesc": "sizes & gaps exaggerated",
+    "didacticDesc": "Sizes and gaps are exaggerated so everything fits one view.",
     "realisticTitle": "TRUE SCALE",
-    "realisticDesc": "physical proportions",
-    "toggleHint": "Click to toggle scale mode",
-    "collapse": "Collapse badge",
-    "expand": "Expand badge"
+    "realisticDesc": "Real physical proportions and distances.",
+    "brightnessAxis": "Brightness",
+    "brightnessAction": "Click to switch brightness mode",
+    "brightnessRealTitle": "TRUE BRIGHTNESS",
+    "brightnessRealDesc": "Sunlight falls off with real distance, uncorrected — the outer worlds are genuinely this dark.",
+    "brightnessAssistedTitle": "ASSISTED",
+    "brightnessAssistedDesc": "Real distances, range compressed so distant worlds stay visible. Order of brightness is preserved.",
+    "brightnessEqualizedTitle": "EQUALIZED",
+    "brightnessEqualizedDesc": "Every world lit as if it sat at Earth's distance — distance tells you nothing here."
   }
 }

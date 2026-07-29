@@ -50,6 +50,19 @@ test.describe("boot", () => {
     // "Initializing Simulation" loader is no longer on screen.
     await expect(page.getByText("Initializing Simulation")).toHaveCount(0);
 
+    // Honesty gate, and specifically a BLIND SPOT of the pixel baseline
+    // below. Atlas boots with two disclosed deviations from the measured
+    // truth — didactic scale and assisted sunlight — and the fidelity badge
+    // is the only surface that says so. If it silently stopped rendering,
+    // the frozen-frame diff would be ~0.92 % of the frame (the badge's own
+    // footprint), which sits UNDER that test's 1 % tolerance: the pixel gate
+    // would stay green while the app quietly started making undisclosed
+    // claims. Assert the surface exists and names both axes.
+    const badge = page.getByTestId("fidelity-badge");
+    await expect(badge).toBeVisible();
+    await expect(badge).toContainText("NOT TO SCALE");
+    await expect(badge).toContainText("ASSISTED");
+
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);
   });
 

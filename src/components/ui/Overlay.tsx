@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useStore } from "../../store";
+import { FidelityBadge } from "./FidelityBadge";
 import { HygStarPanel } from "./HygStarPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { LayersPanel } from "./LayersPanel";
-import { ScalePill } from "./ScalePill";
 import { SearchBar } from "./SearchBar";
 import { Sidebar } from "./Sidebar";
 import { Timeline } from "./Timeline";
@@ -97,7 +97,7 @@ export const Overlay = () => {
       <Timeline />
 
       <div className="absolute top-[calc(env(safe-area-inset-top)+4rem)] left-[max(1rem,env(safe-area-inset-left))] z-30 pointer-events-none">
-        <ScalePill />
+        <FidelityBadge />
       </div>
 
       <div

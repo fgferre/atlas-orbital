@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-28 (parallel lighting-redesign line opened — Onda 1 items 1+3 shipped — in addition to starfield visual-upgrade and texture-VRAM; both other parallel lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (lighting-redesign Onda 2.2 shipped — assisted sunlight default + unified fidelity badge, the step where the lighting became visible; Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -35,16 +35,28 @@ the owner's `handoffiluminacao.md` (repo-worktree root, read-only). Onda 1
 items **1** (deleted the 5 dead lighting controls, kept + repurposed
 Ambient → "Ambient Floor ×") and **3** (default 0.02 ambient viewing floor,
 composed inside `resolveLerpRefTargets`, mid-industry between NASA Eyes
-0.005 / Stellarium 0.02 / OpenSpace 0.05) are **shipped**. Item 2 (per-light
-regolith photometry rewrite) is a **separate agent's** scope, not started
-here — check this pointer before picking it up in case it landed in a
-sibling worktree. Items 4 (assist)/5/6 are blocked on owner decisions (pill
-vs single fidelity surface, didactic-scale-vs-irradiance story) — read the
-wave file's own section before proposing UI for them.
+0.005 / Stellarium 0.02 / OpenSpace 0.05), item **2** (per-light regolith
+`RE_Direct` wrapper), **Onda 2.1** (per-body solar irradiance from ephemeris
+AU) and **Onda 2.2** (unified fidelity badge + assist control) are all
+**shipped**.
 
-**E2E baseline unchanged** — the ambient floor did not move the frozen boot
-frame (wide shot, far from the Sun, per `boot.spec.ts`'s own comment); no
-re-bless spent this wave.
+**Onda 2.2 is the step where the lighting became visible.** The assist
+default is now `"assisted"` — `fused = E^0.35`, a third position between
+`"real"` and the old `"compensated"` — and it ships together with its
+disclosure: `ScalePill` is replaced by `FidelityBadge`, ONE expandable
+surface grouping Scale + Brightness (owner decision 2026-07-29), plus a
+`Sunlight` Select in the Display panel. The four `PlanetModel` bodies
+(haumea, vesta, pallas, hygiea) were the open blocker on this step and they
+**joined** the policy — no exclusion, runtime-verified. Read the wave file's
+"Onda 2.2" section before touching `solarIrradiance.ts` or the badge.
+
+**E2E baseline unchanged, twice over** — the ambient floor did not move the
+frozen boot frame, and neither did the badge redesign or the assisted
+default (wide shot, no resolvable disc, per `boot.spec.ts`'s own comment).
+**No re-bless spent this wave; the budget is still unspent.** `boot.spec.ts`
+now also asserts the badge is present and names both axes — the pixel gate
+provably could not catch it disappearing (its footprint is ~0.92 % of frame
+against a 1 % tolerance).
 
 **Owner decision 2026-07-29 (default scale mode → realistic) attempted and
 reverted** — flipping `store.ts`'s `scaleMode` default boots the camera
