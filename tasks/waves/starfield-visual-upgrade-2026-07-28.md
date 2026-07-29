@@ -987,6 +987,111 @@ ultra tier, look 30-60° off the Sun along the ecliptic, then pan to
 frame the Sun (failure mode 3), then to the antisolar point
 (gegenschein) and to the ecliptic pole (should be black).
 
+**2026-07-29 (forced-ultra headless verification pass) — the "cannot
+render a frame at all" blocker is gone; the "cannot aim the camera at
+a chosen elongation" blocker replaced it, and it wasn't fully solved
+either.** Prior sessions' non-compositing Browser pane and
+constrained-tier headless Playwright are BOTH bypassed by driving
+`window.__ATLAS_TEST_STORE__.getState().setGraphicsAutoMode(false)` +
+`setGraphicsPreset("ultra")` immediately after `__ATLAS_TEST_STORE__`
+appears (before the Canvas mounts) — confirmed via the boot
+diagnostic: `qualityTier: ultra`, `renderer: ANGLE (..., SwiftShader
+Device ...)`. Composer, Bloom, AgX, and ZodiacalLightSkybox all mount.
+Evidence lives in the throwaway scratchpad (not committed); screenshot
+paths were handed to the orchestrator.
+
+What got verified:
+
+- **The geometry/distance pipeline into the shader is correct.**
+  `camera.position.length() / AU_TO_3D_UNITS` (1000) was cross-checked
+  against the Sidebar's own "CURRENT DIST … From Sun" telemetry (which
+  is computed independently, from the orbital engine, not from camera
+  state) at four bodies and agreed to within 1%: Mercury 0.461 vs
+  0.463 AU, Venus 0.727 vs 0.727 AU, Jupiter 5.17 vs 5.212 AU, Neptune
+  29.88 vs ~29.9 AU. `u_cameraR_AU` is receiving the right number.
+- **The band is correctly ABSENT past the black-point crossing.**
+  Screenshots centred at elongation ≈ 110-173° (Venus, Jupiter, Moon —
+  see below) show no visible band, which is the predicted outcome:
+  the derivation above puts the crossing at ≈ 57°, and none of these
+  frames get closer to the Sun than 110°. This is a negative result
+  that matches the model, not an absence of evidence.
+- **No composer-mount console errors** were introduced by forcing
+  ultra (separately from the planetshine defect recorded in the
+  lighting-redesign wave file's Onda 2.3 section — that error is real
+  but unrelated to this layer).
+
+What did NOT get verified, and why — **camera aiming, not rendering,
+was the blocker this time**:
+
+- Every technique tried to pin the camera at "~1 AU, elongation
+  30-60°" failed or landed elsewhere. `setFocusId("hyg:K")` mid-flight
+  (the intended "sample early frames of a fly-to" trick) turns out to
+  cover the vast majority of an interstellar distance within ~100-200
+  ms of real time even at t≈0 (`HygPhysicsFlight`'s exponential
+  distance-proportional velocity, `MAX_VELOCITY_FACTOR = 3.0/s` — see
+  `hygPhysicsFlight.ts`), so "near 1 AU" and "aimed at a star" are
+  mutually exclusive on the timescale a `waitForTimeout` can hit
+  reliably. Curated-body focus (`selectId("venus")` etc.) reliably
+  lands near the body's own true distance (see the cross-check above)
+  but its "view the lit face" framing convention put every body tried
+  — Mercury, Venus, Mars, Jupiter, Neptune, the Moon — at 100-173°
+  elongation, never inside 30-60°.
+- **`setFocusId("sun")` does not give a close-up bright Sun.** In the
+  current default (realistic scale mode), focusing the Sun triggers
+  `AstroPhysics.resolveFocusExtent`'s system-overview special case
+  (the same one that sizes the ≈148 AU boot pose) — the result is a
+  ≈250+ AU wide establishing shot, not a close-up disc. This means
+  the failure-mode-3 check ("does the band clip into an ugly flat
+  disk near the Sun") could not be performed via body-focus at all;
+  it needs a genuine free-look/first-person control this pass did not
+  get working (see below).
+- A synchronous OrbitControls mouse-drag approach (zoom out from a
+  focused body, then drag to sweep elongation through the full 0-180°
+  range while staying near the body's ~1 AU distance) was designed and
+  is geometrically sound, but the `page.mouse.wheel()` zoom step hung
+  for an undiagnosed reason in this session and was abandoned rather
+  than debugged further against the clock.
+- **Antisolar / gegenschein**: closest achieved was Venus at 149.998°
+  and 172.7° (two different sessions), R_AU 0.71-0.73 — reproducibly
+  band-absent, consistent with 0.39× black-point gegenschein
+  prediction, but not a clean 180.000° sample.
+- **Ecliptic pole**: not attempted — no reliable aiming technique was
+  available by the time this was reached in the budget.
+
+**Net:** the shader/pipeline correctness claim is now evidence-backed
+(not just unit-tested); the actual eye-pass on the visible band
+(30-60° cone, near-Sun clipping, gegenschein, pole) is still owed,
+same as every prior session recorded here. The blocker moved from
+"can't render" to "can't aim a synchronous camera", which is a
+narrower, more tractable problem for the next session — the mouse-drag
+approach above is the recommended next attempt, debugged rather than
+abandoned.
+
+**Fly-by fade (`cbc1bf6`, the shell-outrun fix) — verified headless
+forced-ultra (SwiftShader) 2026-07-29: no pop, no discontinuity,
+partial coverage.** Started from a band-in-frame pose (Jupiter focus,
+elongation ≈159°, R_AU ≈5.13 — cross-checked against the Sidebar's
+5.212 AU) and dispatched `setFocusId("hyg:5")`, sampling 5 frames
+(pre-flight + 200/600/1200/2000 ms). Camera-to-Sun distance grew
+**continuously and monotonically** (5.13 → 1.37M → 2.34M → 2.57M →
+2.69M AU) with no reset, no NaN, no jump back — the elongation stayed
+locked at exactly 179.9999° throughout (the aim-lerp target tracked
+correctly, no snap). All 5 screenshots render a normal, smooth
+starfield/target-star approach with no black-hole or blank-frame
+artifact — the specific pre-fix failure mode (camera outruns its own
+1e8-world-unit shell, band vanishes for the whole mid-flight) did not
+reproduce. **Caveat, stated plainly**: the starting pose (159°) was
+already past the ≈57° visibility threshold, so there was no bright
+band actually on screen to watch fade — this run confirms the
+mechanism (continuous per-frame shell recentring, no lag) rather than
+watching a visible band dim to black in real time. `hygPhysicsFlight`'s
+exponential distance-proportional velocity (`MAX_VELOCITY_FACTOR =
+3.0/s`) covers most of an interstellar distance within ~100-200 ms
+regardless of start point, which is faster than this session's
+sampling could usefully resolve for a "watch it fade" capture even
+starting inside the visible cone. Screenshot paths handed to the
+orchestrator (`item7-flyby-*.png`).
+
 ---
 
 ## Worktree hygiene — what is NOT this wave's scope
@@ -1226,3 +1331,20 @@ test:run` (2503 tests), `tsc -b`, `lint`, `build`,
 `npx playwright test e2e/boot.spec.ts` (2/2, no pixel-diff regression —
 confirms `constrained` still never mounts LightGlow headless). Shipped
 on `main` directly per solo-dev workflow._
+
+_2026-07-29 (forced-ultra headless verification pass): **halo-alignment
+fix (`481f429`) verified headless forced-ultra (SwiftShader) — PASS.**
+`setFocusId("hyg:0")` (Sirius) from a near-Earth pose, sampled after the
+aim-lerp settles: a soft radial halo is present and visually CENTRED on
+the star's disc (screenshot `item5-sirius-halo.png`, handed to the
+orchestrator) — no floating halo, no offset, matching the fixed
+`hygEquatorialToScene` transform's prediction (pre-fix this would have
+shown Sirius ~132° from any halo, i.e. no halo near the star at all).
+A handful of other captured views (Jupiter, Venus, Moon, Io — taken for
+other verification items, not a dedicated sweep) showed no floating
+halo with no star beneath, but none of those frames specifically
+targeted a bright HYG star either, so this is corroborating rather than
+an exhaustive sweep. Composer confirmed mounted via the boot diagnostic
+(`qualityTier: ultra`) before this check, per the forced-ultra unlock —
+see the "Outstanding calibration" section above for the full technique
+and its limits._

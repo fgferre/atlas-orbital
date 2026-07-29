@@ -1129,3 +1129,151 @@ test.ts` already use: the shine chunk anchors on a chunk three actually
    The app now boots in `"realistic"` scale mode on a populated,
    inspected, re-blessed system-overview frame. Nothing about this queue
    step remains open.
+
+---
+
+## 2026-07-29 (forced-ultra headless verification pass)
+
+Coordinator-requested runtime pass, real pixels, headless Playwright
+against a production build with `graphicsAutoMode=false` +
+`graphicsPreset="ultra"` forced via `window.__ATLAS_TEST_STORE__`
+immediately after boot (bypasses the SwiftShader→`constrained` tier
+ceiling that blocked every prior session's attempt at this — see the
+starfield-visual-upgrade wave file's "Outstanding calibration" section
+for the full technique and its camera-aiming limits, which apply here
+too). `qualityTier: ultra` confirmed via the boot diagnostic before
+every check below. Throwaway scripts, not committed; screenshot paths
+handed to the orchestrator.
+
+### Assisted lighting (Onda 2.2 default, item 4) — PASS
+
+Focused Mercury and Neptune in turn (`selectId`, curated-body flight,
+distances cross-checked against the Sidebar's own telemetry: Mercury
+0.461 AU vs UI's 0.463 AU, Neptune 29.88 AU vs UI's ~29.9 AU — same
+cross-check used in the starfield wave file, confirms the flight
+actually landed rather than stalling mid-lerp). Mean frame luminance
+(simple average of `max(r,g,b)` over the full screenshot, 0-255 scale):
+**Mercury 71.8, Neptune 12.9** — Mercury visibly brighter, the correct
+ordering under the assisted `E^0.35` curve (Mercury real E ≈ 10.4× →
+assisted ≈ 2.27×; Neptune real E ≈ 1/900 → assisted ≈ 1/10.8 — see the
+"Onda 2.2" section's table above). Not a controlled single-variable
+measurement (whole-frame luminance includes each planet's own disc
+size, starfield background, and UI chrome, which differ between the
+two shots) but the direction and rough magnitude both match the
+documented curve.
+
+### Eye-adaptation (1d, item 3) — INCONCLUSIVE, new information about why
+
+The intended test ("frame the Sun prominently → wait → frame dark
+starfield → wait → compare") could not be performed as specified.
+**New finding this session**: `setFocusId("sun")` in the app's current
+default (realistic scale mode) does not produce a close-up bright Sun —
+`AstroPhysics.resolveFocusExtent`'s Sun-focus system-overview special
+case (the same one that sizes the ≈148 AU boot pose) fires, landing the
+camera at a ≈250+ AU wide establishing shot instead. This is a
+consequence of the queue-step-2 realistic-mode work above, not a bug in
+1d or in this session's harness — but it means "frame the Sun" is not
+currently reachable via body-focus in realistic mode, and no
+alternative technique (see the starfield wave file's camera-aiming
+section) was found in time to substitute.
+
+What WAS measured: mean luminance of the wide Sun-pose frame held
+essentially flat over 8 s (16.03 → 16.02 → 15.99 → 15.98 — a 0.3%
+drift, no pumping or oscillation). A second frame aimed off-Sun (a HYG
+star dispatch, itself still resolving its own aim during the sampling
+window) read 13.47 → 17.33 → 17.09 → 16.83 over the same 8 s — rising
+rather than falling, but this reflects the aim target's own motion
+during sampling, not an isolated exposure reading, so it is not
+attributable to eye-adaptation specifically either way. **Net: no
+evidence of unhealthy pumping/oscillation in the one stable frame
+available, but the core "does exposure move the right direction for a
+genuinely bright vs. genuinely dark frame" question is still owed** —
+same status as every prior session's attempt at this, now with a
+concrete explanation of one reason the test setup is harder than it
+looks (the Sun-focus system-overview interaction).
+
+### Planetshine / earthshine (Onda 2.3, item 6) — DEFECT FOUND, contradicts this section's own "zero console errors" claim above
+
+**The GLSL patch never compiles.** `src/components/canvas/shaders/planetshinePatch.ts`'s
+`buildPlanetshinePatch()` references `u_shineDir` (vec3) and
+`u_shineRadiance` (vec3) inside its injected `#include
+<lights_fragment_begin>` block — but never declares either as a GLSL
+`uniform`, anywhere in the file. Compare `solarIrradiancePatch.ts`,
+which explicitly emits `uniform float u_solarIrradiance;` (line 74) as
+part of its own injected text before referencing it. `shader.uniforms[name]
+= {value: …}` (JS-side, both files do this) registers the value for
+three.js's uniform upload; it does **not** generate the matching GLSL
+declaration — that is a second, separate step this file skips. This is
+the exact bug class the starfield-visual-upgrade wave's zodiacal
+rebuild found and fixed in the OTHER shader last session ("`u_sunDir`
+was read in `main()` but declared nowhere… an undeclared custom
+uniform is a link failure, not a warning"); it was never checked for
+here.
+
+**Confirmed at runtime, twice, independently:**
+
+```
+THREE.THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+Material Type: MeshStandardMaterial
+Program Info Log: Fragment shader is not compiled.
+ERROR: 0:1908: 'u_shineDir' : undeclared identifier
+ERROR: 0:1908: 'constructor' : not enough data provided for construction
+ERROR: 0:1909: 'u_shineRadiance' : undeclared identifier
+ERROR: 0:1909: '=' : dimension mismatch
+```
+
+Fires at plain boot (forced ultra, waited through the full intro + a
+settle buffer: 4 errors — Io, Europa, Moon's own compile plus one
+retry-variant) and again when each of the 3 recipients is explicitly
+focused (moon / io / europa in turn: 6 total console errors across the
+session). `applyPlanetshinePatch` only runs for the 3
+`isPlanetshineRecipient` bodies (Io, Europa, Moon —
+`usePlanetMaterials.ts`'s `receivesPlanetshine` guard), so it never
+touches the other ~40 bodies' materials, consistent with only these 3
+throwing.
+
+**Visual impact is not "earthshine missing" — it is "the body doesn't
+render".** Screenshots (`item6-moon.png`, `item6-io.png`, handed to the
+orchestrator):
+
+- **Moon**: renders as a flat, blown-out white/grey irregular polygon
+  with no shading, no terminator, no crater texture — not a sphere.
+- **Io**: renders as a completely flat BLACK disc (no sunlit surface
+  detail at all — Io should show a mottled sulfur-yellow lit
+  hemisphere), with a separate corrupted glowing white/yellow flat
+  polygon artifact floating near it in the same frame.
+
+Both match the generic "shader failed to link" symptom (three.js
+either falls back to a broken/partial program or renders with
+undefined behaviour from the last successfully-linked program state) —
+not a lighting-tuning issue, a rendering regression affecting Io,
+Europa, and the Moon's basic visibility, live on `main` right now.
+
+**Why the existing gates missed this.** `e2e/boot.spec.ts`'s first test
+does assert `consoleErrors` is empty, but it resolves as soon as the
+top-bar heading + a sized canvas appear — well before these 3 bodies'
+materials get their first draw call and compile. The second boot test
+waits long enough (through `isIntroAnimating` + `waitForStableFrame`)
+but asserts no console errors at all. `npx playwright test
+e2e/boot.spec.ts` passing (as recorded throughout this wave's
+"Verification" sections) is therefore not in conflict with this
+finding — it structurally cannot observe it. The Onda 2.3 section's own
+"Runtime-verified, not just typed… zero console errors" claim above was
+against a **different, uncommitted throwaway harness** whose exact wait
+timing isn't recorded; this session's reproduction is with a committed,
+inspectable technique (`__ATLAS_TEST_STORE__` + wait-for-intro-end) and
+is repeatable.
+
+**Not fixed — this session is docs/verification only per its brief.**
+The fix is almost certainly a one-line addition of `uniform vec3
+u_shineDir; uniform vec3 u_shineRadiance;` to the injected GLSL text in
+`buildPlanetshinePatch()` (mirroring `solarIrradiancePatch.ts`'s
+pattern), but that is product code and out of scope for this pass —
+flagged as a follow-up task instead.
+
+Moon's phase (`illuminatedFraction`, needed for the earthshine-visible
+check) could not be read from the Sidebar's "Sky Geometry" panel within
+this session (it sits below the captured viewport fold and a text-regex
+extraction attempt found nothing) — moot until the compile failure
+above is fixed, since the material doesn't render correctly regardless
+of phase.
