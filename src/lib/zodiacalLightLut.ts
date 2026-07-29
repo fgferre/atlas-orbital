@@ -2,6 +2,26 @@ import * as THREE from "three";
 import { STAR_DISPLAY_BLACK_POINT } from "./starfieldShaderMath";
 
 /**
+ * ## Renderer pulled 2026-07-29 — this file is PARKED, not dead
+ *
+ * The consumer (`ZodiacalLightSkybox.tsx` + its `Scene.tsx` mount) was
+ * deleted 2026-07-29 on an owner effort/benefit call ("muito trabalho
+ * para pouco benefício, não quero mais essa coisa. tire isso do
+ * projeto.") after two calibration rounds — the whiteout fix
+ * (`99132e9`) and a still-ugly bounded dome near the Sun — failed to
+ * make the look land. See
+ * `tasks/waves/starfield-visual-upgrade-2026-07-28.md` §"#3 pulled
+ * (2026-07-29)" for the full record.
+ *
+ * This file stays: [`galaxy-volumetric-2026-07-29.md`](../../tasks/waves/galaxy-volumetric-2026-07-29.md)
+ * explicitly builds on its S10 photometric machinery and derived-
+ * calibration discipline — `ZODIACAL_S10_TO_LINEAR` below is the
+ * concrete instance that wave promotes to a layer-neutral, shared
+ * `SKY_S10_TO_LINEAR` (its own Leinert Table 34 anchor is a different
+ * table in the same source, for the integrated-starlight component) —
+ * as the reference implementation for a future unified diffuse-sky
+ * layer. If that wave is ever cancelled, delete this file with it.
+ *
  * Leinert et al. (1998) zodiacal light brightness table at 500 nm, plus
  * the build-time resampling and photometric calibration that turn it
  * into something the renderer can actually sample.

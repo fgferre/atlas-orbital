@@ -14,6 +14,20 @@ document supersedes is
 [`starfield-visual-upgrade-2026-07-28.md`](./starfield-visual-upgrade-2026-07-28.md)
 §"#4 pulled (2026-07-29)".
 
+**Both diffuse-sky predecessors are now pulled.** The Milky Way
+panorama (§ above) and, later the same day, the zodiacal-light layer
+(same wave file, §"#3 pulled (2026-07-29)" — owner verdict: "muito
+trabalho para pouco benefício, não quero mais essa coisa. tire isso do
+projeto", after two calibration rounds) were both removed by the owner
+for the same underlying reason: a shell layer calibrated and
+composited in isolation does not read as integrated with the rest of
+the sky. **Any future diffuse-sky layer — zodiacal, galaxy glow, or
+otherwise — ships only through this wave's unified sky photometric
+system (`SKY_S10_TO_LINEAR`, §4) and only after an owner eye pass on
+real hardware confirms the look, with a Display toggle default-off
+until that pass happens.** It does not go straight to default-visible
+the way both predecessors did. See `tasks/lessons.md` L42.
+
 ---
 
 ## Feasibility verdict

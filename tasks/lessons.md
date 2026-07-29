@@ -41,6 +41,27 @@ Product constitution + §6.
 
 ---
 
+## L42 — Diffuse sky layers need shared photometry + an eye pass before default-visible
+
+**Trigger**: shipping an additive diffuse sky layer (zodiacal light,
+galaxy glow, any haze/shell composited behind the starfield).
+
+**Rule**: it must be calibrated inside the shared sky photometric
+window (not its own independently-derived constant) AND receive an
+owner eye pass on real hardware before shipping default-visible.
+Headless gates (unit tests, Playwright pixel diffs) cannot judge
+diffuse aesthetics — green gates are not a runtime look.
+
+**Action**: stage new diffuse layers behind the unified sky
+calibration (`SKY_S10_TO_LINEAR`, galaxy-volumetric wave) with a
+Display toggle default-off until the eye pass lands.
+
+**Source**: two same-day product pulls, 2026-07-29 — Milky Way
+panorama (`19af61a`) and zodiacal light (this commit), both calibrated
+in isolation and both rejected on the same "not integrated" axis.
+
+---
+
 ## M1. Ground truth is the wired runtime, not prose
 
 Any claim about what the code / data / scene does — docstring, ROADMAP

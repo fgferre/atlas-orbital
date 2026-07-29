@@ -1503,3 +1503,84 @@ heliocentric-scaling block, `zodiacalLightLut.test.ts` now 25 tests),
 `npm run docs:check` clean, `npm run build` clean, `npx playwright test
 e2e/boot.spec.ts` clean (no pixel-diff change, as predicted). Shipped
 directly on `main` per solo-dev workflow.\_
+
+---
+
+### #3 pulled (2026-07-29) — owner effort/benefit verdict
+
+Same product-pull pattern as "#4 pulled" above, mirrored for the
+zodiacal-light layer. Owner quote, verbatim: **"muito trabalho para
+pouco benefício, não quero mais essa coisa. tire isso do projeto."**
+(too much work for too little benefit, I don't want this thing
+anymore, take it out of the project). This is a **product pull, not a
+bug-fix** — no attempt was made to rescue the look in place.
+
+**The two calibration rounds that preceded the pull:**
+
+1. **Whiteout fix (`99132e9`, "#3 — bound inward brightening" section
+   above)** — fixed a sky-wide flat-grey wash near the Sun by clamping
+   the R⁻²·⁵ heliocentric term inward of 1 AU (Table 16 was only ever
+   measured FROM 1 AU, so the unclamped term multiplied the already
+   3.26×-over-gate 1 AU peak by a further ~316× approaching the Sun).
+   Verified headlessly at Mercury's distance: wash gone, normal star
+   field restored.
+2. **Still-ugly bounded dome near the Sun** — the owner's own eye pass
+   after the whiteout fix, on real hardware, found the now-correctly-
+   bounded near-Sun brightening still did not read well: a visible
+   dome/shell shape around the Sun rather than an integrated diffuse
+   band. No further numeric root-cause was chased — the owner moved
+   straight to the pull decision rather than requesting a third
+   calibration pass. Same failure category the Milky Way panorama hit
+   one revert earlier: an additively-composited shell, calibrated in
+   isolation, does not read as part of the sky no matter how correct
+   its individual numbers are.
+
+**Removed:**
+
+- `src/components/canvas/scene/ZodiacalLightSkybox.tsx` (the renderer)
+  and its mount + import in `src/components/canvas/Scene.tsx`.
+- `src/components/canvas/scene/ZodiacalLightSkybox.test.ts` (the
+  `ZODIACAL_RECENTER_PRIORITY` ordering pin — the only component-level
+  test; it pinned a property of the deleted component itself, so
+  nothing else needed updating).
+- The Zodiacal light `CreditItem` entry in
+  `src/components/ui/CreditsModal.tsx` (a disclosure must not describe
+  something no longer rendered).
+- No other consumer existed: grepped `Zodiacal`/`zodiacal` across
+  `src/` and `e2e/` — the only remaining hits are the kept
+  `src/lib/zodiacalLightLut.ts` + its test, and comments in
+  `src/lib/milkyWayOrientation(.test).ts` that cite
+  `zodiacalLightLut.ts`'s calibration discipline as a documentation
+  anchor (unaffected — that file was already parked by the #4 pull and
+  never imported the renderer).
+
+**Kept (deliberately):**
+
+- `src/lib/zodiacalLightLut.ts` + `src/lib/zodiacalLightLut.test.ts` —
+  the Leinert Table 16 photometric machinery (S10 grid resampling,
+  `ZODIACAL_S10_TO_LINEAR` derived calibration, the R⁻²·⁵ heliocentric
+  bound this session's whiteout fix added) is the explicit foundation
+  [`galaxy-volumetric-2026-07-29.md`](./galaxy-volumetric-2026-07-29.md)
+  builds on for a future **unified** sky photometric system
+  (`SKY_S10_TO_LINEAR`, promoted layer-neutral). A file-header note now
+  points from `zodiacalLightLut.ts` back to this section. If the
+  galaxy-volumetric wave is ever cancelled, delete this file with it.
+- No texture asset was ever wired for this layer — it is a pure
+  analytic/procedural shader (a build-time-resampled LUT texture
+  generated in TypeScript, not a shipped image asset), so there is no
+  orphaned binary to clean up or park, unlike the Milky Way JPEG.
+
+**Do not re-attempt the additive-shell approach.** Both diffuse-sky
+predecessors in this wave (Milky Way panorama, zodiacal light) were
+pulled by the owner for variations of the same failure: a layer
+calibrated and composited in isolation does not read as integrated
+with the rest of the sky. Any future zodiacal/diffuse-sky pass ships
+only through the galaxy-volumetric wave's unified photometric system,
+and only after an owner eye pass on real hardware confirms the look
+BEFORE it becomes default-visible — see that wave file's note at the
+top and `tasks/lessons.md` L42.
+
+**Gates**: `npm run test:run`, `npx tsc -b`, `npm run lint`,
+`npm run docs:check`, `npm run build`, `npx playwright test e2e/` (all
+13 specs) — see the commit message for the actual numbers this pass.
+Shipped directly on `main` per solo-dev workflow.

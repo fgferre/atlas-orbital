@@ -18,17 +18,17 @@ mount + CreditsModal entry removed; `milkyWayOrientation.ts` (verified
 transform) and the source JPEG kept for the rethink. Do not re-attempt
 the additive-shell approach — [`galaxy volumetric`](./waves/galaxy-volumetric-2026-07-29.md)
 plan ready, M1 awaits owner go + GPU answers (§8; §0.1's
-`ZodiacalLightSkybox` camera-outrun spin-off fixed separately).
+`ZodiacalLightSkybox` camera-outrun spin-off fixed separately). **#3 (zodiacal light) PULLED the same day, same reason** (owner: "muito trabalho para pouco benefício, não quero mais essa coisa. tire isso do projeto") — `ZodiacalLightSkybox.tsx` + mount + test + CreditsModal entry removed, `zodiacalLightLut.ts` kept parked for galaxy-volumetric's unified sky system; see wave file §"#3 pulled (2026-07-29)".
 
 **2026-07-29 (halo-alignment fix):** `LightGlowInjector.tsx`, a fourth
 missed `hygFrame.ts` call site, now routes through `hygEquatorialToScene`
 — trail in the wave file. Owner: re-check the sky at home. Remaining
 open in this wave: eye-adaptation runtime verification (1d shipped, not
 eye-checked) and the LightGlow performance audit (blocked on real-GPU
-access). CreditsModal now covers AgX + zodiacal + Milky Way. Next agent:
-pick one of those, or close the wave pending the owner's eye pass. Read
-the wave file's "Honest disclosure" section before labelling any
-earlier sub-pull done — green gates are not a runtime look.
+access). CreditsModal now covers AgX only. Next agent: pick one of
+those, or close the wave pending the owner's eye pass. Read the wave
+file's "Honest disclosure" section before labelling any earlier
+sub-pull done — green gates are not a runtime look.
 
 ---
 
