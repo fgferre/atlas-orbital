@@ -944,6 +944,42 @@ constant-emissive path and its `RING_EMISSIVE_POWER` constant are deleted, not
 left stacked alongside the new path. See `exposureRegistry.ts`'s doc header for
 the exposure-registry side of this closure.
 
+**Verified 2026-07-29, forced-ultra headless, real vs stashed pre-fix build.**
+Saturn focused, ultra tier forced, all three policies driven through the real
+`FidelityBadge` UI (not a test-store shortcut) — mirroring Onda 2.4's own
+technique. A pre-fix baseline came from a second git worktree at `4b1ebfa`
+(parent of `ef09f13`), built and screenshotted with the identical throwaway
+spec, so the two frames differ only by this fix. The `"real"` policy is the
+dispositive comparison, since it is where the ×89 anchor made the defect
+visible: **before**, the ring renders as a blown-out white halo bleeding into
+the starfield, completely obscuring its structure, while Saturn's own disc
+stays properly exposed beside it (the exact compounding defect the owner
+described); **after**, the ring renders as a properly-shaded grey/tan disc
+with NO clipping, and the sunlit near side is visibly warmer/brighter than
+the far side passing behind the planet — the lit/unlit distinction this
+patch adds. The `"assisted"` comparison shows the same contrast even more
+starkly: before, the ring is one flat uniform tone all the way around
+(self-lit, geometry-blind); after, the near/far split is the single most
+obvious feature of the image. `"compensated"` (equalized) shows the same
+split at lower contrast, consistent with that policy compressing every
+body toward one reference brightness. Central-crop mean Rec.709 luminance
+(camera-framing-sensitive, a supporting number, not the primary evidence):
+before {assisted 7.95, equalized 8.24, real 60.50}, after {assisted 17.56,
+equalized 7.98, real 57.77} — assisted rising is the ring picking up a real,
+policy-scaled contribution it did not have before; the two `"real"` readings
+being close is expected, since that crop is starfield-dominated and the
+starfield's own anchor-driven brightening (documented, unrelated to this fix)
+swamps a small ring region either way. Gates: `npx tsc -b`, `npm run lint`,
+`npm run build`, `npm run test:run` (2581/2581, includes the new
+`ringLightingPatch.test.ts`, 8 tests) all clean. `npx playwright test e2e/`
+13/13 at `--workers=1` (a `--workers` default run on this machine hit the
+already-documented WebGL-context-pressure flake from many Chromium launches
+in one session — see W3's "What the gates actually proved" — confirmed by
+every individual failing spec passing alone); the boot pixel baseline needed
+no re-bless, as expected (no Saturn disc in the frozen frame). The throwaway
+verification spec (`e2e/_ring-lighting-verify.spec.ts`) was deleted before
+this commit, same convention as the Onda 2.4 pass.
+
 ---
 
 ### W6 — One pole, one spin · **high** · 5-6 days
