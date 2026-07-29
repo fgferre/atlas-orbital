@@ -63,6 +63,12 @@ import {
 } from "./shaders/atmosphereDynamics";
 import { SOLAR_IRRADIANCE_UNIFORM } from "./shaders/solarIrradiancePatch";
 import { useBodySunlightScalar } from "./planet/useBodySunlightScalar";
+import {
+  PLANETSHINE_DIR_UNIFORM,
+  PLANETSHINE_RADIANCE_UNIFORM,
+} from "./shaders/planetshinePatch";
+import { usePlanetshineScalar } from "./planet/usePlanetshineScalar";
+import { isPlanetshineRecipient } from "../../lib/graphics/planetshine";
 
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
@@ -84,6 +90,8 @@ const TMP_ATMO_CAMERA_LOCAL = new THREE.Vector3();
 const TMP_ATMO_SUN_LOCAL = new THREE.Vector3();
 const TMP_ECLIPSE_RECEIVER_POS = new THREE.Vector3();
 const TMP_ECLIPSE_ECLIPSING_POS = new THREE.Vector3();
+const TMP_SHINE_PARENT_WORLD = new THREE.Vector3();
+const TMP_SHINE_SELF_WORLD = new THREE.Vector3();
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -181,6 +189,19 @@ const PlanetVisual = ({
    * hook for the four model-path bodies.
    */
   const readSunlightScalar = useBodySunlightScalar(body.id);
+
+  /**
+   * Onda 2.3 — planetshine/earthshine second-source scalar (Io, Europa,
+   * Moon only; 0 for every other body). Same 1 s bucket idiom as the sun
+   * scalar above, kept as a separate hook/uniform pair rather than folded
+   * into `u_solarIrradiance` because the two multiply DIFFERENT
+   * `IncidentLight`s in the shader (see `planetshinePatch.ts`) — fusing
+   * them would require the shine's own inverse-square law to route through
+   * the sun's uniform, which `solarIrradiancePatch.ts` scales exactly once
+   * per real light.
+   */
+  const readPlanetshineScalar = usePlanetshineScalar(body.id, body.parentId);
+  const isShineRecipient = isPlanetshineRecipient(body.id);
 
   // The pole is NOT memoised. IAU poles are functions of time — Earth's α₀
   // moves 0.641°/century, Mars's δ₀ carries a 1.6° periodic term — so freezing
@@ -473,6 +494,37 @@ const PlanetVisual = ({
     )?.uniforms?.[SOLAR_IRRADIANCE_UNIFORM];
     if (irradianceUniform) {
       irradianceUniform.value = readSunlightScalar();
+    }
+
+    // 4. Planetshine / earthshine — Onda 2.3. Magnitude comes from the pure
+    // ephemeris resolver (never a render-space distance — same rule
+    // `u_solarIrradiance` follows). Direction comes from the ACTUAL
+    // rendered world position of `body.parentId`'s mesh via
+    // `scene.getObjectByName`, the same pattern the eclipse block above
+    // uses to find its eclipsing body — `mapPhysicalPositionToDisplay`
+    // preserves direction under the didactic remap (only the magnitude
+    // compresses), so this needs no separate ephemeris-direction path.
+    if (isShineRecipient && body.parentId && groupRef.current) {
+      const shineShader = planetMaterial?.userData?.shader as
+        | { uniforms: { [key: string]: THREE.IUniform } }
+        | undefined;
+      const dirUniform = shineShader?.uniforms?.[PLANETSHINE_DIR_UNIFORM];
+      const radianceUniform =
+        shineShader?.uniforms?.[PLANETSHINE_RADIANCE_UNIFORM];
+      const parentMesh = scene.getObjectByName(body.parentId);
+
+      if (dirUniform && radianceUniform && parentMesh) {
+        parentMesh.getWorldPosition(TMP_SHINE_PARENT_WORLD);
+        groupRef.current.getWorldPosition(TMP_SHINE_SELF_WORLD);
+
+        const dir = (dirUniform.value as THREE.Vector3)
+          .copy(TMP_SHINE_PARENT_WORLD)
+          .sub(TMP_SHINE_SELF_WORLD);
+        if (dir.lengthSq() > 1e-12) dir.normalize();
+
+        const scalar = readPlanetshineScalar();
+        (radianceUniform.value as THREE.Vector3).setScalar(scalar);
+      }
     }
   });
   /* eslint-enable react-hooks/immutability */

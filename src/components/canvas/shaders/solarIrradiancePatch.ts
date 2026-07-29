@@ -124,12 +124,24 @@ interface CacheKeyedMaterial {
  * every choice in {@link buildPlanetDirectLightPatch} that changes the
  * generated GLSL. Extend this string — do not add a second mechanism — if a
  * future option makes the emitted chain vary again.
+ *
+ * `shine` (Onda 2.3) is exactly this kind of extension: it does not change
+ * anything `buildPlanetDirectLightPatch` emits (the shine injection is a
+ * separate anchor, see `planetshinePatch.ts`), but it DOES change the
+ * material's overall generated GLSL, and it is read from the same kind of
+ * captured-variable closure (`patchDirectLights` in `usePlanetMaterials.ts`)
+ * that made `regolith` invisible to three's default text-based cache key.
+ * Omitting it defaults to `false`, so every existing call site's key is
+ * byte-identical to before this option existed.
  */
 const resolveDirectLightVariant = ({
   regolith,
+  shine = false,
 }: {
   regolith: boolean;
-}): string => (regolith ? "planet-regolith" : "planet-lambert");
+  shine?: boolean;
+}): string =>
+  `${regolith ? "planet-regolith" : "planet-lambert"}${shine ? "-shine" : ""}`;
 
 /**
  * Make three's program cache see the two direct-light chains as different
@@ -167,7 +179,7 @@ const resolveDirectLightVariant = ({
  */
 export const applyPlanetDirectLightCacheKey = (
   material: CacheKeyedMaterial,
-  options: { regolith: boolean }
+  options: { regolith: boolean; shine?: boolean }
 ): void => {
   const variant = resolveDirectLightVariant(options);
   material.customProgramCacheKey = () =>

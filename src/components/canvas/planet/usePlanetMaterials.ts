@@ -23,6 +23,8 @@ import {
   applyPlanetDirectLightCacheKey,
   applyPlanetDirectLightPatch,
 } from "../shaders/solarIrradiancePatch";
+import { applyPlanetshinePatch } from "../shaders/planetshinePatch";
+import { isPlanetshineRecipient } from "../../../lib/graphics/planetshine";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
 /**
@@ -378,6 +380,12 @@ export function usePlanetMaterials({
 
     const mat = new THREE.MeshStandardMaterial(planetParams);
 
+    // Onda 2.3 — Io, Europa and the Moon additionally receive a
+    // planetshine/earthshine second-source uniform. Resolved once per
+    // material build (body.id never changes at runtime) rather than inside
+    // the per-frame closure below.
+    const receivesPlanetshine = isPlanetshineRecipient(body.id);
+
     // Onda 2.1 — every branch below installs the SAME direct-light chain:
     // three's own `lights_physical_pars_fragment`, the Lommel-Seeliger
     // wrapper for airless bodies, and the `u_solarIrradiance` wrapper
@@ -386,12 +394,19 @@ export function usePlanetMaterials({
     // reaches NO shader branch still has to receive the irradiance uniform —
     // otherwise the day the assist default flips, every unpatched body
     // (Mars, Venus, Titan, …) stays lit for 1 AU while its neighbours dim.
+    // Onda 2.3 — the same closure also installs the shine patch for the 3
+    // recipients, at the SEPARATE `lights_fragment_begin` anchor (see
+    // `planetshinePatch.ts`); zero effect on the other ~30 bodies, whose
+    // `onBeforeCompile` never calls `applyPlanetshinePatch` at all.
     const patchDirectLights = (
       shader: THREE.WebGLProgramParametersWithUniforms
     ) => {
       applyPlanetDirectLightPatch(shader, {
         regolith: !!body.airlessRegolith,
       });
+      if (receivesPlanetshine) {
+        applyPlanetshinePatch(shader, { regolith: !!body.airlessRegolith });
+      }
     };
 
     // …and the flag that closure reads has to reach the PROGRAM CACHE KEY as
@@ -401,8 +416,12 @@ export function usePlanetMaterials({
     // three's default cache key. See `applyPlanetDirectLightCacheKey`.
     // Set once here rather than per branch: it reads `onBeforeCompile`
     // lazily, so it is correct no matter which branch assigns it below.
+    // `shine` joined the discriminator in Onda 2.3, so a shine recipient
+    // never shares a compiled program with a non-recipient of the same
+    // regolith-ness (66ab30f discipline).
     applyPlanetDirectLightCacheKey(mat, {
       regolith: !!body.airlessRegolith,
+      shine: receivesPlanetshine,
     });
 
     // Apply Earth day/night shader (takes priority over ring shadows)

@@ -918,6 +918,185 @@ blocks seeing the scene).
 
 ---
 
+## Onda 2.3 — planetshine / earthshine second-source uniforms (done)
+
+Queue item from "Handoff for the next agent" #4 ("What remains of Onda 2:
+… and planetshine"). Io + Europa Jupiter-shine, Moon earthshine — a SECOND
+incident-light magnitude for exactly these 3 bodies, with **zero new
+three.js scene lights** (handoff §6 checklist item 2): a real light would
+change `NUM_POINT_LIGHTS` for every patched material family and force a
+recompile — a hitch of hundreds of ms across the whole catalogue.
+
+### The published R table (handoff §6 checklist item 7)
+
+| body   | R                                  | source                                                             |
+| ------ | ---------------------------------- | ------------------------------------------------------------------ |
+| Io     | 9.0 × 10⁻³                         | Mergny & Schmidt 2024                                              |
+| Europa | 3.6 × 10⁻³                         | Mergny & Schmidt 2024                                              |
+| Moon   | up to ≈1.01 × 10⁻⁴, × (1 − phase)² | derived (see below); phase-shape precedent Stellarium `Planet.cpp` |
+
+`R` is "shine irradiance as a fraction of the recipient's own local solar
+irradiance". Io receives ~2.5× Europa's Jupiter-shine (9.0 / 3.6 = 2.5
+exactly, pinned by test) — shipping Europa alone would have cherry-picked
+the smaller number and silently dropped the brighter one from the same
+paper.
+
+**Excluded, with reasons** (`PLANETSHINE_EXCLUDED` in
+`src/lib/graphics/planetshine.ts` — inspectable in code, not just prose):
+
+| body     | R          | reason                                                                                                                                                                                                                  |
+| -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ganymede | 2.2 × 10⁻³ | below `PLANETSHINE_FLOOR = 3.0 × 10⁻³` — real per Mergny & Schmidt, just under the line this wave draws for "worth the extra uniform + shader branch"                                                                   |
+| Callisto | not cited  | no R figure carried into this wave                                                                                                                                                                                      |
+| Charon   | not cited  | Lauer et al. 2021 (PSJ 2, 214) measured Pluto–Charon mutual shine directly — a different body pair outside today's Sun-Jupiter-moon / Sun-Earth-Moon recipient set; cited as the excluded-tier example, not implemented |
+
+**Earthshine's peak, derived rather than asserted.** Glenar et al. (2019)
+characterise earthshine's spectrum, not a single "R vs local solar
+irradiance" ratio, so `EARTHSHINE_R_FULL` is derived from the same
+point-reflector approximation the R table implicitly rests on:
+`R_full = A × (r/d)²`, with Earth's V-band geometric albedo `A ≈ 0.367`
+(geometric, not Bond — this is a single reflectance snapshot, not an
+all-phase energy budget), `r = 6371 km`, `d = 384400 km` (the same
+Earth–Moon distance `celestialBodies.ts`'s Moon record quotes):
+
+```
+(r/d)² = (6371 / 384400)² ≈ 2.746 × 10⁻⁴
+R_full = 0.367 × 2.746 × 10⁻⁴ ≈ 1.008 × 10⁻⁴
+```
+
+Within 1% of the plan's "≈1.0 × 10⁻⁴" anchor — and it is a live
+computation in `planetshine.ts`, not a rounded literal, so the arithmetic
+is auditable at the source. The phase SHAPE, `(1 − phase)²`, is borrowed
+from Stellarium's `Planet.cpp` earthshine ambient term (`phase` = the
+Moon's own illuminated fraction, 1 = full, 0 = new — the two phases are
+geometric complements, so Earth is fully lit as seen from the Moon exactly
+at new Moon). Stellarium's own `0.15` peak is NOT reused — it is an opaque
+ambient-relative constant in Stellarium's own units, not comparable to this
+file's "fraction of local solar irradiance" convention; the grounded
+`R_full` above replaces it. `phase` itself comes from
+`AstroPhysics.resolveSkyGeometry`, the SAME function `Sidebar.tsx` already
+uses for the Moon's own phase display.
+
+### CPU side — `src/lib/graphics/planetshine.ts`
+
+Pure resolver, same split as `solarIrradiance.ts`: `resolvePlanetshineRadianceScalar`
+takes AU directly (`R × resolveFusedSunlightScalar({heliocentricDistanceAU:
+parentAU, …})` — literally the SAME function the sun path uses, evaluated
+at the shine SOURCE's distance instead of the recipient's own; since a
+satellite's orbital radius is 10³–10⁵× smaller than its parent's
+heliocentric distance, the two AU values agree to better than 1 part in
+10⁵, so scaling by the parent's irradiance is both the physically direct
+read — Jupiter/Earth reflect a fraction of the sunlight THEY receive — and
+numerically indistinguishable from scaling by the recipient's own).
+`resolvePlanetshineScalar(bodyId, parentId, date, policy, toneMapped)` is
+the ephemeris-consuming app-facing entry point, mirroring
+`resolveBodySunlightScalar`'s shape exactly. `usePlanetshineScalar.ts`
+copies `useBodySunlightScalar.ts`'s 1 s-bucket cache idiom verbatim.
+
+**Policy, not the "Sun Brightness ×" exposure knob.** "The SAME assist-gain
+policy scalar the sun path uses" means `SunlightAssistPolicy` (real /
+assisted / equalized) — literally the same function call — not the
+separate, display-only `sunIntensityMul` slider (Onda 1's "DOIS controles"
+split). Under the default preset the two are numerically the same thing
+anyway; a user who cranks Sun Brightness will see the shine no longer track
+that adjustment 1:1 — a documented, minor simplification, not a silent one.
+
+### GLSL side — `src/components/canvas/shaders/planetshinePatch.ts`
+
+**Where it lands, and how double-scaling is avoided.** The wrapper chain
+`solarIrradiancePatch.ts` builds ends with the `RE_Direct` macro pointing
+at `RE_Direct_SolarIrradiance`, which multiplies the ONE real light (the
+Sun) by `u_solarIrradiance`. This patch does NOT call that macro for its
+manual shine light — doing so would multiply the CPU's already-final
+`u_shineRadiance` a SECOND time by the sun's own body-relative scalar.
+Instead it calls `RE_Direct_Regolith` or `RE_Direct_Physical` **by name**
+— whichever one the existing chain built for this material, both always
+defined regardless — so the shine still gets the per-light Lommel-Seeliger
+correction (or plain Lambert) using ITS OWN incidence geometry, the entire
+reason the regolith patch was rewritten per-light (c145b01). The injection
+anchor is therefore `#include <lights_fragment_begin>` (a SEPARATE anchor
+from where `solarIrradiancePatch.ts` / `regolithPhotometryPatch.ts` land,
+`lights_physical_pars_fragment`) — it has to run after `geometryPosition` /
+`geometryNormal` / `geometryViewDir` / `reflectedLight` exist, which is
+exactly what `lights_fragment_begin` declares.
+
+Direction (`u_shineDir`) is a WORLD-space unit vector, converted to the
+VIEW space `IncidentLight.direction` needs via the built-in `viewMatrix`
+uniform three always provides (the same uniform the pre-c145b01 regolith
+patch read for its old sun-at-origin shortcut). Radiance
+(`u_shineRadiance`) is a neutral grey `vec3` — no spectral tint is cited in
+this wave's sources, so none is invented.
+
+**Cache-key handling (66ab30f discipline).** `applyPlanetshinePatch` only
+ever runs on the 3 recipients (`usePlanetMaterials.ts`'s
+`receivesPlanetshine` guard), so a recipient's generated GLSL already
+differs from a non-recipient's. `solarIrradiancePatch.ts`'s
+`resolveDirectLightVariant` gained an optional `shine` flag (default
+`false`, so every pre-existing call site's key is byte-identical to
+before), appended to the variant string as `-shine` — so three's
+`customProgramCacheKey` (default: `onBeforeCompile` SOURCE TEXT, not
+behaviour) cannot hash a recipient and a non-recipient of the same
+regolith-ness to the same compiled program.
+
+**Zero effect on the other ~30 bodies.** `usePlanetMaterials.ts`'s hoisted
+`patchDirectLights` closure calls `applyPlanetshinePatch` only when
+`isPlanetshineRecipient(body.id)` is true; every other body's
+`onBeforeCompile` never references the shine module at all, so its
+generated GLSL is byte-for-byte unchanged.
+
+### CPU wiring — `Planet.tsx`
+
+A new `usePlanetshineScalar(body.id, body.parentId)` hook call (safe to
+call unconditionally — resolves to 0 for the ~40 non-recipient bodies) and
+a 4th per-frame block alongside the existing `u_solarIrradiance` write:
+magnitude from the cached resolver; direction from `scene.getObjectByName
+(body.parentId)`'s ACTUAL rendered world position minus the recipient's
+own (`groupRef.current.getWorldPosition`) — the SAME pattern the eclipse
+block above it already uses to find its eclipsing body's position, not a
+duplicate ephemeris-direction path. This is safe because
+`mapPhysicalPositionToDisplay` (`astrophysics.ts`) preserves direction
+under the didactic-mode remap (only the magnitude compresses), so the
+rendered-scene direction and the ephemeris direction agree by construction.
+
+### Tests
+
+- `src/lib/graphics/planetshine.test.ts` (22 tests) — the pure-resolver
+  pins the checklist named: Io/Europa ratio exactly 2.5, radiance scaling
+  with parent AU by inverse square (quarters on doubling, `"real"`
+  policy), earthshine → 0 at full Moon / maximal at new Moon, policy
+  neutrality (`"real"` ⇒ `radiance === R × E` bit-for-bit, no
+  `toBeCloseTo`), plus the R-table/floor/exclusion invariants and an
+  ephemeris-consuming end-to-end check (`resolvePlanetshineScalar` against
+  the real orbital engine for Io/Europa/Jupiter and Moon/Earth).
+- `src/components/canvas/shaders/planetshinePatch.test.ts` (7 tests) — the
+  patch-shape idiom `solarIrradiancePatch.test.ts` / `regolithPhotometry.
+test.ts` already use: the shine chunk anchors on a chunk three actually
+  ships, calls the named `RE_Direct_*` function and never the bare
+  `RE_Direct` macro, converts direction via `viewMatrix`, registers
+  neutral (zero) uniforms and rewrites the shader exactly once, is absent
+  from an untouched material's shader entirely, gives a recipient a
+  different program cache key than a non-recipient of the same
+  regolith-ness, and composes cleanly with `applyPlanetDirectLightPatch`
+  on the same shader object.
+
+### Verification
+
+- `npm run test:run` — **2532 passed / 124 files** (net +29 here: 22 in
+  `planetshine.test.ts`, 7 in `planetshinePatch.test.ts`). No test deleted
+  or weakened.
+- `npx tsc -b` — clean.
+- `npm run lint` — clean.
+- `npm run docs:check` — clean.
+- `npm run build` — clean.
+- **E2E gate:** `npx playwright test e2e/boot.spec.ts` — **2 passed, zero
+  pixel diff, no re-bless.** Expected: the frozen boot frame is a wide
+  system-overview shot with no resolvable Io/Europa/Moon disc (per this
+  wave's own "constrained tier + wide shot" anchor rule), and Onda 2.3
+  touches only those 3 bodies' own materials — nothing else in the frame
+  could move.
+
+---
+
 ## Handoff for the next agent
 
 1. Read this file, then `handoffiluminacao.md` (still read-only), then
@@ -930,15 +1109,15 @@ blocks seeing the scene).
    UI against it. §5.1 and §5.6 are resolved — see "Owner decisions —
    2026-07-29" and follow its queue order (irradiance → default-mode flip →
    unified badge + assist control → Milky Way HDR panorama).
-4. Onda 2's **irradiance** step and the **unified badge + assist control**
-   are both done (see their sections above). The default is now
-   `"assisted"` — a third, compressive position — and it ships disclosed by
-   `FidelityBadge`. What remains of Onda 2: analytical auto-exposure (still
-   blocked on §5.3's radiometric anchor — the 1 AU anchor is explicitly
-   provisional and is NOT that decision), and planetshine. The
-   exposure-registry sweep is decided per family in `exposureRegistry.ts`'s
-   JSDoc; atmosphere + clouds are the two that still structurally cannot
-   follow a body's irradiance.
+4. Onda 2's **irradiance** step, the **unified badge + assist control**,
+   and **planetshine/earthshine** are all done (see their sections above).
+   The default sunlight policy is `"assisted"` — a third, compressive
+   position — and it ships disclosed by `FidelityBadge`. What remains of
+   Onda 2: analytical auto-exposure (still blocked on §5.3's radiometric
+   anchor — the 1 AU anchor is explicitly provisional and is NOT that
+   decision). The exposure-registry sweep is decided per family in
+   `exposureRegistry.ts`'s JSDoc; atmosphere + clouds are the two that
+   still structurally cannot follow a body's irradiance.
 5. **The `scaleMode` default flip (queue step 2) is DONE**, second
    attempt, 2026-07-29 — see "Queue step 2 shipped 2026-07-29" above. The
    first attempt (see "Queue step 2 attempted 2026-07-29" just above it,
