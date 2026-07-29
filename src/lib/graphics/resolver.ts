@@ -49,14 +49,17 @@ export interface GraphicsOverrides {
   contrastDelta?: number;
   /** Additive delta over `visualPreset.brightness`. */
   brightnessDelta?: number;
-  /** Multiplier on `visualPreset.ambientIntensity`. */
+  /**
+   * Multiplier on the display ambient floor composed in
+   * `resolveLerpRefTargets` (Onda 1.3) — see that function's JSDoc and
+   * `AMBIENT_VIEWING_FLOOR` in `visualPresetOverrides.ts` for the
+   * citations. Field name kept from the pre-Onda-1 "ambient intensity
+   * multiplier" control it repurposes; the DisplayPanel label changed
+   * to "Ambient Floor ×" to describe the new behavior.
+   */
   ambientIntensityMul?: number;
   /** Multiplier on `visualPreset.sunIntensity`. */
   sunIntensityMul?: number;
-  /** Multiplier on `visualPreset.shadowIntensity`. */
-  shadowIntensityMul?: number;
-  /** Multiplier on `visualPreset.envMapIntensity`. */
-  envMapIntensityMul?: number;
   /**
    * Multiplier on the COMPLEX `LensFlareEffect` `u_flareIntensity`
    * knob (atlas-only UX tuning, not in Gaia). Default 1.0; users can
@@ -76,10 +79,6 @@ export interface GraphicsOverrides {
   resolutionScale?: number;
   /** Antialias override (reload-required per graphics-settings-design §8). */
   antialias?: boolean;
-  /** Shadow map size override. */
-  shadowMapSize?: 1024 | 2048 | 4096;
-  /** Env-map resolution override. */
-  environmentResolution?: 64 | 128 | 256;
   /** Bloom enable override. */
   bloomEnabled?: boolean;
   /**
@@ -117,7 +116,12 @@ export type ToneMappingName = "none" | "agx" | "aces" | "reinhard" | "cineon";
  * from `(presetBase, overrides, deviceSignals)` by `resolveEffectiveGraphics`.
  */
 export interface EffectiveGraphics {
-  // Rendering (byte-match qualityProfile RESOLVED_PROFILES numerics)
+  // Rendering (byte-match qualityProfile RESOLVED_PROFILES numerics).
+  // shadowMapSize / environmentResolution are tier-only (not user
+  // overridable) — see resolver.ts's GraphicsOverrides JSDoc trail for
+  // why the Onda 1.1 removal left them here: SceneLighting's
+  // SmartSunLight and the Environment cubemap still consume them, they
+  // just no longer take a DisplayPanel override.
   resolutionScale: number;
   antialias: boolean;
   shadowMapSize: 1024 | 2048 | 4096;
@@ -135,8 +139,6 @@ export interface EffectiveGraphics {
   brightnessDelta: number;
   ambientIntensityMul: number;
   sunIntensityMul: number;
-  shadowIntensityMul: number;
-  envMapIntensityMul: number;
   lensFlareIntensityMul: number;
   starOptics: StarOpticsProfile;
 }
@@ -176,8 +178,6 @@ export const PRESET_DEFAULTS: Record<
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
     starOptics: "none",
   },
@@ -197,8 +197,6 @@ export const PRESET_DEFAULTS: Record<
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
     starOptics: "none",
   },
@@ -218,8 +216,6 @@ export const PRESET_DEFAULTS: Record<
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
     starOptics: "none",
   },
@@ -250,8 +246,6 @@ export const PRESET_DEFAULTS: Record<
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
     starOptics: "none",
   },
@@ -355,9 +349,13 @@ export const resolveEffectiveGraphics = (
   return {
     resolutionScale: ov.resolutionScale ?? base.resolutionScale,
     antialias: ov.antialias ?? base.antialias,
-    shadowMapSize: ov.shadowMapSize ?? base.shadowMapSize,
-    environmentResolution:
-      ov.environmentResolution ?? base.environmentResolution,
+    // Onda 1.1: shadowMapSize / environmentResolution are no longer
+    // user-overridable (the DisplayPanel controls drove an inert
+    // SmartSunLight shadow map and a cubemap whose intensity is force-
+    // zeroed by every preset — see visualPresets.ts's envMapIntensity
+    // JSDoc). Tier value only.
+    shadowMapSize: base.shadowMapSize,
+    environmentResolution: base.environmentResolution,
     bloomEnabled: ov.bloomEnabled ?? base.bloomEnabled,
     lightGlowEnabled: ov.lightGlowEnabled ?? base.lightGlowEnabled,
     vfxHdrGain: ov.vfxHdrGain ?? base.vfxHdrGain,
@@ -371,8 +369,6 @@ export const resolveEffectiveGraphics = (
     ambientIntensityMul:
       base.ambientIntensityMul * (ov.ambientIntensityMul ?? 1),
     sunIntensityMul: base.sunIntensityMul * (ov.sunIntensityMul ?? 1),
-    shadowIntensityMul: base.shadowIntensityMul * (ov.shadowIntensityMul ?? 1),
-    envMapIntensityMul: base.envMapIntensityMul * (ov.envMapIntensityMul ?? 1),
     lensFlareIntensityMul:
       base.lensFlareIntensityMul * (ov.lensFlareIntensityMul ?? 1),
     starOptics: ov.starOptics ?? base.starOptics,

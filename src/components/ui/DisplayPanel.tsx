@@ -4,11 +4,20 @@
  * Wave α Commit 3 (R2 Wave 1). Ships the E- and H-class rows from
  * graphics-settings-design.md §3:
  *   - Rendering: Preset, Auto-detect, Resolution Scale, Antialias
- *     (read-only), Shadow Map Size, Env Map Resolution.
+ *     (read-only).
  *   - Post-Processing: Bloom (enabled), Bloom Intensity, Bloom
  *     Threshold, Tone Mapping, Contrast, Brightness, Saturation.
- *   - Atmosphere & Sun: Ambient, Sun Brightness, Shadow Light, Env
- *     Reflections, Sun Render.
+ *   - Atmosphere & Sun: Ambient Floor, Sun Brightness, Sun Render.
+ *
+ * lighting-redesign Onda 1.1 (2026-07-28) removed four controls that
+ * measurably did nothing: Shadow Map Size + Env Map Resolution fed an
+ * inert `SmartSunLight` (layer-1 light the render camera never sees —
+ * `SceneLighting.tsx`) and a cubemap whose `envMapIntensity` every
+ * preset force-zeroes (`visualPresets.ts`); Shadow Light × and Env
+ * Reflections × were their live-value siblings. Ambient Light × was
+ * kept and repurposed as "Ambient Floor ×" — see Onda 1.3's
+ * `AMBIENT_VIEWING_FLOOR` in `visualPresetOverrides.ts`. Full trail in
+ * `tasks/waves/lighting-redesign-2026-07-28.md`.
  *
  * Deferred from Wave 1 per Finding 7 + scope:
  *   - Exposure slider: `@react-three/postprocessing` tone mapping has
@@ -82,9 +91,6 @@ const STAR_OPTICS_OPTIONS: Array<{ id: StarOpticsProfile; label: string }> = [
   { id: "jwst", label: "Segmented (6-spike)" },
   { id: "cinema", label: "Camera iris (8-blade)" },
 ];
-
-const SHADOW_OPTIONS = [1024, 2048, 4096] as const;
-const ENV_RES_OPTIONS = [64, 128, 256] as const;
 
 export const DisplayPanel = () => {
   const {
@@ -216,30 +222,6 @@ export const DisplayPanel = () => {
             </span>
           </div>
         </div>
-
-        <Select
-          label="Shadow Map Size"
-          value={effective.shadowMapSize}
-          options={SHADOW_OPTIONS.map((v) => ({ id: v, label: `${v}` }))}
-          onChange={(v) => setGraphicsOverride("shadowMapSize", v)}
-          onReset={
-            graphicsOverrides.shadowMapSize !== undefined
-              ? () => setGraphicsOverride("shadowMapSize", undefined)
-              : undefined
-          }
-        />
-
-        <Select
-          label="Env Map Resolution"
-          value={effective.environmentResolution}
-          options={ENV_RES_OPTIONS.map((v) => ({ id: v, label: `${v}` }))}
-          onChange={(v) => setGraphicsOverride("environmentResolution", v)}
-          onReset={
-            graphicsOverrides.environmentResolution !== undefined
-              ? () => setGraphicsOverride("environmentResolution", undefined)
-              : undefined
-          }
-        />
       </section>
 
       {/* ── Post-Processing ─────────────────────────────────────────── */}
@@ -371,8 +353,15 @@ export const DisplayPanel = () => {
       <section className="space-y-3">
         <SectionLabel>Atmosphere &amp; Sun</SectionLabel>
 
+        {/* Onda 1.3 — repurposed from the pre-lighting-redesign "Ambient
+            Light ×" control. Scales a display-only ambient viewing
+            floor (default 0.02, mid-industry — see
+            AMBIENT_VIEWING_FLOOR's JSDoc in visualPresetOverrides.ts
+            for the NASA Eyes / Stellarium / OpenSpace citations), not
+            the always-0.0 preset ambient itself. 0 = true unassisted
+            black; 1 (default) = the floor active out of the box. */}
         <Slider
-          label="Ambient Light ×"
+          label="Ambient Floor ×"
           value={graphicsOverrides.ambientIntensityMul ?? 1}
           min={0}
           max={5}
@@ -383,6 +372,7 @@ export const DisplayPanel = () => {
               ? () => setGraphicsOverride("ambientIntensityMul", undefined)
               : undefined
           }
+          hint="Minimum dark-side brightness so shadowed terrain isn't pure black. 0 = physically-accurate darkness."
         />
 
         <Slider
@@ -395,34 +385,6 @@ export const DisplayPanel = () => {
           onReset={
             graphicsOverrides.sunIntensityMul !== undefined
               ? () => setGraphicsOverride("sunIntensityMul", undefined)
-              : undefined
-          }
-        />
-
-        <Slider
-          label="Shadow Light ×"
-          value={graphicsOverrides.shadowIntensityMul ?? 1}
-          min={0}
-          max={5}
-          step={0.1}
-          onChange={(v) => setGraphicsOverride("shadowIntensityMul", v)}
-          onReset={
-            graphicsOverrides.shadowIntensityMul !== undefined
-              ? () => setGraphicsOverride("shadowIntensityMul", undefined)
-              : undefined
-          }
-        />
-
-        <Slider
-          label="Env Reflections ×"
-          value={graphicsOverrides.envMapIntensityMul ?? 1}
-          min={0}
-          max={5}
-          step={0.1}
-          onChange={(v) => setGraphicsOverride("envMapIntensityMul", v)}
-          onReset={
-            graphicsOverrides.envMapIntensityMul !== undefined
-              ? () => setGraphicsOverride("envMapIntensityMul", undefined)
               : undefined
           }
         />

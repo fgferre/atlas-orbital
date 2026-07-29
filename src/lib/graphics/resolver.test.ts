@@ -65,8 +65,6 @@ describe("PRESET_DEFAULTS — byte-match to qualityProfile RESOLVED_PROFILES", (
       expect(p.saturationMul).toBe(1);
       expect(p.ambientIntensityMul).toBe(1);
       expect(p.sunIntensityMul).toBe(1);
-      expect(p.shadowIntensityMul).toBe(1);
-      expect(p.envMapIntensityMul).toBe(1);
     }
   });
 
