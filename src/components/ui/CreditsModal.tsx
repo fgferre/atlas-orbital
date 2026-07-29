@@ -101,6 +101,14 @@ export const CreditsModal = () => {
                   description="Star brightness is measured: apparent magnitude follows Pogson's ratio from the catalog's absolute magnitude and the live distance, so a star's screen flux is its real flux. Colour is derived from the catalog's B−V index through Ballesteros' temperature fit and CIE chromaticity, with a fixed +0.16 HSV saturation lift carried over from Gaia Sky — a deliberate, disclosed exaggeration, since true stellar colours are far paler than most renderings suggest. The rest is display, not sky: stars are drawn with a 0.95-pixel Gaussian point-spread function, which is a rendering choice and NOT the star's angular size, and stars bright enough to clip the display gain a halo modelled on the human eye's own scattering (the ciliary-corona r⁻³ lobe of Spencer et al., SIGGRAPH 1995). That halo is an observer artefact — the star has none. Diffraction spikes are off by default because they belong to a telescope's support vanes, never to a star; the Display panel's Star Optics control names the aperture being simulated when you turn them on."
                 />
                 <CreditItem
+                  title="Display transform — AgX tone mapping"
+                  description="HDR scene light is mapped to the screen through the AgX display transform (Troy Sobotka's AgX, as implemented in the postprocessing library), enabled by default on composer-capable hardware tiers. AgX is a rendering choice, not a physical claim: it compresses real high-dynamic-range values the display cannot show. The Display panel's Tone Mapping control can switch operators or disable it entirely."
+                />
+                <CreditItem
+                  title="Zodiacal light — Leinert et al. (1998)"
+                  description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted. The overall visibility factor is a calibration constant, disclosed in the source, pending a final human-eye pass."
+                />
+                <CreditItem
                   title="NASA JPL Horizons"
                   description="Reference ephemeris for validation and fixture generation. Provides high-precision positions for comparison testing."
                   link="https://ssd.jpl.nasa.gov/horizons/"
