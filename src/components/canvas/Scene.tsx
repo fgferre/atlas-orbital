@@ -51,7 +51,6 @@ import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { ExposureBridge } from "./scene/ExposureBridge";
 import { EyeAdaptationBridge } from "./scene/EyeAdaptationBridge";
 import { ZodiacalLightSkybox } from "./scene/ZodiacalLightSkybox";
-import { MilkyWaySkybox } from "./scene/MilkyWaySkybox";
 
 // Lazy: procedural shader module only loads when sun render mode is "procedural".
 // Photo-mode users (majority) never download the shader chunk.
@@ -766,13 +765,6 @@ export const Scene = () => {
             item from the user's report. See
             `src/lib/zodiacalLightLut.ts` + `ZodiacalLightSkybox.tsx`. */}
         <ZodiacalLightSkybox />
-        {/* #4 -- Milky Way panorama. NASA SVS Deep Star Maps 2020
-            `milkyway_2020` diffuse layer (Gaia DR2 stars below the HYG
-            catalogue cut -- no double-counting against the star
-            catalogue), camera-centered and additively composited
-            between the zodiacal band and the resolved star catalogue.
-            See `src/lib/milkyWayOrientation.ts` + `MilkyWaySkybox.tsx`. */}
-        <MilkyWaySkybox />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <GridRecursive />}
         {showEclipticGrid && <GridDecadeLabel />}

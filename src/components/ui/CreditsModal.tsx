@@ -117,11 +117,6 @@ export const CreditsModal = () => {
                   description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127 Table 16, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted; its blank cells near the Sun are held constant rather than invented, and the ecliptic-pole value is Leinert's own 60 S10. The overall visibility factor is still a display calibration, not a photometric conversion: the table spans a wider brightness range than the graded image can show, so it is centred on that range with equal margin at both ends: the brightest region near the Sun overflows into bloom, and the antisolar gegenschein sits below the visible floor until the view adapts. Disclosed in the source, pending a final human-eye pass."
                 />
                 <CreditItem
-                  title="Milky Way panorama — NASA SVS Deep Star Maps 2020"
-                  description="The diffuse Milky Way backdrop is the `milkyway_2020` layer of NASA's Deep Star Maps 2020 (Scientific Visualization Studio; Gaia DR2 data, ESA/Gaia/DPAC), a synthesis of Gaia stars fainter than the Hipparcos/Tycho catalogue cut with the catalogued bright stars deliberately OMITTED — so it composes with this app's own HYG star catalogue without drawing any star twice. Re-encoded once from the source linear EXR to an 8-bit sRGB texture; the panorama's galactic-to-scene orientation and its display brightness are both derived and pinned by unit test, not eyeballed, and disclosed in `milkyWayOrientation.ts`. Formal licensing review for redistribution is still owed to the project owner — implementation shipped ahead of that check by explicit owner request."
-                  link="https://svs.gsfc.nasa.gov/4851"
-                />
-                <CreditItem
                   title="NASA JPL Horizons"
                   description="Reference ephemeris for validation and fixture generation. Provides high-precision positions for comparison testing."
                   link="https://ssd.jpl.nasa.gov/horizons/"

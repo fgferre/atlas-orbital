@@ -6,6 +6,18 @@ import {
 import { STAR_DISPLAY_BLACK_POINT } from "./starfieldShaderMath";
 
 /**
+ * NOTE (2026-07-29): the `MilkyWaySkybox` renderer this module fed was
+ * pulled from the product after the owner's first real eye pass on
+ * commit 53ce720 — "muito ruim, confuso e não integrado com o
+ * starfield. ele some nos fly-bys" (bad, confusing, not integrated with
+ * the starfield, and it disappears during fly-bys). This is a product
+ * pull, not a defect in the math below: the galactic→ecliptic transform
+ * here was independently verified to 1e-12 against the published
+ * ICRS↔Galactic matrix and stays in the tree as the verified reference
+ * implementation for a future retry, and for auditing `gridOrientation.ts`
+ * separately. See `tasks/waves/starfield-visual-upgrade-2026-07-28.md`
+ * (#4 section) for the full removal record and rethink notes.
+ *
  * Galactic ↔ scene orientation for the Milky Way panorama skybox (#4),
  * plus the display calibration measured from the shipped texture.
  *

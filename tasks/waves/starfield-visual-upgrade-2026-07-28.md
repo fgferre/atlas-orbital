@@ -699,6 +699,69 @@ double-counted bright stars are visible against the HYG catalogue's
 own points, and (d) the formal licensing determination for
 redistributing the NASA asset.
 
+### #4 pulled (2026-07-29) — owner eye-pass verdict
+
+The human-eye pass owed above happened, and the verdict was negative.
+Owner quote, verbatim: **"muito ruim, confuso e não integrado com o
+starfield. ele some nos fly-bys"** — bad, confusing, not integrated
+with the starfield, and it disappears during fly-bys. Owner decision:
+remove it now, rethink the approach later. This is a **product pull**,
+not a bug-fix request — the integration was not attempted to be fixed
+in place.
+
+**Removed:**
+
+- `src/components/canvas/scene/MilkyWaySkybox.tsx` (the renderer) and
+  its mount + import in `src/components/canvas/Scene.tsx`.
+- The Milky Way `CreditItem` entry in `src/components/ui/CreditsModal.tsx`
+  (a disclosure must not describe something no longer rendered).
+- No component-level test existed for `MilkyWaySkybox.tsx` to delete.
+
+**Kept (deliberately):**
+
+- `src/lib/milkyWayOrientation.ts` + `milkyWayOrientation.test.ts` — the
+  galactic→ecliptic transform was independently verified to 1e-12
+  against the published ICRS↔Galactic matrix. It stays as the verified
+  reference implementation for a future retry, and for auditing
+  `gridOrientation.ts` (a separate audit line). A note was added at the
+  top of the file's header comment pointing back to this section.
+- `public/textures/4k_milkyway_2020_gal.jpg` (3.6 MB) stays on disk —
+  hard to reproduce (EXR download + measured-percentile re-encode).
+  Checked: the texture was never wired through `assetManifest.ts` or
+  `textureVariantManifest.ts` — `MilkyWaySkybox.tsx` loaded it via a
+  hardcoded URL straight into `useDeferredTexture`, bypassing the
+  manifest system entirely. With that component deleted, nothing in
+  the codebase references the file any more; it just parks in the repo.
+  `src/lib/textureReachability.test.ts` only asserts requestable paths
+  exist on disk (deliberately does NOT assert the inverse — see that
+  file's own doc comment on why an orphan-file sweep is a trap), so it
+  does not fail for a parked, unreferenced file — no allowlist entry or
+  relocation was needed.
+
+**Failure-mode hypotheses for a future retry (recorded, not
+investigated this pass):**
+
+- _"Disappears during fly-bys"_ — candidates: deferred-texture eviction
+  under VRAM pressure during the transition; the camera-centered
+  sphere's `frustumCulled={false}`/`renderOrder=-50` interplay with
+  whatever camera-rig swap a fly-by does; or the additive band getting
+  tone-mapped/adapted below visibility when a bright body enters frame
+  (1d's eye-adaptation dims exposure, and the panorama has no camera-
+  distance-driven brightening the way zodiacal light does to compensate).
+- _"Not integrated with the starfield"_ — the JPEG is a display-referred
+  bake (sRGB, fixed exposure) composited additively behind a
+  physically-derived Pogson+PSF star catalogue; the two do not share a
+  photometric system, so the seam between "real stars" and "painted
+  backdrop" is visible by construction. A future retry should probably
+  composite the panorama INTO the starfield's own photometric pipeline
+  (e.g. as a per-pixel radiance contribution scaled the same way
+  starlight is) rather than as an independent additive shell layered on
+  top.
+
+No code beyond the removals above was touched to chase these — this is
+a scoped pull per the owner's explicit "remove now, rethink later"
+instruction, not a fix.
+
 ---
 
 ## Outstanding calibration (NOT BLOCKING, but visible)
@@ -1119,3 +1182,14 @@ verification remains structurally impossible from this sandbox
 every prior attempt) and is owed to the owner, same as the zodiacal
 band and 1d. LightGlow audit and W5/eye-adaptation items untouched
 this session._
+
+_2026-07-29 (owner eye-pass session): **#4 (Milky Way HDR panorama)
+PULLED** — the human-eye pass owed above landed and the verdict was
+negative ("muito ruim, confuso e não integrado com o starfield. ele
+some nos fly-bys"). `MilkyWaySkybox.tsx` and its `Scene.tsx` mount plus
+the CreditsModal disclosure entry were removed; see "#4 pulled
+(2026-07-29)" above for the full removal record, what was kept
+(`milkyWayOrientation.ts` + its test, and the source JPEG, now
+unreferenced and parked), and the failure-mode hypotheses recorded for
+a future retry. This is a product pull per explicit owner instruction,
+not a bug fix — no attempt was made to fix the integration in place._

@@ -11,15 +11,14 @@ _Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-
 
 **[`tasks/waves/starfield-visual-upgrade-2026-07-28.md`](./waves/starfield-visual-upgrade-2026-07-28.md)**
 
-**#4 (Milky Way HDR panorama) is now code-complete** — see the wave
-file's "#4 shipped (2026-07-29)" section for the asset, orientation
-(Gram-Schmidt from cited R/Q/P, pinned to 1e-12 against the published
-matrix + the task's own ecliptic pin), calibration, and VRAM tradeoff
-record. All gates clean (2502 tests, `tsc -b`, `lint`, `docs:check`,
-`build`, `npx playwright test e2e/` 12/12, no re-bless — same
-`constrained`-tier self-gate as `ZodiacalLightSkybox`). **Owed to the
-owner:** a human-eye pass (this sandbox cannot composite a frame) and
-the formal licensing determination for the NASA asset.
+**#4 (Milky Way HDR panorama) PULLED after the owner's eye pass
+(2026-07-29)** — verdict: "muito ruim, confuso e não integrado com o
+starfield. ele some nos fly-bys". `MilkyWaySkybox.tsx` + its `Scene.tsx`
+mount + CreditsModal entry removed; `milkyWayOrientation.ts` (verified
+transform) and the source JPEG (now unreferenced) kept for a future
+rethink. See the wave file's "#4 pulled (2026-07-29)" section.
+Rethink pending — do not re-attempt the same additive-shell approach
+without addressing the recorded failure-mode hypotheses.
 
 Remaining open in this wave: eye-adaptation runtime verification (1d
 shipped, not eye-checked) and the LightGlow performance audit (blocked
