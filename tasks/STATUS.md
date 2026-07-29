@@ -3,7 +3,26 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-28 (parallel texture-VRAM line opened; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-28 (parallel starfield visual-upgrade line opened in addition to texture-VRAM; texture-VRAM line still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+
+---
+
+## Parallel line — starfield visual upgrade (partial, handoff)
+
+**[`tasks/waves/starfield-visual-upgrade-2026-07-28.md`](./waves/starfield-visual-upgrade-2026-07-28.md)**
+
+Runs in parallel with the texture-VRAM line; **3 sub-pulls committed
+and a 4-item scope handoff**: AgX default (1a), selective bloom +
+exposure registry (1b+1c), and analytical zodiacal light (#3, Leinert
+1998). Remaining: eye-adaptation (1d), CreditsModal provenance,
+LightGlow performance audit, and Milky Way HDR panorama (#4). Next
+agent should pick up 1d first — all infrastructure is in place.
+
+**No visual runtime verification in the originating session.** Tests,
+tsc, lint all green but commit log = "what was coded" not "what was
+seen". The wave file's "Honest disclosure" and "Outstanding
+calibration" sections say exactly what was NOT verified — read them
+before labelling sub-pulls done.
 
 ---
 
