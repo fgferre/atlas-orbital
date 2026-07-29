@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (planetshine GLSL-compile defect FIXED — `planetshinePatch.ts` (`26cb756`) now declares `u_shineDir`/`u_shineRadiance` at the `lights_physical_pars_fragment` anchor it shares with `solarIrradiancePatch.ts`; Io, Europa and the Moon render correctly again. New permanent regression net: `e2e/ultra-shaders.spec.ts` (forced-ultra focus sweep over one representative per patched material family, asserts zero console errors — this is the gate that would have caught the defect before ship). Prior: forced-ultra headless verification pass found the defect (see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section for the original report, now closed). Before that: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (**Onda 2.4 shipped — analytical auto-exposure / radiometric anchor**: scene exposure is now `1 / fusedSunlightScalar(focusedBody, policy)`, so the focused body always lands at reference display brightness and Saturn/Jupiter stop rendering as black discs in "Brilho real"; `handoffiluminacao.md` §5.3 closed; exposure registry is a two-factor product (`anchor × adaptation`) with 1d demoted to a ±1-stop refinement; `SCENE_EXPOSURE_MAX` 16 → 1e6; boot frame unchanged, no re-bless. Owed: aesthetics of the high-anchor star sky. Prior: planetshine GLSL-compile defect FIXED — `planetshinePatch.ts` (`26cb756`) now declares `u_shineDir`/`u_shineRadiance` at the `lights_physical_pars_fragment` anchor it shares with `solarIrradiancePatch.ts`; Io, Europa and the Moon render correctly again. New permanent regression net: `e2e/ultra-shaders.spec.ts` (forced-ultra focus sweep over one representative per patched material family, asserts zero console errors — this is the gate that would have caught the defect before ship). Prior: forced-ultra headless verification pass found the defect (see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section for the original report, now closed). Before that: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -47,36 +47,36 @@ AU) and **Onda 2.2** (unified fidelity badge + assist control) are all
 **shipped**.
 
 **Onda 2.2 is the step where the lighting became visible.** The assist
-default is now `"assisted"` — `fused = E^0.35`, a third position between
-`"real"` and the old `"compensated"` — and it ships together with its
-disclosure: `ScalePill` is replaced by `FidelityBadge`, ONE expandable
-surface grouping Scale + Brightness (owner decision 2026-07-29), plus a
-`Sunlight` Select in the Display panel. The four `PlanetModel` bodies
-(haumea, vesta, pallas, hygiea) were the open blocker on this step and they
-**joined** the policy — no exclusion, runtime-verified. Read the wave file's
-"Onda 2.2" section before touching `solarIrradiance.ts` or the badge.
-
-**E2E baseline unchanged, twice over** — the ambient floor did not move the
-frozen boot frame, and neither did the badge redesign or the assisted
-default (wide shot, no resolvable disc, per `boot.spec.ts`'s own comment).
-**No re-bless spent this wave; the budget is still unspent.** `boot.spec.ts`
-now also asserts the badge is present and names both axes — the pixel gate
-provably could not catch it disappearing (its footprint is ~0.92 % of frame
-against a 1 % tolerance).
+default is `"assisted"` (`fused = E^0.35`, a third position between `"real"`
+and the old `"compensated"`), shipped with its disclosure: `ScalePill`
+replaced by `FidelityBadge`, ONE expandable surface grouping Scale +
+Brightness, plus a `Sunlight` Select in the Display panel. The four
+`PlanetModel` bodies (haumea, vesta, pallas, hygiea) **joined** the policy —
+no exclusion, runtime-verified. `boot.spec.ts` also asserts the badge is
+present and names both axes. Read the wave file's "Onda 2.2" section before
+touching `solarIrradiance.ts` or the badge.
 
 **Owner decision 2026-07-29 (default scale mode → realistic, boot = system
-overview) SHIPPED**, second attempt same day — `store.ts`'s `scaleMode`
-default is now `"realistic"`, and `AstroPhysics.resolveFocusExtent` grew a
-realistic-mode system-overview branch (Sun focus only, mirrors the
-didactic inclusion set: planets + dwarfs with `orbit.a <= 40` AU, so Pluto
-is in and Eris is out) so the boot camera parks ≈148 AU out — orbit lines,
-labels, and the outer dwarfs/TNOs all visible, planets point-light-sized,
-NASA-Eyes style. `FidelityBadge` boots `TRUE SCALE · ASSISTED`. Boot pixel
-baseline re-blessed from an inspected, healthy frame (this wave's re-bless
-budget is now spent). See the wave file's "Queue step 2 shipped
-2026-07-29 (second attempt)" section for the extent numbers and full
-verification; "Queue step 2 attempted 2026-07-29" (kept above it) is the
-first attempt's record of the real blocker this second attempt resolved. **Onda 2.3's planetshine GLSL-compile defect is FIXED (2026-07-29)** — see the wave file's "2026-07-29 (planetshine GLSL-compile defect — FIXED)" section; regression net is `e2e/ultra-shaders.spec.ts`.
+overview) SHIPPED** — `store.ts`'s `scaleMode` default is `"realistic"` and
+`AstroPhysics.resolveFocusExtent` grew a realistic-mode system-overview
+branch, so the boot camera parks ≈148 AU out (NASA-Eyes style). The wave's
+re-bless budget is spent on that frame. **Onda 2.3's planetshine
+GLSL-compile defect is FIXED** — regression net is
+`e2e/ultra-shaders.spec.ts`. Both fully written up in the wave file.
+
+**Onda 2.4 — analytical auto-exposure / radiometric anchor — SHIPPED
+(2026-07-29).** Closes the owner's "Saturn is a pitch-black disc in Brilho
+real" report and answers `handoffiluminacao.md` §5.3: scene exposure is now
+`1 / fusedSunlightScalar(focusedBody, policy)`, so the focused body always
+lands at reference brightness and the policy decides only how the rest of
+the scene relates to it. Unfocused ⇒ exactly 1, boot frame unchanged, no
+re-bless. Registry is a two-factor product (`anchor × adaptation`,
+`setSceneExposure` deleted; 1d demoted to a ±1-stop refinement);
+`SCENE_EXPOSURE_MAX` 16 → 1e6. **Owed: the aesthetics of the high-anchor
+star sky** — at Neptune-real ×906 the starfield lifts hard, physically
+defensible, left uncapped, needs the owner's eye. Read the wave file's
+"Onda 2.4" section before touching `exposureRegistry.ts`,
+`autoExposure.ts` or either exposure bridge.
 
 ---
 

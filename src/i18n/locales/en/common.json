@@ -48,9 +48,9 @@
     "brightnessAxis": "Brightness",
     "brightnessAction": "Click to switch brightness mode",
     "brightnessRealTitle": "TRUE BRIGHTNESS",
-    "brightnessRealDesc": "Sunlight falls off with real distance, uncorrected — the outer worlds are genuinely this dark.",
+    "brightnessRealDesc": "True brightness ratios between worlds. Exposure adapts to the world you focus, the way an observer standing there would be adapted.",
     "brightnessAssistedTitle": "ASSISTED",
-    "brightnessAssistedDesc": "Real distances, range compressed so distant worlds stay visible. Order of brightness is preserved.",
+    "brightnessAssistedDesc": "Same adapted exposure, but the brightness gaps between worlds are compressed so the whole system reads at once. Order of brightness is preserved.",
     "brightnessEqualizedTitle": "EQUALIZED",
     "brightnessEqualizedDesc": "Every world lit as if it sat at Earth's distance — distance tells you nothing here."
   }

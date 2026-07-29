@@ -72,7 +72,9 @@ describe("FidelityBadge", () => {
     expect(
       screen.getByText(/sizes and gaps are exaggerated/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/range compressed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/order of brightness is preserved/i)
+    ).toBeInTheDocument();
     expect(screen.getByTitle(HEADER_TITLE)).toHaveAttribute(
       "aria-expanded",
       "true"

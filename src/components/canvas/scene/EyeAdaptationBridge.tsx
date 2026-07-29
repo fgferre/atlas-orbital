@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import type * as THREE from "three";
 import type { ToneMappingEffect } from "postprocessing";
-import { setSceneExposure } from "../../../lib/graphics/exposureRegistry";
+import { setExposureAdaptation } from "../../../lib/graphics/exposureRegistry";
 import {
   EYE_ADAPTATION_CEILING,
   exposureFromAdaptedLuminance,
@@ -14,9 +14,44 @@ import {
 
 /**
  * 1d — eye-adaptation. Reads the composer's own adaptive-luminance
- * downsample and writes a bounded exposure scalar into the
- * {@link setSceneExposure} registry; {@link ExposureBridge} (1c) carries
- * that number into `gl.toneMappingExposure` the same way it always has.
+ * downsample and writes a bounded REFINEMENT factor into the
+ * {@link setExposureAdaptation} half of the exposure registry;
+ * `ExposureBridge` (1c) carries the composed product into
+ * `gl.toneMappingExposure` the same way it always has.
+ *
+ * ## Demoted from writer to factor (Onda 2.4)
+ *
+ * Until Onda 2.4 this file wrote the whole registry via
+ * `setSceneExposure`, mapping measured luminance to an ABSOLUTE
+ * exposure in `[0.165, 1]`. Onda 2.4 introduced the analytical
+ * radiometric anchor (`autoExposure.ts`), which answers a different
+ * question about the same number — "put the focused body at reference
+ * brightness" versus this loop's "put the frame average at 0.165" —
+ * and two absolute writers on one scalar is the stacked-multiplier
+ * failure mode the lighting plan forbids: the anchor would be
+ * destroyed within one adaptation time constant of being set.
+ *
+ * The measured loop was **kept, not disabled**, because what it
+ * actually contributes is worth having and is orthogonal to the
+ * anchor. Its output is 1.0 (neutral, byte-identical to pre-1d) for
+ * the overwhelming majority of frames — a mostly-black solar-system
+ * frame averages far below the 0.165 floor in the library's 1×1 mip —
+ * and only dips when something genuinely blows the frame out, i.e. the
+ * Sun in view. That is glare protection, not exposure placement. As a
+ * multiplier it now reads the way a biological eye actually behaves:
+ * trimming around a scene it is already adapted to.
+ *
+ * The registry clamps this factor to ±1 stop
+ * (`EXPOSURE_ADAPTATION_MIN`/`MAX`) so it can never relocate the
+ * anchor; see `exposureRegistry.ts` for why one stop specifically.
+ * The raw measurement below is deliberately NOT pre-clamped here — the
+ * honest measured value goes in, and the composition bound is applied
+ * in the one place that owns the composition.
+ *
+ * Note this is not a feedback loop: `AdaptiveLuminancePass` samples the
+ * composer's HDR **input** buffer, which is upstream of the
+ * `ToneMappingEffect` that consumes `toneMappingExposure`, so raising
+ * the anchor does not change what gets measured.
  *
  * ## What the library actually does (verified against
  * `node_modules/postprocessing/build/index.js@6.38.0`, not guessed)
@@ -72,8 +107,8 @@ import {
  *      `three/src/renderers/shaders/ShaderChunk/packing.glsl.js`), which
  *      is why `unpackLuminanceFromRGBA8` reimplements that exact dot
  *      product rather than reading a plain grayscale byte.
- *   3. Converts luminance → exposure and eases toward it every frame via
- *      `setSceneExposure()`.
+ *   3. Converts luminance → refinement factor and eases toward it every
+ *      frame via `setExposureAdaptation()`.
  *
  * `adaptiveLuminancePass` and its `renderTargetAdapted` render target
  * are real runtime properties (`this.adaptiveLuminancePass = new
@@ -112,7 +147,7 @@ import {
  * a 256×256 quad plus two 1×1 quads, and throttling it would change the
  * look rather than just the sampling of it.
  *
- * ## Bounding the adaptation (why a black frame cannot reach exposure=16)
+ * ## Bounding the adaptation (why a black frame cannot run away)
  *
  * `minLuminance={STAR_DISPLAY_BLACK_POINT}` is passed to `<ToneMapping>`
  * so the SAME constant the starfield shader math calibrates the display
@@ -227,7 +262,7 @@ export const EyeAdaptationBridge = ({
     );
     if (next !== currentExposureRef.current) {
       currentExposureRef.current = next;
-      setSceneExposure(next);
+      setExposureAdaptation(next);
     }
   });
 

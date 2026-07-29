@@ -416,8 +416,11 @@ export const ZODIACAL_FAINT_ANCHOR_S10 = 140;
  * The layer shipped with `4.0e-9`, justified as "a discretely small
  * scalar". It put the brightest cell in the entire table at
  * `9000 × 4.0e-9 = 3.6e-5` linear — 4600× below
- * {@link STAR_DISPLAY_BLACK_POINT}, and still 286× below it after the
- * largest exposure the registry allows (`SCENE_EXPOSURE_MAX = 16`).
+ * {@link STAR_DISPLAY_BLACK_POINT}, and still 286× below it even after
+ * a 16× exposure lift — the exposure registry's ceiling at the time
+ * this was written. (Onda 2.4's analytical anchor raised
+ * `SCENE_EXPOSURE_MAX`; the argument does not depend on the ceiling,
+ * only on 16× already being far more lift than this band would see.)
  * The band could not have produced a lit pixel on any tier, at any
  * distance, under any grade. This constant is 90 468× larger.
  *

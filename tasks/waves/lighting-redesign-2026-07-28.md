@@ -1390,3 +1390,316 @@ not a second shader defect.
   this exact flake); it passed alone and passed again in a clean full
   re-run. The boot pixel baseline needed no re-blessing — this defect and
   its fix never touch the wide, disc-free boot frame.
+
+---
+
+## Onda 2.4 — analytical auto-exposure / radiometric anchor (done)
+
+Shipped 2026-07-29. Closes the owner's report that in "Brilho real"
+Saturn and Jupiter render as **pitch-black discs** — reproduced
+headlessly before the fix (`saturn-real-before.png`: an invisible
+planet, only the constant ring emissive faintly present) and after
+(`saturn-real-after.png`: banded disc, terminator, lit rings).
+
+### The defect was the exposure, not the irradiance
+
+Onda 2.1–2.3 gave every body the sunlight it really receives, but left
+exposure pinned at the 1 AU reference. In `"real"` that showed Saturn's
+true RADIANCE **under Earth's exposure**. The owner's objection is
+correct on the physics: Saturn receives ~1.1 % of Earth's irradiance,
+and 1 % of sunlight is ~1500 lux — an overcast Earth afternoon. Any
+observer at Saturn, and every Cassini frame, sees a brilliant planet.
+No serious astronomy app fixes exposure at one body's distance while
+claiming to show another body's brightness.
+
+### The formula
+
+```
+sceneExposure_anchor = 1 / fusedSunlightScalar(focusedBody, activePolicy)
+```
+
+`fusedSunlightScalar` is the **same** `resolveFusedSunlightScalar` the
+planet materials multiply their direct sunlight by — not a parallel
+re-derivation. That identity is the design: the focused body's
+on-screen luminance is `fused × exposure ≡ 1`, exactly reference
+display brightness, in every policy. A camera exposes for its subject.
+`autoExposure.test.ts` pins the invariant across 10 bodies × 3
+policies; if the two ever drift, the black-disc defect returns for
+whatever body the drift covers.
+
+Pinned positions (`autoExposure.test.ts`):
+
+| focus                | policy        | anchor                           |
+| -------------------- | ------------- | -------------------------------- |
+| any body             | `compensated` | exactly 1 (`Math.fround` = 1.0f) |
+| Saturn (9.0–10.1 AU) | `real`        | d² = 81–102, ~89 mid-orbit       |
+| Neptune              | `assisted`    | ~10.8                            |
+| Neptune              | `real`        | ~906                             |
+| nothing focused      | any           | exactly 1                        |
+
+### The §5.3 answer — "âncora radiométrica: o que significa 0 EV?"
+
+**0 EV means the sunlight falling on the body you are looking at.** Not
+a fixed W/m², not 1 AU forever — an observer's adaptation state, which
+is the only thing a display-referred pipeline can honestly claim. The
+1 AU constant survives as the _unfocused_ anchor: system overview and
+boot frame yield exposure exactly 1. `handoffiluminacao.md` §5.3 is
+closed; `solarIrradiance.ts`'s "the anchor is PROVISIONAL" header is now
+about where the _material_ normalisation sits, not about an unanswered
+design question.
+
+Consequence, all intended: the policy control no longer decides whether
+you can see your subject, only how the **rest of the scene relates to
+it** — `real` = true ratios, `assisted` = sigma-0.35-compressed ratios,
+`compensated` = today's equalized look (anchor = 1, byte-identical to
+pre-2.4).
+
+### The Sun is not a subject
+
+`resolveAnchorDistanceAU` falls back to the 1 AU reference for: no
+focus, an id outside the curated catalog (HYG star focus arrives as
+`hyg:<index>`; `resolveHeliocentricDistanceAU` throws on unknown ids by
+design), and any body inside `SOLAR_IRRADIANCE_MIN_AU`. The last case
+is the Sun and only the Sun (Mercury's perihelion is 0.3077 AU). Its
+heliocentric distance is 0 and `solarIrradianceAtAU` clamps that to
+0.05 AU purely as a division-by-zero guard _for the material path_ —
+that module's own docstring calls it "not a photometric statement".
+Reading it as an anchor would darken the whole scene 400× on
+`focusHome()` and promote a defensive bound to a claim; the Sun does
+not _receive_ sunlight, so the quantity is undefined, not small.
+
+### The ramp: log-space, time-based — and why not flight progress
+
+Log2 (stop) space, `stepExposureLogTowards`, tau = 1.5 s. Log space is
+non-negotiable: the anchor crosses ~10 stops Earth to Neptune, and a
+linear lerp would spend ~97 % of its duration inside the last stop —
+a hard cut followed by a crawl. Tests pin monotonicity in both
+directions, continuity as delta-t goes to 0, frame-rate independence,
+and exact settling.
+
+**Flight progress was NOT used, deliberately.** The only
+flight-progress scalar this repo exports is `hygFlightPosProgress`,
+which covers HYG _star_ flights — the one focus class that has no
+heliocentric distance and therefore never moves the anchor at all. The
+curated-body fly-to (`CameraController.tsx`'s `CameraTransition`) keeps
+its progress in a component-local ref with no exported surface, and the
+bodies whose exposure actually swings (Jupiter, Saturn, Neptune) are
+all on that path. Publishing it means either a 60 Hz store write (a
+React re-render per frame) or a second camera-to-photometry singleton,
+to buy a difference the eye cannot resolve: the fly-to is
+duration-clamped to 1.5–4 s, and at tau = 1.5 s the ramp has covered
+63 % of its stops by the end of the shortest flight and >93 % by the
+end of the longest. This is the documented fallback the brief allows,
+taken knowingly.
+
+### Interplay 1 — eye adaptation: bounded refinement, not a second writer
+
+`EyeAdaptationBridge` (1d) used to write the WHOLE registry via
+`setSceneExposure`, mapping measured luminance to an ABSOLUTE exposure
+in `[0.165, 1]`. Left alone it would have destroyed the anchor within
+one adaptation time constant — two absolute writers on one scalar is
+the "dois multiplicadores empilhados que depois brigam" failure mode
+the plan names, the same law `solarIrradiance.ts` obeys by fusing
+irradiance and assist gain before either reaches a shader.
+
+**Chosen: option (a), bounded refinement multiplier — kept, not
+disabled.** Evidence for keeping it: `exposureFromAdaptedLuminance`
+returns `TARGET / max(L, TARGET)`, which is 1.0 (neutral,
+byte-identical to pre-1d) for the overwhelming majority of frames — a
+mostly-black solar-system frame averages far below the 0.165 floor in
+the library's 1×1 mip — and only dips when something genuinely blows
+the frame out, i.e. the Sun in view. Its real contribution today is
+_glare protection_, which is orthogonal to exposure placement and
+worth having. As a multiplier it also reads the way a biological eye
+actually behaves: trimming around a scene it is already adapted to.
+
+**The composition is structural, not conventional.** The registry now
+holds two private factors and derives the product:
+
+```
+sceneExposure = anchor × adaptation
+setExposureAnchor()      <- AutoExposureBridge, exclusively
+setExposureAdaptation()  <- EyeAdaptationBridge, exclusively
+```
+
+`setSceneExposure` is **gone**; there is no API by which either driver
+can reach the other's factor or the product. `exposureRegistry.test.ts`
+pins that writing one factor leaves the other bit-identical.
+
+Bound: ±1 stop (`EXPOSURE_ADAPTATION_MIN/MAX = 0.5 / 2.0`). One stop is
+the largest trim that cannot reorder which body reads brighter than
+which — the ordering claim `assisted`/`real` make is that irradiance
+RATIOS survive, and the smallest ratio between adjacent catalog bodies
+is well over 2:1. The raw measurement is deliberately NOT pre-clamped
+in `eyeAdaptation.ts`; the honest measured value goes in and the bound
+is applied in the one place that owns the composition.
+
+Not a feedback loop: `AdaptiveLuminancePass` samples the composer's HDR
+**input** buffer, upstream of the `ToneMappingEffect` that consumes
+`toneMappingExposure`, so raising the anchor does not change what gets
+measured.
+
+### Interplay 2 — Bloom threshold: VERIFIED unaffected
+
+Two independent reasons, both read out of
+`node_modules/postprocessing/build/index.js@6.38.0` and three's
+`tonemapping_pars_fragment.glsl.js`, not assumed:
+
+1. **Ordering.** `PostProcessingPipeline.tsx` mounts
+   `Bloom -> ToneMapping -> HueSaturation -> BrightnessContrast`. Bloom
+   reads the raw HDR buffer before any tone-mapping stage runs.
+2. **Uniform reach.** `toneMappingExposure` appears in exactly one
+   shader in the whole pipeline: `tone_mapping_default` (index.js:13282)
+   is the only string in the package that includes
+   `<tonemapping_pars_fragment>`. Bloom's threshold material is
+   `LuminanceMaterial` (index.js:3368-3396) — its fragment source
+   declares only `inputBuffer`, `threshold`, `smoothing`/`range`, and
+   computes `mask = smoothstep(threshold, threshold + smoothing,
+luminance(texel.rgb))`. No exposure term, no chunk include.
+
+Corollary also verified: `Scene.tsx` sets
+`gl.toneMapping = NoToneMapping`, and three only emits the chunk into
+scene materials when `toneMapping !== NoToneMapping`, so the registry
+cannot leak into planet/star materials either. It reaches exactly one
+place — the AgX EffectPass (three's AgX branch multiplies by it at
+`tonemapping_pars_fragment.glsl.js:135`).
+
+**Therefore no change to `luminanceThreshold = 1.0` was needed and none
+was made.** `SUNLIGHT_UNMAPPED_CEILING` (the "gain > 1 needs a mounted
+operator" guard from §6 item 4) is likewise untouched and still correct:
+where no operator is mounted, `gl.toneMappingExposure` is a structural
+no-op, which is also why the headless boot pixel baseline is immune to
+everything in this Onda.
+
+### Interplay 3 — what does and does not follow the anchor
+
+- **Sun disc** — `toneMapped: false`, bypasses exposure entirely, stays
+  saturated at any anchor. Physically right and deliberately kept: an
+  adapted eye still cannot look at the Sun from Neptune. Documented in
+  `exposureRegistry.ts` and in the new Credits entry.
+- **Starfield, night lights, atmosphere, ring emissive** — all scale
+  with the global exposure (via `toneMappingExposure` on the composed
+  buffer). At Neptune-real (×906) the sky lifts dramatically. This is a
+  dark-adapted observer's sky and AgX rolls the top, so it is
+  physically defensible — **captured in the screenshots and left
+  uncapped, owed to the owner's aesthetic judgment.** See "Owed" below.
+- **Ring emissive specifically** — Saturn's rings are still an
+  emissive constant, so at anchor 89 they lift by 89× while the
+  planet's own surface stays at reference. Visible in
+  `saturn-real-after.png`. Owed to the rings wave (W5-B), which runs
+  after this one; not touched here.
+
+### Registry bound: 16 to 1e6, structurally derived
+
+The old ceiling of 16 was chosen when the only writer produced values in
+`[0.165, 1]`. The anchor asks for d² in AU: Jupiter ~27, Saturn ~89,
+Neptune ~906, Pluto ~1560, Eris at aphelion ~9525, Sedna at aphelion
+~941 000. A ceiling of 16 would have clipped everything from Jupiter
+outward — i.e. silently reproduced the exact defect this Onda fixes.
+
+The new ceiling is **not a round taste number**: it is exactly
+`SOLAR_IRRADIANCE_MAX_AU²` = 1000² = 1e6, the reciprocal of the
+smallest irradiance `solarIrradiance.ts` can produce, pinned to that
+identity by test. Any round replacement (4096, 65536) still clips SOME
+catalog body and therefore still breaks `fused × exposure = 1` for that
+body alone — correct almost everywhere and silently wrong at the edge,
+the worst kind of bound. Tying it to the irradiance module's own
+distance clamp makes the invariant hold for every body the catalog can
+ever hold, by construction. `SCENE_EXPOSURE_MIN` is unchanged at 1e-6.
+
+Safety: `gl.toneMappingExposure` is consumed only by the ToneMapping
+fragment shader, which three compiles at `precision highp float`
+(WebGL2 mandates highp in fragment shaders), so `color *= 1e6` cannot
+overflow; AgX then clamps `log2(color)` into its `[-12.47, 4.026]` EV
+window before the sigmoid, so even a zero-luminance pixel resolves to
+the operator's black rather than a NaN.
+
+### Disclosure changes
+
+- **FidelityBadge, both locales.** The old `real` line ("A luz solar cai
+  com a distância real, sem correção — os mundos externos são mesmo
+  assim tão escuros") had become a lie and was the copy the owner was
+  reading. Now: _"Razões de brilho verdadeiras entre os mundos. A
+  exposição se adapta ao corpo focado, como um observador no local
+  estaria adaptado."_ / _"True brightness ratios between worlds.
+  Exposure adapts to the world you focus, the way an observer standing
+  there would be adapted."_ The `assisted` line was also rewritten —
+  its old "range compressed so distant worlds stay visible" sold
+  visibility, which is now the anchor's job, not the assist's; it now
+  names what the assist actually does (compresses the gaps _between_
+  worlds) and keeps the ordering claim.
+- **Credits.** New entry _"Exposure — an observer adapted to the world
+  you are looking at"_: the formula in words, the 1500-lux Saturn
+  argument, the unfocused 1 AU anchor, the log-space ramp, and both
+  named consequences (Sun disc exempt; starfield not exempt). The
+  existing sunlight entry dropped its now-obsolete "the 1 AU reference
+  point is itself provisional / no absolute radiometric claim" tail,
+  which moved into the new entry in its answered form.
+
+### Files
+
+- `src/lib/graphics/autoExposure.ts` (new, pure) — formula, subject
+  rules, log ramp.
+- `src/lib/graphics/exposureRegistry.ts` — two-factor composition,
+  new bound, `setSceneExposure` removed.
+- `src/components/canvas/scene/AutoExposureBridge.tsx` (new) — the
+  three lines of glue the pure module cannot own (focus id, clock,
+  frame delta), with the same 1 s bucket cache
+  `useBodySunlightScalar.ts` uses, keyed additionally on focus id.
+- `src/components/canvas/scene/EyeAdaptationBridge.tsx` — writes
+  `setExposureAdaptation`.
+- `src/components/canvas/Scene.tsx` — mounts the new bridge.
+- `src/lib/graphics/autoExposure.test.ts`,
+  `src/lib/graphics/exposureRegistry.test.ts` (new).
+- `src/components/ui/CreditsModal.tsx`, both `common.json` locales,
+  `FidelityBadge.test.tsx` (copy pin updated to a line that survived
+  the rewrite).
+- `src/lib/zodiacalLightLut.ts` — a doc comment quoted the old
+  `SCENE_EXPOSURE_MAX = 16`; reworded so its argument no longer depends
+  on the ceiling.
+
+### Verification
+
+- `npm run test:run` — **2573 passed / 126 files** (+32 new: 20
+  `autoExposure`, 12 `exposureRegistry`). No test deleted; one copy pin
+  in `FidelityBadge.test.tsx` retargeted to surviving copy.
+- `npx tsc -b`, `npm run lint`, `npm run docs:check`, `npm run build` —
+  all clean.
+- `npx playwright test e2e/` — 13/13 passed. **Boot pixel baseline
+  unchanged and NOT re-blessed**: no focus at boot means anchor exactly
+  1, and headless resolves to `constrained` where no ToneMapping pass
+  mounts at all, so the registry is a structural no-op there.
+- **Forced-ultra headless A/B** (the technique committed as
+  `e2e/ultra-shaders.spec.ts`, driven here by a throwaway spec that was
+  deleted before the commit): `__ATLAS_TEST_STORE__` then
+  `setGraphicsAutoMode(false)` + `setGraphicsPreset("ultra")`, policy
+  driven through the real FidelityBadge UI, focus via `setFocusId`.
+  BEFORE captured by stashing this change and rebuilding, so the two
+  frames differ only by this commit.
+  - `saturn-real-before.png` — Saturn is an invisible black disc; only
+    the constant ring emissive is faintly present. The owner's report,
+    reproduced exactly.
+  - `saturn-real-after.png` — banded disc, terminator, lit rings, at
+    anchor ~89.
+  - `neptune-assisted-after.png` — lit blue disc with cloud structure
+    at anchor ~10.8.
+
+### Owed
+
+1. **Aesthetics of the high-anchor sky.** At Neptune-real (×906) and
+   even at Saturn-real (×89) the starfield lifts hard —
+   `saturn-real-after.png` shows a dense, bright star field and a
+   large solar glow. This is physically defensible (dark adaptation)
+   and was left uncapped on purpose rather than silently clipped, but
+   it is a look decision the owner has not seen yet. If he wants it
+   damped, the honest lever is a per-family registry subscription
+   (starfield `u_exposure` taking a sub-linear share of the anchor),
+   not a cap on the anchor itself.
+2. **Ring emissive detaches under a high anchor** — W5-B.
+3. **Atmosphere shell + cloud COLOR blend** still do not follow the
+   registry (pre-existing, `exposureRegistry.ts`); bounded today
+   because Earth is the only body with either and sits at anchor 1.
+4. Bodies rendered via `PlanetModel.tsx` (haumea, vesta, pallas,
+   hygiea) still skip every per-material mechanism, so they do not get
+   the irradiance scalar and now sit at whatever the anchor leaves them
+   — pre-existing §5 item 5, unchanged by this Onda.

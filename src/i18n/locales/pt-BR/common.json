@@ -48,9 +48,9 @@
     "brightnessAxis": "Brilho",
     "brightnessAction": "Clique para alternar o modo de brilho",
     "brightnessRealTitle": "BRILHO REAL",
-    "brightnessRealDesc": "A luz solar cai com a distância real, sem correção — os mundos externos são mesmo assim tão escuros.",
+    "brightnessRealDesc": "Razões de brilho verdadeiras entre os mundos. A exposição se adapta ao corpo focado, como um observador no local estaria adaptado.",
     "brightnessAssistedTitle": "ASSISTIDO",
-    "brightnessAssistedDesc": "Distâncias reais, faixa comprimida para mundos distantes continuarem visíveis. A ordem de brilho é preservada.",
+    "brightnessAssistedDesc": "A mesma exposição adaptada, mas com as diferenças de brilho entre os mundos comprimidas para o sistema inteiro ser lido de uma vez. A ordem de brilho é preservada.",
     "brightnessEqualizedTitle": "EQUALIZADO",
     "brightnessEqualizedDesc": "Cada mundo iluminado como se estivesse à distância da Terra — aqui a distância não diz nada."
   }

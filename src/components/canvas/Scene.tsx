@@ -48,6 +48,7 @@ import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
+import { AutoExposureBridge } from "./scene/AutoExposureBridge";
 import { ExposureBridge } from "./scene/ExposureBridge";
 import { EyeAdaptationBridge } from "./scene/EyeAdaptationBridge";
 
@@ -743,17 +744,22 @@ export const Scene = () => {
           bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
           userOverrides={graphicsOverrides}
         />
-        {/* 1c — exposure registry bridge. Pushes the central
+        {/* 1c — exposure registry bridge. Pushes the composed
             `sceneExposure` scalar into `gl.toneMappingExposure` per
             frame so the AgX EffectPass scales its curve consistently.
-            No-op while registry stays at default 1.0; 1d
-            (eye-adaptation) and a future photometric-EV readout will
-            write to it. See `src/lib/graphics/exposureRegistry.ts`. */}
+            See `src/lib/graphics/exposureRegistry.ts`. */}
         <ExposureBridge />
-        {/* 1d — eye-adaptation. Drives the SAME `sceneExposure` scalar
-            `ExposureBridge` carries into `gl.toneMappingExposure`, using
-            the composer's own adaptive-luminance downsample as the
-            input signal. `toneMappingRef` is `null` (no-op) whenever no
+        {/* Onda 2.4 — analytical auto-exposure. Owns the ANCHOR factor
+            of that registry: `1 / fusedSunlightScalar(focusedBody)`, so
+            the body you are looking at always lands at reference
+            display brightness and the policy decides how the rest of
+            the scene relates to it. Unfocused ⇒ exactly 1. See
+            `src/lib/graphics/autoExposure.ts`. */}
+        <AutoExposureBridge />
+        {/* 1d — eye-adaptation. Owns the ADAPTATION factor of the same
+            registry (bounded to ±1 stop around the anchor), using the
+            composer's own adaptive-luminance downsample as the input
+            signal. `toneMappingRef` is `null` (no-op) whenever no
             ToneMapping pass is mounted — see EyeAdaptationBridge.tsx for
             the full empirical write-up. */}
         <EyeAdaptationBridge toneMappingRef={toneMappingRef} />
