@@ -27,6 +27,15 @@
  * by the same factor. The two cancel, so resident bytes approach a constant set
  * by the *viewport*, not by the zoom. That is the property to hold onto —
  * `estimateResidentTiles` encodes it and `texturePyramid.test.ts` pins it.
+ *
+ * ## Why this has no production importer yet
+ *
+ * S1-S4 in the wave doc (offline tiler, atlas sampling, view-dependent
+ * selection, rollout) have not started — `deferredTextureCache.ts` still does
+ * whole-image tier swapping. This file is that work's parked budget-planner
+ * scaffolding, kept pure/GPU-free on purpose so the memory argument is provable
+ * before any renderer code changes. Not dead code; do not delete without first
+ * checking whether the wave is still the active plan.
  */
 
 /** Tile edge in texels. 256 matches the slippy-map convention. */
