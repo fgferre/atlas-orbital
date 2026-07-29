@@ -150,7 +150,17 @@ export const useVisualPresetLerp = ({
 
     if (bloomRef.current) {
       bloomRef.current.intensity = targets.bloomIntensity;
-      bloomRef.current.luminanceThreshold = targets.bloomThreshold;
+      // The real knob — `BloomEffect` itself has no `luminanceThreshold`
+      // property, only `intensity`; the threshold lives on the nested
+      // `LuminanceMaterial` (see `BloomController`'s JSDoc). Writing it
+      // every frame is safe: `LuminanceMaterial.threshold`'s setter only
+      // touches a uniform (`uniforms.threshold.value`, always GPU-live)
+      // plus a `defines.THRESHOLD` flag that never actually flips at
+      // runtime — `luminanceSmoothing` is fixed at construction to 0.1
+      // and never changed again, so `this.smoothing > 0` is permanently
+      // true and the define is rewritten to the same "1" every call, never
+      // triggering (or needing) a `needsUpdate`-driven shader recompile.
+      bloomRef.current.luminanceMaterial.threshold = targets.bloomThreshold;
       // Radius is tricky with mipmapBlur, often static. We'll skip radius lerping for now or assume it works.
     }
     if (hueSatRef.current) hueSatRef.current.saturation = targets.saturation;

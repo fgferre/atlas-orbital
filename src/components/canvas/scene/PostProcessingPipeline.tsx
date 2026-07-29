@@ -14,9 +14,23 @@ import type { ToneMappingName } from "../../../lib/graphics/resolver";
 import { setSunlightToneMappingMounted } from "../../../lib/graphics/solarIrradiance";
 import { STAR_DISPLAY_BLACK_POINT } from "../../../lib/starfieldShaderMath";
 
+/**
+ * Structural shape of the real `postprocessing` `BloomEffect` instance
+ * `<Bloom ref>` forwards (verified against `node_modules/postprocessing`).
+ *
+ * `BloomEffect` itself has no `luminanceThreshold` property — only
+ * `intensity`. The threshold lives one level down, on the `LuminanceMaterial`
+ * (`luminanceMaterial.threshold`, a live GPU uniform write — see
+ * `useVisualPresetLerp.ts` for why writing it every frame is safe). An
+ * earlier version of this interface declared a `luminanceThreshold` field
+ * that didn't exist on the real object: TypeScript's structural typing let
+ * that compile silently, and the write from `useVisualPresetLerp` landed on
+ * a dead own-property nothing read, making the DisplayPanel's bloom
+ * threshold slider inert. Fixed 2026-07-29.
+ */
 export interface BloomController {
   intensity: number;
-  luminanceThreshold: number;
+  luminanceMaterial: { threshold: number };
 }
 
 export interface HueSaturationController {
