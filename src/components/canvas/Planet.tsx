@@ -10,11 +10,21 @@ import {
 } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { type CelestialBody, AstroPhysics } from "../../lib/astrophysics";
+import {
+  type CelestialBody,
+  AstroPhysics,
+  AU_IN_KM,
+} from "../../lib/astrophysics";
 import {
   resolveOrbitalDisplayPosition,
   getOrbitalDisplayOrbitPoints,
 } from "../../lib/orbital";
+import { resolveHeliocentricPositionAU } from "../../lib/orbital/heliocentric";
+import {
+  resolveEclipseConeGeometry,
+  scaleEclipseRadiiToRenderUnits,
+  type EclipseConeGeometry,
+} from "../../lib/eclipseGeometry";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { getOrbitCacheKey, getOrbitSegments } from "../../lib/orbitQuality";
 import { simulationClock } from "../../lib/simulationClock";
@@ -90,6 +100,25 @@ const TMP_ATMO_CAMERA_LOCAL = new THREE.Vector3();
 const TMP_ATMO_SUN_LOCAL = new THREE.Vector3();
 const TMP_ECLIPSE_RECEIVER_POS = new THREE.Vector3();
 const TMP_ECLIPSE_ECLIPSING_POS = new THREE.Vector3();
+// W7 — NEW-4 dissolution. Position and radius for the eclipse cone driver
+// now come from `resolveHeliocentricPositionAU` + the catalog, never a
+// scene-graph mesh lookup (`resolveHeliocentricPositionAU`'s own header:
+// the didactic remap would lie about real distances if sampled via
+// `getWorldPosition()`). `TMP_ECLIPSE_GEOMETRY` is the out-parameter
+// `resolveEclipseConeGeometry` writes into every eligible frame — shared
+// across bodies the same way the other `TMP_` scratch above is, safe
+// because each body's `useFrame` fully consumes it synchronously before
+// the next body's callback runs.
+const TMP_ECLIPSE_GEOMETRY: EclipseConeGeometry = {
+  umbraRadiusKm: 0,
+  penumbraRadiusKm: 0,
+  axisDistanceKm: 0,
+  active: false,
+  minShadow: 0,
+};
+/** The Sun is always at the AU origin in this app's frame — read-only, never mutated. */
+const SUN_POSITION_AU = new THREE.Vector3(0, 0, 0);
+const SUN_RADIUS_KM = BODIES_BY_ID.get("sun")?.radiusKm ?? 696340;
 const TMP_SHINE_PARENT_WORLD = new THREE.Vector3();
 const TMP_SHINE_SELF_WORLD = new THREE.Vector3();
 
@@ -397,56 +426,93 @@ const PlanetVisual = ({
         }
       }
 
-      // T3.3 — Eclipse uniforms. Runs for any body with an
+      // W7 — Eclipse uniforms. Runs for any body with an
       // `eclipsingBodyId` (Earth during solar eclipse, Moon during
-      // lunar eclipse). Looks up the eclipsing body's mesh via
-      // `scene.getObjectByName`, writes its world-pos + radius into
-      // the shader uniforms every frame. Matches Gaia's
-      // `MainPostProcessor.java:633-679` (light-position update
-      // handler) pattern: driver pushes CPU-computed world-space
-      // eclipse geometry; shader reads as-is.
-      // Shared block — computes the eclipse state once, writes to all
-      // materials that have eclipse uniforms. Post 2026-04-22 codex
-      // audit fix #5, the cloud material also needs eclipse so a solar
-      // eclipse darkens clouds above the Earth surface, matching Gaia
-      // `cloud.fragment.glsl:170-172`.
-      if (body.eclipsingBodyId) {
+      // lunar eclipse). NEW-4 dissolved (2026-07-29): post-W7 the
+      // driver needs the eclipser's MESH for nothing — position comes
+      // from `resolveHeliocentricPositionAU`, radius from the catalog —
+      // so `active` is keyed off the physical cone predicate alone,
+      // never mesh-mount state. Earth's shadow falls on the Moon
+      // whether or not Earth's mesh happens to be loaded.
+      //
+      // Skip entirely while this receiver is off-screen — the two
+      // scope notes in the wave file: a sim-time throttle degrades
+      // badly at both high warp (becomes per-frame anyway) and low warp
+      // with a moon receiver (a short ingress needs sub-bucket
+      // resolution), so the cleaner gate the driver already holds is
+      // camera visibility. Only Earth and Moon carry `eclipsingBodyId`
+      // today, so this is at most 2 extra `resolveHeliocentricPositionAU`
+      // chains per visible frame, not the 13-moon cost the wave file
+      // guards against.
+      if (body.eclipsingBodyId && cameraInterest.visibility !== "hidden") {
         const eclipsingBody = BODIES_BY_ID.get(body.eclipsingBodyId);
-        const eclipsingMesh = scene.getObjectByName(body.eclipsingBodyId);
-        let pos: THREE.Vector3 | null = null;
-        let radius = 0;
+        let syntheticEclipserPos: THREE.Vector3 | null = null;
+        let umbraRadiusRender = 0;
+        let penumbraRadiusRender = 0;
+        let minShadow = 0;
         let vrScale = 1;
         let active = 0;
-        if (eclipsingBody && eclipsingMesh) {
-          eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
-          pos = TMP_ECLIPSE_ECLIPSING_POS;
-          // World radius of the eclipsing body, matching atlas's
-          // scale-mode resolution.
-          //
-          // W5 corrected this comment (standing law 4). It used to claim
-          // `resolveSemanticBodyRadius` "returns the same value the eclipsing
-          // body's mesh is actually scaled by". That is now only true for a
-          // spherical body: a body with a `flattening` or `shapeScale` record
-          // is scaled uniformly by its LARGEST semi-axis and then carries its
-          // figure in the baked geometry, so the shadow caster is treated as a
-          // sphere of that largest semi-axis. Harmless today — the only
-          // eclipsing bodies in the catalog are the Moon and Earth, both
-          // unflagged — but the cone model gains a real per-axis error the day
-          // a flattened body eclipses anything, and W7 owns that fix.
-          // The `eclipsingBodyRadius × 1.7` penumbra ratio is unchanged.
-          radius = AstroPhysics.resolveSemanticBodyRadius({
-            body: eclipsingBody,
-            scaleMode,
-          });
-          // vrScale must be large enough for the segment from the
-          // receiver fragment toward the Sun (world origin) to reach
-          // past the eclipsing body. `distance(receiver, sun) × 2`
-          // guarantees that regardless of whether the eclipsing body
-          // is between receiver and sun or beyond.
-          groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
-          vrScale = Math.max(1, TMP_ECLIPSE_RECEIVER_POS.length() * 2);
-          active = 1;
+
+        if (eclipsingBody) {
+          const eclipseNow = simulationClock.getNow();
+          const receiverPositionAU = resolveHeliocentricPositionAU(
+            body.id,
+            eclipseNow
+          );
+          const eclipserPositionAU = resolveHeliocentricPositionAU(
+            body.eclipsingBodyId,
+            eclipseNow
+          );
+          const geometry = resolveEclipseConeGeometry(
+            {
+              sunPositionAU: SUN_POSITION_AU,
+              eclipserPositionAU,
+              receiverPositionAU,
+              sunRadiusKm: SUN_RADIUS_KM,
+              eclipserRadiusKm: eclipsingBody.radiusKm,
+              receiverRadiusKm: body.radiusKm,
+            },
+            TMP_ECLIPSE_GEOMETRY
+          );
+
+          if (geometry.active) {
+            // Similarity transform (third-round "actual heart of the
+            // wave") — anchor the synthetic eclipser position AND scale
+            // the cone radii by the SAME render-units-per-km factor that
+            // scales the receiver's own radius. Degenerates to the
+            // identity in realistic mode (`semanticRadius / body.radiusKm
+            // === KM_TO_3D_UNITS`) and preserves the true angular
+            // relationship the per-fragment shader math depends on in
+            // didactic mode, where a raw km radius would be meaningless.
+            const renderUnitsPerKm = semanticRadius / body.radiusKm;
+            const scaled = scaleEclipseRadiiToRenderUnits(
+              geometry,
+              renderUnitsPerKm
+            );
+            umbraRadiusRender = scaled.umbraRadiusRender;
+            penumbraRadiusRender = scaled.penumbraRadiusRender;
+            minShadow = geometry.minShadow;
+
+            groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
+            TMP_ECLIPSE_ECLIPSING_POS.copy(eclipserPositionAU)
+              .sub(receiverPositionAU)
+              .multiplyScalar(AU_IN_KM * renderUnitsPerKm)
+              .add(TMP_ECLIPSE_RECEIVER_POS);
+            syntheticEclipserPos = TMP_ECLIPSE_ECLIPSING_POS;
+
+            // Large enough for the fragment→Sun segment to reach past
+            // the synthetic eclipser regardless of which side of the
+            // receiver it renders on.
+            vrScale = Math.max(
+              1,
+              TMP_ECLIPSE_ECLIPSING_POS.distanceTo(TMP_ECLIPSE_RECEIVER_POS) *
+                2,
+              TMP_ECLIPSE_RECEIVER_POS.length() * 2
+            );
+            active = 1;
+          }
         }
+
         const materials = [planetMaterial, cloudMaterial] as (
           | THREE.Material
           | null
@@ -458,14 +524,26 @@ const PlanetVisual = ({
             | undefined;
           if (!s) continue;
           const uPos = s.uniforms.uEclipsingBodyPos;
-          const uRadius = s.uniforms.uEclipsingBodyRadius;
+          const uUmbra = s.uniforms.u_eclipsingUmbraRadius;
+          const uPenumbra = s.uniforms.u_eclipsingPenumbraRadius;
+          const uMinShadow = s.uniforms.u_eclipsingMinShadow;
           const uVrScale = s.uniforms.uEclipsingVrScale;
           const uActive = s.uniforms.uEclipsingActive;
-          if (!uPos || !uRadius || !uVrScale || !uActive) continue;
-          if (pos) {
-            (uPos.value as THREE.Vector3).copy(pos);
+          if (
+            !uPos ||
+            !uUmbra ||
+            !uPenumbra ||
+            !uMinShadow ||
+            !uVrScale ||
+            !uActive
+          )
+            continue;
+          if (syntheticEclipserPos) {
+            (uPos.value as THREE.Vector3).copy(syntheticEclipserPos);
           }
-          uRadius.value = radius;
+          uUmbra.value = umbraRadiusRender;
+          uPenumbra.value = penumbraRadiusRender;
+          uMinShadow.value = minShadow;
           uVrScale.value = vrScale;
           uActive.value = active;
         }
@@ -560,7 +638,19 @@ const PlanetVisual = ({
           {/* 1. Base Planet Sphere */}
           {planetMaterial ? (
             <mesh
-              castShadow={body.type !== "star"}
+              // W7 (third-round "second eclipse renderer" finding,
+              // 2026-07-29) — `castShadow` deliberately dropped. A
+              // sphere is convex, so this mesh's own `castShadow` could
+              // never produce a legitimate SELF-shadow; the only thing
+              // it ever did was cast a hard, cross-body silhouette from
+              // `SmartSunLight`'s directional shadow map onto OTHER
+              // bodies inside its frustum (Earth painting the Moon's
+              // full hard-edged disc onto itself, Io onto Jupiter at
+              // didactic-wrong times) — a second, uncorrected eclipse
+              // renderer that visually dominated the analytical one this
+              // wave repairs. `receiveShadow` stays: the cloud layer
+              // still casts (see the cloud mesh below) and the surface
+              // still needs to receive that legitimate shadow.
               receiveShadow={body.type !== "star"}
               raycast={THREE.Mesh.prototype.raycast}
             >

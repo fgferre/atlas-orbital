@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { AstroPhysics, type CelestialBody } from "../../../lib/astrophysics";
+import { BODIES_BY_ID } from "../../../data/celestialBodies";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
@@ -16,11 +17,11 @@ import {
 } from "../shaders/ringLightingPatch";
 import {
   ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY,
-  ECLIPSE_FRAGMENT_HELPERS,
   ECLIPSE_FRAGMENT_OUTPUT_PATCH,
   ECLIPSE_FRAGMENT_UNIFORMS,
   ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
   ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
+  buildEclipseFragmentHelpers,
 } from "../shaders/eclipseShaderPatch";
 import {
   applyPlanetDirectLightCacheKey,
@@ -109,6 +110,16 @@ export function usePlanetMaterials({
     // eclipse the Earth surface would darken but clouds stayed
     // fully lit — a visible layered artefact.
     const cloudEclipseEnabled = !!body.eclipsingBodyId;
+    // W7 — does THIS body's eclipser have an atmosphere? Only then does
+    // the Danjon-style refraction floor/tint apply (see
+    // `eclipseShaderPatch.ts`'s header). Earth's own eclipser is the
+    // Moon (airless), so this is always false for the cloud layer today;
+    // computed generically so a future cloud-bearing eclipse receiver
+    // gets the correct answer with no code change.
+    const cloudEclipserHasAtmosphere = !!(
+      body.eclipsingBodyId &&
+      BODIES_BY_ID.get(body.eclipsingBodyId)?.atmosphereScattering
+    );
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
       // Sun is always at world origin — pass as world-space uniform, no CPU transform needed.
@@ -128,7 +139,9 @@ export function usePlanetMaterials({
         shader.uniforms.uEclipsingBodyPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
-        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.u_eclipsingUmbraRadius = { value: 0 };
+        shader.uniforms.u_eclipsingPenumbraRadius = { value: 0 };
+        shader.uniforms.u_eclipsingMinShadow = { value: 0 };
         shader.uniforms.uEclipsingVrScale = { value: 1 };
         shader.uniforms.uEclipsingActive = { value: 0 };
       }
@@ -153,7 +166,7 @@ export function usePlanetMaterials({
       // but onBeforeCompile patches are per-material, so we inject
       // here too rather than cross-reference.
       //
-      // Eclipse branch: reuse the shared `ECLIPSE_FRAGMENT_HELPERS`
+      // Eclipse branch: reuse the shared `buildEclipseFragmentHelpers(...)`
       // + `ECLIPSE_FRAGMENT_OUTPUT_PATCH` but the helpers hardcode
       // varying names `vWorldPos` / `vWorldNormal` (planet convention).
       // The cloud shader uses `vCloudWorldPos` / `vCloudWorldNormal`,
@@ -175,7 +188,7 @@ export function usePlanetMaterials({
         #define vWorldPos vCloudWorldPos
         #define vWorldNormal vCloudWorldNormal
         ${ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY}
-        ${ECLIPSE_FRAGMENT_HELPERS}
+        ${buildEclipseFragmentHelpers({ lunarRefraction: cloudEclipserHasAtmosphere })}
         `
             : ""
         }
@@ -209,10 +222,10 @@ export function usePlanetMaterials({
       //   fragColor.rgb = eclipseBlend(fragColor.rgb, diffractionTint, eclshdw);
       if (cloudEclipseEnabled) {
         shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <output_fragment>",
+          "#include <opaque_fragment>",
           `
           ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-          #include <output_fragment>
+          #include <opaque_fragment>
           `
         );
       }
@@ -428,6 +441,13 @@ export function usePlanetMaterials({
     // Apply Earth day/night shader (takes priority over ring shadows)
     if (body.id === "earth" && textureNight) {
       const eclipseEnabled = !!body.eclipsingBodyId;
+      // W7 — Earth's eclipser is the Moon (airless): always false today,
+      // computed generically per this file's shared rule (see the cloud
+      // material above).
+      const eclipserHasAtmosphere = !!(
+        body.eclipsingBodyId &&
+        BODIES_BY_ID.get(body.eclipsingBodyId)?.atmosphereScattering
+      );
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.tNight = { value: textureNight };
@@ -438,12 +458,14 @@ export function usePlanetMaterials({
         shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
 
         // T3.3 eclipse uniforms — populated per-frame by `Planet.tsx`
-        // via `body.eclipsingBodyId` scene-graph lookup.
+        // via `eclipseGeometry.ts`'s ephemeris-driven cone predicate.
         if (eclipseEnabled) {
           shader.uniforms.uEclipsingBodyPos = {
             value: new THREE.Vector3(0, 0, 0),
           };
-          shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+          shader.uniforms.u_eclipsingUmbraRadius = { value: 0 };
+          shader.uniforms.u_eclipsingPenumbraRadius = { value: 0 };
+          shader.uniforms.u_eclipsingMinShadow = { value: 0 };
           shader.uniforms.uEclipsingVrScale = { value: 1 };
           shader.uniforms.uEclipsingActive = { value: 0 };
         }
@@ -485,7 +507,7 @@ export function usePlanetMaterials({
           }
 
           ${eclipseEnabled ? ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY : ""}
-          ${eclipseEnabled ? ECLIPSE_FRAGMENT_HELPERS : ""}
+          ${eclipseEnabled ? buildEclipseFragmentHelpers({ lunarRefraction: eclipserHasAtmosphere }) : ""}
 
           ${shader.fragmentShader}
         `;
@@ -520,15 +542,17 @@ export function usePlanetMaterials({
           `
         );
 
-        // T3.3 — inject eclipse shadow blend before output_fragment
+        // T3.3 — inject eclipse shadow blend before opaque_fragment
         // so the multiplication hits outgoingLight pre-tonemap
-        // (matches Gaia pbr.fragment.glsl:671,676 call site).
+        // (matches Gaia pbr.fragment.glsl:671,676 call site). Needle
+        // renamed `output_fragment` → `opaque_fragment` (three r152+;
+        // this repo is on r181) — see this file's needle-fix commit.
         if (eclipseEnabled) {
           shader.fragmentShader = shader.fragmentShader.replace(
-            "#include <output_fragment>",
+            "#include <opaque_fragment>",
             `
             ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-            #include <output_fragment>
+            #include <opaque_fragment>
             `
           );
         }
@@ -541,6 +565,11 @@ export function usePlanetMaterials({
     // lunar eclipse). Injects the eclipse shader on top of a
     // default MeshStandardMaterial.
     else if (body.eclipsingBodyId) {
+      // W7 — the Moon's eclipser is Earth, which HAS
+      // `atmosphereScattering`: this branch is what bakes the Danjon
+      // refraction floor/tint (see `eclipseShaderPatch.ts`'s header).
+      const eclipserHasAtmosphere = !!BODIES_BY_ID.get(body.eclipsingBodyId)
+        ?.atmosphereScattering;
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.uSunPositionWorld = {
@@ -549,7 +578,9 @@ export function usePlanetMaterials({
         shader.uniforms.uEclipsingBodyPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
-        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.u_eclipsingUmbraRadius = { value: 0 };
+        shader.uniforms.u_eclipsingPenumbraRadius = { value: 0 };
+        shader.uniforms.u_eclipsingMinShadow = { value: 0 };
         shader.uniforms.uEclipsingVrScale = { value: 1 };
         shader.uniforms.uEclipsingActive = { value: 0 };
 
@@ -566,13 +597,13 @@ export function usePlanetMaterials({
 
         shader.fragmentShader = `
           ${ECLIPSE_FRAGMENT_UNIFORMS}
-          ${ECLIPSE_FRAGMENT_HELPERS}
+          ${buildEclipseFragmentHelpers({ lunarRefraction: eclipserHasAtmosphere })}
           ${shader.fragmentShader}
         `.replace(
-          "#include <output_fragment>",
+          "#include <opaque_fragment>",
           `
           ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-          #include <output_fragment>
+          #include <opaque_fragment>
           `
         );
 

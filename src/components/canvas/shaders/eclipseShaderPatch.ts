@@ -1,24 +1,57 @@
 import {
-  ECLIPSE_DIFFRACTION_END_RATIO,
-  ECLIPSE_DIFFRACTION_INTENSITY_SCALE,
-  ECLIPSE_DIFFRACTION_SPECTRUM_HIGH,
-  ECLIPSE_DIFFRACTION_SPECTRUM_LOW,
-  ECLIPSE_DIFFRACTION_SPECTRUM_SCALE,
-  ECLIPSE_DIFFRACTION_START_RATIO,
   ECLIPSE_EDGE_FADE_HI,
   ECLIPSE_EDGE_FADE_LO,
+  ECLIPSE_LUNAR_REFRACTION_TINT,
+  ECLIPSE_LUNAR_UMBRA_FLOOR,
   ECLIPSE_NEAR_SIDE_DOT_THRESHOLD,
-  ECLIPSE_PENUMBRA_RADIUS_RATIO,
-  ECLIPSE_UMBRA_CORE_RADIUS_RATIO,
 } from "./eclipseMath";
 
 /**
- * T3.3 eclipse shader patches for `usePlanetMaterials`. Ports
- * `/tmp/gaiasky/assets/shader/lib/eclipses.glsl` + the
- * `dist_segment_point` helper from
- * `/tmp/gaiasky/assets/shader/lib/math.glsl` as GLSL template
- * strings the Earth and eclipse-only planet material branches can
- * compose into their `onBeforeCompile` shader patches.
+ * W7 eclipse shader patches for `usePlanetMaterials`. Ports the shape of
+ * Gaia Sky's `/tmp/gaiasky/assets/shader/lib/eclipses.glsl` +
+ * `dist_segment_point` (`math.glsl`), but the shadow-cone math itself is
+ * no longer Gaia's fixed `UMBRA0`/`PENUMBRA0` ratios — see
+ * `../../../lib/eclipseGeometry.ts` for the real similar-triangles
+ * construction this patch now consumes.
+ *
+ * ## What changed from the pre-W7 version, and why
+ *
+ * The needle this patch injects at (`#include <opaque_fragment>`) was
+ * silently dead on three r181 for some time before this wave — see
+ * `usePlanetMaterials.ts`'s needle-fix commit for the full story. Because
+ * of that, W7 could rewrite the algorithm itself rather than being bound
+ * to preserve an already-inert shape:
+ *
+ *  - `uEclipsingBodyRadius` is replaced by two uniforms,
+ *    `u_eclipsingUmbraRadius` / `u_eclipsingPenumbraRadius` — the real
+ *    (render-space, similarity-transformed) cone radii the CPU driver
+ *    computes every frame via `eclipseGeometry.ts`, not a fixed multiple
+ *    of the eclipser's own radius. `u_eclipsingMinShadow` is a third new
+ *    uniform: the annular floor (`1 − (θ_eclipser/θ_sun)²`), needed
+ *    because a physically-correct cone can go NEGATIVE (antumbral /
+ *    annular — the eclipser's angular size is smaller than the Sun's, so
+ *    a ring of direct sunlight always survives even at perfect
+ *    alignment). Net new uniform NAMES: +2, matching the "+2 eclipse-cone
+ *    uniforms" standing law 2 sanctions for this wave. All three follow
+ *    the `u_` naming/audit/cache-key convention the lighting wave
+ *    established (66ab30f) — the OLDER `uEclipsingBodyPos` /
+ *    `uEclipsingVrScale` / `uEclipsingActive` / `uSunPositionWorld` names
+ *    are untouched (not new, renaming them is not this wave's job).
+ *  - The pre-W7 diffraction "band" (a fixed 0.2–1.6×-eclipser-radius
+ *    pulse with a warm-orange gradient) had no physical grounding for a
+ *    SOLAR receiver — third-round arbitration: "seen from space,
+ *    penumbral shading is neutral" — and is deleted. What replaces it is
+ *    a single continuous `mix(coreFloor, 1.0, dist/penumbraRadius)` ramp,
+ *    where `coreFloor` is baked PER MATERIAL (not a uniform — the
+ *    eclipser a given material can ever face never changes at runtime) to
+ *    either `0.0` (airless eclipser: true black at the umbra centre) or
+ *    `ECLIPSE_LUNAR_UMBRA_FLOOR` + `ECLIPSE_LUNAR_REFRACTION_TINT`
+ *    (eclipser has an atmosphere: the Danjon refraction floor/tint) —
+ *    see {@link buildEclipseFragmentHelpers}. Earth's material (eclipser
+ *    = Moon, airless) always bakes the neutral floor; the Moon's material
+ *    (eclipser = Earth, has `atmosphereScattering`) always bakes the
+ *    Danjon one. A future eclipser with an atmosphere (e.g. a Titan
+ *    system body) gets the tint for free from the same rule.
  *
  * The patches assume the receiving material ALREADY declares (in
  * vertex and fragment):
@@ -26,31 +59,12 @@ import {
  *   - `varying vec3 vWorldNormal;`
  * with the vertex shader writing world-space position + normal into
  * them. Earth's existing day/night branch already does this (see
- * `usePlanetMaterials.ts:301-317`); the eclipse-only branch must
- * replicate the pattern via `ECLIPSE_VERTEX_WORLD_VARYINGS_DECL` +
+ * `usePlanetMaterials.ts`); the eclipse-only branch replicates the
+ * pattern via `ECLIPSE_VERTEX_WORLD_VARYINGS_DECL` +
  * `ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN`.
  *
  * A shared `uniform vec3 uSunPositionWorld;` is also assumed — Earth
- * already has it (sun at origin, per the comment at
- * `usePlanetMaterials.ts:295`). Both branches share the convention.
- *
- * Eclipse-specific uniforms (declared via
- * `ECLIPSE_FRAGMENT_UNIFORMS`):
- *   - `uEclipsingBodyPos`      — world-space position of the
- *     eclipsing body (km), updated per-frame in `Planet.tsx`.
- *   - `uEclipsingBodyRadius`   — world-space radius (km).
- *   - `uEclipsingVrScale`      — ray length multiplier for
- *     `dist_segment_point`. Per-frame set to `distance(planet,
- *     sun) × 2.0` so the segment always reaches past the
- *     eclipsing body. Gaia uses a scene-scale `DISTANCE_SCALE_FACTOR`
- *     for this (`AbstractRenderSystem.java:169`) but the driver
- *     logic collapses to the same requirement: the segment length
- *     must exceed fragment-to-eclipsing-body distance.
- *   - `uEclipsingActive`       — enable flag (0 = skip eclipse
- *     math entirely, 1 = run it). Flipped to 0 by the driver when
- *     `scene.getObjectByName(eclipsingBodyId)` fails so atlas
- *     doesn't pay the shader cost on the frames between load
- *     events.
+ * already has it (sun at origin). Both branches share the convention.
  */
 
 /** Vertex-shader declarations for the world-space varyings the eclipse patch consumes. */
@@ -70,10 +84,17 @@ export const ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN = /* glsl */ `
  * subset only. For branches that already declare
  * `uSunPositionWorld`, `vWorldPos`, `vWorldNormal` (e.g. Earth's
  * day/night branch).
+ *
+ * `u_eclipsingUmbraRadius` / `u_eclipsingPenumbraRadius` /
+ * `u_eclipsingMinShadow` are render-space (world units), already
+ * similarity-transformed by the CPU driver — see `Planet.tsx` and
+ * `eclipseGeometry.ts`'s `scaleEclipseRadiiToRenderUnits`.
  */
 export const ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY = /* glsl */ `
   uniform vec3 uEclipsingBodyPos;
-  uniform float uEclipsingBodyRadius;
+  uniform float u_eclipsingUmbraRadius;
+  uniform float u_eclipsingPenumbraRadius;
+  uniform float u_eclipsingMinShadow;
   uniform float uEclipsingVrScale;
   uniform float uEclipsingActive;
 `;
@@ -92,17 +113,33 @@ export const ECLIPSE_FRAGMENT_UNIFORMS = /* glsl */ `
 `;
 
 /**
- * Fragment-shader helper functions: `dist_segment_point`,
- * `getDiffractionSpectrum`, `computeEclipseShading`, `eclipseBlend`
- * — all named with `gs_` prefixes to avoid collisions with
- * Three.js's own shader chunk includes.
+ * Fragment-shader helper functions: `gs_distSegmentPoint`,
+ * `gs_computeEclipseShading`, `gs_eclipseBlend` — named with `gs_`
+ * prefixes to avoid collisions with Three.js's own shader chunk includes.
  *
- * Literal constants interpolate directly from the JS-side
- * `eclipseMath.ts` exports so a drift in one file is a drift in
- * both — compile-time guarantee of math-JS ↔ GLSL parity.
+ * `lunarRefraction` bakes the umbral floor/tint literal for THIS
+ * material's eclipser (see this file's header) — it is a compile-time
+ * choice, not a uniform, because a given material's eclipser identity
+ * never changes at runtime (a body's `eclipsingBodyId` is a `useMemo` dep
+ * in `usePlanetMaterials.ts`, so the material rebuilds if it ever did).
  */
-export const ECLIPSE_FRAGMENT_HELPERS = /* glsl */ `
-  // math.glsl port: dist_segment_point.
+export const buildEclipseFragmentHelpers = ({
+  lunarRefraction,
+}: {
+  lunarRefraction: boolean;
+}): string => {
+  const coreFloorLiteral = lunarRefraction
+    ? ECLIPSE_LUNAR_UMBRA_FLOOR.toString()
+    : "0.0";
+  const tintLiteral = lunarRefraction
+    ? `vec3(${ECLIPSE_LUNAR_REFRACTION_TINT[0]}, ${ECLIPSE_LUNAR_REFRACTION_TINT[1]}, ${ECLIPSE_LUNAR_REFRACTION_TINT[2]})`
+    : "vec3(0.0)";
+
+  return /* glsl */ `
+  // math.glsl port: dist_segment_point. Still needed per-fragment — this
+  // is the perpendicular distance from THIS surface point's ray toward
+  // the Sun to the eclipser's centre, which no body-level predicate can
+  // precompute.
   float gs_distSegmentPoint(vec3 v, vec3 w, vec3 p) {
     vec3 aux3 = p - v;
     vec3 aux4 = w - v;
@@ -121,24 +158,20 @@ export const ECLIPSE_FRAGMENT_HELPERS = /* glsl */ `
     return distance(p, projection);
   }
 
-  // eclipses.glsl:23-29 getDiffractionSpectrum.
-  vec3 gs_getDiffractionSpectrum(float pos) {
-    return mix(
-      vec3(${ECLIPSE_DIFFRACTION_SPECTRUM_LOW[0]}, ${ECLIPSE_DIFFRACTION_SPECTRUM_LOW[1]}, ${ECLIPSE_DIFFRACTION_SPECTRUM_LOW[2]}),
-      vec3(${ECLIPSE_DIFFRACTION_SPECTRUM_HIGH[0]}, ${ECLIPSE_DIFFRACTION_SPECTRUM_HIGH[1]}, ${ECLIPSE_DIFFRACTION_SPECTRUM_HIGH[2]}),
-      pos
-    );
-  }
-
-  // eclipses.glsl:33-94 eclipseColor (shadow + tint outputs only;
-  // atlas skips the #ifdef eclipseOutlines branch — that's a Gaia
-  // wireframe debug mode).
+  // W7 rewrite — real cone radii from the CPU (u_eclipsingUmbraRadius /
+  // u_eclipsingPenumbraRadius / u_eclipsingMinShadow), not fixed ratios
+  // of the eclipser's own radius. One continuous ramp from coreFloor
+  // (baked below) at dist=0 to fully lit at the penumbra edge — replaces
+  // the pre-W7 two-stage "hard floor inside UMBRA0, separate diffraction
+  // pulse in a mid-band" shape. See this file's header for why.
   void gs_computeEclipseShading(
     vec3 fragPosWorld,
     vec3 normalVector,
     vec3 lightDirection,
     vec3 eclipsingBodyPos,
-    float eclipsingBodyRadius,
+    float umbraRadius,
+    float penumbraRadius,
+    float minShadow,
     float vrScale,
     out float shdw,
     out vec3 diffractionTint
@@ -154,49 +187,42 @@ export const ECLIPSE_FRAGMENT_HELPERS = /* glsl */ `
     float dot_NL = dot(normalize(normalVector), normalize(lightDirection));
     float edgeFade = smoothstep(${ECLIPSE_EDGE_FADE_LO}, ${ECLIPSE_EDGE_FADE_HI}, dot_NL);
 
-    if (dot_NM > ${ECLIPSE_NEAR_SIDE_DOT_THRESHOLD}) {
-      float penumbraRadius = eclipsingBodyRadius * ${ECLIPSE_PENUMBRA_RADIUS_RATIO};
-      if (dist < penumbraRadius) {
-        shdw = dist / penumbraRadius;
-
-        float diffractionStart = eclipsingBodyRadius * ${ECLIPSE_DIFFRACTION_START_RATIO};
-        float diffractionEnd = eclipsingBodyRadius * ${ECLIPSE_DIFFRACTION_END_RATIO};
-        float diffractionRange = diffractionEnd - diffractionStart;
-
-        if (dist > diffractionStart && dist < diffractionEnd) {
-          float x = (dist - diffractionStart) / diffractionRange;
-          float diffractionIntensity = 4.0 * x * (1.0 - x);
-          diffractionIntensity *= ${ECLIPSE_DIFFRACTION_INTENSITY_SCALE};
-          diffractionIntensity *= edgeFade;
-          vec3 spectrumColor = gs_getDiffractionSpectrum(x) * ${ECLIPSE_DIFFRACTION_SPECTRUM_SCALE};
-          diffractionTint = spectrumColor * diffractionIntensity;
-        }
-
-        shdw = mix(1.0, shdw, edgeFade);
-        if (dist < eclipsingBodyRadius * ${ECLIPSE_UMBRA_CORE_RADIUS_RATIO}) {
-          shdw = 0.0;
-        }
-      }
+    if (dot_NM > ${ECLIPSE_NEAR_SIDE_DOT_THRESHOLD} && penumbraRadius > 0.0) {
+      // Negative umbraRadius = antumbral (annular) — the true umbra
+      // never reaches this receiver at this instant, so the core floor
+      // is the annular brightness rather than true black or the Danjon
+      // refraction floor (that floor is a lunar-eclipse-only physical
+      // effect and never applies to an annular solar eclipse).
+      float coreFloor = umbraRadius < 0.0 ? minShadow : ${coreFloorLiteral};
+      float t = clamp(dist / penumbraRadius, 0.0, 1.0);
+      shdw = mix(coreFloor, 1.0, t);
+      shdw = mix(1.0, shdw, edgeFade);
+      diffractionTint = ${tintLiteral} * (1.0 - t) * edgeFade;
     }
   }
 
-  // eclipses.glsl:102-104 eclipseBlendWeightedMix — the default
-  // blend used by Gaia's eclipseBlend (line 118-120). shadow=1
-  // leaves base untouched; shadow=0 returns pure tint.
+  // Matches Gaia's eclipseBlend (WeightedMix): shadow=1 leaves base
+  // untouched; shadow=0 returns pure tint.
   vec3 gs_eclipseBlend(vec3 base, vec3 tint, float shadow) {
     return mix(base, tint, 1.0 - shadow);
   }
 `;
+};
 
 /**
- * Fragment-shader code to inject BEFORE `#include <output_fragment>`
+ * Fragment-shader code to inject BEFORE `#include <opaque_fragment>`
  * so the eclipse blend multiplies the pre-tonemap outgoingLight.
  *
- * Three.js's `<output_fragment>` chunk emits
+ * Three.js's `<opaque_fragment>` chunk emits
  * `gl_FragColor = vec4( outgoingLight, diffuseColor.a );` — we
  * intercept by modifying `outgoingLight` before that runs. Matches
  * Gaia's post-lighting call site at `pbr.fragment.glsl:676`:
  * `fragColor.rgb = eclipseBlend(fragColor.rgb, diffractionTint, eclshdw);`.
+ *
+ * `#include <opaque_fragment>` is the r152+ name for the chunk atlas's
+ * three@0.181.2 ships (`output_fragment` was the pre-r152 name, and is
+ * the needle three renamed out from under this patch — see
+ * `usePlanetMaterials.ts`'s needle-fix commit).
  */
 export const ECLIPSE_FRAGMENT_OUTPUT_PATCH = /* glsl */ `
   if (uEclipsingActive > 0.5) {
@@ -208,7 +234,9 @@ export const ECLIPSE_FRAGMENT_OUTPUT_PATCH = /* glsl */ `
       vWorldNormal,
       lightDir,
       uEclipsingBodyPos,
-      uEclipsingBodyRadius,
+      u_eclipsingUmbraRadius,
+      u_eclipsingPenumbraRadius,
+      u_eclipsingMinShadow,
       uEclipsingVrScale,
       eclipseShadow,
       eclipseTint
