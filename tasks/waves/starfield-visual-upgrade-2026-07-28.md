@@ -771,6 +771,17 @@ right, and the layer was broken in four independent ways. All four are
 now fixed; see "Zodiacal rebuild" immediately below. The eye pass is
 still owed.**
 
+**2026-07-29 (later, near-Sun whiteout fix) — a FIFTH, latent defect
+was found by owner report on real hardware and fixed: the heliocentric
+`R^-2.5` term had no inward bound, so the 1 AU calibration above
+(correct at 1 AU) multiplied by up to ~316× as the camera approached
+the Sun, washing the whole screen white. See the dated entry near the
+end of this file ("near-Sun whiteout fix session") for the full root
+cause, arithmetic, and the bound shipped. This did not change anything
+in the "Zodiacal rebuild" or "derived visibility constant" sections
+below — the 1 AU calibration and the outward `R ≥ 1 AU` dimming are
+untouched and still exactly as documented there.**
+
 ### Zodiacal rebuild (2026-07-29)
 
 An external review, independently reproduced, found the layer shipped
@@ -1348,3 +1359,147 @@ an exhaustive sweep. Composer confirmed mounted via the boot diagnostic
 (`qualityTier: ultra`) before this check, per the forced-ultra unlock —
 see the "Outstanding calibration" section above for the full technique
 and its limits._
+
+\_2026-07-29 (near-Sun whiteout fix session): **owner-reported visual
+regression fixed — the zodiacal band's inward `R^-2.5` scaling was
+unbounded and washed the whole screen white as the camera approached
+the Sun.** Owner report (real GPU, with screenshots): a white
+"penumbra"/glare grows around the Sun on zoom-in "até a tela inteira
+ficar branca" (until the whole screen goes flat white); "esse efeito
+visual (parece um glare) é muito estranho e não cumpre sua função
+planejada" (looks like a glare, doesn't serve its intended purpose).
+Introduced by `f900c99` ("Zodiacal rebuild" above): that commit
+correctly raised `ZODIACAL_S10_TO_LINEAR` 90 468× (it had been
+arithmetically invisible, see "The derived visibility constant"), but
+did not touch `zodiacalBrightness`'s heliocentric term, which still
+multiplied by `pow(max(u_cameraR_AU / ZODIACAL_REFERENCE_R_AU, 0.1),
+-2.5)` with no upper bound. That factor was harmless at 4.0e-9 (still
+invisible at any R) and only became a display bug once the calibration
+made the band visible in the first place — a defect that had been
+latent since `48a3acc`, not introduced by this rebuild, just unmasked
+by it.
+
+**Root cause, with arithmetic.** `ZODIACAL_S10_TO_LINEAR` is derived
+entirely AT `R = 1 AU` (see "The derived visibility constant" above):
+it already puts the brightest tabulated cell at 3.2569× the bloom gate
+by design. The unbounded factor multiplied that ceiling further: at the
+shader's own 0.1 AU floor, `pow(0.1, -2.5) = 10^2.5 ≈ 316.2×`, so the
+inner cone alone reached `3.2569 × 316.2 ≈ 1030×` the bloom gate — and
+at Mercury's real orbital range (perihelion 0.307 AU to aphelion 0.467
+AU, `pow(R,-2.5)` ≈ 19.2× to 6.7×), even the TABLE'S FAINTEST cell (140
+S10☉ at the gegenschein, 0.0507 linear at 1 AU — already below the
+0.165 black point by design) crossed back above it: `0.0507 × 6.7 ≈
+0.34` to `0.0507 × 19.2 ≈ 0.97`. Because the factor is direction-
+independent (it scales every texel of the LUT alike, only the texel
+VALUE varies with look direction), this pushes brightness above the
+black point in every direction at once past a certain R, not just
+toward the Sun — which is exactly the "whole screen washes out" shape
+of the owner's report, not a localised near-Sun clip.
+
+**The bound (`zodiacalLightLut.ts`,
+`zodiacalHeliocentricFactor`).** `factor(R) = pow(max(R, 1 AU) / 1 AU,
+-2.5)`: unchanged for `R ≥ 1 AU` (the calibrated, verified, outward-
+dimming regime), clamped to exactly `1.0` for every `R ≤ 1 AU`. The
+band can never exceed its already-3.26×-over-gate 1 AU brightness, no
+matter how close the camera gets to the Sun — it only ever dims going
+outward. Continuous at `R = 1 AU` by construction (both branches
+evaluate to 1.0 there). Disclosed as a display bound, not a
+recalibration: Table 16 is the sky as measured FROM 1 AU, nothing in
+Leinert licenses sliding the observer inward and reusing the same
+table, and even if it did, the display has no ~300× of spare headroom
+regardless of what the true sky radiance does inward of 1 AU (Helios
+photopolarimeter data show the cloud genuinely keeps brightening to
+about 0.3 AU, at a similar exponent — real physics, deliberately NOT
+reproduced past this bound, same "no invented shape, only a floor"
+policy the blank-cell fill already uses). Implementation used
+`ZODIACAL_REFERENCE_R_AU` itself as the clamp floor (both are the same
+1 AU quantity) rather than a second magic constant. `CreditsModal.tsx`
+and `ZodiacalLightSkybox.tsx`'s doc comments updated with the same
+disclosure. `ZODIACAL_R_EXPONENT` (previously a bare `2.5` hardcoded
+only inside the GLSL template) was promoted to an exported TS constant
+so the shader and the new pure-TS mirror (`zodiacalHeliocentricFactor`,
+used by tests and available for future pure-TS callers) cannot drift —
+same pattern the file already uses for every other shared constant.
+
+**Verified headless, forced-ultra (SwiftShader), same technique as the
+"forced-ultra headless verification pass" above** —
+`setGraphicsAutoMode(false)` + `setGraphicsPreset("ultra")` dispatched
+via `__ATLAS_TEST_STORE__` immediately after it appears, then
+`setFocusId("mercury")` (R inside Mercury's 0.307-0.467 AU range).
+Screenshots at the IDENTICAL pose (same frozen simulation time, same
+camera transform, same "MARTE"/"PLUTÃO" labels) before vs. after the
+fix, throwaway repro script + PNGs in the scratchpad verify folder
+(not committed): **before** — the entire sky is a flat, uniform medium-
+grey wash from horizon to horizon, the ecliptic grid lines barely
+visible through it, exactly the reported regression, just short of a
+literal 100%-white clip at this particular R (consistent with the
+6.7-19.2× arithmetic above, well short of the 316× floor-case); **
+after** — normal black sky, stars crisp and coloured, ecliptic grid
+lines clearly visible in cyan, no wash at all. `boot.spec.ts` also
+re-run clean (boot camera is at ~148 AU, `pow(148,-2.5) ≈ 3.7e-6`, far
+inside the `R ≥ 1 AU` branch this fix left untouched — zero pixel
+change expected and observed).
+
+**Near-Sun total-output check (requirement of this fix, not a re-
+tune).** At the bound, the near-Sun peak is CAPPED at the same
+3.2569×-over-gate value the 1 AU calibration already ships and has
+already been accepted as a deliberate, documented overshoot (see "The
+derived visibility constant" — confined to ≈26°×20° around the Sun,
+the same solid angle the Sun's own disc/bloom already occupy). At
+Mercury's distance this session could reach headlessly, the sky-wide
+wash from the bug is fully gone and the remaining scene reads as a
+normal star field — the AgX shoulder is not being asked to roll off
+anything more than it already handles at 1 AU. A tighter near-Sun
+frame (elongation < 30°, R closer to 0.1-0.3 AU) was not reachable this
+session (same camera-aiming blocker recorded in "Outstanding
+calibration" above — curated `setFocusId` frames the LIT face, i.e.
+Sun roughly BEHIND the camera, and a native-PointerEvent drag-rotate
+attempt to swing the Sun into frame hung for ~90s+ and was aborted,
+same failure shape as the wheel-zoom attempt recorded above). Given the
+bound provably caps the near-Sun peak at the already-accepted 1 AU
+ceiling regardless of R, and that ceiling was already judged acceptable
+in the "Outstanding calibration" analysis above, no further numeric
+finding is owed here — but the eye pass owed above should still glance
+at an actual close Sun approach on real hardware to confirm the AgX
+shoulder reads well against a MOVING near-Sun band, not just a static
+1 AU frame.
+
+**Hexagon artifact — identified, pre-existing, NOT the zodiacal
+geometry.** The owner's screenshots show a faint hexagonal shape inside
+the glow. Traced to `LensFlareEffect.ts`'s `regShape(p, N)` (a regular-
+polygon SDF, `N = 6` hardcoded at the `lensFlareCircle` call site) —
+the COMPLEX lens-flare's "aperture-blade ghost" term, a 1:1 port of
+Gaia Sky's `lensflare.frag.glsl`/ShaderToy origin, deliberately hexagon-
+shaped to simulate a 6-blade camera iris. This is pre-existing (the
+`APERTURE_GHOST_OFFSET_REMOVED` fix for exactly this "hex blob" report
+already landed 2026-07-25, well before this session) and structurally
+CANNOT be the zodiacal icosphere: `ZodiacalLightSkybox.tsx`'s fragment
+shader colours every pixel from a continuous analytic function of the
+per-fragment world direction (`zodiacalBrightness(betaDeg, lambdaDeg)`
+sampled from a bilinear LUT) — there is no per-vertex colour and
+therefore no mechanism for icosahedron subdivision to produce facets, at
+any subdivision level. No fix applied here (out of scope: it is not
+the zodiacal layer, and it is not new). Confirmed by reading
+`LensFlareEffect.ts` directly (`regShape`/`lensFlareCircle`), not by a
+visual repro — a Sun-focused headless capture this session
+(`setFocusId("sun")`, realistic-mode system-overview framing, ~250+ AU)
+put the Sun's disc at only a few pixels, too small at that distance to
+visually resolve the hexagon either way.
+
+**Tests** — `zodiacalLightLut.test.ts` gained a
+`zodiacalHeliocentricFactor` describe block: `factor(R≥1) === R^-2.5`
+exactly (spot-checked at R=2, 5.17 (Jupiter), 29.9 (Neptune)),
+`factor(R≤1) === 1.0` exactly (spot-checked at the OLD 0.1 AU floor,
+Mercury/Venus distances, and R=0), continuity at R=1 (both sides →
+1.0), monotonic outward decline preserved, the near-Sun peak never
+exceeding its calibrated 1 AU value at any inward R, and a GLSL-source
+assertion that the shader clamps against `ZODIACAL_REFERENCE_R_AU`
+(not a re-introduced `0.1` literal). No prior test pinned the old
+unbounded form, so nothing needed deleting.
+
+**Gates**: `npm run test:run` (2542 tests, all green — 6 new in the
+heliocentric-scaling block, `zodiacalLightLut.test.ts` now 25 tests),
+`npx tsc -b` clean, `npm run lint` clean,
+`npm run docs:check` clean, `npm run build` clean, `npx playwright test
+e2e/boot.spec.ts` clean (no pixel-diff change, as predicted). Shipped
+directly on `main` per solo-dev workflow.\_

@@ -127,8 +127,18 @@ export const ZODIACAL_POLE_S10 = 60;
 
 /** Reference observer heliocentric distance in AU. Table 16 is measured
  *  from Earth, i.e. at 1 AU; the shader divides the live camera
- *  distance by this before applying the R^-2.5 law. */
+ *  distance by this before applying the R^-2.5 law. Doubles as the
+ *  INWARD clamp floor on that division — see
+ *  {@link zodiacalHeliocentricFactor} for why the same number is
+ *  correct in both roles. */
 export const ZODIACAL_REFERENCE_R_AU = 1.0;
+
+/** Dumont (1983) fan-cloud density exponent: the integrated zodiacal
+ *  dust density scales as R^-2.5 with heliocentric distance. Applied
+ *  outward of {@link ZODIACAL_REFERENCE_R_AU} by
+ *  {@link zodiacalHeliocentricFactor}; see that function for the
+ *  inward bound. */
+export const ZODIACAL_R_EXPONENT = 2.5;
 
 // -----------------------------------------------------------------------------
 // Uniform resampling
@@ -465,6 +475,79 @@ export const ZODIACAL_S10_TO_LINEAR =
   Math.sqrt(ZODIACAL_BRIGHT_ANCHOR_S10 * ZODIACAL_FAINT_ANCHOR_S10);
 
 // -----------------------------------------------------------------------------
+// Heliocentric distance scaling
+// -----------------------------------------------------------------------------
+
+/**
+ * R^-2.5 heliocentric brightness law, bounded inward of
+ * {@link ZODIACAL_REFERENCE_R_AU} — pure-TypeScript mirror of the GLSL
+ * `r` / `pow(r, -ZODIACAL_R_EXPONENT)` line in
+ * {@link ZODIACAL_FRAGMENT_GLSL}.
+ *
+ * ## The regression this fixes (owner report, 2026-07-29)
+ *
+ * The calibration above ({@link ZODIACAL_S10_TO_LINEAR}) was derived
+ * entirely AT `R = 1 AU`: it puts the brightest tabulated cell at
+ * 3.26× {@link ZODIACAL_BLOOM_THRESHOLD} — deliberate, documented, and
+ * fine, because the window it overflows into is the same solid angle
+ * the Sun's own disc and bloom already occupy at that distance.
+ *
+ * The shader as first shipped then multiplied that already-at-the-
+ * ceiling result by `pow(max(R_AU, 0.1), -2.5)` with NO upper bound on
+ * the factor for `R < 1 AU`. That is `10^2.5 ≈ 316×` at the old 0.1 AU
+ * floor — so the near-Sun band alone reached `3.26 × 316 ≈ 1030×` the
+ * bloom gate, and every pixel within the inner cone (and, once bloom
+ * spreads it, effectively the whole screen) washed out flat white as
+ * the camera approached the Sun. Reported by the owner as a "glare"
+ * that "não cumpre sua função planejada" (does not serve its intended
+ * purpose) — confirmed against the arithmetic above, not just the
+ * screenshot.
+ *
+ * ## Why the fix is a bound, not a re-tune
+ *
+ * The R^-2.5 law itself is real physics (Dumont 1983's fan-cloud
+ * integral), and Helios photopolarimeter data shows the zodiacal
+ * cloud genuinely DOES keep brightening inward of 1 AU, at a similar
+ * exponent, to at least 0.3 AU (Leinert 1975). That is not in dispute.
+ *
+ * What is out of bounds is applying it to Table 16 as a WHOLE. Table
+ * 16 (Leinert et al. 1998, A&AS 127) is the sky brightness as seen
+ * FROM 1 AU — every one of its 190 cells was measured at that one
+ * heliocentric distance. Nothing in the paper licenses sliding the
+ * observer inward and keeping the same angular table; that would need
+ * a second table Leinert never published. And even if the shape were
+ * right, {@link ZODIACAL_S10_TO_LINEAR} was fitted to the display's
+ * ~6:1 usable window (black point to bloom gate) with the band's OWN
+ * 64:1 range already spending most of it — there is no 300× of spare
+ * headroom in an 8-bit-equivalent graded image regardless of what the
+ * true sky radiance does.
+ *
+ * ## The bound
+ *
+ * `factor(R) = pow(max(R, 1 AU) / 1 AU, -2.5)`, i.e. `pow(r, -2.5)`
+ * unchanged for `R >= 1 AU` (untouched — calibrated and verified, see
+ * `tasks/waves/starfield-visual-upgrade-2026-07-28.md`), clamped to
+ * exactly `1.0` for every `R <= 1 AU`. The band never gets brighter
+ * than its already-3.26×-over-gate value at 1 AU, no matter how close
+ * the camera gets to the Sun; it only ever dims going outward. This
+ * deliberately UNDER-states the real Helios-measured inward
+ * brightening — the same policy {@link buildZodiacalUniformGrid}'s
+ * blank-cell fill uses above ("no invented shape, only a floor") —
+ * because Table 16's validity domain stops at 1 AU and the display's
+ * headroom stops at the bloom gate; a display bound, disclosed here
+ * with its own arithmetic rather than silently folded into the
+ * calibration constant.
+ *
+ * Continuous at `R = 1 AU` by construction (both branches evaluate to
+ * `1.0` there), so there is no seam to see crossing it.
+ */
+export const zodiacalHeliocentricFactor = (cameraRAu: number): number => {
+  const r =
+    Math.max(cameraRAu, ZODIACAL_REFERENCE_R_AU) / ZODIACAL_REFERENCE_R_AU;
+  return Math.pow(r, -ZODIACAL_R_EXPONENT);
+};
+
+// -----------------------------------------------------------------------------
 // GPU upload
 // -----------------------------------------------------------------------------
 
@@ -532,7 +615,10 @@ const glslFloat = (value: number): string => {
  * axis maxima, and both copies were wrong in different ways.
  *
  * Exports `zodiacalAngles` (direction → β, |λ−λ☉|) and
- * `zodiacalBrightness` (β, |λ−λ☉| → linear scene radiance).
+ * `zodiacalBrightness` (β, |λ−λ☉| → linear scene radiance). The R-scaling
+ * inside `zodiacalBrightness` mirrors {@link zodiacalHeliocentricFactor}
+ * exactly — see that function's JSDoc for the near-Sun bound and why it
+ * exists (2026-07-29 whiteout fix).
  */
 export const ZODIACAL_FRAGMENT_GLSL = /* glsl */ `
 uniform sampler2D u_zodiacalLut;
@@ -553,9 +639,10 @@ const float ZODIACAL_S10_TO_LINEAR  = ${glslFloat(ZODIACAL_S10_TO_LINEAR)};
 const float ZODIACAL_REFERENCE_R_AU = ${glslFloat(ZODIACAL_REFERENCE_R_AU)};
 
 // Dumont (1983): the integrated fan-cloud density scales as R^-2.5 with
-// heliocentric distance. Table 16 is measured at 1 AU; rescaling by this
-// gives the brightness an observer at R sees.
-const float ZODIACAL_R_EXPONENT = 2.5;
+// heliocentric distance, applied OUTWARD of 1 AU only — see
+// zodiacalHeliocentricFactor() in zodiacalLightLut.ts for the inward bound
+// (this is that function's exponent, not a free-standing tunable).
+const float ZODIACAL_R_EXPONENT = ${glslFloat(ZODIACAL_R_EXPONENT)};
 
 // Helioecliptic angles of a look direction. +Y is the ecliptic pole and
 // XZ is the ecliptic plane, so beta is the elevation and the longitude
@@ -592,9 +679,15 @@ float zodiacalBrightness(float betaDeg, float lambdaDeg) {
   vec2 uv = (deg / ZODIACAL_STEP_DEG + 0.5) / ZODIACAL_LUT_SIZE;
   float s10 = texture2D(u_zodiacalLut, uv).r;
 
-  // Dim outward, brighten inward. The floor keeps R=0 finite: the real
-  // grain density in the inner system is bounded, the R^-2.5 law is not.
-  float r = max(u_cameraR_AU / ZODIACAL_REFERENCE_R_AU, 0.1);
+  // Dim outward of 1 AU (Dumont R^-2.5); hold flat inward of it. Table 16
+  // was measured FROM 1 AU only, and the calibration above has no headroom
+  // to extrapolate that law toward the Sun (an unclamped floor of 0.1 AU
+  // used to multiply the already-3.26x-over-gate inner band by a further
+  // ~316x -- the reported near-Sun whiteout). Real inward brightening
+  // exists (Helios: ~R^-2.3..-2.5 to 0.3 AU) but is deliberately NOT
+  // reproduced past this bound -- see zodiacalHeliocentricFactor() in
+  // zodiacalLightLut.ts for the full arithmetic and rationale.
+  float r = max(u_cameraR_AU, ZODIACAL_REFERENCE_R_AU) / ZODIACAL_REFERENCE_R_AU;
   return s10 * pow(r, -ZODIACAL_R_EXPONENT) * ZODIACAL_S10_TO_LINEAR * u_brightnessMul;
 }
 `;

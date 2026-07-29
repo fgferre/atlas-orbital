@@ -3,6 +3,7 @@ import {
   buildZodiacalUniformGrid,
   sampleZodiacalGridS10,
   zodiacalAnglesFromDirection,
+  zodiacalHeliocentricFactor,
   ZODIACAL_BLOOM_THRESHOLD,
   ZODIACAL_BRIGHT_ANCHOR_S10,
   ZODIACAL_BRIGHTNESS_S10,
@@ -12,6 +13,8 @@ import {
   ZODIACAL_GRID_LAMBDA_COUNT,
   ZODIACAL_GRID_STEP_DEG,
   ZODIACAL_POLE_S10,
+  ZODIACAL_REFERENCE_R_AU,
+  ZODIACAL_R_EXPONENT,
   ZODIACAL_S10_TO_LINEAR,
   ZODIACAL_TABLE_BETA_AXIS_DEG,
   ZODIACAL_TABLE_LAMBDA_AXIS_DEG,
@@ -257,6 +260,91 @@ describe("visibility calibration", () => {
     expect(gegenschein).toBeGreaterThan(0.25);
     // The ecliptic pole stays dark, as 60 S10☉ should.
     expect(linear(90, 90)).toBeLessThan(0.2 * STAR_DISPLAY_BLACK_POINT);
+  });
+});
+
+describe("heliocentric distance scaling (2026-07-29 near-Sun whiteout fix)", () => {
+  // Owner report: a white "penumbra" grew around the Sun on zoom-in until
+  // the whole screen washed out. Root cause: the shader's old floor
+  // (`max(R_AU, 0.1)`) let pow(r, -2.5) reach ~316x at 0.1 AU, on top of
+  // the already-3.26x-over-bloom-gate value the 1 AU calibration puts on
+  // the brightest cell -- ~1030x the gate with no display headroom for it.
+  // These pin the replacement: dims outward of 1 AU exactly as before,
+  // holds flat (never brightens) inward of it.
+
+  it("matches R^-2.5 outward of 1 AU -- untouched, calibrated behaviour", () => {
+    expect(zodiacalHeliocentricFactor(1)).toBeCloseTo(1, 12);
+    expect(zodiacalHeliocentricFactor(2)).toBeCloseTo(Math.pow(2, -2.5), 12);
+    expect(zodiacalHeliocentricFactor(5.17)).toBeCloseTo(
+      Math.pow(5.17, -2.5),
+      12
+    ); // Jupiter
+    expect(zodiacalHeliocentricFactor(29.9)).toBeCloseTo(
+      Math.pow(29.9, -2.5),
+      12
+    ); // Neptune
+  });
+
+  it("holds flat at the 1 AU value inward of 1 AU instead of exploding", () => {
+    // The old unclamped shader floor was 0.1 AU: pow(0.1, -2.5) ~= 316x.
+    // None of these should exceed the 1 AU factor of 1.0.
+    expect(zodiacalHeliocentricFactor(0.1)).toBeCloseTo(1, 12);
+    expect(zodiacalHeliocentricFactor(0.39)).toBeCloseTo(1, 12); // Mercury
+    expect(zodiacalHeliocentricFactor(0.72)).toBeCloseTo(1, 12); // Venus
+    expect(zodiacalHeliocentricFactor(0.9)).toBeCloseTo(1, 12);
+    expect(zodiacalHeliocentricFactor(0)).toBeCloseTo(1, 12);
+  });
+
+  it("is continuous at R = 1 AU -- no seam between the two branches", () => {
+    const justBelow = zodiacalHeliocentricFactor(1 - 1e-6);
+    const justAt = zodiacalHeliocentricFactor(1);
+    const justAbove = zodiacalHeliocentricFactor(1 + 1e-6);
+    expect(justBelow).toBeCloseTo(1, 5);
+    expect(justAt).toBe(1);
+    expect(justAbove).toBeCloseTo(1, 5);
+  });
+
+  it("never lets the inner-cone peak exceed its calibrated 1 AU value, at any distance inward", () => {
+    const peakAt1Au =
+      ZODIACAL_BRIGHT_ANCHOR_S10 *
+      ZODIACAL_S10_TO_LINEAR *
+      zodiacalHeliocentricFactor(1);
+    // 1 AU calibration already puts this at 3.26x the bloom gate, by
+    // design (see ZODIACAL_S10_TO_LINEAR's JSDoc) -- that overshoot is
+    // untouched, just no longer multipliable by approaching the Sun.
+    expect(peakAt1Au / ZODIACAL_BLOOM_THRESHOLD).toBeCloseTo(3.2569, 3);
+    for (const r of [0, 0.01, 0.1, 0.3, 0.39, 0.5, 0.99, 1]) {
+      const peakAtR =
+        ZODIACAL_BRIGHT_ANCHOR_S10 *
+        ZODIACAL_S10_TO_LINEAR *
+        zodiacalHeliocentricFactor(r);
+      expect(peakAtR).toBeCloseTo(peakAt1Au, 12);
+    }
+  });
+
+  it("still dims monotonically going outward past 1 AU", () => {
+    const rs = [1, 1.5, 2, 5.17, 29.9, 148];
+    for (let i = 1; i < rs.length; i++) {
+      expect(zodiacalHeliocentricFactor(rs[i])).toBeLessThan(
+        zodiacalHeliocentricFactor(rs[i - 1])
+      );
+    }
+  });
+
+  it("carries the same exponent and reference distance into the GLSL as the TS constants", () => {
+    const exponentMatch = ZODIACAL_FRAGMENT_GLSL.match(
+      /ZODIACAL_R_EXPONENT\s*=\s*([0-9.eE+-]+);/
+    );
+    expect(exponentMatch).not.toBeNull();
+    expect(Number(exponentMatch![1])).toBeCloseTo(ZODIACAL_R_EXPONENT, 9);
+
+    // The clamp itself: GLSL must bound the ratio at ZODIACAL_REFERENCE_R_AU,
+    // not at some other hard-coded floor (e.g. the old 0.1).
+    expect(ZODIACAL_FRAGMENT_GLSL).toContain(
+      "max(u_cameraR_AU, ZODIACAL_REFERENCE_R_AU) / ZODIACAL_REFERENCE_R_AU"
+    );
+    expect(ZODIACAL_FRAGMENT_GLSL).not.toContain("0.1)");
+    expect(ZODIACAL_REFERENCE_R_AU).toBe(1);
   });
 });
 

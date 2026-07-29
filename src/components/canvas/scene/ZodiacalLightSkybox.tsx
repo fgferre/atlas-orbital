@@ -78,9 +78,13 @@ export const ZODIACAL_RECENTER_PRIORITY = 0.5;
  *     of `dir` and `sunDir`. It is a LONGITUDE DIFFERENCE, not the 3D
  *     angular separation; the two agree only in the ecliptic plane.
  *   • Looks the pair up in `u_zodiacalLut` (a uniform 5° resampling of
- *     Leinert Table 16) and scales by `pow(R_AU, -2.5)` (Dumont
- *     distance law) and `ZODIACAL_S10_TO_LINEAR` — a derived
- *     calibration, see the arithmetic in `zodiacalLightLut.ts`.
+ *     Leinert Table 16) and scales by `pow(max(R_AU, 1), -2.5)` (Dumont
+ *     distance law, clamped flat inward of 1 AU — see
+ *     `zodiacalHeliocentricFactor` in `zodiacalLightLut.ts` for why:
+ *     unclamped, this scaling washed the whole screen white as the
+ *     camera approached the Sun, fixed 2026-07-29) and
+ *     `ZODIACAL_S10_TO_LINEAR` — a derived calibration, see the
+ *     arithmetic in `zodiacalLightLut.ts`.
  *
  * The output is a vec3 with the band brightness in linear scene
  * radiance units, added into the HalfFloat composer buffer via
