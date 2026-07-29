@@ -49,6 +49,7 @@ import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 import { useStore } from "../../store";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { ExposureBridge } from "./scene/ExposureBridge";
+import { EyeAdaptationBridge } from "./scene/EyeAdaptationBridge";
 import { ZodiacalLightSkybox } from "./scene/ZodiacalLightSkybox";
 
 // Lazy: procedural shader module only loads when sun render mode is "procedural".
@@ -77,6 +78,7 @@ import {
   addZoomImpulse,
   consumeZoomVelocity,
 } from "../../lib/camera/zoomPhysics";
+import type { ToneMappingEffect } from "postprocessing";
 import {
   PostProcessingPipeline,
   type BloomController,
@@ -610,6 +612,7 @@ export const Scene = () => {
   const bloomRef = useRef<BloomController | null>(null);
   const hueSatRef = useRef<HueSaturationController | null>(null);
   const brightnessRef = useRef<BrightnessContrastController | null>(null);
+  const toneMappingRef = useRef<ToneMappingEffect | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const sunLightRef = useRef<THREE.PointLight | null>(null);
   const smartSunLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -748,6 +751,13 @@ export const Scene = () => {
             (eye-adaptation) and a future photometric-EV readout will
             write to it. See `src/lib/graphics/exposureRegistry.ts`. */}
         <ExposureBridge />
+        {/* 1d — eye-adaptation. Drives the SAME `sceneExposure` scalar
+            `ExposureBridge` carries into `gl.toneMappingExposure`, using
+            the composer's own adaptive-luminance downsample as the
+            input signal. `toneMappingRef` is `null` (no-op) whenever no
+            ToneMapping pass is mounted — see EyeAdaptationBridge.tsx for
+            the full empirical write-up. */}
+        <EyeAdaptationBridge toneMappingRef={toneMappingRef} />
         {/* #3 — zodiacal light. Leinert et al. (1998) tabulated band,
             analytically camera-distance-modulated via the Dumont
             R^-2.5 fan-cloud density law so flying outward dims it and
@@ -862,6 +872,7 @@ export const Scene = () => {
             bloomRef={bloomRef}
             hueSatRef={hueSatRef}
             brightnessRef={brightnessRef}
+            toneMappingRef={toneMappingRef}
             bloomMounted={shouldMountBloom(
               qualityProfile.bloomEnabled,
               // 1b: when the user has set an explicit bloomIntensity

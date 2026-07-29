@@ -7,10 +7,11 @@ import {
   BrightnessContrast,
   ToneMapping,
 } from "@react-three/postprocessing";
-import { ToneMappingMode } from "postprocessing";
+import { ToneMappingMode, type ToneMappingEffect } from "postprocessing";
 import { LensFlareSlot } from "./LensFlareInjector";
 import { LightGlowSlot } from "./LightGlowInjector";
 import type { ToneMappingName } from "../../../lib/graphics/resolver";
+import { STAR_DISPLAY_BLACK_POINT } from "../../../lib/starfieldShaderMath";
 
 export interface BloomController {
   intensity: number;
@@ -30,6 +31,13 @@ interface PostProcessingPipelineProps {
   bloomRef: RefObject<BloomController | null>;
   hueSatRef: RefObject<HueSaturationController | null>;
   brightnessRef: RefObject<BrightnessContrastController | null>;
+  /**
+   * 1d — lets `EyeAdaptationBridge` reach the mounted `ToneMappingEffect`
+   * instance and drive its internal adaptive-luminance passes. `null`
+   * whenever no ToneMapping pass is mounted (toneMapping="none", or the
+   * constrained tier which never renders this component at all).
+   */
+  toneMappingRef: RefObject<ToneMappingEffect | null>;
   /**
    * True when the Bloom effect should be mounted into the composer.
    * Computed at Scene level via `shouldMountBloom(bloomEnabled,
@@ -57,6 +65,7 @@ export const PostProcessingPipeline = memo(
     bloomRef,
     hueSatRef,
     brightnessRef,
+    toneMappingRef,
     bloomMounted,
     toneMapping,
     composerMultisampling,
@@ -78,6 +87,12 @@ export const PostProcessingPipeline = memo(
         brightnessRef.current = effect;
       },
       [brightnessRef]
+    );
+    const assignToneMappingRef = useCallback(
+      (effect: ToneMappingEffect | null) => {
+        toneMappingRef.current = effect;
+      },
+      [toneMappingRef]
     );
 
     // Effect ordering:
@@ -190,7 +205,18 @@ export const PostProcessingPipeline = memo(
           <></>
         )}
         {toneMappingMode !== undefined ? (
-          <ToneMapping mode={toneMappingMode} />
+          // 1d — `minLuminance` floors the library's OWN internal
+          // adaptive-luminance sample (see EyeAdaptationBridge.tsx for
+          // why AGX mode never runs that pass on its own and why we
+          // force it on separately). Anchored to the same
+          // STAR_DISPLAY_BLACK_POINT constant the starfield shader math
+          // calibrates the display black point against, so the GPU-side
+          // floor and EyeAdaptationBridge's JS-side floor agree.
+          <ToneMapping
+            ref={assignToneMappingRef}
+            mode={toneMappingMode}
+            minLuminance={STAR_DISPLAY_BLACK_POINT}
+          />
         ) : (
           <></>
         )}

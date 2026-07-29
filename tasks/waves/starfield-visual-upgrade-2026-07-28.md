@@ -3,11 +3,10 @@
 _2026-07-28. Owner request: "não estou feliz com a qualidade visual
 atual do starfield"_.
 
-**This is a partial-work handoff.** Three sub-pulls are code-complete
-and committed (1a, 1b, 1c, #3). Four items remain open and are the
-remaining scope of this wave. The previous session ran out of context
-before doing eye-adaptation (1d), the credits-modal provenance update,
-the LightGlow performance audit, and the (#4) Milky Way HDR panorama.
+**This is a partial-work handoff.** Four sub-pulls are code-complete
+and committed (1a, 1b, 1c, 1d, #3). Three items remain open and are the
+remaining scope of this wave: the credits-modal provenance update, the
+LightGlow performance audit, and the (#4) Milky Way HDR panorama.
 
 Read [`../AGENTS.md`](../AGENTS.md) before touching code. That file is
 product law. This wave file is **operational context** for whoever
@@ -27,6 +26,19 @@ All three pass `npm run test:run` (2363 tests green), `npm run lint`,
 `npx tsc -b`, and the `docs:check` pre-commit hook. Visual regression
 baselines under `e2e/boot.spec.ts-snapshots/` are **unchanged** by
 these commits — none of them touch the boot scene the snapshot pins.
+
+A follow-up session in the same worktree then shipped **1d
+(eye-adaptation)** as a fourth commit (see git log for the hash — this
+doc was written in the same commit as the code, before the hash
+existed). Same verification profile: `npm run test:run` (2427 tests
+green), `npm run lint`, `npx tsc -b`, `npm run docs:check` all clean.
+`npm run test:e2e` (the `boot-frozen.png` pixel-diff gate) was **not**
+run this session — CLI-only, same caveat as the rest of this wave. The
+registry still starts at neutral `1.0` and the intro-flight boot pose
+is far from the Sun (near-black sky per the θ.2 comment further down
+in `boot.spec.ts`), so a diff is unlikely but not verified. Whoever
+does the runtime pass (see "Handoff" below) should run
+`npm run test:e2e -- boot` as part of it.
 
 The worktree has other commits that pre-date this session (see
 "Worktree hygiene" below). Those are NOT this wave's scope and should
@@ -103,7 +115,7 @@ it never existed. So bloom was permanently inert.
    genuinely-bright pixels cross; planets stay matte).
 2. `Scene.tsx:828` now passes
    `effectiveGraphics.bloomIntensity
-   ?? VISUAL_PRESETS[visualPreset].bloomIntensity`
+?? VISUAL_PRESETS[visualPreset].bloomIntensity`
    to `shouldMountBloom`. The `??` falls through only on `undefined`,
    so an explicit user 0 correctly unmounts (saves the 5-mip pass when
    the user explicitly asks for no bloom), while the visual preset
@@ -150,6 +162,108 @@ byte-identical to the pre-1c state. 1d will write to it; per-shader
 INTERNAL exposure constants (atmos, ring, starfield) can opt in
 later if A/B shows the linear AgX-only scaling produces the
 predicted detachment.
+
+### 1d — Eye-adaptation (AdaptiveLuminancePass → registry)
+
+Picked up where the previous session's context ran out. The wave's own
+1d spec said "confirm the enum mapping empirically; do not invent a
+mode string the library does not export" — doing that turned up a firm
+**no** on the spec's suggested path.
+
+**Empirical finding (`node_modules/postprocessing@6.38.0/build/index.js`):**
+`ToneMappingEffect`'s `mode` setter only enables its internal
+`adaptiveLuminancePass` when `mode === ToneMappingMode.REINHARD2_ADAPTIVE`
+(index.js:13416), and the compound tone-mapping fragment shader only
+samples the luminance buffer for `TONE_MAPPING_MODE == 2 || 3`
+(Reinhard2 family) — the AGX branch (`#else toneMapping(texel)`,
+index.js:13307-13315) never touches it. There is no "AGX but adaptive"
+mode to opt into; renaming `resolver.ts`'s `toneMapping` to
+`"reinhard2_adaptive"` per the original spec draft would have swapped
+the ENTIRE visible tone curve away from AGX, not just added adaptation
+— out of scope for the "ship AgX-only path first" recommendation.
+
+Separately verified `toneMappingExposure` DOES reach the AGX branch:
+three.js's `WebGLRenderer.setProgram` (`WebGLRenderer.js:2525`) pushes
+`renderer.toneMappingExposure` into any compiled program that declares
+the uniform, every frame, regardless of `mode` — confirming
+`ExposureBridge` (1c) was already the correct carrier for whatever 1d
+produces.
+
+**What shipped instead:** `PostProcessingPipeline` still mounts
+`<ToneMapping mode={AGX}>` exactly as before (1a's visible curve is
+unchanged) but now also refs the underlying `ToneMappingEffect`
+instance. A new `EyeAdaptationBridge.tsx` force-enables that instance's
+internal `adaptiveLuminancePass` every frame — bypassing the mode-gated
+auto-toggle, not replacing it — so the library's OWN
+downsample-to-1×1-mip + exponential-decay pass runs against the
+composer's real HDR buffer exactly as it would under
+`REINHARD2_ADAPTIVE`, just without changing what's on screen. The
+bridge then reads that 1×1 texture back with
+`gl.readRenderTargetPixels` (unpacking three.js's standard
+`packDepthToRGBA`/`unpackRGBAToDepth` RGBA8 encoding — reimplemented in
+JS since there's no public API to sample a mip level from the CPU
+side), converts it to an exposure scalar, and writes it via
+`setSceneExposure()`. `ExposureBridge` (1c) carries that number into
+`gl.toneMappingExposure` unchanged.
+
+`adaptiveLuminancePass` and its `renderTargetAdapted` render target are
+real runtime properties the package's `.d.ts` omits (only
+`adaptiveLuminanceMaterial`/`texture` getters are typed); reaching them
+needed a narrow, documented local type augmentation rather than an
+`any` — see the full citation trail in `EyeAdaptationBridge.tsx`'s
+module doc comment.
+
+**Bounding:** `<ToneMapping minLuminance={STAR_DISPLAY_BLACK_POINT}>`
+floors the GPU-side adaptive sample at the same 0.165 linear constant
+`starfieldShaderMath.ts` already calibrates the display black point
+against. The exposure formula reuses that constant as both floor and
+numerator (`exposure = TARGET / max(luminance, TARGET)`); since the
+library's own luminance render target is `UnsignedByteType` (WebGL
+clamps HDR fragment output to ≤ 1.0 before it's stored), `luminance`
+always lands in `[TARGET, 1.0]` and so does `exposure` — a near-empty
+starfield frame (the common case) reads back at neutral `1.0` (pixel-
+identical to pre-1d), and the most a blown-out frame can be dimmed to
+is the display's own black point. This satisfies the spec's "a black
+frame cannot blow exposure to 16" requirement structurally, not just
+via the registry's outer `[1e-6, 16]` clamp.
+
+**Files:**
+
+- `src/components/canvas/scene/EyeAdaptationBridge.tsx` (NEW): the
+  `useFrame` hook described above.
+- `src/components/canvas/scene/PostProcessingPipeline.tsx`: added
+  `toneMappingRef` prop + `assignToneMappingRef` callback (same
+  pattern as `bloomRef`/`hueSatRef`/`brightnessRef`); `<ToneMapping>`
+  now takes `ref` + `minLuminance={STAR_DISPLAY_BLACK_POINT}`.
+- `src/components/canvas/Scene.tsx`: added `toneMappingRef`, mounted
+  `<EyeAdaptationBridge>` next to `<ExposureBridge>`, threaded the ref
+  into `<PostProcessingPipeline>`.
+- No changes to `resolver.ts` — no new `ToneMappingName` value was
+  needed (see the "empirical finding" above), so no `resolver.test.ts`
+  changes either.
+
+**Tier gate:** self-gating, not a new explicit check. `toneMappingRef`
+stays `null` on the constrained tier (`PostProcessingPipeline` never
+mounts there) and whenever a user picks `toneMapping="none"` from the
+Display panel — `EyeAdaptationBridge` no-ops in both cases the same
+way `ExposureBridge` already does.
+
+**Deferred to 1e**, unchanged from the original recommendation: the
+four emissive families that don't read the registry (atmospheres'
+`exposureGround`/`exposureSky` `#define`s, the starfield's
+`u_exposure`, ring `emissiveIntensity`, the `toneMapped: false`
+procedural Sun disk) are still untouched. Only a per-shader A/B pass
+after a runtime look at 1d would justify that follow-up.
+
+**Not verified at runtime this session** (CLI-only, same caveat as
+1a/1b/1c/#3): whether the adaptation is visually perceptible at all
+inside `[0.165, 1.0]`, whether the 1-frame GPU-readback lag reads as
+smooth or as a stutter on a real dimming event (Sun entering frame),
+and whether `adaptationRate`'s library default (`tau=1`) feels right
+for this scene's pacing. `npm run test:run` (2427 tests, all green —
+zero new unit tests added per AGENTS.md §6, this is experimental look
+work), `npx tsc -b`, and `npm run lint` are all clean; that is a type-
+and-logic check, not a visual one.
 
 ### #3 — Analytical zodiacal light (Leinert et al. 1998)
 
@@ -205,70 +319,21 @@ the budget there.
 
 ## Outstanding -- the remaining scope of this wave
 
-These items were deferred out of the current session by context+
-credits exhaustion, NOT by technical blockers. They are the next
-agent's scope. In priority order:
+These items were deferred out of prior sessions by context/credits
+exhaustion, NOT by technical blockers. They are the next agent's
+scope. In priority order:
 
-### 1d — Eye-adaptation (AdaptiveLuminancePass → registry)
+### 1d — Eye-adaptation — SHIPPED, see "What was done and why" above
 
-**Status:** All infrastructure is in place; this is the next item.
-
-`postprocessing@6.38` ships `AdaptiveLuminancePass` — verified at
-`node_modules/postprocessing/build/index.js:13012` (extracted
-`AdaptiveLuminanceMaterial`, the integration shader reads:
-`adaptedLum = l0 + (l1 - l0) * (1.0 - exp(-deltaTime * tau))`).
-`ToneMappingEffect` constructor takes `{ adaptive: true, mode:
-REINHARD2_ADAPTIVE }` (verified at
-`node_modules/postprocessing/build/index.js:13318-13375`); the
-AdaptiveLuminancePass is wired up there automatically.
-
-**What 1d should do.**
-
-1. Add a per-frame computation that downsamples scene luminance to a
-   1×1 mip and feeds it into the registry. The library already has
-   this — `ToneMappingEffect`'s `luminancePass` + `adaptiveLuminancePass`
-   fields (private; reach via the effect's getters or build the pass
-   directly and feed the value back through `setSceneExposure()`).
-2. Rename `toneMapping` from `"agx"` to `"reinhard2_adaptive"` at the
-   resolver level when eye-adaptation is on — see
-   `node_modules/postprocessing` for whether `ToneMappingMode.REINHARD2_ADAPTIVE`
-   is exposed through the existing `ToneMappingMode` enum map in
-   `PostProcessingPipeline.tsx:46-51`. There may be a new mode value
-   to add to `ToneMappingName` in `resolver.ts:95`. **Confirm the
-   enum mapping empirically; do not invent a mode string the library
-   does not export.**
-3. Set initial `sceneExposure = 1.0`, drive with adaptation.
-
-**Risk the audit flagged** — emission families that don't currently
-read `sceneExposure`:
-
-- Atmospheres: `atmscatteringSnippet.ts:76-77` hard-codes
-  `exposureGround=0.5` and `exposureSky=0.25` as GLSL `#define`s.
-  Converted to `uniform float` (one per material) lets the registry
-  reach into the limb — closes the "atmosphere halo descola da
-  superficie" failure mode the fable-5 audit predicted for the
-  AgX-only path.
-- Starfield: `Starfield.tsx:141,466` carries `u_exposure` driven by
-  `starExposure()` (`starfieldShaderMath.ts:476`). The star shader
-  already modulates by exposure, but it reads a const boot value.
-  Wiring `u_exposure.value` to `sceneExposure.value * starExposure()`
-  per-frame would let eye-adaptation dim the field when the Sun is
-  in-frame.
-- Rings: `usePlanetMaterials.ts:679` uses `emissiveIntensity =
-ringEmissive` (a const). Same pattern.
-- Sun disk: `MeshBasicMaterial` with `toneMapped: false`
-  (`usePlanetMaterials.ts:339,345`) bypasses the ToneMapping effect
-  entirely, so eye-adaptation via `gl.toneMappingExposure` does NOT
-  reach it. Per-shader subscription would need to scale the disk's
-  baseColor — the procedural sun (`ProceduralSun3D.tsx`) has its own
-  material with uniforms.
-
-**Recommendation:** ship 1d as **AgX-only path first** (the registry
-scalar drives `gl.toneMappingExposure` only). A/B compare. If the
-detachment is visible, do a follow-up sub-pull (1e) that opts each
-emissive family's internal exposure constant into the registry. Do
-NOT pre-emptively rewire all four families — that is a costly rewrite
-that may be unnecessary.
+The 1e follow-up this section used to describe (per-shader emissive
+families opting the four families — atmospheres, starfield, rings, Sun
+disk — into the registry) is still open and still gated on an A/B
+runtime look at the AgX-only path shipped in 1d; see that section's
+"Deferred to 1e" note for the exact list and file/line pointers
+(`atmscatteringSnippet.ts:76-77`, `Starfield.tsx:141,466`,
+`usePlanetMaterials.ts:339,345,679`). Do NOT pre-emptively rewire all
+four — that is a costly rewrite that may be unnecessary until someone
+actually looks at the running scene.
 
 ### CreditsModal provenance update (high honesty priority)
 
@@ -379,8 +444,10 @@ S10_sun; the extra factor is meant to make the band visible against
 the starfield+atmosphere composite, but the right value depends on
 eye adaptation behaviour that 1d ships.
 
-**Until 1d lands there is no honest runtime verification of the
-band's visibility.** Three failure modes to check after 1d:
+**1d has landed in code (see "What was done and why" above) but its
+runtime effect on the band's visibility has not been eye-checked yet**
+— this session was CLI-only, same caveat as 1a/1b/1c/#3. Three failure
+modes to check now that 1d is in the pipeline:
 
 1. Band so dim it stays below `STAR_DISPLAY_BLACK_POINT` and is
    never visible (raise `u_brightnessMul` or `ZODIACAL_S10_TO_LINEAR`).
@@ -389,7 +456,7 @@ band's visibility.** Three failure modes to check after 1d:
    S10 value doesn't pass Bloom's `luminanceThreshold=1.0`. If so,
    add a soft smoothstep fade near elongation < 15° in the shader.
 
-When 1d +CreditsModal provenance land, recommend a single human-eye
+Once CreditsModal provenance also lands, recommend a single human-eye
 calibration pass before declaring this sub-pull done.
 
 ---
@@ -435,18 +502,20 @@ math, the multi-star catalogue, or the texture loader.
 
 ---
 
-## Honest disclosure (this session)
+## Honest disclosure (this session, plus the 1d follow-up)
 
-Three of my commits (200e13d, 1a45230, 48a3acc) did not get a visual
-runtime verification in this session. The session was CLI-only.
-Verification was:
+Three of the prior session's commits (200e13d, 1a45230, 48a3acc) did
+not get a visual runtime verification. This session's 1d commit did
+not either — also CLI-only. Verification for 1d was:
 
-- `npm run test:run` → 2363 passes (every existing test + new resolver
-  differential + new bloom tests pass).
-- `npx tsc -b` → clean (no type drift from new `ExposureBridge`,
-  `ZodiacalLightSkybox`, `zodiacalLightLut` modules).
-- `npm run lint` → clean (lint immutability rule satisfied via the
-  ref-stash pattern).
+- `npm run test:run` → 2427 passes (all pre-existing tests green; zero
+  new tests added, per AGENTS.md §6's "experimental look work needs
+  zero new unit tests" — no new `ToneMappingName` value was added, so
+  no `resolver.test.ts` differential to extend either).
+- `npx tsc -b` → clean (including the narrow undeclared-property type
+  augmentation in `EyeAdaptationBridge.tsx` — see that file's module
+  doc comment).
+- `npm run lint` → clean.
 - `npm run docs:check` pre-commit gate → clean.
 
 This is **unit-level forgetting**. Specifically NOT verified:
@@ -463,11 +532,16 @@ This is **unit-level forgetting**. Specifically NOT verified:
    (see "Outstanding calibration" above). The intensity constant is
    a documented estimate, not measured against the rest of the
    composer's output.
+4. Whether 1d's eye-adaptation is visually perceptible at all, whether
+   its 1-frame GPU-readback lag reads as smooth or as a stutter, and
+   whether the library's default `adaptationRate` (tau=1) paces
+   correctly for this scene — see the 1d section above.
 
 A single human-eye calibration pass (suggested: 1080p fullscreen,
 ultra tier, default scene, camera at Earth-orbit looking towards
-ecliptic pole + looking towards Sun) would close this. Until then,
-do not claim this wave is "done" beyond the commit log.
+ecliptic pole + looking towards Sun, then panning to frame the Sun)
+would close this. Until then, do not claim this wave is "done" beyond
+the commit log.
 
 ---
 
@@ -508,11 +582,10 @@ before re-investigating anything; do not re-derive its numbers.
    constitution there explicitly permits deleting impl-pinning tests
    frozen yesterday's form and explicitly makes Gaia a reference not
    a merge gate.
-2. Pick up **1d (eye-adaptation)**. Verify `AdaptiveLuminancePass`
-   enum exposure by reading `node_modules/postprocessing/build/index.js`
-   around line 13318, not by guessing. Drop new test if behaviour
-   pins a real coordinate or luminance contract; otherwise skip
-   (rule 6).
+2. ~~Pick up 1d (eye-adaptation).~~ **Shipped** — see "What was done
+   and why" above. First runtime look should confirm the adaptation is
+   perceptible and not a stutter (see "Honest disclosure" item 4)
+   before considering a 1e per-shader follow-up.
 3. Update **`CreditsModal.tsx`** for AgX + zodiacal provenance. Cheap
    honest disclosure; high value-of-information.
 4. Run the **LightGlow audit** with a runtime FPS measurer. Don't
@@ -521,15 +594,18 @@ before re-investigating anything; do not re-derive its numbers.
    done AND the parallel tiled-streaming wave settles on whether
    KTX2 is in scope (check `tasks/STATUS.md` heritor for that
    wave's status).
-6. After 1d + CreditsModal land, do the **calibration pass** for
-   zodiacal intensity. Document the final `ZODIACAL_S10_TO_LINEAR`
-   value + commit message that explains why it's the chosen value
-   (not "we tuned it" — the AGENTS.md §honesty requires this).
+6. After CreditsModal lands, do the **calibration pass** for zodiacal
+   intensity (now unblocked on the 1d side — see "Outstanding
+   calibration"). Document the final `ZODIACAL_S10_TO_LINEAR` value +
+   commit message that explains why it's the chosen value (not "we
+   tuned it" — the AGENTS.md §honesty requires this).
 7. **Verify everything** at runtime by booting `npm run dev` once
    before declaring the wave complete. The CLI-only test pipeline is
-   a sanity check, not a visual regression gate.
+   a sanity check, not a visual regression gate. This now includes
+   confirming 1d's eye-adaptation doesn't fight the zodiacal
+   calibration in step 6 — do them in the same sitting.
 
 ---
 
-_Last updated: 2026-07-28 by opencode-glm session that ran out of
-context mid-1d._
+_Last updated: 2026-07-28. 1d (eye-adaptation) shipped by a follow-up
+session; CreditsModal, LightGlow audit, and #4 remain open._
