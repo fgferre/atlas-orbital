@@ -500,6 +500,205 @@ parallel line may invalidate file paths assumed below.
   fix is a subtraction mask at the HYG positions — out of scope
   unless the user reports double-counting visible.
 
+### #4 shipped (2026-07-29)
+
+Owner explicitly approved implementation including downloading the
+NASA source image ("vamos implementar, depois vejo licenças" +
+follow-up approval this session); **the formal licensing check for
+redistribution remains with the owner** and is disclosed as such in
+`CreditsModal.tsx`. Everything below is code-complete, gated, and
+committed; the one thing not done is a human-eye look at a real GPU.
+
+**Files:** `src/lib/milkyWayOrientation.ts` (NEW, orientation math +
+GLSL + calibration), `src/lib/milkyWayOrientation.test.ts` (NEW, 16
+tests), `src/components/canvas/scene/MilkyWaySkybox.tsx` (NEW, the
+renderer), `public/textures/4k_milkyway_2020_gal.jpg` (NEW, the
+asset), plus small edits to `Scene.tsx` (mount) and `CreditsModal.tsx`
+(disclosure entry).
+
+**Asset.** NASA SVS "Deep Star Maps 2020" (svs.gsfc.nasa.gov/4851),
+the `milkyway_2020` layer specifically — SVS's own description: "This
+is a version of the star map that omits the bright (Hipparcos and
+Tycho) stars." Atlas already draws every HYG-catalogue star
+individually (`Starfield.tsx`); the sibling `starmap_2020` layer HAS
+those same bright stars baked in and would draw them twice. Using
+`milkyway_2020` is a fidelity argument (no double-counting against the
+star catalogue), not an aesthetic pick — this is the whole reason the
+wave file names this exact layer.
+
+Downloaded: `milkyway_2020_4k_gal.exr` — galactic-coordinate
+projection, 4096×2048, OpenEXR half-float (linear), 33.2 MB, from
+`https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/milkyway_2020_4k_gal.exr`.
+The galactic-projection variant was available (no extra "celestial +
+rotate" step needed for the texture itself — the shader's own
+galactic→scene rotation, below, still has to exist regardless of which
+input projection is used).
+
+**Encoding tradeoff — a judgment call, recorded per the spec's
+instruction to report judgment calls.** The wave file's sketch assumed
+NASA would offer a "standard web format" (PNG/TIF) directly; in
+reality SVS only publishes this layer as EXR (plus a 1024×512 JPEG
+preview, too small to use). Two options were weighed:
+
+1. **Ship the EXR via `three`'s bundled `EXRLoader`.** Zero new
+   dependency, no lossy re-encode, genuinely linear HDR data. Rejected
+   because `deferredTextureCache.ts` — the app's ONE deferred-loading
+   contract, used by every other texture — wraps `THREE.TextureLoader`
+   only; adding an EXR branch means changing shared infrastructure
+   every other texture consumer depends on, for one caller. Also
+   costs ~85 MB VRAM (HalfFloat RGBA, 4k, with mips) versus the
+   ~33 MB an 8-bit RGB texture costs for the same pixel count.
+2. **Re-encode to an 8-bit sRGB image and reuse the existing
+   `useDeferredTexture` path unchanged.** Chosen. Matches the wave
+   file's own "pragmatic fallback" framing (a standard web format is
+   what the spec expected to be available) and needs zero changes to
+   shared code.
+
+KTX2/UASTC was evaluated first, per the spec's instruction to prefer
+it if encodable via an npm-only devDependency: confirmed (via
+research) that `three`'s bundled `KTX2Loader` can only **decode** an
+existing `.ktx2`; no encoder exists in `package.json`'s current
+devDependencies, and adding one (e.g. `@gltf-transform/cli`) was
+judged out of scope for this change — recorded here as the **KTX2
+upgrade path** for whoever next touches texture encoding pipeline-wide
+(the tiled-streaming line is the natural owner, since it already
+touches `deferredTextureCache.ts`).
+
+**The build step:** the source EXR (linear, half-float) was decoded
+with `three`'s own `EXRLoader.parse()` run headless in Node (same
+decoder the app would otherwise use, so no independent
+reimplementation to drift), normalised by a measured 99.9th-percentile
+luminance ceiling (0.382635 — a robust near-max that excludes a
+handful of literal-1.0 outlier texels, not the true max), clamped to
+[0,1], sRGB-encoded, and saved as `public/textures/4k_milkyway_2020_gal.jpg`
+(quality 95 mozjpeg, 3.6 MB, PSNR ≈37 dB against the lossless
+intermediate). Full derivation, including the exact anchor numbers
+measured off the real pixel data, is in `milkyWayOrientation.ts`'s
+`MILKY_WAY_BRIGHTNESS_MULTIPLIER` doc comment. The source EXR itself
+is NOT committed (nothing at runtime reads it; keeping it would be
+dead weight).
+
+**VRAM math** (per `deferredTextureCache.ts`'s own estimator,
+`inferTextureEdge` correctly reads the `4k_` filename prefix): 4096×2048
+RGBA8 with mips ≈ 44.7 MB estimated / ~33 MB measured actual — small
+against the tiled-streaming wave's measured admission-control budgets
+(ultra 512 MB / high 256 MB / balanced 64 MB; only `constrained` at
+32 MB would be tight, and the layer self-unmounts there anyway, same
+gate as `ZodiacalLightSkybox`). No LFS: repo has no `.gitattributes`
+and already commits larger plain blobs (`4k_oberon.png` ≈37.8 MB) —
+this asset follows existing practice, not a new one.
+
+**Orientation — the classic failure mode, and how it was caught.**
+`gridOrientation.ts`'s cited Euler recipe (`R=32.93192°, Q=27.12825°,
+P=192.85948°` via `getRotationMatrix(alpha,beta,gamma) =
+Ry(gamma)·Rz(beta)·Ry(alpha)`, attributed to Gaia Sky's
+`Coordinates.java:153-157`) was re-implemented and numerically checked
+against the two facts a galactic rotation must reproduce (NGP at RA
+192.85948°/Dec 27.12825°; Galactic Center at RA 266.405°/Dec −28.936°)
+— **it reproduced neither, off by tens of degrees.** Rather than
+guess at a different multiplication order from a comment citing a
+file not in this repo, `milkyWayOrientation.ts` constructs the
+rotation directly from the SAME three cited angles via an unambiguous
+Gram-Schmidt method (two known vector correspondences — NGP↔galactic
+pole, NCP↔galactic-frame position — fix the rotation uniquely) and
+cross-checks the result against the independently published numeric
+ICRS↔Galactic matrix (Liu, Zhu & Zhang 2010 / ESA Hipparcos catalogue)
+to 1e-12.
+
+The map's OWN convention needed a second, independent check: NASA's
+page documents the longitude direction ("centered at 0°, longitude
+increases to the LEFT") but not which pole is at the image's top edge.
+That half was determined empirically — the LMC and SMC are isolated,
+unambiguous bright features at known galactic coordinates well south
+of the plane; sampling the actual downloaded EXR at both candidate
+polarities found the LMC ~14× brighter than same-latitude baseline sky
+under "row 0 = south galactic pole", and statistically indistinguishable
+from baseline under "row 0 = north" (SMC independently gave ~9×). **Row
+0 = south galactic pole**, opposite the "north up" default a Plate
+Carrée map would otherwise be assumed to use — exactly the kind of
+convention a wrong assumption would have shipped silently.
+
+**Test result:** `milkyWayOrientation.test.ts`, 16 tests, all passing.
+Includes the exact pin the spec named — galactic center (l=0,b=0) →
+ecliptic lon 266.8395° / lat −5.5363° against the target (266.84°,
+−5.54°), well inside a 0.05° tolerance chosen to still catch a
+tens-of-degrees wrong-handedness bug — plus an independent second pin
+(NGP → ecliptic lon 180.02°/lat 29.81°, not given in the task text, so
+a rotation that happened to pass the first pin by coincidence would
+still be caught), a determinant/orthogonality check, a forward/inverse
+round-trip check, and the UV-mapping/LMC-polarity assertions.
+
+**Calibration.** Same discipline as `zodiacalLightLut.ts`: two
+anchors measured off the real image (row-average — not single-pixel —
+luminance at the disk's brightest latitude, and at ±20° from it, so a
+resolved nebula or the LMC core cannot set the scale), mapped via the
+same geometric-mean-into-the-visible-window construction. Result:
+`MILKY_WAY_BRIGHTNESS_MULTIPLIER ≈ 3.201`, putting the disk's own
+brightest latitude band right at the bloom gate (≈1.02×, a soft kiss)
+and the ±20° edge at the display black point (≈0.162×) — clearly
+subordinate to the zodiacal band's peak (19.7× black point / 3.26×
+bloom), per the spec's explicit "do not make it dominate" requirement.
+Isolated real hotspots the row-average smooths over (Carina Nebula,
+measured directly at ≈0.447 linear, above the JPEG's normalisation
+ceiling) clip and bloom harder in the actual texture — comparable in
+degree to zodiacal's own near-Sun overshoot, confined to the same
+handful of resolved nebular knots in the source data.
+
+**Renderer.** `MilkyWaySkybox.tsx` mirrors `ZodiacalLightSkybox.tsx`'s
+structure: camera-centered `BackSide` icosphere (radius 1e8, same as
+zodiacal), additive `CustomBlending`/`AddEquation`/`OneFactor` into the
+HalfFloat composer buffer, `depthTest`/`depthWrite` both false,
+`frustumCulled={false}`. `renderOrder = -50`, between the zodiacal
+band (`-100`, furthest back) and the star catalogue (`-2`) — read from
+the live files rather than assumed, since the wave file's own
+"Worktree hygiene" section warned line numbers/values could have
+drifted. Colour space: the JPEG is sRGB; `texture.colorSpace =
+THREE.SRGBColorSpace` (the deferred cache's own default, passed
+explicitly for the record) makes the GPU decode to linear on sample —
+one place, documented, no manual `pow()` in the shader. Loads through
+`useDeferredTexture` (pinned, priority 3, lowest) exactly like every
+other scene texture; never blocks boot. Tier gate is the same
+`qualityProfile.name !== "constrained"` self-gate `ZodiacalLightSkybox`
+uses.
+
+**e2e outcome: unchanged, and here is why that is the correct
+(not merely convenient) result.** `npx playwright test e2e/` — 12/12
+passing, including `boot.spec.ts`'s pixel-diff gate — needed **no
+re-bless**. Per the spec's own standing order, `test-results/` was
+inspected before concluding this: the boot test still passes against
+the existing baseline, meaning headless Chromium's frame is
+byte-for-byte within tolerance of the pre-#4 baseline. Root cause,
+confirmed by the same tier-detection finding this wave already
+documented for the LightGlow audit: headless Playwright resolves to
+`qualityTier: constrained` (SwiftShader software rasteriser), where
+`Scene.tsx` swaps in `DirectRenderPass` instead of the
+`EffectComposer` — `MilkyWaySkybox` (like `ZodiacalLightSkybox`) never
+mounts there, so there is genuinely nothing for the pixel gate to
+change. **Zero change is the correct outcome here, not an inconclusive
+one** — it does not mean the layer is broken, and it does not mean
+the layer is confirmed correct either; it means this test exercises a
+tier the layer intentionally excludes.
+
+**Owner's Browser-pane attempt this session:** tried once, per the
+"inspect before blessing" standing order and to see if anything new
+was learnable. Same structural block the lighting-audit session
+already recorded: `document.hidden === true` /
+`visibilityState === "hidden"`, confirmed via a direct JS probe;
+`requestAnimationFrame` never fires because the pane never composites
+in this non-interactive session. No new information beyond
+re-confirming the prior finding — not attempted-and-inconclusive,
+structurally blocked, same as every other visual check this wave has
+tried.
+
+**Owed to the owner** (same status as the zodiacal band, plus the
+licensing check): a human-eye pass on real hardware, composer tier,
+confirming (a) the panorama band appears where the real Milky Way
+should relative to the ecliptic/zodiacal band, (b) it reads as
+subordinate to zodiacal light rather than washing it out, (c) no
+double-counted bright stars are visible against the HYG catalogue's
+own points, and (d) the formal licensing determination for
+redistributing the NASA asset.
+
 ---
 
 ## Outstanding calibration (NOT BLOCKING, but visible)
@@ -864,10 +1063,15 @@ before re-investigating anything; do not re-derive its numbers.
    measurement + gate decision is still owed — whoever has real GPU
    access next should flip the toggle live, compare frame times, and
    update `PRESET_DEFAULTS` per the recorded decision rule.
-5. Defer **#4 (Milky Way HDR)** until the user's licensing check is
+5. ~~Defer **#4 (Milky Way HDR)** until the user's licensing check is
    done AND the parallel tiled-streaming wave settles on whether
-   KTX2 is in scope (check `tasks/STATUS.md` heritor for that
-   wave's status).
+   KTX2 is in scope.~~ **Shipped 2026-07-29** — owner explicitly
+   approved implementing ahead of the licensing check (see "#4
+   shipped" section above). KTX2 was evaluated and deferred as a
+   documented upgrade path, not blocked on; the 8-bit JPEG fallback
+   needed no changes to the tiled-streaming line's territory
+   (`deferredTextureCache.ts` was read, not modified). The licensing
+   determination itself is still owed to the owner.
 6. After CreditsModal lands, do the **calibration pass** for zodiacal
    intensity (now unblocked on the 1d side — see "Outstanding
    calibration"). Document the final `ZODIACAL_S10_TO_LINEAR` value +
@@ -902,3 +1106,16 @@ section for the full trail. 1d/zodiacal runtime verification attempted,
 also blocked by the same environment limits — still owed a human-eye
 pass. CreditsModal and #4 untouched this session (out of scope for this
 pass)._
+
+_2026-07-29: **#4 (Milky Way HDR panorama) shipped** — see "#4 shipped
+(2026-07-29)" above for the full asset/orientation/calibration trail.
+CreditsModal also gained the Milky Way disclosure entry (AgX's own
+CreditsModal entry was already present from an earlier session; not
+re-verified this pass). `npm run test:run` (2502 tests), `tsc -b`,
+`lint`, `docs:check`, `build`, and `npx playwright test e2e/` (12/12,
+including the boot pixel gate, no re-bless) all clean. Runtime eye
+verification remains structurally impossible from this sandbox
+(confirmed again this session — `document.hidden === true`, same as
+every prior attempt) and is owed to the owner, same as the zodiacal
+band and 1d. LightGlow audit and W5/eye-adaptation items untouched
+this session._

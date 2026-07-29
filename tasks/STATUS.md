@@ -11,18 +11,23 @@ _Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-
 
 **[`tasks/waves/starfield-visual-upgrade-2026-07-28.md`](./waves/starfield-visual-upgrade-2026-07-28.md)**
 
-Runs in parallel with the texture-VRAM line; **3 sub-pulls committed
-and a 4-item scope handoff**: AgX default (1a), selective bloom +
-exposure registry (1b+1c), and analytical zodiacal light (#3, Leinert
-1998). Remaining: eye-adaptation (1d), CreditsModal provenance,
-LightGlow performance audit, and Milky Way HDR panorama (#4). Next
-agent should pick up 1d first — all infrastructure is in place.
+**#4 (Milky Way HDR panorama) is now code-complete** — see the wave
+file's "#4 shipped (2026-07-29)" section for the asset, orientation
+(Gram-Schmidt from cited R/Q/P, pinned to 1e-12 against the published
+matrix + the task's own ecliptic pin), calibration, and VRAM tradeoff
+record. All gates clean (2502 tests, `tsc -b`, `lint`, `docs:check`,
+`build`, `npx playwright test e2e/` 12/12, no re-bless — same
+`constrained`-tier self-gate as `ZodiacalLightSkybox`). **Owed to the
+owner:** a human-eye pass (this sandbox cannot composite a frame) and
+the formal licensing determination for the NASA asset.
 
-**No visual runtime verification in the originating session.** Tests,
-tsc, lint all green but commit log = "what was coded" not "what was
-seen". The wave file's "Honest disclosure" and "Outstanding
-calibration" sections say exactly what was NOT verified — read them
-before labelling sub-pulls done.
+Remaining open in this wave: eye-adaptation runtime verification (1d
+shipped, not eye-checked) and the LightGlow performance audit (blocked
+on real-GPU access). CreditsModal now covers AgX + zodiacal + Milky
+Way. Next agent: pick one of those, or close the wave pending the
+owner's eye pass. Read the wave file's "Honest disclosure" section
+before labelling any earlier sub-pull done — green gates are not a
+runtime look.
 
 ---
 
