@@ -155,26 +155,82 @@ pin regression. Added a dedicated `ambientIntensityMul=0 → true zero` test.
 
 ---
 
-## Item 2 — next (not started here)
+## Item 2 — regolith photometry as a per-light `RE_Direct` wrapper (done)
 
-Rewrite `regolithPhotometryPatch.ts` as a per-`RE_Direct` wrapper (scale
-each light call's delta by that light's own `mu0`, bounded to 4/3 by
-construction) instead of the current post-sum multiply on
-`reflectedLight.directDiffuse`. Per the handoff: this is a **separate
-agent's** work, explicitly out of scope for this session. The ambient floor
-shipped here is safe to land first — handoff §2 confirms ambient
-accumulates in `indirectDiffuse`, which the regolith patch never touches.
+**Root cause.** The prior patch anchored after `#include
+<lights_fragment_begin>` and multiplied the POST-SUM
+`reflectedLight.directDiffuse` (the accumulation across every direct light
+in the scene) by geometry derived from a single assumed sun at the world
+origin (`viewMatrix[3].xyz`). With today's one `pointLight` this is
+harmless, but any future second direct light — planetshine is planned for
+Onda 2 — would have been amplified by up to ~13.3x near its own terminator,
+because the correction factor was computed from a DIFFERENT light's
+incidence geometry than the one it was scaling.
+
+**Fix.** Three.js calls `RE_Direct` once per direct light
+(`lights_fragment_begin.glsl.js`'s point/spot/directional loops), and
+`RE_Direct` is a macro (`#define RE_Direct RE_Direct_Physical`, set at the
+end of `lights_physical_pars_fragment.glsl.js`). The patch now injects
+after `#include <lights_physical_pars_fragment>` (moved from
+`lights_fragment_begin`, which is too late — the macro has to be redefined
+before the light loop calls it) and defines a wrapper:
+
+```glsl
+void RE_Direct_Regolith( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+
+  vec3 lsDiffuseBefore = reflectedLight.directDiffuse;
+
+  RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+
+  float lsMu0 = saturate( dot( geometryNormal, directLight.direction ) );
+  float lsMu = saturate( dot( geometryNormal, geometryViewDir ) );
+  vec3 lsDiffuseDelta = reflectedLight.directDiffuse - lsDiffuseBefore;
+  reflectedLight.directDiffuse = lsDiffuseBefore + lsDiffuseDelta * ( 1.3333333 / max( lsMu0 + lsMu, 1e-4 ) );
+
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Regolith
+```
+
+Each light's diffuse delta is now scaled by THAT light's own `mu0`/`mu` —
+bounded to ≤ 4/3 by construction regardless of how many direct lights end
+up calling `RE_Direct`. The `viewMatrix[3].xyz` sun-at-origin hack is gone
+entirely: `directLight.direction` is a value three.js already computes per
+light from scene state, so moving the Sun (or adding a second light) can no
+longer silently break the photometry. Only the diffuse delta this call just
+added is touched; specular/clearcoat/sheen and any earlier light's
+already-accumulated diffuse pass through unscaled — same invariant the old
+post-sum form held.
+
+**Single-light identity, verified.** With today's one `pointLight` at the
+world origin, `directLight.direction` is exactly `normalize(pointLight.position
+
+- geometryPosition)`in view space — the same vector the old code derived
+from`viewMatrix[3].xyz - geometryPosition`(the view-space position of the
+world origin is the view matrix's translation column by definition).`directDiffuse`starts at`vec3(0)`before the scene's only light call, so`delta == reflectedLight.directDiffuse`there and`before + delta _ factor`reduces to exactly the old`sum _= factor`. `npx playwright test
+  e2e/boot.spec.ts` confirmed zero pixel change against the frozen boot
+  baseline, corroborating the algebra at runtime.
+
+**Files:** `src/components/canvas/shaders/regolithPhotometryPatch.ts`
+(rewritten, full derivation in its header),
+`src/components/canvas/shaders/regolithPhotometry.test.ts` (quadrature
+re-derivation of 4/3 kept verbatim; regex re-pinned to the new
+`lsDiffuseDelta * ( 1.333... /` shape; added asserts that the old post-sum
+line is absent and that the wrapper/macro-redirect shape is present).
+`src/components/canvas/planet/usePlanetMaterials.ts`'s two call sites
+(Moon's eclipse-branch and the trailing airless-body branch) both moved
+their anchor from `#include <lights_fragment_begin>` to `#include
+<lights_physical_pars_fragment>`.
 
 ---
 
 ## Items 4 (assist)/5/6 — blocked on owner decisions
 
-Not started. Per handoff §5, open and not this session's call:
+Per handoff §5, open. **§5.1 and §5.6 are now resolved** — see "Owner
+decisions — 2026-07-29" below, which supersedes both. §5.2, §5.3, §5.4,
+§5.5, §5.7 remain open and not this session's call:
 
-- **§5.1 Didactic scale vs irradiance story** — the biggest unresolved
-  question: a body that LOOKS close under didactic compression but is LIT
-  as if physically far — what space story does that tell, and how is it
-  disclosed?
+- ~~§5.1 Didactic scale vs irradiance story~~ — **resolved**, see below.
 - **§5.2 Screenshot/export disclosure** — the pill doesn't travel with an
   exported image.
 - **§5.3 Radiometric anchor** — what 0 EV physically means; blocks a real
@@ -184,12 +240,46 @@ Not started. Per handoff §5, open and not this session's call:
 - **§5.5 PlanetModel-only bodies** (haumea, vesta, pallas, hygiea) — every
   per-material mechanism skips them; they become brightness outliers under
   real irradiance.
-- **§5.6 Disclosure surface** — single expandable-line fidelity surface vs
-  a second pill (two permanent amber pills = banner blindness). This is
-  what item 4's "assist" pill (as opposed to the display-only floor shipped
-  here) is blocked on.
+- ~~§5.6 Disclosure surface~~ — **resolved**, see below.
 - **§5.7 Per-device adaptation** — a 10-second step-wedge test, never
   measured, only asserted (the "projector argument").
+
+---
+
+## Owner decisions — 2026-07-29
+
+Recorded verbatim from the owner (relayed via the session coordinator, not
+written into `handoffiluminacao.md` itself — that file stays read-only and
+unedited). These supersede the handoff's open questions §5.1 (didactic
+scale vs irradiance story) and §5.6 (disclosure surface: single expandable
+badge vs second pill):
+
+1. **Disclosure UI:** ONE unified fidelity badge grouping Scale and
+   Brightness, expandable on click — no second permanent pill.
+2. **Default scale mode changes to REAL distance ("realistic"), and body
+   irradiance follows the REAL ephemeris distance in BOTH scale modes** —
+   light always tells the true story; the content-assist gain (with
+   disclosure) is what keeps things visible.
+3. **Milky Way HDR panorama (#4, NASA SVS Deep Star Maps 2020) approved
+   for implementation now**; formal licensing check stays with the owner.
+
+**Scheduled next in the queue** (this order — each depends on state the
+previous one leaves behind):
+
+1. Irradiance work first — inverse-square from ephemeris heliocentric
+   distance (Onda 2's `resolveHeliocentricDistanceAU` pattern), applied in
+   BOTH scale modes per decision 2, fused with the didactic content-assist
+   gain into a single per-material uniform (handoff §4 Onda 2: "senão
+   nascem dois multiplicadores empilhados que depois brigam").
+2. Default-mode change — flip `store.ts`'s `scaleMode` default from
+   `"didactic"` to `"realistic"`, now that irradiance no longer silently
+   diverges from what the scale mode shows.
+3. Unified badge + assist control — the single expandable fidelity badge
+   (decision 1) replacing/absorbing `ScalePill`, plus the "assist" gain
+   control from handoff §4 item 4 (now unblocked by decision 1 resolving
+   §5.6).
+4. Milky Way HDR panorama — NASA SVS Deep Star Maps 2020 (decision 3),
+   licensing check owner-side before shipping.
 
 ---
 
@@ -236,12 +326,14 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
 
 1. Read this file, then `handoffiluminacao.md` (still read-only), then
    `AGENTS.md`.
-2. **Item 2** (regolith per-light rewrite) is the next Onda 1 item, and is
-   explicitly assigned to a separate agent per the coordinator — check
-   `tasks/STATUS.md`'s parallel-line pointer before starting it, in case it
-   already landed in a sibling worktree.
-3. Items 4/5/6 all need an **owner decision** first (see "blocked on owner
-   decisions" above) — do not guess a resolution and ship UI against it.
+2. **Item 2 (regolith per-light `RE_Direct` wrapper) is done** — see its
+   section above. Onda 2 is now unblocked on the sequencing dependency the
+   handoff named.
+3. §5.2, §5.3, §5.4, §5.5, §5.7 still need an **owner decision** first (see
+   "blocked on owner decisions" above) — do not guess a resolution and ship
+   UI against it. §5.1 and §5.6 are resolved — see "Owner decisions —
+   2026-07-29" and follow its queue order (irradiance → default-mode flip →
+   unified badge + assist control → Milky Way HDR panorama).
 4. Onda 2 (inverse-square irradiance, analytical auto-exposure, exposure
-   registry audit, planetshine) is unstarted and depends on Item 2 landing
-   first per the handoff's own sequencing.
+   registry audit, planetshine) is next per both the handoff's sequencing
+   and the owner-decisions queue above — start with irradiance.

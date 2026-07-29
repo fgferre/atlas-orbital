@@ -19,11 +19,57 @@
  * without them a Hapke implementation would be an invention wearing a
  * physical name.
  *
+ * **Per-light wrapper, not a post-sum multiply.** Three.js calls `RE_Direct`
+ * once per direct light — see `lights_fragment_begin.glsl.js` in
+ * `node_modules/three`, which loops over point/spot/directional lights and
+ * invokes `RE_Direct(directLight, geometryPosition, geometryNormal,
+ * geometryViewDir, geometryClearcoatNormal, material, reflectedLight)`
+ * inside each loop body. `RE_Direct` is itself a macro
+ * (`#define RE_Direct RE_Direct_Physical`, set at the end of
+ * `lights_physical_pars_fragment.glsl.js`), so this patch redefines that
+ * macro to point at a wrapper: `RE_Direct_Regolith` snapshots
+ * `reflectedLight.directDiffuse`, calls the original `RE_Direct_Physical`
+ * for this light, then rescales only the delta THAT CALL just added by the
+ * Lommel-Seeliger factor computed from THIS light's own
+ * `directLight.direction` and `geometryViewDir`. Every other light's
+ * already-accumulated diffuse, and this light's own specular/clearcoat/sheen
+ * contributions (`RE_Direct_Physical` also writes those), pass through
+ * unscaled — exactly the same fields the old post-sum multiply left
+ * untouched.
+ *
+ * This replaces an earlier version of this patch that multiplied the
+ * POST-SUM `reflectedLight.directDiffuse` once, using geometry derived from
+ * an assumed single sun at the world origin (`viewMatrix[3].xyz`). That form
+ * was correct only because today's scene has exactly one direct light; a
+ * second direct light (planetshine, tracked as Onda 2 work) would have been
+ * scaled by geometry belonging to a DIFFERENT light, amplifying it by up to
+ * ~13.3x near its own terminator. The per-light wrapper has no such
+ * coupling: each light supplies its own incidence direction via
+ * `directLight.direction`, which three.js already computes correctly for
+ * both point and directional lights (`getPointLightInfo` /
+ * `getDirectionalLightInfo` in `lights_pars_begin.glsl.js`) — no
+ * sun-at-origin assumption survives, so moving the Sun (or adding a second
+ * light) can no longer silently break the photometry.
+ *
+ * **Single-light identity.** With today's one `pointLight` at the world
+ * origin (`SceneLighting.tsx`), `directLight.direction` is exactly
+ * `normalize(pointLight.position - geometryPosition)` in view space, which
+ * is the same vector the old code derived from `viewMatrix[3].xyz -
+ * geometryPosition` (the view-space position of the world origin is, by
+ * definition, the translation column of the view matrix). `directDiffuse`
+ * starts at `vec3(0)` before the scene's only light call, so
+ * `delta == reflectedLight.directDiffuse` there and the wrapper's
+ * `before + delta * factor` reduces to exactly the old `sum *= factor`.
+ * Output is bit-for-bit identical for the single-light case — see
+ * `regolithPhotometry.test.ts` for the pinned shape and `e2e/boot.spec.ts`'s
+ * pixel baseline for the runtime check.
+ *
  * **The 4/3 is derived, not tuned — and Atlas', not published.** Three's
- * `directDiffuse` already carries the μ₀ factor, so converting Lambert to
- * Lommel-Seeliger means multiplying by C / (μ₀ + μ). C is fixed by demanding
- * the change be flux-neutral, so it redistributes brightness across the disc
- * without touching the body's total apparent output:
+ * `directDiffuse` delta already carries the μ₀ factor for this light, so
+ * converting Lambert to Lommel-Seeliger means multiplying that delta by
+ * C / (μ₀ + μ). C is fixed by demanding the change be flux-neutral, so it
+ * redistributes brightness across the disc without touching the body's
+ * total apparent output:
  *
  *   - At zero phase (viewing along the light direction) μ = μ₀ everywhere on
  *     the visible disc, so the LS product collapses to the constant C/2 —
@@ -51,11 +97,10 @@
  * only gets the law once someone has confirmed it has no atmosphere to
  * speak of.
  *
- * **Zero new uniforms** (standing law 2). The Sun sits at the world origin, so
- * `viewMatrix[3].xyz` *is* the Sun in view space and the incidence direction
- * needs no CPU-supplied vector. The patch anchors after
- * `lights_fragment_begin`, which is the first point at which
- * `geometryPosition`, `geometryNormal` and `geometryViewDir` exist.
+ * **Zero new uniforms.** `directLight.direction` is a value three.js already
+ * computes per light from scene state (light position/direction transformed
+ * to view space) — no CPU-supplied vector is needed, and unlike the previous
+ * form there is no assumption baked in about where any light sits.
  *
  * **Known limitation, recorded rather than skipped.** Bodies with a `model`
  * field — haumea, vesta, pallas, hygiea — render through `PlanetModel.tsx`,
@@ -68,26 +113,40 @@
  */
 
 /**
- * Replaces `#include <lights_fragment_begin>`; emit the include, then correct
- * the direct diffuse lobe that it just accumulated.
+ * Replaces `#include <lights_physical_pars_fragment>`; emits the include
+ * (which defines `RE_Direct_Physical` and the `RE_Direct` macro), then
+ * redefines `RE_Direct` to a wrapper that corrects each light's own direct
+ * diffuse lobe immediately after that light's call, rather than correcting
+ * the sum after every light has been processed.
  *
  * Indirect (ambient / env) diffuse is deliberately left Lambert: it carries no
  * single incidence direction, so μ₀ is undefined for it.
  */
 export const REGOLITH_PHOTOMETRY_LIGHTS_PATCH = /* glsl */ `
-#include <lights_fragment_begin>
+#include <lights_physical_pars_fragment>
 
-// Lommel-Seeliger single-scattering diffuse for airless regolith.
-// Sun is at the world origin, so its view-space position is the translation
-// column of the view matrix — no uniform needed.
-{
-  vec3 lsSunView = viewMatrix[3].xyz;
-  vec3 lsIncident = normalize(lsSunView - geometryPosition);
-  float lsMu0 = max(dot(geometryNormal, lsIncident), 0.0);
-  float lsMu = max(dot(geometryNormal, geometryViewDir), 0.0);
-  // directDiffuse already carries Lambert's mu0, so the conversion to
-  // mu0 / (mu0 + mu) is a division by the sum. 4/3 is the flux-preserving
-  // normalisation derived in this file's header, not a tuned constant.
-  reflectedLight.directDiffuse *= 1.3333333 / max(lsMu0 + lsMu, 1e-4);
+// Lommel-Seeliger single-scattering diffuse for airless regolith, applied
+// per RE_Direct call so each light's diffuse contribution is corrected by
+// its OWN incidence geometry — bounded to <= 4/3 by construction no matter
+// how many direct lights end up calling RE_Direct.
+void RE_Direct_Regolith( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+
+  vec3 lsDiffuseBefore = reflectedLight.directDiffuse;
+
+  RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+
+  // The call above just added this light's Lambert-mu0 delta to
+  // directDiffuse. Converting that delta to mu0 / (mu0 + mu) is dividing it
+  // by (mu0 + mu) and re-applying the flux-preserving 4/3 derived in this
+  // file's header. Only the delta THIS call added is touched — any diffuse
+  // already accumulated from an earlier light, and this call's own
+  // directSpecular / clearcoat / sheen writes, pass through untouched.
+  float lsMu0 = saturate( dot( geometryNormal, directLight.direction ) );
+  float lsMu = saturate( dot( geometryNormal, geometryViewDir ) );
+  vec3 lsDiffuseDelta = reflectedLight.directDiffuse - lsDiffuseBefore;
+  reflectedLight.directDiffuse = lsDiffuseBefore + lsDiffuseDelta * ( 1.3333333 / max( lsMu0 + lsMu, 1e-4 ) );
+
 }
+#undef RE_Direct
+#define RE_Direct RE_Direct_Regolith
 `;

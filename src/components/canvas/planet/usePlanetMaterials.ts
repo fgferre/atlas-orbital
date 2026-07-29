@@ -528,10 +528,13 @@ export function usePlanetMaterials({
         // W3 — Lommel-Seeliger call site 1 of 2. This branch chain is
         // mutually exclusive and it is the Moon's only route, so the
         // regolith patch has to be applied here as well as in the
-        // trailing branch below.
+        // trailing branch below. Onda 1.2 — anchor moved to
+        // `lights_physical_pars_fragment` (the per-light RE_Direct
+        // wrapper needs to land before `lights_fragment_begin`'s light
+        // loop calls RE_Direct, not after it).
         if (regolith) {
           shader.fragmentShader = shader.fragmentShader.replace(
-            "#include <lights_fragment_begin>",
+            "#include <lights_physical_pars_fragment>",
             REGOLITH_PHOTOMETRY_LIGHTS_PATCH
           );
         }
@@ -632,7 +635,7 @@ export function usePlanetMaterials({
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <lights_fragment_begin>",
+          "#include <lights_physical_pars_fragment>",
           REGOLITH_PHOTOMETRY_LIGHTS_PATCH
         );
       };
