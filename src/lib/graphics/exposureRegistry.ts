@@ -86,7 +86,14 @@
  *     factor and subtractive artefacts. Scaling it needs the blend
  *     decision revisited, not just a uniform.
  *   • Ring emissive — `ringEmissive` / `RING_EMISSIVE_POWER`.
- *   • Starfield — `u_exposure`, already a registry participant.
+ *   • Starfield — `u_exposure` is set once at material construction
+ *     (`Starfield.tsx`'s `useMemo`) from `starExposure()` and never
+ *     re-reads `sceneExposure`; it is NOT a registry participant. The
+ *     starfield still tracks scene-wide exposure shifts correctly today
+ *     because `ExposureBridge` drives `gl.toneMappingExposure`, which
+ *     scales the whole rendered buffer (stars included) after the fact —
+ *     so behaviour is fine, only this line's "already wired" claim
+ *     was wrong.
  *
  * **Decided when the default flipped to `"assisted"` (Onda 2.2): all six
  * stay body-independent, deliberately, and none of them joins the

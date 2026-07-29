@@ -177,11 +177,20 @@ export const applyPlanetDirectLightCacheKey = (
 /**
  * Install the direct-light chain on a shader inside `onBeforeCompile`.
  *
- * Call this exactly once per material — a second call would replace the
- * include a second time and nest the wrapper inside itself, squaring the
- * irradiance. Every planet-material branch in `usePlanetMaterials` routes
- * through here so the anchor string and the uniform registration have one
- * definition each.
+ * Call this exactly once per material — a second call on the same `shader`
+ * would re-find the literal `#include <lights_physical_pars_fragment>`
+ * token (still present verbatim in the once-patched string, since
+ * {@link buildPlanetDirectLightPatch}'s non-regolith branch re-emits that
+ * exact token ahead of the wrapper) and inject a SECOND
+ * `RE_Direct_SolarIrradiance` function definition. GLSL does not allow two
+ * function definitions with the same name, so the result is a shader
+ * compile error, not a silently-doubled multiply — there is no live path
+ * to a "squared irradiance" runtime. Not currently reachable: only one call
+ * site exists (`usePlanetMaterials.ts`), and three.js hands `onBeforeCompile`
+ * a fresh unpatched template on every recompile rather than reusing the
+ * previous run's mutated string. Every planet-material branch in
+ * `usePlanetMaterials` routes through here so the anchor string and the
+ * uniform registration have one definition each.
  *
  * The uniform starts at `1.0` (neutral) so a material that renders before
  * `Planet.tsx`'s first `useFrame` write is lit exactly as it is today.
