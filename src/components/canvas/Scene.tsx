@@ -453,7 +453,14 @@ export const Scene = () => {
     () => resolveSunRenderMode(sunRenderMode, qualityProfile.name),
     [qualityProfile.name, sunRenderMode]
   );
-  const [rendererAntialias] = useState(() => qualityProfile.antialias);
+  // When `PostProcessingPipeline` is mounted it owns antialiasing: the scene
+  // is drawn into the composer's own multisampled render target and reaches the
+  // default framebuffer as a fullscreen quad, which has no geometry edges for
+  // context MSAA to resolve. Asking for both allocates a second full-resolution
+  // multisampled backbuffer that provably cannot change a pixel.
+  const [rendererAntialias] = useState(
+    () => qualityProfile.antialias && qualityProfile.name === "constrained"
+  );
   const canvasDpr = useMemo(
     () => [1, qualityProfile.dprMax] as [number, number],
     [qualityProfile.dprMax]
@@ -536,6 +543,9 @@ export const Scene = () => {
         console.info("[atlas] WebGL renderer info:", {
           vendor,
           renderer,
+          // Beside the hardware facts that produced it, so a silent auto
+          // downgrade explains itself in a user-pasted console.
+          qualityTier: qualityProfile.name,
           maxTextureSize: webglCtx.getParameter(webglCtx.MAX_TEXTURE_SIZE),
           maxCubeMapSize: webglCtx.getParameter(
             webglCtx.MAX_CUBE_MAP_TEXTURE_SIZE
@@ -590,7 +600,11 @@ export const Scene = () => {
         import.meta.hot.dispose(detachContextLossHandlers);
       }
     },
-    [setContextLost]
+    // `qualityProfile.name` is read by the diagnostic above. R3F invokes
+    // `onCreated` once per Canvas mount and not again on prop identity
+    // change, so widening the deps costs nothing at runtime — it just
+    // keeps the compiler's inferred set and the declared set in agreement.
+    [qualityProfile.name, setContextLost]
   );
 
   const bloomRef = useRef<BloomController | null>(null);
@@ -864,6 +878,7 @@ export const Scene = () => {
                 VISUAL_PRESETS[visualPreset].bloomIntensity
             )}
             toneMapping={effectiveGraphics.toneMapping}
+            composerMultisampling={qualityProfile.composerMultisampling}
           />
         ) : (
           <DirectRenderPass />

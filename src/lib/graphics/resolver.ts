@@ -15,9 +15,10 @@
  * - `graphicsOverrides = {}` yields the preset base; all *Mul fields
  *   default to 1, all *Delta fields default to 0, bare fields are
  *   absolute overrides (undefined = fall through).
- * - Auto-mode picks a preset from device signals using the existing
- *   `calculateQualityScore` heuristic; Custom keeps `customBase` in
- *   `graphicsSlice` so "Reset to High" stays meaningful.
+ * - Auto-mode picks a preset from device signals via
+ *   `resolveQualityTierFromSignals` (the score heuristic plus the GPU
+ *   capability ceiling); Custom keeps `customBase` in `graphicsSlice`
+ *   so "Reset to High" stays meaningful.
  */
 
 import type {
@@ -26,7 +27,7 @@ import type {
   DeviceSignals,
 } from "../qualityProfile";
 import type { StarOpticsProfile } from "../starfieldShaderMath";
-import { calculateQualityScore } from "./deviceSignals";
+import { resolveQualityTierFromSignals } from "./deviceSignals";
 
 /** User-facing preset identifier. `custom` = at least one override is set. */
 export type GraphicsPresetName = "low" | "medium" | "high" | "ultra" | "custom";
@@ -283,19 +284,15 @@ export const mapPresetToTier = (
 };
 
 /**
- * Auto-resolve a preset from device signals using the same scoring
- * heuristic that `qualityProfile.ts:resolveQualityProfile` applies in
- * `"auto"` mode. Keeps behavior identical when a user opts into Auto.
+ * Auto-resolve a preset from device signals. Delegates to
+ * `resolveQualityTierFromSignals` rather than repeating the threshold
+ * ladder, so the score cutoffs and the GPU ceiling live in exactly one
+ * place — this is the only auto path with runtime consumers.
  */
 export const autoResolvePreset = (
   signals: DeviceSignals
-): Exclude<GraphicsPresetName, "custom"> => {
-  const score = calculateQualityScore(signals);
-  if (score >= 4) return "ultra";
-  if (score >= 2) return "high";
-  if (score >= -1) return "medium";
-  return "low";
-};
+): Exclude<GraphicsPresetName, "custom"> =>
+  mapTierToPreset(resolveQualityTierFromSignals(signals));
 
 /**
  * Core resolver. Given the persisted state and live device signals,
@@ -370,12 +367,22 @@ export const resolveEffectiveGraphics = (
  * `effective` (caller provides it since `EffectiveGraphics` itself is
  * name-less after the merge).
  */
+const COMPOSER_MULTISAMPLING: Record<ResolvedQualityName, number> = {
+  ultra: 4,
+  high: 2,
+  balanced: 0,
+  constrained: 0,
+};
+
 export const projectToLegacyShape = (
   effective: EffectiveGraphics,
   presetName: Exclude<GraphicsPresetName, "custom">
 ): ResolvedQualityProfile => ({
   name: mapPresetToTier(presetName),
   antialias: effective.antialias,
+  // Derived from the tier rather than carried on EffectiveGraphics: composer
+  // MSAA is a VRAM budget decision, not a user-facing graphics slider.
+  composerMultisampling: COMPOSER_MULTISAMPLING[mapPresetToTier(presetName)],
   dprMax: effective.resolutionScale,
   shadowMapSize: effective.shadowMapSize,
   environmentResolution: effective.environmentResolution,

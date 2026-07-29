@@ -13,6 +13,14 @@ import type { ViewportRect } from "./effectiveViewport";
 export class PrivilegedPosition {
   // Rembrandt lighting offset (30 degrees)
   private static readonly PHASE_OFFSET = THREE.MathUtils.degToRad(30);
+  /**
+   * How far the moon-framing bias may pull the camera away from the fully
+   * lit view. At 70° more than half the visible disc is still lit and a
+   * terminator stays in frame, which is where surface relief reads best.
+   */
+  private static readonly MAX_SOLAR_DEVIATION = THREE.MathUtils.degToRad(70);
+  /** Weight of "away from the parent" against the solar-aligned framing. */
+  private static readonly PARENT_FRAMING_BIAS = 0.78;
 
   // Default up vector (ecliptic north)
   private static readonly ECLIPTIC_UP = new THREE.Vector3(0, 1, 0);
@@ -237,7 +245,39 @@ export class PrivilegedPosition {
 
     // For close moons, favor the side away from the parent so the planet does
     // not dominate the frame, while keeping some solar bias for readable lighting.
-    return solarDirection.lerp(awayFromParent.normalize(), 0.78).normalize();
+    const blended = solarDirection
+      .clone()
+      .lerp(awayFromParent.normalize(), this.PARENT_FRAMING_BIAS)
+      .normalize();
+
+    // ...but never past the terminator. At a 0.78 bias the parent term wins
+    // outright: the blend leaves the lit hemisphere whenever the parent→moon
+    // vector is more than ~106° from the sun, which put the focus camera on
+    // the night side of Iapetus, Titan, the Moon, Europa, Rhea and Dione.
+    // Ambient is 0.0 in every preset, so "night side" means solid black, not
+    // dim — the body reads as if it failed to load. Clamping the deviation
+    // keeps the away-from-parent azimuth wherever it is compatible with
+    // light, and otherwise takes the closest direction that still is.
+    const litDirection = targetPos.clone().sub(sunPos);
+    if (litDirection.lengthSq() < 1e-9) {
+      return blended;
+    }
+    litDirection.normalize().negate();
+
+    if (blended.angleTo(litDirection) <= this.MAX_SOLAR_DEVIATION) {
+      return blended;
+    }
+
+    const swingAxis = new THREE.Vector3().crossVectors(litDirection, blended);
+    if (swingAxis.lengthSq() < 1e-12) {
+      // Exactly anti-parallel: no plane to swing in, so there is no
+      // away-from-parent component worth preserving.
+      return solarDirection;
+    }
+
+    return litDirection
+      .applyAxisAngle(swingAxis.normalize(), this.MAX_SOLAR_DEVIATION)
+      .normalize();
   }
 
   /**

@@ -40,6 +40,8 @@ interface PostProcessingPipelineProps {
    * `bloomEnabled && intensity > 0`.
    */
   bloomMounted: boolean;
+  /** MSAA samples for the composer's internal RTs. See `ResolvedQualityProfile`. */
+  composerMultisampling: number;
   toneMapping: ToneMappingName;
 }
 
@@ -57,6 +59,7 @@ export const PostProcessingPipeline = memo(
     brightnessRef,
     bloomMounted,
     toneMapping,
+    composerMultisampling,
   }: PostProcessingPipelineProps) => {
     const assignBloomRef = useCallback(
       (effect: BloomController | null) => {
@@ -169,7 +172,10 @@ export const PostProcessingPipeline = memo(
     const toneMappingMode = TONE_MAPPING_MODE[toneMapping];
 
     return (
-      <EffectComposer frameBufferType={THREE.HalfFloatType}>
+      <EffectComposer
+        frameBufferType={THREE.HalfFloatType}
+        multisampling={composerMultisampling}
+      >
         <LightGlowSlot />
         <LensFlareSlot />
         {bloomMounted ? (

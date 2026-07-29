@@ -66,14 +66,11 @@ const TEXTURES = [
     name: "2k_neptune.jpg",
     url: "https://www.solarsystemscope.com/textures/download/2k_neptune.jpg",
   },
-  {
-    name: "8k_stars.jpg",
-    url: "https://www.solarsystemscope.com/textures/download/8k_stars.jpg",
-  },
-  {
-    name: "8k_stars_milky_way.jpg",
-    url: "https://www.solarsystemscope.com/textures/download/8k_stars_milky_way.jpg",
-  },
+  // 8k_stars.jpg / 8k_stars_milky_way.jpg / 2k_stars_milky_way.jpg were
+  // removed 2026-07-27. The starfield is the HYG catalog plus the NASA star
+  // data (`Starfield.tsx`, `HygStellarMesh.tsx`); no code path has ever
+  // sampled a background plate, so re-fetching them only refills the deploy
+  // artifact.
   {
     name: "4k_haumea_fictional.jpg",
     url: "https://www.solarsystemscope.com/textures/download/4k_haumea_fictional.jpg",
