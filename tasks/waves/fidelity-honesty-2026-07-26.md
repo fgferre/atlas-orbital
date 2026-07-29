@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status                            | Commit                                                                                                                                                                   |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                                                |
-| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                                    |
-| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                                    |
-| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                                                |
-| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                                                                          |
-| W6 One pole, one spin                   | **done**                          | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (Moon + 20 satellites, Pluto/Charon, Triton, OPP-PC, kernel parser) |
-| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                                        |
-| W8 Reach and discovery                  | not started                       | —                                                                                                                                                                        |
-| W9 The rings transmit                   | not started                       | —                                                                                                                                                                        |
-| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                                        |
-| — CHECKPOINT —                          | —                                 | —                                                                                                                                                                        |
-| W11 J2 secular precession               | not decided                       | —                                                                                                                                                                        |
-| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                                        |
-| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                                        |
+| Wave                                    | Status                            | Commit                                                                                                                                                                             |
+| --------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                                                          |
+| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                                              |
+| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                                              |
+| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                                                          |
+| W5 Body figure                          | **done, both stages**             | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · `d5c6ebb` stage B (Saturn figure, F-09 ring ratios, ellipsoid ring-shadow occluder) · `ef09f13` follow-on (rings sunlit, see below) |
+| W6 One pole, one spin                   | **done**                          | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (Moon + 20 satellites, Pluto/Charon, Triton, OPP-PC, kernel parser)           |
+| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                                                  |
+| W8 Reach and discovery                  | not started                       | —                                                                                                                                                                                  |
+| W9 The rings transmit                   | not started                       | —                                                                                                                                                                                  |
+| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                                                  |
+| — CHECKPOINT —                          | —                                 | —                                                                                                                                                                                  |
+| W11 J2 secular precession               | not decided                       | —                                                                                                                                                                                  |
+| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                                                  |
+| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                                                  |
 
 ---
 
@@ -900,6 +900,49 @@ pixels wide and a 2.26% oblateness is sub-pixel there. Same camera obstacle reco
 
 **Verification.** `npm run test:run -- astrophysics celestialBodies cameraNearPlane moonSceneFrame && npm run lint && npm run build`.
 Add a real assert in `astrophysics.test.ts`: `resolveSemanticBodyRadius(saturn,'realistic') / KM_TO_3D_UNITS` equals 60 268 ± 0.1% and Jupiter 71 492 — `cameraNearPlane.test.ts` is built entirely on Deimos, which has neither `shapeScale` nor flattening, so it is **structurally blind** to this wave and must not be described as the gate (lesson M5). Post-stage-B arithmetic gate: `resolveRingOuterRadius(saturn,'realistic') / KM_TO_3D_UNITS` still equals 140 180 km within 1%. Smoke per commit: Quaoar through one 17.68 h period; Jupiter limb plus spin-axis lock (a wobble means the scale went on the wrong group); Uranus; stage B, Saturn's ring shadow still tracking the drawn ring at three sub-solar latitudes, and didactic Saturnian moons still outside the rings. **Confirm Weywot's separation from Quaoar and Io's from Jupiter are unchanged from main at the same timestamp** — if either moved, the scale went on `groupRef`. Record the measured focus-extent deltas here: the equatorial radius grows 3.5% for Saturn, 2.2% Jupiter, 0.8% Uranus, 0.6% Neptune, in both scale modes, which shifts every moon of every flattened planet in didactic mode. Then `npm run test:e2e`.
+
+#### Stage B shipped `d5c6ebb`, then a docs regression said otherwise, now corrected (2026-07-29)
+
+**Stage B (F-09 ring ratios + the ellipsoid ring-shadow occluder) shipped same-day
+as stage A, in `d5c6ebb`** — the object-space unit change (F-09: rings drawn
+against the equatorial radius, 1.110/2.326, not the mean radius) and the Z-not-Y
+ellipsoid occluder for the planet's shadow on the ring (`planetShadowShader.ts`,
+`buildPlanetShadowFragmentPatch`/`buildPlanetShadowEmissivePatch`, one builder,
+both call sites). `dc5b819` (same day) recorded the progress table as "done, both
+stages" and moved STATUS to W6.
+
+**Then `d8d9317` (2026-07-27) reopened it by mistake.** That commit's own message
+says "W5 shipped stage A only and its stage B ... was never started" — which is
+false: `d5c6ebb` predates it in this same branch's history and is titled exactly
+"W5 stage B" in its own subject line. The progress table's stage-B cell has read
+"not started" ever since, and this file's own W5 prose (the "Stage B trap"
+subsection above, the F-09 paragraph) still describes stage B as future work
+despite the code having shipped it three days earlier. **Read code before trusting
+a progress table** — this is the concrete instance the general rule is for.
+Corrected here rather than left for the next reader to re-discover: the progress
+table row above now cites `d5c6ebb` directly, and this paragraph is the record of
+why the correction happened, per standing law 4 (a commit that changes what a
+sentence claims greps and updates every sentence describing it — this is that
+sentence).
+
+**What was NOT part of F-09, and shipped separately in `ef09f13` (2026-07-29).**
+The owner's real-GPU report — "rings don't respond to any lighting mode, always
+look the same" — is a different defect from F-09's ring-ratio undersizing: the
+ring material carried a constant `emissive`/`emissiveMap`/`emissiveIntensity`
+(`RING_EMISSIVE_POWER`), self-lit regardless of the brightness policy, Saturn's
+real heliocentric distance, or the auto-exposure anchor. Onda 2.4
+(lighting-redesign wave) named this exact defect as its **owed item 2**
+("ring emissive detaches under a high anchor") and pointed at "the rings wave
+(W5-B)" as shorthand for wherever ring-shader work lands — not at F-09
+specifically. `ef09f13` closes that owed item: the ring material now joins the
+SAME `u_solarIrradiance`-driven direct-light path the planet surfaces use
+(`ringLightingPatch.ts`), with a lit/unlit face distinction (front face full
+sunlit response; back face receives a fixed `RING_TRANSMISSION_FRACTION` of the
+same light, approximating the transmission a real, optically-thin ring shows —
+not a per-ring optical-depth model, which is W9's job, not this fix's). The
+constant-emissive path and its `RING_EMISSIVE_POWER` constant are deleted, not
+left stacked alongside the new path. See `exposureRegistry.ts`'s doc header for
+the exposure-registry side of this closure.
 
 ---
 

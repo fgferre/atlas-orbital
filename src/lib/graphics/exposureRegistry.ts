@@ -9,9 +9,12 @@
  * exposure shift. The number multiplies into each subsystem's OWN
  * calibrated exposure constant (AgX's `toneMappingExposure`, the
  * starfield's `u_exposure`, atmospheres' `exposureGround`/`exposureSky`,
- * the Sun's `sunEmissive`, the rings' `emissiveIntensity`) so the
- * per-subsystem calibration math stays untouched and one update here
- * propagates through every emissive surface in lockstep.
+ * the Sun's `sunEmissive`) so the per-subsystem calibration math stays
+ * untouched and one update here propagates through every emissive surface
+ * in lockstep. The rings no longer carry a calibrated exposure constant of
+ * their own (W5-B retired `RING_EMISSIVE_POWER` / `emissiveIntensity`) —
+ * they follow the per-body solar-irradiance path instead, see the
+ * "Deferred" section below.
  *
  * ## Two factors, two writers, one product (Onda 2.4)
  *
@@ -48,10 +51,10 @@
  *
  * ## Why a registry at all (audit fable-5)
  *
- * Half a dozen exposure-like constants live across the repo (atmos
+ * Several exposure-like constants live across the repo (atmos
  * `1 - exp(-scatter * exposure_atmos)`, starfield `u_exposure`, Sun
- * `SUN_EMISSIVE_POWER`, rings `RING_EMISSIVE_POWER`) — each with its
- * own physical justification. Without a registry, an eye-adaptation
+ * `SUN_EMISSIVE_POWER`) — each with its own physical justification.
+ * Without a registry, an eye-adaptation
  * pass scaling the AGX operator's `toneMappingExposure` ONLY would
  * shift the buffer uniformly *after* every per-subsystem exposure
  * baked in. The audit (fable-5) flagged this as the "halo da Terra
@@ -121,7 +124,6 @@
  *     invariant to luminance scale: `src > 1` produces a negative
  *     factor and subtractive artefacts. Scaling it needs the blend
  *     decision revisited, not just a uniform.
- *   • Ring emissive — `ringEmissive` / `RING_EMISSIVE_POWER`.
  *   • Starfield — `u_exposure` is set once at material construction
  *     (`Starfield.tsx`'s `useMemo`) from `starExposure()` and never
  *     re-reads `sceneExposure`; it is NOT a registry participant. The
@@ -131,10 +133,23 @@
  *     so behaviour is fine, only this line's "already wired" claim
  *     was wrong.
  *
- * **Decided when the default flipped to `"assisted"` (Onda 2.2): all six
- * stay body-independent, deliberately, and none of them joins the
- * irradiance term in that change.** The reasoning is per family and it
- * is not "we ran out of time":
+ * **Ring emissive is NO LONGER on this list (W5-B).** It used to detach
+ * under a high anchor exactly like the families above — Saturn-real
+ * (anchor ~89) lifted the constant `RING_EMISSIVE_POWER` 89× while the
+ * planet's own surface stayed at reference (`saturn-real-after.png`,
+ * Onda 2.4's owed item 2). The fix was not "give it a registry
+ * subscription": the ring material now joins `solarIrradiancePatch.ts`'s
+ * OWN per-body law directly (`ringLightingPatch.ts` wraps `RE_Direct` with
+ * the SAME `u_solarIrradiance` uniform the planet surfaces read, written by
+ * the same per-frame call in `Planet.tsx`), so it tracks Saturn's real
+ * irradiance rather than a scene-wide exposure shift — the more correct of
+ * the two mechanisms, since the ring's brightness should follow the SUN's
+ * distance, not the DISPLAY's exposure.
+ *
+ * **Decided when the default flipped to `"assisted"` (Onda 2.2): the
+ * remaining five stay body-independent, deliberately, and none of them
+ * joins the irradiance term in that change.** The reasoning is per family
+ * and it is not "we ran out of time":
  *
  *   • Sun disc — it is the SOURCE. Its own surface radiance does not
  *     fall off with the distance to whoever is looking at it; only the
@@ -150,12 +165,6 @@
  *     keeps Earth (the only body with either) at exactly 1.0 — the
  *     fixed point of every position. The detachment becomes visible the
  *     first time another atmosphere body ships, or if the anchor moves.
- *   • Ring emissive — Saturn only; same 9.6 AU as its planet, so it
- *     detaches by a constant factor rather than a varying one. Recorded,
- *     not fixed. **Onda 2.4 makes this visible**: focusing Saturn in
- *     `"real"` now sets the anchor to ~89, which lifts the constant
- *     ring emissive by the same 89× while the planet's own surface
- *     stays at reference. Owed to the rings wave (W5-B).
  *   • Starfield — stars are not lit by our Sun. Correct as is. They DO
  *     scale with this registry (via `toneMappingExposure`), so a
  *     high-anchor focus lifts the whole sky — a dark-adapted observer's

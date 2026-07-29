@@ -1695,7 +1695,20 @@ the operator's black rather than a NaN.
    damped, the honest lever is a per-family registry subscription
    (starfield `u_exposure` taking a sub-linear share of the anchor),
    not a cap on the anchor itself.
-2. **Ring emissive detaches under a high anchor** — W5-B.
+2. ~~Ring emissive detaches under a high anchor — W5-B.~~ **CLOSED
+   2026-07-29, `ef09f13`.** The ring material's constant `emissive` /
+   `emissiveMap` / `emissiveIntensity` (`RING_EMISSIVE_POWER`) is deleted.
+   The ring now joins this Onda's own per-body law directly:
+   `ringLightingPatch.ts` wraps `RE_Direct` with the SAME
+   `u_solarIrradiance` uniform the planet surfaces read, written by the
+   same per-frame call in `Planet.tsx` — one resolver call feeds both
+   materials. Front (sunlit) face gets the full scaled response; the far
+   face mirrors the light direction and dims by a fixed
+   `RING_TRANSMISSION_FRACTION`, approximating the light a real,
+   optically-thin ring transmits (not a per-ring optical-depth model —
+   that is W9's job). Verified across all three policies at Saturn focus;
+   see `tasks/waves/fidelity-honesty-2026-07-26.md`'s W5 section for the
+   full account and screenshot paths.
 3. **Atmosphere shell + cloud COLOR blend** still do not follow the
    registry (pre-existing, `exposureRegistry.ts`); bounded today
    because Earth is the only body with either and sits at anchor 1.

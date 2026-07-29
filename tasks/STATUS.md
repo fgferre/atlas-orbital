@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (**Onda 2.4 shipped — analytical auto-exposure / radiometric anchor**: scene exposure is now `1 / fusedSunlightScalar(focusedBody, policy)`, so the focused body always lands at reference display brightness and Saturn/Jupiter stop rendering as black discs in "Brilho real"; `handoffiluminacao.md` §5.3 closed; exposure registry is a two-factor product (`anchor × adaptation`) with 1d demoted to a ±1-stop refinement; `SCENE_EXPOSURE_MAX` 16 → 1e6; boot frame unchanged, no re-bless. Owed: aesthetics of the high-anchor star sky. Prior: planetshine GLSL-compile defect FIXED — `planetshinePatch.ts` (`26cb756`) now declares `u_shineDir`/`u_shineRadiance` at the `lights_physical_pars_fragment` anchor it shares with `solarIrradiancePatch.ts`; Io, Europa and the Moon render correctly again. New permanent regression net: `e2e/ultra-shaders.spec.ts` (forced-ultra focus sweep over one representative per patched material family, asserts zero console errors — this is the gate that would have caught the defect before ship). Prior: forced-ultra headless verification pass found the defect (see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section for the original report, now closed). Before that: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (**W5-B: rings join the fused solar scalar, `ef09f13`** — the ring material's constant self-lit emissive (`RING_EMISSIVE_POWER`/`emissiveIntensity`) is deleted and replaced with the same `u_solarIrradiance`-driven direct-light path the planet surfaces use (`ringLightingPatch.ts`), with a lit/unlit face distinction (sunlit face full response, unlit face a fixed transmitted fraction). Closes lighting-redesign Onda 2.4's owed item 2 ("ring emissive detaches under a high anchor", 89× at Saturn-real). Not F-09 (already shipped, `d5c6ebb` — see the corrected W5 progress-table entry below); this is the separate ring-shading defect the owner reported on real GPU. Prior: **Onda 2.4 shipped — analytical auto-exposure / radiometric anchor**: scene exposure is now `1 / fusedSunlightScalar(focusedBody, policy)`, so the focused body always lands at reference display brightness and Saturn/Jupiter stop rendering as black discs in "Brilho real"; `handoffiluminacao.md` §5.3 closed; exposure registry is a two-factor product (`anchor × adaptation`) with 1d demoted to a ±1-stop refinement; `SCENE_EXPOSURE_MAX` 16 → 1e6; boot frame unchanged, no re-bless. Prior: planetshine GLSL-compile defect FIXED — `planetshinePatch.ts` (`26cb756`) now declares `u_shineDir`/`u_shineRadiance` at the `lights_physical_pars_fragment` anchor it shares with `solarIrradiancePatch.ts`; Io, Europa and the Moon render correctly again. New permanent regression net: `e2e/ultra-shaders.spec.ts` (forced-ultra focus sweep over one representative per patched material family, asserts zero console errors — this is the gate that would have caught the defect before ship). Prior: forced-ultra headless verification pass found the defect (see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section for the original report, now closed). Before that: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -74,9 +74,9 @@ re-bless. Registry is a two-factor product (`anchor × adaptation`,
 `setSceneExposure` deleted; 1d demoted to a ±1-stop refinement);
 `SCENE_EXPOSURE_MAX` 16 → 1e6. **Owed: the aesthetics of the high-anchor
 star sky** — at Neptune-real ×906 the starfield lifts hard, physically
-defensible, left uncapped, needs the owner's eye. Read the wave file's
-"Onda 2.4" section before touching `exposureRegistry.ts`,
-`autoExposure.ts` or either exposure bridge.
+defensible, left uncapped, needs the owner's eye. Owed item 2 (ring emissive
+detaching) is **CLOSED**, see the W5-B entry above (`ef09f13`). Read the wave
+file's "Onda 2.4" section before touching exposure code.
 
 ---
 
@@ -126,12 +126,12 @@ in the progress table is NOT a blocker and no increment waits on it. The
 consolidated checklist is the wave's **Deferred smoke gate** section; do not
 rebuild it from the per-wave prose.
 
-**W5 stage B is still open** and is the one thing an agent could walk past,
-because W6 landing later makes the queue look finished: stage A shipped the
-body figure (`2d26f5e`), stage B — **Saturn, F-09, the ring shaders** — was
-never started. Arbitrated decision B puts F-09 in W5, first commit of stage B,
-not in W1. So the next increment is **W5 stage B or W7**, owner's pick; they do
-not depend on each other.
+**W5 is done, both stages — corrected 2026-07-29.** "W5 stage B ... never
+started" (`d8d9317`) was a docs regression: stage B (F-09 + ellipsoid
+ring-shadow occluder) shipped same-day as stage A, in `d5c6ebb` — see the
+wave file's "Stage B shipped `d5c6ebb`..." subsection. **Separately, `ef09f13`
+closed lighting-redesign's owed item 2** (ring emissive detaching, not F-09's
+scope), same subsection. Next up: **W7**, or user-stated tasks.
 
 **W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
 source, and the Sun, all eight planets, the Moon, the eighteen analytical
