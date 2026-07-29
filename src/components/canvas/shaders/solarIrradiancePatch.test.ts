@@ -7,6 +7,7 @@ import {
   applyPlanetDirectLightPatch,
   buildPlanetDirectLightPatch,
 } from "./solarIrradiancePatch";
+import { findUndeclaredUniforms } from "./shaderUniformAudit";
 
 /**
  * Two failure modes here are silent — they compile, render, and look
@@ -113,5 +114,22 @@ describe("solar irradiance direct-light patch", () => {
     expect(regolith.customProgramCacheKey()).toContain(
       sharedOnBeforeCompile.toString()
     );
+  });
+
+  /**
+   * Same "chunk PRESENCE is not compilability" gap `planetshinePatch.ts`
+   * fell into (commit 26cb756, fixed by declaring `u_shineDir` /
+   * `u_shineRadiance` at this file's own `lights_physical_pars_fragment`
+   * anchor) — this file already declares `u_solarIrradiance` in the SAME
+   * text it references it in, so this is a defensive pin against a future
+   * regression, not a fix for a live bug.
+   */
+  it("declares every u_-prefixed identifier it references", () => {
+    for (const regolith of [true, false]) {
+      expect(
+        findUndeclaredUniforms(buildPlanetDirectLightPatch({ regolith })),
+        `regolith=${regolith}`
+      ).toEqual([]);
+    }
   });
 });

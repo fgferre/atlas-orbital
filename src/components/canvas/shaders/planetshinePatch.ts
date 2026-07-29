@@ -30,16 +30,25 @@
  * second direct light must never be corrected using a DIFFERENT light's
  * geometry.
  *
- * The injection point is `#include <lights_fragment_begin>` (inside the
- * fragment shader's `main()`, right after three's own point/spot/
- * directional light loops finish) — NOT `lights_physical_pars_fragment`,
- * which is where `solarIrradiancePatch.ts` / `regolithPhotometryPatch.ts`
- * land. Those two live at global scope (function/macro DEFINITIONS); this
- * one has to run AFTER `geometryPosition` / `geometryNormal` /
- * `geometryViewDir` / `geometryClearcoatNormal` / `reflectedLight` exist,
- * which `lights_fragment_begin` itself declares. Splitting the anchor is
- * why this is a separate module rather than a branch inside
+ * The CALL SITE's injection point is `#include <lights_fragment_begin>`
+ * (inside the fragment shader's `main()`, right after three's own
+ * point/spot/directional light loops finish) — NOT
+ * `lights_physical_pars_fragment`, which is where `solarIrradiancePatch.ts`
+ * / `regolithPhotometryPatch.ts` land. Those two live at global scope
+ * (function/macro DEFINITIONS); this one has to run AFTER
+ * `geometryPosition` / `geometryNormal` / `geometryViewDir` /
+ * `geometryClearcoatNormal` / `reflectedLight` exist, which
+ * `lights_fragment_begin` itself declares. Splitting the anchor is why
+ * this is a separate module rather than a branch inside
  * `solarIrradiancePatch.ts`.
+ *
+ * The two UNIFORM DECLARATIONS (`u_shineDir`, `u_shineRadiance`) cannot
+ * live at that same call-site anchor — GLSL forbids a `uniform` inside a
+ * function body, and `lights_fragment_begin` is already inside `main()`.
+ * They are instead folded into the SAME `lights_physical_pars_fragment`
+ * anchor `solarIrradiancePatch.ts` already owns (see
+ * {@link PLANETSHINE_PARS_PATCH}), mirroring that file's own
+ * `uniform float u_solarIrradiance;` idiom one anchor over.
  *
  * ## Direction convention
  *
@@ -109,6 +118,37 @@ export const buildPlanetshinePatch = ({
 }
 `;
 
+/**
+ * Pars-level declarations for the two shine uniforms, injected at the SAME
+ * literal anchor `applyPlanetDirectLightPatch` (`solarIrradiancePatch.ts`)
+ * already consumes: `#include <lights_physical_pars_fragment>`. This is
+ * the fix for the defect where `buildPlanetshinePatch`'s injected block
+ * READ `u_shineDir` / `u_shineRadiance` without either ever being
+ * DECLARED — a GLSL compile failure (`'u_shineDir' : undeclared
+ * identifier`) for all 3 recipients, not a warning, because the call-site
+ * anchor (`lights_fragment_begin`) is inside `main()` and GLSL forbids
+ * declaring a `uniform` inside a function body.
+ *
+ * Safe to re-target the same token a second time: both branches of
+ * `buildPlanetDirectLightPatch` (regolith and lambert — see
+ * `solarIrradiancePatch.ts` / `regolithPhotometryPatch.ts`) re-emit
+ * `#include <lights_physical_pars_fragment>` verbatim as the FIRST line of
+ * their own replacement text, so after `applyPlanetDirectLightPatch` runs
+ * the token still appears in the shader exactly once, embedded in what it
+ * just inserted. **This makes call order load-bearing, not incidental**:
+ * `applyPlanetshinePatch` MUST run AFTER `applyPlanetDirectLightPatch` on
+ * the same shader object, or this `.replace()` finds nothing and silently
+ * no-ops (the exact failure mode `solarIrradiancePatch.test.ts`'s own
+ * docstring warns about for a missing anchor). `usePlanetMaterials.ts`'s
+ * `patchDirectLights` closure already calls them in that order for every
+ * branch — this is the invariant that ordering depends on.
+ */
+export const PLANETSHINE_PARS_PATCH = /* glsl */ `
+uniform vec3 ${PLANETSHINE_DIR_UNIFORM};
+uniform vec3 ${PLANETSHINE_RADIANCE_UNIFORM};
+#include <lights_physical_pars_fragment>
+`;
+
 /** Minimal structural view of the object three hands `onBeforeCompile`. */
 interface PatchableShader {
   uniforms: { [name: string]: { value: unknown } };
@@ -117,10 +157,11 @@ interface PatchableShader {
 
 /**
  * Install the shine uniforms + injection on a shader inside
- * `onBeforeCompile`. Call this AFTER `applyPlanetDirectLightPatch` (order
- * does not actually matter — the two touch disjoint anchors — but this
- * keeps the "irradiance chain first, second-source addition after" reading
- * order `usePlanetMaterials.ts` documents). Call once per material, same
+ * `onBeforeCompile`. Call this AFTER `applyPlanetDirectLightPatch` — order
+ * is now load-bearing, not just a reading-order preference: see
+ * {@link PLANETSHINE_PARS_PATCH}'s docstring for why the pars-level
+ * uniform declarations depend on `applyPlanetDirectLightPatch` having
+ * already re-emitted the anchor token. Call once per material, same
  * non-reentrancy argument as `applyPlanetDirectLightPatch`: three hands
  * `onBeforeCompile` a fresh unpatched template on every recompile, and only
  * one call site exists.
@@ -138,8 +179,10 @@ export const applyPlanetshinePatch = (
   shader.uniforms[PLANETSHINE_RADIANCE_UNIFORM] = {
     value: new THREE.Vector3(),
   };
-  shader.fragmentShader = shader.fragmentShader.replace(
-    "#include <lights_fragment_begin>",
-    buildPlanetshinePatch(options)
-  );
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <lights_physical_pars_fragment>", PLANETSHINE_PARS_PATCH)
+    .replace(
+      "#include <lights_fragment_begin>",
+      buildPlanetshinePatch(options)
+    );
 };

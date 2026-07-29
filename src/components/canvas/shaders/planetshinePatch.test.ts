@@ -11,6 +11,7 @@ import {
   applyPlanetshinePatch,
   buildPlanetshinePatch,
 } from "./planetshinePatch";
+import { findUndeclaredUniforms } from "./shaderUniformAudit";
 
 /**
  * Mirrors `solarIrradiancePatch.test.ts`'s idiom: the shine chunk must be
@@ -122,5 +123,42 @@ describe("planetshine second-source patch", () => {
     expect(shader.fragmentShader).toContain("void RE_Direct_Regolith(");
     expect(shader.fragmentShader).toContain("void RE_Direct_SolarIrradiance(");
     expect(shader.fragmentShader).toContain("IncidentLight shineLight;");
+  });
+
+  /**
+   * The regression this pins: commit 26cb756 shipped `buildPlanetshinePatch`
+   * READING `u_shineDir` / `u_shineRadiance` at its `lights_fragment_begin`
+   * call site without either ever being DECLARED as a GLSL uniform anywhere
+   * — a compile failure for all 3 recipients (Io, Europa, Moon rendered as
+   * flat, unlit polygons), invisible to every test above because they only
+   * assert chunk PRESENCE (`toContain("IncidentLight shineLight;")`), never
+   * that a referenced identifier is actually declared. Static text search
+   * cannot run an actual GPU compiler, but it CAN catch exactly this class
+   * of defect: an identifier referenced with no matching `uniform`
+   * declaration in the composed shader text is undeclared under any GLSL
+   * compiler, full stop. This is the assert that would have failed on
+   * 26cb756 and passes once `applyPlanetshinePatch` also declares the two
+   * uniforms at the `lights_physical_pars_fragment` anchor (see
+   * `PLANETSHINE_PARS_PATCH` in `planetshinePatch.ts`).
+   *
+   * Must run against the FULLY COMPOSED shader (both patches applied, same
+   * order `usePlanetMaterials.ts` uses) — `buildPlanetshinePatch()`'s own
+   * output is deliberately incomplete in isolation, since its uniform
+   * declarations live at a different anchor.
+   */
+  it("declares every u_-prefixed identifier it references, once composed with the direct-light patch (26cb756 regression)", () => {
+    for (const regolith of [true, false]) {
+      const shader = {
+        uniforms: {} as { [name: string]: { value: unknown } },
+        fragmentShader: THREE.ShaderLib.standard.fragmentShader,
+      };
+      applyPlanetDirectLightPatch(shader, { regolith });
+      applyPlanetshinePatch(shader, { regolith });
+
+      expect(
+        findUndeclaredUniforms(shader.fragmentShader),
+        `regolith=${regolith}`
+      ).toEqual([]);
+    }
   });
 });

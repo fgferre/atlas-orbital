@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 
 import { REGOLITH_PHOTOMETRY_LIGHTS_PATCH } from "./regolithPhotometryPatch";
+import { findUndeclaredUniforms } from "./shaderUniformAudit";
 
 /**
  * Standing law 3 — the 4/3 in `regolithPhotometryPatch.ts` needs an
@@ -107,6 +108,17 @@ describe("Lommel-Seeliger normalisation", () => {
     );
     expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
       "#include <lights_physical_pars_fragment>"
+    );
+  });
+
+  // Same patch-family static assert `planetshinePatch.test.ts` /
+  // `solarIrradiancePatch.test.ts` use — this patch carries zero custom
+  // uniforms today, so this is trivially satisfied; it exists so a future
+  // uniform added here gets the same "declared, not just present"
+  // guarantee for free, with no new setup.
+  it("declares every u_-prefixed identifier it references", () => {
+    expect(findUndeclaredUniforms(REGOLITH_PHOTOMETRY_LIGHTS_PATCH)).toEqual(
+      []
     );
   });
 });
