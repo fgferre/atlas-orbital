@@ -49,6 +49,7 @@ import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 import { useStore } from "../../store";
 import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { ExposureBridge } from "./scene/ExposureBridge";
+import { ZodiacalLightSkybox } from "./scene/ZodiacalLightSkybox";
 
 // Lazy: procedural shader module only loads when sun render mode is "procedural".
 // Photo-mode users (majority) never download the shader chunk.
@@ -733,6 +734,13 @@ export const Scene = () => {
             (eye-adaptation) and a future photometric-EV readout will
             write to it. See `src/lib/graphics/exposureRegistry.ts`. */}
         <ExposureBridge />
+        {/* #3 — zodiacal light. Leinert et al. (1998) tabulated band,
+            analytically camera-distance-modulated via the Dumont
+            R^-2.5 fan-cloud density law so flying outward dims it and
+            flying inward brightens it. The #3-of-the-visual-upgrade
+            item from the user's report. See
+            `src/lib/zodiacalLightLut.ts` + `ZodiacalLightSkybox.tsx`. */}
+        <ZodiacalLightSkybox />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <GridRecursive />}
         {showEclipticGrid && <GridDecadeLabel />}
