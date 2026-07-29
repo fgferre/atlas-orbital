@@ -63,6 +63,36 @@
  *     shift. Read `getSceneExposure()` from anywhere outside Canvas
  *     hot path (e.g., a Display-panel "−N EV @ X AU" readout) to
  *     surface the live value.
+ *
+ * ## Deferred: emissive families vs. per-body solar irradiance (Onda 2.1)
+ *
+ * `solarIrradiance.ts` + `solarIrradiancePatch.ts` shipped a per-body
+ * `irradiance × assistGain` scalar that multiplies **direct sunlight
+ * only**, by wrapping `RE_Direct` on the planet materials. Every
+ * luminance source that does NOT flow through a direct light is
+ * therefore outside it, and will not follow a body as its irradiance
+ * changes once the assist default flips to `"real"`:
+ *
+ *   • Sun disc — `sunEmissive` on a `MeshBasicMaterial`
+ *     (`usePlanetMaterials.ts`, star branch) and `ProceduralSun3D`.
+ *   • Earth night lights — `uNightLightIntensity`, added to
+ *     `totalEmissiveRadiance` (`usePlanetMaterials.ts`, Earth branch).
+ *   • Atmosphere shell — its own `ShaderMaterial` ignores scene lights
+ *     entirely and carries hardcoded `exposureGround` / `exposureSky`
+ *     (`atmscatteringSnippet.ts`).
+ *   • Cloud layer — lit via a `MeshStandardMaterial` but composited
+ *     with a COLOR blend (`ONE / ONE_MINUS_SRC_COLOR`) that is NOT
+ *     invariant to luminance scale: `src > 1` produces a negative
+ *     factor and subtractive artefacts. Scaling it needs the blend
+ *     decision revisited, not just a uniform.
+ *   • Ring emissive — `ringEmissive` / `RING_EMISSIVE_POWER`.
+ *   • Starfield — `u_exposure`, already a registry participant.
+ *
+ * At the shipped `"compensated"` default the fused scalar is exactly
+ * 1.0 for every body, so nothing detaches today. The agent that flips
+ * the default owns deciding, per family, whether it joins this
+ * registry, gets its own irradiance term, or is documented as
+ * deliberately body-independent.
  */
 
 /**

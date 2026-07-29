@@ -19,7 +19,7 @@ import {
   ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
   ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
 } from "../shaders/eclipseShaderPatch";
-import { REGOLITH_PHOTOMETRY_LIGHTS_PATCH } from "../shaders/regolithPhotometryPatch";
+import { applyPlanetDirectLightPatch } from "../shaders/solarIrradiancePatch";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
 /**
@@ -375,6 +375,22 @@ export function usePlanetMaterials({
 
     const mat = new THREE.MeshStandardMaterial(planetParams);
 
+    // Onda 2.1 — every branch below installs the SAME direct-light chain:
+    // three's own `lights_physical_pars_fragment`, the Lommel-Seeliger
+    // wrapper for airless bodies, and the `u_solarIrradiance` wrapper
+    // outermost. Hoisted to one closure because the ordering is not
+    // commutative (see `solarIrradiancePatch.ts`) and because a body that
+    // reaches NO shader branch still has to receive the irradiance uniform —
+    // otherwise the day the assist default flips, every unpatched body
+    // (Mars, Venus, Titan, …) stays lit for 1 AU while its neighbours dim.
+    const patchDirectLights = (
+      shader: THREE.WebGLProgramParametersWithUniforms
+    ) => {
+      applyPlanetDirectLightPatch(shader, {
+        regolith: !!body.airlessRegolith,
+      });
+    };
+
     // Apply Earth day/night shader (takes priority over ring shadows)
     if (body.id === "earth" && textureNight) {
       const eclipseEnabled = !!body.eclipsingBodyId;
@@ -482,6 +498,8 @@ export function usePlanetMaterials({
             `
           );
         }
+
+        patchDirectLights(shader);
       };
     }
     // T3.3 — bodies with eclipsingBodyId but no Earth-specific
@@ -489,7 +507,6 @@ export function usePlanetMaterials({
     // lunar eclipse). Injects the eclipse shader on top of a
     // default MeshStandardMaterial.
     else if (body.eclipsingBodyId) {
-      const regolith = !!body.airlessRegolith;
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
         shader.uniforms.uSunPositionWorld = {
@@ -531,13 +548,10 @@ export function usePlanetMaterials({
         // trailing branch below. Onda 1.2 — anchor moved to
         // `lights_physical_pars_fragment` (the per-light RE_Direct
         // wrapper needs to land before `lights_fragment_begin`'s light
-        // loop calls RE_Direct, not after it).
-        if (regolith) {
-          shader.fragmentShader = shader.fragmentShader.replace(
-            "#include <lights_physical_pars_fragment>",
-            REGOLITH_PHOTOMETRY_LIGHTS_PATCH
-          );
-        }
+        // loop calls RE_Direct, not after it). Onda 2.1 — the branch on
+        // `regolith` moved INSIDE `patchDirectLights`, which emits the
+        // whole ordered chain in one replacement.
+        patchDirectLights(shader);
       };
     }
     // Apply shaders: ring shadows for ringed planets (if not Earth)
@@ -623,21 +637,31 @@ export function usePlanetMaterials({
           }
           `
         );
+
+        patchDirectLights(shader);
       };
     }
-    // W3 — Lommel-Seeliger call site 2 of 2, deliberately the LAST branch:
-    // airless bodies that reach no branch at all today (Mercury, Io, Europa,
-    // Ganymede, Callisto, Enceladus). They had no `onBeforeCompile`
-    // whatsoever before this wave. Placed after the ring branch so a future
-    // airless body that also carries a `ringSystem` keeps its ring shadow
-    // rather than silently trading it for the photometry patch.
-    else if (body.airlessRegolith) {
+    // Everything else. Pre-Onda-2.1 this slot was `else if
+    // (body.airlessRegolith)` — the W3 Lommel-Seeliger call site for airless
+    // bodies that reach no other branch (Mercury, Io, Europa, Ganymede,
+    // Callisto, Enceladus) — and any body matching none of the five
+    // conditions got no `onBeforeCompile` at all. Both facts changed:
+    //
+    //  - the regolith decision moved into `patchDirectLights`, which reads
+    //    `body.airlessRegolith` directly, so it no longer depends on which
+    //    branch fires. A future airless body that also carries a
+    //    `ringSystem` now keeps its ring shadow AND gets the photometry, the
+    //    combination the old branch order had to choose between;
+    //  - the fallthrough is now an unconditional `else`, so Mars, Venus, the
+    //    giants, Titan and the sphere-path TNOs carry `u_solarIrradiance`
+    //    too. Without it the irradiance law would reach only the subset of
+    //    bodies that happened to already be patched, and the day the assist
+    //    default flips those bodies would stay lit for 1 AU while their
+    //    neighbours dimmed.
+    else {
       mat.onBeforeCompile = (shader) => {
         mat.userData.shader = shader;
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <lights_physical_pars_fragment>",
-          REGOLITH_PHOTOMETRY_LIGHTS_PATCH
-        );
+        patchDirectLights(shader);
       };
     }
 

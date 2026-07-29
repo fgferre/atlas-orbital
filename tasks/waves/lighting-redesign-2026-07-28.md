@@ -1,4 +1,4 @@
-# Wave — Lighting redesign (Onda 1, items 1 + 3)
+# Wave — Lighting redesign (Onda 1 items 1-3, Onda 2.1)
 
 _2026-07-28. Source: `handoffiluminacao.md` (repo-worktree root, READ-ONLY,
 owner's file — never commit or edit it). That doc's §1 records product
@@ -224,6 +224,196 @@ their anchor from `#include <lights_fragment_begin>` to `#include
 
 ---
 
+## Onda 2.1 — per-body solar irradiance from ephemeris AU (done)
+
+Queue step 1 of the "Owner decisions — 2026-07-29" list below. **Ships as a
+visual no-op by construction** — see "The no-op contract" — so the owner sees
+zero change until the badge + assist agent flips the default.
+
+### Resolver — `src/lib/graphics/solarIrradiance.ts`
+
+`E(d) = (d₀ / d)²` with `d₀ = SOLAR_IRRADIANCE_ANCHOR_AU = 1`, so Earth reads
+1.0, Mercury near perihelion ≈ 10.4×, Neptune ≈ 1/900.
+
+- **The anchor is PROVISIONAL and says so in its JSDoc.** Handoff §5.3 ("what
+  does 0 EV mean physically") is still OPEN, so no absolute W/m² or EV claim is
+  made. 1 AU was chosen because Earth is the one body whose look the project
+  has tuned against reference imagery, which makes this change a
+  redistribution rather than a global brightness edit. When §5.3 closes, that
+  constant moves — not the call sites.
+- **Input is ephemeris AU, never world coordinates.** `resolveBodySunlightScalar(bodyId, date)`
+  is the app-facing entry point precisely because a caller holding a body id
+  and a date cannot reach scene coordinates; it composes through
+  `resolveHeliocentricDistanceAU`, which walks `parentId` to the Sun in
+  physical AU (so Europa gets Jupiter's ~5.2 AU, not its own 0.0045 AU
+  `orbit.a`). The pure kernel `solarIrradianceAtAU` takes a plain number, so
+  the _type_ cannot distinguish AU from render units; the clamp
+  `[0.05, 1000] AU` is the second line of defence — 0.05 sits inside
+  Mercury's 0.3077 AU perihelion and keeps the Sun's own `d = 0` from dividing
+  by zero; 1000 sits past Sedna's 970.1 AU aphelion, so a render-space caller
+  (didactic cap 3200) lands on a bounded, uniformly-black value instead of a
+  plausible-looking wrong one.
+- **Fusion, one number.** `fused = E(d) × assistGain(d, policy)`. The two
+  factors never exist as separate uniforms — that is handoff §4 Onda 2's named
+  failure mode ("senão nascem dois multiplicadores empilhados que depois
+  brigam").
+- **Policy shape the next agent flips.** `SunlightAssistPolicy =
+"compensated" | "real"`, with `DEFAULT_SUNLIGHT_ASSIST_POLICY =
+"compensated"` and a live `{ value }` singleton
+  (`get/setSunlightAssistPolicy`) copying `exposureRegistry.ts`'s idiom.
+  `"compensated"` gain is exactly `1 / E`; `"real"` gain is 1. The plan's
+  third "Realçado" position is documented as the natural next member but
+  deliberately NOT declared — an unimplemented union member is a branch every
+  consumer must handle for no behaviour. **The next agent changes the default
+  policy value, not the plumbing.**
+
+### Where the uniform lands — `solarIrradiancePatch.ts`
+
+One `uniform float u_solarIrradiance`, injected by `applyPlanetDirectLightPatch`
+at the `#include <lights_physical_pars_fragment>` anchor, wrapping `RE_Direct`:
+
+```glsl
+IncidentLight scaledLight = directLight;
+scaledLight.color *= u_solarIrradiance;
+RE_Direct( scaledLight, … );   // macro → whatever inner patch is installed
+```
+
+- **It scales the incoming irradiance, not the BRDF result.** So it reaches
+  diffuse, specular, clearcoat and sheen with one multiply (all linear in
+  incident radiance), and it lands **before** the Lommel-Seeliger factor —
+  which is a purely geometric, flux-neutral redistribution in μ₀/μ. "How much
+  light arrived" and "how that light is redistributed across the disc" stay
+  independent concerns.
+- **Composition with the Onda 1.2 regolith wrapper is by macro, not by name.**
+  The regolith wrapper calls `RE_Direct_Physical` explicitly, so it must be
+  INNER; the irradiance wrapper calls the `RE_Direct` macro, so it must be
+  OUTER. `buildPlanetDirectLightPatch({ regolith })` emits the whole ordered
+  chain as ONE replacement rather than two independent `String.replace` calls
+  that could land in either order. `regolithPhotometryPatch.ts` is unchanged
+  and its test is untouched and still green.
+- **Ambient/indirect is NOT scaled.** Only `RE_Direct` is wrapped;
+  `RE_IndirectDiffuse` is left alone, so the Onda 1.3 `AMBIENT_VIEWING_FLOOR`
+  stays a display guarantee. Pinned by a test that forbids the string
+  `RE_IndirectDiffuse` in the patch.
+- **Material families reached.** All five branches of `usePlanetMaterials`'s
+  `planetMaterial` now route through one hoisted `patchDirectLights` closure:
+  Earth day/night, the eclipse branch (Moon), the ring branch (Saturn), and
+  the airless-regolith path — plus a **new final `else`**. That fallthrough is
+  the substantive addition: Mars, Venus, the giants, Titan and the sphere-path
+  TNOs previously had no `onBeforeCompile` at all, so without it the
+  irradiance law would have reached only the subset of bodies that happened to
+  already be patched, and the day the default flips those would have stayed
+  lit for 1 AU while their neighbours dimmed. The regolith decision also moved
+  inside that closure (it reads `body.airlessRegolith` directly), so a future
+  airless body that also carries a `ringSystem` keeps its ring shadow AND gets
+  the photometry — a combination the old branch order had to choose between.
+- **Per-frame write, no material recreation.** `Planet.tsx`'s existing
+  `useFrame` writes `u_solarIrradiance` via `material.userData.shader.uniforms`,
+  with a `(1 s bucket, policy)` cache copying `useVisualPresetLerp.ts`'s
+  documented pattern. Nothing was added to any `useMemo` dep list — handoff §2
+  "Pipeline / tone mapping" records that `sunEmissive`/`nightLightIntensity`/
+  `surfaceFillLight` ARE deps and that scaling them per frame recreates the
+  material; per-frame LIGHT/uniform values are the safe half. The uniform
+  lookup runs before the resolver, so the Sun (a `MeshBasicMaterial` with no
+  shader, and the one body at `d = 0`) never reaches it.
+
+### The no-op contract
+
+`"compensated"` gain is `1 / E`, so `fused = 1.0` for every body and the
+shader multiply is an IEEE-754 identity. `solarIrradiance.test.ts` pins both
+`toBeCloseTo(1, 12)` and `Math.fround(fused) === 1` — the second is what
+actually reaches a float32 uniform, and it is what backs the "bit-identical
+frame" claim. A companion test asserts the same bodies are NOT 1.0 under
+`"real"`, so a resolver that returned 1.0 unconditionally (inert plumbing)
+fails.
+
+**Runtime proof the uniform is live** (not just string-shaped): the same
+converged-frame harness `boot.spec.ts` uses (frozen sim → intro-end gate →
+`waitForStableFrame`) was run twice against production builds differing only
+in the default policy. Focused Mercury's frame mean luminance went
+13.49 → 19.40 (+44 %) and focused Neptune's 7.58 → 7.50 when the default was
+temporarily flipped to `"real"` — correct direction for both, with Neptune's
+small magnitude explained by its disc occupying few pixels of the frame. A
+smoke run also focused one body per patched family (Earth, Mercury, Moon,
+Saturn, Mars) and recorded **zero console errors**, which is the real
+GLSL-compile gate: `THREE.WebGLProgram` reports shader errors as
+`console.error`, and the boot pixel baseline could not have caught a failed
+program because its frame contains no resolvable planet disc. Both harnesses
+were temporary and are not committed.
+
+### Exclusions found (handoff §5.5 — verified against HEAD, still true)
+
+`PlanetModel.tsx` builds its own materials in both loader paths — `GLBModel`
+mutates the cloned GLTF materials' `roughness`/`metalness` only, `OBJModel`
+constructs a fresh `MeshStandardMaterial` per mesh — and **neither sets
+`onBeforeCompile`**. The four bodies that render through it (`haumea`,
+`vesta`, `pallas`, `hygiea`, i.e. every catalog record with a `model` field)
+therefore do NOT receive `u_solarIrradiance`.
+
+Consequence for the next agent, stated plainly: **the moment the default flips
+to `"real"`, those four become brightness outliers.** All four are in the
+30–45 AU belt/TNO range where real irradiance is ~1/1000 to ~1/2000, so they
+would render at full 1 AU brightness beside neighbours that had collapsed to
+near-black — the most visible possible form of the asymmetry. They are also
+already excluded from the Lommel-Seeliger photometry for the same structural
+reason (documented in `regolithPhotometryPatch.ts`'s header since Onda 1.2).
+Fixing this needs an `onBeforeCompile` pass in `PlanetModel.tsx`'s two
+material-construction sites; it was left out of this step deliberately —
+it changes a render path the no-op contract cannot protect, so it belongs with
+the flip, not before it.
+
+### Single-multiplier audit
+
+After this change exactly **one** place multiplies irradiance by distance for
+a body surface: `u_solarIrradiance`. Verified:
+
+- `SceneLighting.tsx`'s `<pointLight decay={0}>` is untouched — no distance
+  falloff at all, still purely the direction/shadow source.
+- `Sun Brightness ×` (`sunIntensityMul`) and the preset `sunIntensity` lerp
+  compose as `preset.sunIntensity × (overrides.sunIntensityMul ?? 1)` in
+  `resolveLerpRefTargets`, written to `sunLightRef.current.intensity`. Plain
+  user/preset scalars **on the light**, no distance term — unchanged, and
+  they now sit on the opposite side of the pipeline from the distance law.
+- `SmartSunLight` remains inert (layer 1, camera never leaves layer 0).
+- Two other inverse-square laws exist in the repo and are **different
+  quantities**, not a second body-irradiance law: `Starfield.tsx` /
+  `starfieldShaderMath.ts` compute stellar flux from parsec distance (Pogson),
+  and `zodiacalLightLut.ts` scales the dust band by `R^-2.5` from the CAMERA's
+  heliocentric distance. Neither touches a planet material.
+
+### Deferred, recorded in `exposureRegistry.ts`
+
+Emissive/non-direct-light families are out of scope here and will not follow a
+body's irradiance when the default flips: Sun disc (`sunEmissive`,
+`ProceduralSun3D`), Earth night lights (`uNightLightIntensity`), the
+atmosphere shell (own `ShaderMaterial`, ignores scene lights), the cloud layer
+(COLOR blend is not invariant to luminance scale — `src > 1` goes subtractive,
+so it needs the blend decision revisited, not a uniform), ring emissive, and
+the starfield. The deferral list lives in that file's JSDoc so the exposure
+registry stays the single place that enumerates luminance sources outside the
+light path.
+
+### Verification
+
+- `npx tsc -b` — clean.
+- `npm run lint` — clean.
+- `npm run test:run` — **2453 passed / 120 files**, of which 17 tests in 2
+  files are new here: 13 in `src/lib/graphics/solarIrradiance.test.ts`
+  (the law, the clamps, the fusion, the no-op contract) and 4 in
+  `src/components/canvas/shaders/solarIrradiancePatch.test.ts` (chain order,
+  live anchor, ambient untouched, single application). No test was deleted or
+  weakened; `regolithPhotometry.test.ts` is untouched and green.
+- `npm run docs:check` — clean.
+- `npm run build` — clean.
+- **E2E gate:** `npx playwright test e2e/boot.spec.ts` — **2 passed**, no
+  re-bless. The frozen boot frame is unchanged, which is the expected outcome
+  of the no-op contract rather than a weak signal: the same harness detected a
+  +44 % luminance change on the focused-Mercury frame the moment the policy
+  was flipped, so it is not blind to this uniform.
+- **This wave's re-bless budget (§4.7 "at most 1× per wave"): still UNSPENT.**
+
+---
+
 ## Items 4 (assist)/5/6 — blocked on owner decisions
 
 Per handoff §5, open. **§5.1 and §5.6 are now resolved** — see "Owner
@@ -239,7 +429,9 @@ decisions — 2026-07-29" below, which supersedes both. §5.2, §5.3, §5.4,
   regolith bodies; the regolith patch only corrects diffuse.
 - **§5.5 PlanetModel-only bodies** (haumea, vesta, pallas, hygiea) — every
   per-material mechanism skips them; they become brightness outliers under
-  real irradiance.
+  real irradiance. **Re-verified against HEAD in Onda 2.1 — still true, and
+  now quantified**: see "Exclusions found" in that section. Must be fixed in,
+  or explicitly accepted by, the change that flips the assist default.
 - ~~§5.6 Disclosure surface~~ — **resolved**, see below.
 - **§5.7 Per-device adaptation** — a 10-second step-wedge test, never
   measured, only asserted (the "projector argument").
@@ -266,18 +458,25 @@ badge vs second pill):
 **Scheduled next in the queue** (this order — each depends on state the
 previous one leaves behind):
 
-1. Irradiance work first — inverse-square from ephemeris heliocentric
-   distance (Onda 2's `resolveHeliocentricDistanceAU` pattern), applied in
-   BOTH scale modes per decision 2, fused with the didactic content-assist
-   gain into a single per-material uniform (handoff §4 Onda 2: "senão
-   nascem dois multiplicadores empilhados que depois brigam").
+1. ~~Irradiance work first~~ — **DONE**, see "Onda 2.1 — per-body solar
+   irradiance from ephemeris AU" above. Shipped as a visual no-op:
+   `DEFAULT_SUNLIGHT_ASSIST_POLICY` is `"compensated"`, so `fused = 1.0`
+   for every body and nothing on screen moved.
 2. Default-mode change — flip `store.ts`'s `scaleMode` default from
    `"didactic"` to `"realistic"`, now that irradiance no longer silently
    diverges from what the scale mode shows.
 3. Unified badge + assist control — the single expandable fidelity badge
    (decision 1) replacing/absorbing `ScalePill`, plus the "assist" gain
    control from handoff §4 item 4 (now unblocked by decision 1 resolving
-   §5.6).
+   §5.6). **This step owns the default flip**: the assist default stays
+   `"compensated"` until then, and the badge agent changes
+   `DEFAULT_SUNLIGHT_ASSIST_POLICY` to `"real"` **in the same change as the
+   disclosure UI** — a content claim never ships ahead of the surface that
+   discloses it. Only the default value moves; the plumbing (resolver,
+   uniform, per-frame write, policy singleton) is already in place. That
+   change must also decide what happens to the four `PlanetModel` bodies
+   (see "Exclusions found") and to the deferred emissive families listed in
+   `exposureRegistry.ts`.
 4. Milky Way HDR panorama — NASA SVS Deep Star Maps 2020 (decision 3),
    licensing check owner-side before shipping.
 
@@ -334,6 +533,12 @@ e2e-hygiene commit — see that wave's "Worktree hygiene" section).
    UI against it. §5.1 and §5.6 are resolved — see "Owner decisions —
    2026-07-29" and follow its queue order (irradiance → default-mode flip →
    unified badge + assist control → Milky Way HDR panorama).
-4. Onda 2 (inverse-square irradiance, analytical auto-exposure, exposure
-   registry audit, planetshine) is next per both the handoff's sequencing
-   and the owner-decisions queue above — start with irradiance.
+4. Onda 2's **irradiance** step is done (see its section above); the assist
+   default deliberately still reads `"compensated"`, so the feature is live
+   but neutral. What remains of Onda 2: analytical auto-exposure (still
+   blocked on §5.3's radiometric anchor — the 1 AU anchor shipped here is
+   explicitly provisional and is NOT that decision), the exposure-registry
+   sweep, and planetshine. Per the owner-decisions queue, the next step is
+   the `scaleMode` default flip, then the unified badge + assist control —
+   which is the step that flips `DEFAULT_SUNLIGHT_ASSIST_POLICY` to
+   `"real"`, together with its disclosure UI.
