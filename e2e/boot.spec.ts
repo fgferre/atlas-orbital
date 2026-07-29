@@ -87,6 +87,10 @@ test.describe("boot", () => {
   //      the pre-T5.6 3500 ms flat wait — intro finishes before the
   //      loader hides, so only the lerp tail matters after exit).
   test("boot visual identity (frozen sim)", async ({ page }) => {
+    test.skip(
+      process.platform !== "win32",
+      "The reviewed pixel baseline is owned by the required Windows visual-regression CI job."
+    );
     await freezeSimulation(page);
     await visitAtlasAndWaitForReady(page);
     // Wait for the full-screen loader overlay (`Loader.tsx`

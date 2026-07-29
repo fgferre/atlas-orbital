@@ -15,19 +15,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  visual-regression:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      # Pixel baselines are platform-specific. Keep the reviewed Windows
+      # baseline as the single visual source of truth instead of silently
+      # accepting an unreviewed Linux render.
+      - name: Visual regression
+        run: npm run test:e2e -- e2e/boot.spec.ts --grep "boot visual identity" --workers=1
+
+      - name: Upload visual regression results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-regression-results-windows
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   deploy:
+    needs: visual-regression
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: "npm"
 
       - name: Install dependencies
