@@ -146,23 +146,40 @@ test.describe("hyg-focus", () => {
       w.__ATLAS_TEST_STORE__.getState().setFocusId("hyg:0");
     });
 
-    // Mid-fly orientation-lerp sample. The orientation channel uses
-    // `OrientationLerp` with `performance.now()`-driven elapsed time
-    // (independent of R3F frame rate), so a sample at wall-time
-    // ~0.5 s reliably catches the lerp mid-progress regardless of
-    // how many integrator sub-steps fired in the same window. We
-    // ONLY read target here — position assertions are deferred to
-    // the post-landing block because integrator pacing is
-    // R3F-coupled and may already have reached gate.
-    await page.waitForTimeout(500);
-    const midTarget = await page.evaluate(() => {
-      const w = window as unknown as {
-        __ATLAS_TEST_CAMERA__: () => {
-          target: { x: number; y: number; z: number };
-        };
-      };
-      return w.__ATLAS_TEST_CAMERA__().target;
-    });
+    // Mid-fly orientation-lerp evidence. This used to be one sample at
+    // wall-time 0.5 s, calibrated for headless R3F at ~1 Hz. The VRAM
+    // wave's composer-MSAA cap (d5ef6b5) made SwiftShader fast — the
+    // merged tree measures ~57 fps headless — so the 200–400 ms AimLerp
+    // now finishes its scripted duration BEFORE 0.5 s and the fixed-time
+    // sample reads a perfectly healthy lerp as a "setup-time snap"
+    // (probe: smooth intermediate targets at t=217..408 ms, endpoint
+    // from t=425 ms on). Record the target on EVERY frame for 1.5 s
+    // instead; the assertions below then check the trajectory, not one
+    // wall-clock instant, which holds at any frame pacing that can
+    // observe the lerp at all. Position assertions stay deferred to the
+    // post-landing block because integrator pacing is R3F-coupled.
+    const aimSamples = await page.evaluate(
+      () =>
+        new Promise<Array<{ x: number; y: number; z: number }>>((resolve) => {
+          const w = window as unknown as {
+            __ATLAS_TEST_CAMERA__: () => {
+              target: { x: number; y: number; z: number };
+            };
+          };
+          const out: Array<{ x: number; y: number; z: number }> = [];
+          const t0 = performance.now();
+          const tick = () => {
+            const { x, y, z } = w.__ATLAS_TEST_CAMERA__().target;
+            out.push({ x, y, z });
+            if (performance.now() - t0 < 1500) {
+              requestAnimationFrame(tick);
+            } else {
+              resolve(out);
+            }
+          };
+          requestAnimationFrame(tick);
+        })
+    );
 
     // Wait for landing. Headless Chromium runs R3F at ~1 Hz, and
     // `MAX_DT_TOTAL = 0.1 s` (post Codex 2026-05-06 P1 mitigation
@@ -236,23 +253,34 @@ test.describe("hyg-focus", () => {
       `landing distance ${landingDist.toFixed(2)} wu out of [400, 1000] bracket`
     ).toBeLessThanOrEqual(1000);
 
-    // Target was lerped, not snapped. The orientation channel's
-    // `performance.now()`-driven elapsed time + factor=17 logistic
-    // sigmoid gives a measurable mid-progress sample at t=0.5 s
-    // that should be NEITHER at the pre-fly target (lerp idle =
-    // regression) NOR at the final endpoint (setup-time snap =
-    // regression). Tolerance 1.0 wu is loose enough that small
-    // catalog-position numerics don't flap.
-    const midToInitial = distVec(midTarget, initial.target);
-    const midToLanded = distVec(midTarget, landed.target);
+    // Target was lerped, not snapped. Two trajectory facts replace the
+    // old fixed-time sample (see the recorder comment above):
+    //   1. The target left the pre-fly value at some point (lerp armed
+    //      and ran — "lerp idle" regression).
+    //   2. At least one recorded frame sits STRICTLY BETWEEN the
+    //      pre-fly target and the landed target (>1 wu from both). A
+    //      pre-M2.5 setup-time snap jumps to the endpoint in a single
+    //      frame and can never produce an intermediate sample, at any
+    //      frame rate; the measured ~57 fps headless pacing puts
+    //      ~12-20 frames inside the 200-400 ms lerp window, so a
+    //      healthy lerp produces many. Tolerance 1.0 wu is loose
+    //      enough that small catalog-position numerics don't flap.
+    const moved = aimSamples.some(
+      (sample) => distVec(sample, initial.target) > 1.0
+    );
+    const intermediate = aimSamples.some(
+      (sample) =>
+        distVec(sample, initial.target) > 1.0 &&
+        distVec(sample, landed.target) > 1.0
+    );
     expect(
-      midToInitial,
-      "target did not move between pre-fly and t=0.5 s — orientation lerp may be broken"
-    ).toBeGreaterThan(1.0);
+      moved,
+      "target never left the pre-fly value during the aim window — orientation lerp may be broken"
+    ).toBe(true);
     expect(
-      midToLanded,
-      "target reached final endpoint by t=0.5 s — possible regression to pre-M2.5 setup-time snap"
-    ).toBeGreaterThan(1.0);
+      intermediate,
+      `no recorded frame sits between the pre-fly and landed targets (${aimSamples.length} frames in 1.5 s) — possible regression to pre-M2.5 setup-time snap`
+    ).toBe(true);
 
     // Console clean throughout the fly-to.
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);

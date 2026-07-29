@@ -125,6 +125,32 @@ test.describe("boot", () => {
     await expect(page.getByTestId("atlas-loader")).toHaveCount(0, {
       timeout: 55_000,
     });
+    // Wait for the intro flight to END before polling for a stable
+    // frame. The θ.2 starfield made this gate necessary: the intro
+    // starts ~5 kpc from the origin, and under real Pogson photometry
+    // the whole HYG catalog is genuinely invisible from there (the
+    // retired renderer's solid-angle floor kept stars visible from
+    // anywhere). Early intro is therefore a near-black sky moving
+    // slowly — two frames 750 ms apart differ by less than the
+    // convergence tolerance, the poll latches, and the gate captures a
+    // mid-intro frame that the standing order above forbids blessing.
+    // `isIntroAnimating` is the same store gate `hyg-focus.spec.ts`
+    // waits on; the hook exists whenever `__ATLAS_TEST_FREEZE__` is
+    // set, which `freezeSimulation` did above.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const w = window as unknown as {
+              __ATLAS_TEST_STORE__?: {
+                getState: () => { isIntroAnimating: boolean };
+              };
+            };
+            return w.__ATLAS_TEST_STORE__?.getState().isIntroAnimating ?? true;
+          }),
+        { timeout: 30_000 }
+      )
+      .toBe(false);
     // Poll until the frame stops changing, rather than guessing how
     // long convergence takes on this machine and this build.
     const screenshot = await waitForStableFrame(page);
