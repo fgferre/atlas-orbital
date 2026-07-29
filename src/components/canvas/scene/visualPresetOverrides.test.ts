@@ -55,33 +55,42 @@ describe("resolveLerpRefTargets — override composition", () => {
   it("bloomIntensity is absolute so users can opt into bloom over Gaia's 0 default", () => {
     const result = resolveLerpRefTargets(
       BASE_PRESET,
-      { bloomIntensity: 0.8, bloomIntensityMul: 2 },
+      { bloomIntensity: 0.8 },
       0.75
     );
     expect(result.bloomIntensity).toBe(0.8);
   });
 
-  it("bloomIntensityMul doubles the bloom target", () => {
-    const result = resolveLerpRefTargets(
-      BASE_PRESET,
-      { bloomIntensityMul: 2 },
-      1
-    );
+  it("bloomIntensityMultiplier composes with the preset base exactly once", () => {
+    // balanced tier (0.75) resolves against the preset base with no
+    // second multiply — the resolver already fused any user
+    // `bloomIntensityMul` knob into this one argument before calling in.
+    const result = resolveLerpRefTargets(BASE_PRESET, {}, 0.75);
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
   });
 
-  it("bloomIntensityMul composes multiplicatively with bloomIntensityMultiplier", () => {
-    // balanced tier (0.75) + user turns bloom up 2x → net 1.5x
+  it("a stray bloomIntensityMul on the overrides object has no effect (regression pin)", () => {
+    // 2026-07-29 double-multiply bug: this function used to ALSO multiply
+    // by `overrides.bloomIntensityMul`, on top of a `bloomIntensityMultiplier`
+    // argument that the resolver already fuses tier x user knob into —
+    // producing `tier x user^2` instead of `tier x user` whenever the user
+    // moved that knob off its default of 1. `bloomIntensityMul` was
+    // therefore removed from this file's `GraphicsOverrides` (see its
+    // JSDoc); this pins that a stray one on the real (superset) store
+    // object still can't sneak back in and get re-applied.
+    const overridesWithStrayMul = {
+      bloomIntensityMul: 2,
+    } as unknown as Parameters<typeof resolveLerpRefTargets>[1];
     const result = resolveLerpRefTargets(
       BASE_PRESET,
-      { bloomIntensityMul: 2 },
+      overridesWithStrayMul,
       0.75
     );
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 0.75 * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
   });
@@ -152,7 +161,6 @@ describe("resolveLerpRefTargets — override composition", () => {
 
   it("all override types combined produce the expected composite", () => {
     const overrides: GraphicsOverrides = {
-      bloomIntensityMul: 2,
       bloomThreshold: 0.5,
       saturationMul: 1.5,
       contrastDelta: 0.1,
@@ -162,7 +170,7 @@ describe("resolveLerpRefTargets — override composition", () => {
     };
     const result = resolveLerpRefTargets(BASE_PRESET, overrides, 0.75);
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 0.75 * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
     expect(result.bloomThreshold).toBe(0.5);

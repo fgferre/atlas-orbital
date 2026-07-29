@@ -18,12 +18,20 @@
  *   - bare fields (e.g. `bloomThreshold`): absolute override
  *     (default = preset value).
  *
- * `bloomIntensity` additionally composes with the quality-profile
- * gate's `bloomIntensityMultiplier` (ultra 1 / high 1 / balanced 0.75
- * / constrained 0). The resolver folds that multiplier into
- * `PRESET_DEFAULTS.bloomIntensityMul` in `src/lib/graphics/resolver.ts`;
- * we pass it into this function so the hook stays byte-identical to
- * `qualityProfile.ts`'s shipped behavior while both paths coexist.
+ * `bloomIntensity` additionally composes with the `bloomIntensityMultiplier`
+ * parameter below. That number is NOT tier-only: the resolver
+ * (`resolveEffectiveGraphics` in `src/lib/graphics/resolver.ts`) already
+ * fuses the quality-profile gate (ultra 1 / high 1 / balanced 0.75 /
+ * constrained 0) with the user's own `graphicsOverrides.bloomIntensityMul`
+ * knob into one `effective.bloomIntensityMul` number before `Scene.tsx`
+ * ever calls this function — that fused value is what flows in here as
+ * `bloomIntensityMultiplier`. This function must NOT re-apply
+ * `overrides.bloomIntensityMul` on top of it: doing so double-counted the
+ * user's knob (`tier × user²` instead of `tier × user`) whenever it left
+ * its default of 1. Caught dormant 2026-07-29 — no DisplayPanel control
+ * writes `bloomIntensityMul` yet, so the bug had zero visible effect, but
+ * the pure-function tests below now pin "applied exactly once" instead of
+ * pinning the double-apply.
  *
  * The earlier Leva debug branch (debugMode + debugValues) was removed
  * when the Leva panel retired — the DisplayPanel is the single
@@ -67,10 +75,18 @@ export const AMBIENT_VIEWING_FLOOR = 0.02;
 /**
  * User override record. Every field is optional; `undefined` means
  * "fall through to the preset base".
+ *
+ * Deliberately missing `bloomIntensityMul`, present on the canonical
+ * `GraphicsOverrides` in `src/lib/graphics/resolver.ts`: the resolver owns
+ * applying that field, folding it into the `bloomIntensityMultiplier`
+ * value passed to {@link resolveLerpRefTargets} below. Declaring it again
+ * here would invite this file to re-apply it — the double-count this
+ * function's JSDoc warns about. The real `graphicsOverrides` object the
+ * store passes in structurally satisfies this narrower type fine (extra
+ * properties on a variable, as opposed to an object literal, are not an
+ * error).
  */
 export interface GraphicsOverrides {
-  /** Multiplier applied to `preset.bloomIntensity × qualityMultiplier`. */
-  bloomIntensityMul?: number;
   /** Absolute bloom intensity override; used to opt into bloom over Gaia's 0.0 default. */
   bloomIntensity?: number;
   /** Absolute override for bloom threshold (preset value ignored). */
@@ -127,11 +143,12 @@ export const resolveLerpRefTargets = (
   overrides: GraphicsOverrides,
   bloomIntensityMultiplier: number
 ): ResolvedRefTargets => ({
+  // `bloomIntensityMultiplier` already IS `tier × user's bloomIntensityMul`
+  // (the resolver fuses them — see this function's JSDoc); do not multiply
+  // by `overrides.bloomIntensityMul` again here.
   bloomIntensity:
     overrides.bloomIntensity ??
-    preset.bloomIntensity *
-      bloomIntensityMultiplier *
-      (overrides.bloomIntensityMul ?? 1),
+    preset.bloomIntensity * bloomIntensityMultiplier,
   bloomThreshold: overrides.bloomThreshold ?? preset.bloomThreshold,
   saturation: preset.saturation * (overrides.saturationMul ?? 1),
   brightness: preset.brightness + (overrides.brightnessDelta ?? 0),
