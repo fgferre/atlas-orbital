@@ -43,10 +43,46 @@ describe("Lommel-Seeliger normalisation", () => {
 
   it("ships that derived value, and no other, in the GLSL", () => {
     const literal = REGOLITH_PHOTOMETRY_LIGHTS_PATCH.match(
-      /reflectedLight\.directDiffuse \*= ([0-9.]+) \//
+      /lsDiffuseDelta \* \( ([0-9.]+) \//
     );
     expect(literal).not.toBeNull();
     expect(Number(literal?.[1])).toBeCloseTo(4 / 3, 6);
+  });
+
+  it("wraps RE_Direct per light instead of multiplying the post-sum diffuse", () => {
+    // Onda 1.2 — the old form multiplied the SUM of all direct lights'
+    // diffuse by geometry derived from one assumed sun; that line must be
+    // gone entirely, not just deprioritised.
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).not.toMatch(
+      /reflectedLight\.directDiffuse \*=/
+    );
+
+    // The replacement wraps RE_Direct: define a per-light function, call
+    // the original RE_Direct_Physical to get this light's own delta, then
+    // rescale only that delta by this light's own incidence geometry
+    // (never the running sum) before redirecting the RE_Direct macro at
+    // the wrapper.
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
+      "void RE_Direct_Regolith("
+    );
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
+      "RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );"
+    );
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toMatch(
+      /vec3 lsDiffuseDelta = reflectedLight\.directDiffuse - lsDiffuseBefore;/
+    );
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
+      "saturate( dot( geometryNormal, directLight.direction ) )"
+    );
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain("#undef RE_Direct");
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
+      "#define RE_Direct RE_Direct_Regolith"
+    );
+
+    // The sun-at-origin hack this wrapper replaces (a CPU-free but
+    // single-light-only assumption) must not survive the rewrite — each
+    // light now supplies its own direction via `directLight.direction`.
+    expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).not.toContain("viewMatrix[3]");
   });
 
   it("redistributes brightness without changing full-phase flux", () => {
@@ -63,11 +99,14 @@ describe("Lommel-Seeliger normalisation", () => {
     // The bug this guards against is silent: String.replace with a needle
     // that no longer exists returns the string unchanged, so a renamed
     // three chunk turns a shader patch into a no-op with no error anywhere.
+    // Onda 1.2 moved the anchor to `lights_physical_pars_fragment` — the
+    // wrapper has to land before `lights_fragment_begin`'s light loop
+    // calls the (now redefined) RE_Direct macro, not after it.
     expect(THREE.ShaderLib.physical.fragmentShader).toContain(
-      "#include <lights_fragment_begin>"
+      "#include <lights_physical_pars_fragment>"
     );
     expect(REGOLITH_PHOTOMETRY_LIGHTS_PATCH).toContain(
-      "#include <lights_fragment_begin>"
+      "#include <lights_physical_pars_fragment>"
     );
   });
 });

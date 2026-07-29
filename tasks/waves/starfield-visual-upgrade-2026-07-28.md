@@ -1,0 +1,1121 @@
+# Wave — Starfield visual upgrade
+
+_2026-07-28. Owner request: "não estou feliz com a qualidade visual
+atual do starfield"_.
+
+**This is a partial-work handoff.** Four sub-pulls are code-complete
+and committed (1a, 1b, 1c, 1d, #3). Three items remain open and are the
+remaining scope of this wave: the credits-modal provenance update, the
+LightGlow performance audit, and the (#4) Milky Way HDR panorama.
+
+Read [`../AGENTS.md`](../AGENTS.md) before touching code. That file is
+product law. This wave file is **operational context** for whoever
+picks it up next.
+
+---
+
+## Commits shipped this session (this worktree only)
+
+```
+200e13d  fix(pipeline): AgX tone mapping default on composer tiers (1a)
+1a45230  feat(pipeline): mount selective bloom + exposure registry (1b, 1c)
+48a3acc  feat(skybox): analytical zodiacal light layer (Leinert 1998) -- item #3
+```
+
+All three pass `npm run test:run` (2363 tests green), `npm run lint`,
+`npx tsc -b`, and the `docs:check` pre-commit hook. Visual regression
+baselines under `e2e/boot.spec.ts-snapshots/` are **unchanged** by
+these commits — none of them touch the boot scene the snapshot pins.
+
+A follow-up session in the same worktree then shipped **1d
+(eye-adaptation)** as a fourth commit (see git log for the hash — this
+doc was written in the same commit as the code, before the hash
+existed). Same verification profile: `npm run test:run` (2427 tests
+green), `npm run lint`, `npx tsc -b`, `npm run docs:check` all clean.
+`npm run test:e2e` (the `boot-frozen.png` pixel-diff gate) was **not**
+run this session — CLI-only, same caveat as the rest of this wave. The
+registry still starts at neutral `1.0` and the intro-flight boot pose
+is far from the Sun (near-black sky per the θ.2 comment further down
+in `boot.spec.ts`), so a diff is unlikely but not verified. Whoever
+does the runtime pass (see "Handoff" below) should run
+`npm run test:e2e -- boot` as part of it.
+
+The worktree has other commits that pre-date this session (see
+"Worktree hygiene" below). Those are NOT this wave's scope and should
+not be rolled back as part of picking this up.
+
+---
+
+## What was done and why
+
+### 1a — AgX tone mapping default on composer tiers
+
+`src/lib/graphics/resolver.ts` `PRESET_DEFAULTS` shipped
+`toneMapping: "none"` on all four tiers. The EffectComposer runs on a
+`HalfFloatType` target end-to-end (`PostProcessingPipeline.tsx:167`),
+so without a filmic operator every genuinely-HDR pixel (Sun disk,
+sun-glint, lit terminator) hard-clipped to flat white against the
+0.165 display black point the starfield was calibrated against
+(`STAR_DISPLAY_BLACK_POINT` in `starfieldShaderMath.ts:349`).
+
+The `PostProcessingPipeline.tsx:90-119` comment claimed the
+ToneMapping pass had been moved BEFORE the grade to fix exactly this,
+but with `mode=none` the pass is omitted entirely on every tier
+(`PostProcessingPipeline.tsx:181-185` short-circuits on
+`toneMappingMode !== undefined`). The documented fix never ran.
+
+**Fix:** `PRESET_DEFAULTS.ultra/high/medium.toneMapping` → `"agx"`;
+`low` keeps `"none"` because `Scene.tsx:600` unmounts the entire
+`EffectComposer` on the constrained tier so a ToneMapping pass never
+runs there anyway. The AgX operator itself was already wired
+(`TONE_MAPPING_MODE.agx` at `PostProcessingPipeline.tsx:47`); the
+bug was the default value, not missing plumbing.
+
+User-facing surface unchanged: the Display panel Tone Mapping select
+(`DisplayPanel.tsx:281-291`) had exposed all five operators since
+Wave α; users who want byte-Gaia parity can pick "none" from the
+panel. The override composes cleanly via `resolver.ts:327`.
+
+Pin the `none` default test was replaced with a differential assert
+(`resolver.test.ts:81-93`): `ultra/high/medium === "agx"`, `low ===
+"none"`. The deleted test only froze yesterday's bug. AGENTS.md rule
+6 explicitly permits this.
+
+### 1b — Selective bloom now mounts by default
+
+All 5 `VISUAL_PRESETS` shipped `bloomIntensity: 0.0` (Gaia-matching),
+so `shouldMountBloom(bloomEnabled, effectiveGraphics.bloomIntensity)`
+(`Scene.tsx:828` → `bloomGate.ts:73`) read `undefined → 0 > 0 is
+false → <Bloom>` never mounted on a fresh boot. The Wave α chain
+documented "selective bloom on the HDR allow-list" as a product
+feature; that feature did not exist in the shipped product. The per-
+preset intensity slider in the Display panel was a no-op control.
+
+Worse, there was a **wiring divergence**: two paths computed bloom
+intensity, only one reached the gate.
+
+- `visualPresetOverrides.ts:88-93` (per-frame, feeds the effect when
+  mounted): `preset.bloomIntensity × bloomIntensityMultiplier ×
+(overrides.bloomIntensityMul ?? 1)` — reads the visual preset.
+- `resolver.ts:345` (gate): `effectiveGraphics.bloomIntensity =
+ov.bloomIntensity` — only reads the user override, ignores the
+  visual preset entirely.
+
+Even setting `VISUAL_PRESETS.DEEP_SPACE.bloomIntensity = 0.5` would
+NOT have mounted the `<Bloom>` because the gate saw `undefined`
+and short-circuited. Path one only ran when the effect existed — but
+it never existed. So bloom was permanently inert.
+
+**Fix:**
+
+1. Per-context non-zero base values in `VISUAL_PRESETS`
+   (`src/config/visualPresets.ts`): DEEP_SPACE 0.35, PLANET_ORBIT
+   0.3, CLOSE_FLYBY 0.15, INNER_SYSTEM 0.3, OUTER_SYSTEM 0.3.
+   `bloomThreshold` stays 1.0 (the HDR-allow-list contract — only
+   genuinely-bright pixels cross; planets stay matte).
+2. `Scene.tsx:828` now passes
+   `effectiveGraphics.bloomIntensity
+?? VISUAL_PRESETS[visualPreset].bloomIntensity`
+   to `shouldMountBloom`. The `??` falls through only on `undefined`,
+   so an explicit user 0 correctly unmounts (saves the 5-mip pass when
+   the user explicitly asks for no bloom), while the visual preset
+   base finally reaches the gate.
+3. `Scene.tsx` now reads `visualPreset` from the store (was not read
+   there before).
+
+`bloomGate.ts` JSDoc invariant rewritten to document the new
+contract. `bloomGate.test.ts` preserves the `intensity=0 → skip`
+predicate (the user-override-zero path) but de-emphasises the
+"out-of-box mounts nothing" assertion. `visualPresets.test.ts`
+replaces the `bloomIntensity === 0` pin with per-context assertions
+of the new tuned values.
+
+### 1c — Exposure registry plumbing (no visual change)
+
+Pre-req flagged by the **fable-5 audit**
+(`tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md`
+§127): without a registry, eye-adaptation scaling only
+`gl.toneMappingExposure` AFTER all per-shader exposure constants are
+baked in — which is what the audit called "halo da Terra descola da
+superfície" failure. Atmos output is non-linear in its own exposure
+constant, so linear scaling at the AgX stage can move the bright
+limb differently from the surface. 1c ships the opt-in coordination
+surface so 1d can reachevery emissive family simultaneously, or
+(today's scope) the AgX operator alone.
+
+**Files:**
+
+- `src/lib/graphics/exposureRegistry.ts` (NEW): a `{value: number}`
+  singleton, default `1.0`, clamped setters `[1e-6, 16]`,
+  `getSceneExposure` / `setSceneExposure` read/write surfaces.
+  Pure-TS, no R3F dep.
+- `src/components/canvas/scene/ExposureBridge.tsx` (NEW): one
+  `useFrame` hook inside `<Canvas>` that pushes
+  `sceneExposure.value` into `gl.toneMappingExposure`. Uses the
+  same ref-stash pattern `useVisualPresetLerp.ts:170` uses for
+  `scene.environmentIntensity` to satisfy the
+  `react-hooks/immutability` lint rule.
+- Mounted in `Scene.tsx` next to `<VisualPresetLerpBridge />`.
+
+**While registry stays at 1.0 this is a no-op** — pixels render
+byte-identical to the pre-1c state. 1d will write to it; per-shader
+INTERNAL exposure constants (atmos, ring, starfield) can opt in
+later if A/B shows the linear AgX-only scaling produces the
+predicted detachment.
+
+### 1d — Eye-adaptation (AdaptiveLuminancePass → registry)
+
+Picked up where the previous session's context ran out. The wave's own
+1d spec said "confirm the enum mapping empirically; do not invent a
+mode string the library does not export" — doing that turned up a firm
+**no** on the spec's suggested path.
+
+**Empirical finding (`node_modules/postprocessing@6.38.0/build/index.js`):**
+`ToneMappingEffect`'s `mode` setter only enables its internal
+`adaptiveLuminancePass` when `mode === ToneMappingMode.REINHARD2_ADAPTIVE`
+(index.js:13416), and the compound tone-mapping fragment shader only
+samples the luminance buffer for `TONE_MAPPING_MODE == 2 || 3`
+(Reinhard2 family) — the AGX branch (`#else toneMapping(texel)`,
+index.js:13307-13315) never touches it. There is no "AGX but adaptive"
+mode to opt into; renaming `resolver.ts`'s `toneMapping` to
+`"reinhard2_adaptive"` per the original spec draft would have swapped
+the ENTIRE visible tone curve away from AGX, not just added adaptation
+— out of scope for the "ship AgX-only path first" recommendation.
+
+Separately verified `toneMappingExposure` DOES reach the AGX branch:
+three.js's `WebGLRenderer.setProgram` (`WebGLRenderer.js:2525`) pushes
+`renderer.toneMappingExposure` into any compiled program that declares
+the uniform, every frame, regardless of `mode` — confirming
+`ExposureBridge` (1c) was already the correct carrier for whatever 1d
+produces.
+
+**What shipped instead:** `PostProcessingPipeline` still mounts
+`<ToneMapping mode={AGX}>` exactly as before (1a's visible curve is
+unchanged) but now also refs the underlying `ToneMappingEffect`
+instance. A new `EyeAdaptationBridge.tsx` force-enables that instance's
+internal `adaptiveLuminancePass` every frame — bypassing the mode-gated
+auto-toggle, not replacing it — so the library's OWN
+downsample-to-1×1-mip + exponential-decay pass runs against the
+composer's real HDR buffer exactly as it would under
+`REINHARD2_ADAPTIVE`, just without changing what's on screen. The
+bridge then reads that 1×1 texture back with
+`gl.readRenderTargetPixels` (unpacking three.js's standard
+`packDepthToRGBA`/`unpackRGBAToDepth` RGBA8 encoding — reimplemented in
+JS since there's no public API to sample a mip level from the CPU
+side), converts it to an exposure scalar, and writes it via
+`setSceneExposure()`. `ExposureBridge` (1c) carries that number into
+`gl.toneMappingExposure` unchanged.
+
+`adaptiveLuminancePass` and its `renderTargetAdapted` render target are
+real runtime properties the package's `.d.ts` omits (only
+`adaptiveLuminanceMaterial`/`texture` getters are typed); reaching them
+needed a narrow, documented local type augmentation rather than an
+`any` — see the full citation trail in `EyeAdaptationBridge.tsx`'s
+module doc comment.
+
+**Bounding:** `<ToneMapping minLuminance={STAR_DISPLAY_BLACK_POINT}>`
+floors the GPU-side adaptive sample at the same 0.165 linear constant
+`starfieldShaderMath.ts` already calibrates the display black point
+against. The exposure formula reuses that constant as both floor and
+numerator (`exposure = TARGET / max(luminance, TARGET)`); since the
+library's own luminance render target is `UnsignedByteType` (WebGL
+clamps HDR fragment output to ≤ 1.0 before it's stored), `luminance`
+always lands in `[TARGET, 1.0]` and so does `exposure` — a near-empty
+starfield frame (the common case) reads back at neutral `1.0` (pixel-
+identical to pre-1d), and the most a blown-out frame can be dimmed to
+is the display's own black point. This satisfies the spec's "a black
+frame cannot blow exposure to 16" requirement structurally, not just
+via the registry's outer `[1e-6, 16]` clamp.
+
+**Files:**
+
+- `src/components/canvas/scene/EyeAdaptationBridge.tsx` (NEW): the
+  `useFrame` hook described above.
+- `src/components/canvas/scene/PostProcessingPipeline.tsx`: added
+  `toneMappingRef` prop + `assignToneMappingRef` callback (same
+  pattern as `bloomRef`/`hueSatRef`/`brightnessRef`); `<ToneMapping>`
+  now takes `ref` + `minLuminance={STAR_DISPLAY_BLACK_POINT}`.
+- `src/components/canvas/Scene.tsx`: added `toneMappingRef`, mounted
+  `<EyeAdaptationBridge>` next to `<ExposureBridge>`, threaded the ref
+  into `<PostProcessingPipeline>`.
+- No changes to `resolver.ts` — no new `ToneMappingName` value was
+  needed (see the "empirical finding" above), so no `resolver.test.ts`
+  changes either.
+
+**Tier gate:** self-gating, not a new explicit check. `toneMappingRef`
+stays `null` on the constrained tier (`PostProcessingPipeline` never
+mounts there) and whenever a user picks `toneMapping="none"` from the
+Display panel — `EyeAdaptationBridge` no-ops in both cases the same
+way `ExposureBridge` already does.
+
+**Deferred to 1e**, unchanged from the original recommendation: the
+four emissive families that don't read the registry (atmospheres'
+`exposureGround`/`exposureSky` `#define`s, the starfield's
+`u_exposure`, ring `emissiveIntensity`, the `toneMapped: false`
+procedural Sun disk) are still untouched. Only a per-shader A/B pass
+after a runtime look at 1d would justify that follow-up.
+
+**Not verified at runtime this session** (CLI-only, same caveat as
+1a/1b/1c/#3): whether the adaptation is visually perceptible at all
+inside `[0.165, 1.0]`, whether the 1-frame GPU-readback lag reads as
+smooth or as a stutter on a real dimming event (Sun entering frame),
+and whether `adaptationRate`'s library default (`tau=1`) feels right
+for this scene's pacing. `npm run test:run` (2427 tests, all green —
+zero new unit tests added per AGENTS.md §6, this is experimental look
+work), `npx tsc -b`, and `npm run lint` are all clean; that is a type-
+and-logic check, not a visual one.
+
+### #3 — Analytical zodiacal light (Leinert et al. 1998)
+
+The space between the stars in atlas is pure black. At 1 AU the
+zodiacal light band visible above the ecliptic is as bright as the
+Milky Way — it is the SUBJECT of this app (motion through the
+interplanetary dust cloud). A static skybox cannot give the live-cue
+that motion through the dust cloud produces; an analytic model driven
+by the live camera heliocentric distance can.
+
+**Files:**
+
+- `src/lib/zodiacalLightLut.ts` (NEW): Leinert Table 16 in
+  `S10_sun` units, β ∈ [0,180]° × λ-λ_sun ∈ [0,75]°, 19×10 grid.
+  Built into a tiny `10×19 RGBA16F DataTexture` via
+  `buildZodiacalLutTexture`. The table is cited verbatim from the
+  paper, not a fit — shader output is traceable to a published
+  source per the honesty rule. Documents:
+  - `ZODIACAL_S10_TO_LINEAR = 4.0e-9` photometric conversion (1
+    S10_sun = 1.28e-8 W/m²/sr/µm at 500 nm per Leinert Table 2;
+    the extra factor is a discretionary tunable so the band is
+    visible against the rest of the scene — see "Outstanding
+    calibration" below).
+  - Dumont (1983) R⁻²·⁵ fan-cloud density scaling
+    (`ZODIACAL_R_EXPONENT = 2.5`).
+  - `ZODIACAL_FRAGMENT_GLSL` is a GLSL string the consumer
+    shader pastes; lives here so the math has one source.
+- `src/components/canvas/scene/ZodiacalLightSkybox.tsx` (NEW):
+  shader-shadowed BackSide icosphere (radius 1e8) centered on the
+  camera each frame (`meshRef.current.position.copy(camera.position)`
+  in `useFrame`). Shader:
+  - β = `degrees(asin(clamp(dir.y, -1.0, 1.0)))` (scene Y = ecliptic
+    pole)
+  - λ = `degrees(acos(dot(dir, sunDir)))` (Sun direction is
+    `-camera.position.normalized()` because the Sun is at scene
+    origin)
+  - Lookup against `u_zodiacalLut`
+  - Multiply by `pow(max(u_cameraR_AU, 0.1), -2.5)` (Dumont) and the
+    photometric factor
+  - Emit as additive linear radiance into the HalfFloat composer
+    buffer via `CustomBlending, AddEquation, OneFactor x4`
+  - `renderOrder = -100` keeps it behind starfield (-2) and planets.
+  - `frustumCulled={false}` because the sphere follows the camera.
+- `Scene.tsx`: mounts `<ZodiacalLightSkybox />` next to
+  `<ExposureBridge />`.
+
+**Tier gate:** composer tiers (ultra/high/medium) mount it.
+Constrained unmounts — `DirectRenderPass` has no HalfFloat buffer so
+the analytic band would need a second explicit path that is not worth
+the budget there.
+
+---
+
+## Outstanding -- the remaining scope of this wave
+
+These items were deferred out of prior sessions by context/credits
+exhaustion, NOT by technical blockers. They are the next agent's
+scope. In priority order:
+
+### 1d — Eye-adaptation — SHIPPED, see "What was done and why" above
+
+The 1e follow-up this section used to describe (per-shader emissive
+families opting the four families — atmospheres, starfield, rings, Sun
+disk — into the registry) is still open and still gated on an A/B
+runtime look at the AgX-only path shipped in 1d; see that section's
+"Deferred to 1e" note for the exact list and file/line pointers
+(`atmscatteringSnippet.ts:76-77`, `Starfield.tsx:141,466`,
+`usePlanetMaterials.ts:339,345,679`). Do NOT pre-emptively rewire all
+four — that is a costly rewrite that may be unnecessary until someone
+actually looks at the running scene.
+
+### CreditsModal provenance update (high honesty priority)
+
+The user (owner) flagged disclosure as the differentiator: "nobody
+else discloses, that's where we win." Two commits need credits-panel
+coverage:
+
+- **AgX default (1a):** `CreditsModal.tsx` should name the display
+  transform. AgX is a published display transform (Troy S., Pyzia
+  2023); disclosing it is in the same honesty class as naming the
+  planet-texture provenance.
+- **Zodiacal light (#3):** credit should read something like "Zodiacal
+  light model — Leinert et al. (1998) tabulated brightness, Dumont
+  (1983) R⁻²·⁵ heliocentric scaling; solar-spectrum colour
+  approximation per Leinert §3.3."
+
+Read `src/components/ui/CreditsModal.tsx` for the existing format.
+Follow the same idiom.
+
+### LightGlow performance audit (item from user's original report)
+
+The user's analysis flagged: "LightGlow (θ.3) is a SECOND halo, more
+crude, on top of the θ.2 physical halo on the same top-N stars — and
+its own comment estimates ~400M texture samples/sec per active
+light." Before cancelling it, the user agreed an audit pass is the
+right move (rule: "don't surprise the user with actions you take
+without asking").
+
+**What to do.**
+
+1. Measure FPS with `LightGlowSlot` mounted and unmounted. The slot
+   is in `PostProcessingPipeline.tsx:168` (`<LightGlowSlot />`),
+   gated by `useStore((state) => state.accessibility.reducedMotion)`
+   in `LightGlowInjector.tsx:113`. Toggle path: comment out the
+   primitive temporarily and compare. Better still, gate it behind a
+   DisplayPanel checkbox and measure live with the R3F `stats`
+   helper or the WebGL renderer's `info.render.frame` counter.
+2. If the cost is paid (visible FPS delta on ultra/high):
+   recommended cancellation is to either:
+   - Skip the slot from the post-processing chain (one-line revert).
+   - Or gate it behind a new `GraphicsOverrides.lightGlowEnabled`
+     flag, defaulting to false, and add a DisplayPanel toggle.
+
+The audit (fable-5) suggested the θ.2 starfield halo (lin `r⁻³`
+closed-form in `Starfield.tsx:316-338`) already covers the visual
+need for halo on bright stars; LightGlow was the Gaia-style cone
+spiral that pre-dated θ.2. There is no evidence users have seen both
+side by side at runtime. **Pure measurement.grad the gate on the
+measurement, not on speculation.**
+
+**RUNTIME AUDIT ATTEMPTED 2026-07-28 (lighting-audit session) — no
+real-GPU number obtained; toggle shipped instead of a default flip.**
+
+Two independent tool paths were tried, both structurally blocked:
+
+1. **Claude Browser preview pane.** Every tab in this session reported
+   `Viewport: 0x0` from `read_page`, `computer{screenshot}` errored
+   "the Browser pane is not displayed, so the page is not compositing
+   frames" on every attempt (including a full `preview_stop` +
+   `preview_start` cycle per the HMR-accumulation lesson), and a direct
+   probe confirmed `document.hidden === true` /
+   `visibilityState === "hidden"` with `requestAnimationFrame` never
+   firing (30 s timeout, zero callbacks). This session is
+   non-interactive — nobody's screen shows this pane — so real-GPU
+   visual/FPS verification is structurally impossible from here, not a
+   transient bug to retry.
+2. **Headless Playwright (substitute path).** Drove the dev server
+   directly with `playwright`'s `chromium.launch({headless: true})`,
+   using the repo's existing test-only hooks
+   (`window.__ATLAS_TEST_STORE__`, `window.__ATLAS_TEST_CAMERA__`) —
+   this DOES run real frames (rAF fires normally in a real headless
+   Chromium page, unlike the non-compositing pane above) and produced
+   numbers: two 5 s rAF-counted runs at **8.28 fps** and **8.40 fps**
+   with `LightGlowSlot` mounted. **These numbers are NON-DECISIONAL.**
+   Confirmed via the `console.info("[atlas] WebGL renderer info", …)`
+   diagnostic Scene.tsx already logs at boot:
+   `renderer: ANGLE (…, SwiftShader Device …)`, `qualityTier:
+constrained`. `resolveGlTierCeiling` in `src/lib/qualityProfile.ts`
+   hard-ceilings any `softwareRenderer === true` GPU to `constrained`
+   regardless of CPU/RAM signals, and on `constrained` Scene.tsx
+   unmounts the entire `EffectComposer` — so `LightGlowSlot`,
+   `<Bloom>`, `<ToneMapping>`, and `ZodiacalLightSkybox` never mount at
+   all under headless Playwright. The A/B this audit needs (LightGlow
+   mounted vs. unmounted on a real ultra/high-tier composer) cannot run
+   in ANY environment available this session — headless Chromium always
+   resolves to the software-renderer floor unless launched with real
+   GPU passthrough (`--use-gl=angle` + a real backend), which this
+   sandbox does not provide either.
+
+**What shipped instead of a measurement-gated default:** per the
+coordinator's call, `GraphicsOverrides.lightGlowEnabled` (new,
+`src/lib/graphics/resolver.ts`) — same idiom as `bloomEnabled` —
+default **`true`** on every tier (preserves current visuals exactly,
+zero behavior change out of the box), plus a "Light Glow" toggle in
+`DisplayPanel.tsx` right after the "Bloom" toggle, and
+`PostProcessingPipeline`'s `<LightGlowSlot />` now conditional on a new
+`lightGlowMounted` prop threaded from `Scene.tsx`'s
+`effectiveGraphics.lightGlowEnabled`. This converts the blocked audit
+into an instrument: the owner (or anyone with a real GPU) can flip the
+toggle live and feel the frame-time difference on their own hardware.
+Minimal differential test added in `resolver.test.ts` ("lightGlowEnabled
+defaults true on every tier and an override can flip it off"), mirroring
+the existing `bloomEnabled` test — AGENTS.md §6, new product-contract
+field.
+
+**The decision rule from the original ask still stands, unexecuted:**
+if removing LightGlow improves frame time by ≥10 % on a **real**
+ultra/high-tier GPU, flip `PRESET_DEFAULTS.*.lightGlowEnabled` to
+`false` (or just the composer tiers where it matters) and update this
+section. If <10 %, leave the default `true` and close this item. Do
+NOT use the SwiftShader numbers above for that call even directionally
+— a software rasterizer's bottleneck profile (pixel-fill / texture-
+sample bound) is not guaranteed to track a real GPU's the same way, and
+in this case the tier ceiling makes the comparison void outright (both
+arms of the A/B ran on `constrained`, where LightGlow was never even
+mounted).
+
+### #4 — Milky Way HDR panorama (NASA SVS)
+
+Last item from the user's original report. Quote: "vamos
+implementar, depois vejo licenças." — owner explicitly deferred
+licensing worry until after implementation.
+
+**Asset:** NASA SVS "Deep Star Maps 2020", `milkyway_2020_*.*`
+layer. Why this exact choice (from the original report): these are
+Gaia DR2 stars below the brightness cut that the HYG catalog does
+not include — so the panorama composes with HYG **without double
+counting**, which is a fidelity argument, not just an aesthetic one.
+A photographic panorama (ESO/Brunier) has bright stars embedded and
+would sum them twice.
+
+**Format:** KTX2/UASTC-HDR is the recommended encoding (8k RGBA16F
+raw = 268 MB VRAM; compressed block = 33 MB). Do **NOT** use the
+`*_stars_milky_way.jpg` files already in `public/textures/` (Solar
+System Scope, provenance "based on NASA data" with no citable source
+per an earlier fable-5 audit note).
+
+**Worktree risk:** `public/data/nasa-stars/` was DELETED in this
+worktree (commits `632d49d`, `338312e` etc. that pre-date this
+session are **not mine**). The texture-inventory wave
+(`tasks/waves/tiled-streaming-2026-07-28.md`) is actively working
+in parallel and may move files. Check `tasks/STATUS.md` and the
+tiled-streaming wave file **before** importing textures — the
+parallel line may invalidate file paths assumed below.
+
+**Implementation sketch:**
+
+- A new `MilkyWaySkybox.tsx` parallel to `ZodiacalLightSkybox.tsx`.
+- Texture loaded through `deferredTextureCache.ts` (you'll need a new
+  loader path for KTX2/UASTC-HDR — three.js has
+  `KTX2Loader` in `three/examples/jsm/loaders/KTX2Loader.js`; that
+  handles the transcode). Confirm at runtime before importing; the
+  loader requires a basis transcoder bin path.
+- UV-mapped onto a galactic-coordinate sphere. Use the
+  `OBLIQUITY_J2000_RAD` constant in
+  `src/lib/orbital/analytical/coordUtils.ts:72` for the ecliptic→
+  equatorial rotation; the galactic → ecliptic Euler rotation
+  (`R=32.93192°, Q=27.12825°, P=192.85948°`) is cited at
+  `src/lib/gridOrientation.ts:20`.
+- Composite via additive blend, depth-cleared, behind the starfield
+  (renderOrder -1, just above the zodiacal band at -100).
+- Disclosure: the bright stars in the panorama may bleed through
+  HYG's PSF on top-N bright stars (Vega, Sirius etc.). The right
+  fix is a subtraction mask at the HYG positions — out of scope
+  unless the user reports double-counting visible.
+
+### #4 shipped (2026-07-29)
+
+Owner explicitly approved implementation including downloading the
+NASA source image ("vamos implementar, depois vejo licenças" +
+follow-up approval this session); **the formal licensing check for
+redistribution remains with the owner** and is disclosed as such in
+`CreditsModal.tsx`. Everything below is code-complete, gated, and
+committed; the one thing not done is a human-eye look at a real GPU.
+
+**Files:** `src/lib/milkyWayOrientation.ts` (NEW, orientation math +
+GLSL + calibration), `src/lib/milkyWayOrientation.test.ts` (NEW, 16
+tests), `src/components/canvas/scene/MilkyWaySkybox.tsx` (NEW, the
+renderer), `public/textures/4k_milkyway_2020_gal.jpg` (NEW, the
+asset), plus small edits to `Scene.tsx` (mount) and `CreditsModal.tsx`
+(disclosure entry).
+
+**Asset.** NASA SVS "Deep Star Maps 2020" (svs.gsfc.nasa.gov/4851),
+the `milkyway_2020` layer specifically — SVS's own description: "This
+is a version of the star map that omits the bright (Hipparcos and
+Tycho) stars." Atlas already draws every HYG-catalogue star
+individually (`Starfield.tsx`); the sibling `starmap_2020` layer HAS
+those same bright stars baked in and would draw them twice. Using
+`milkyway_2020` is a fidelity argument (no double-counting against the
+star catalogue), not an aesthetic pick — this is the whole reason the
+wave file names this exact layer.
+
+Downloaded: `milkyway_2020_4k_gal.exr` — galactic-coordinate
+projection, 4096×2048, OpenEXR half-float (linear), 33.2 MB, from
+`https://svs.gsfc.nasa.gov/vis/a000000/a004800/a004851/milkyway_2020_4k_gal.exr`.
+The galactic-projection variant was available (no extra "celestial +
+rotate" step needed for the texture itself — the shader's own
+galactic→scene rotation, below, still has to exist regardless of which
+input projection is used).
+
+**Encoding tradeoff — a judgment call, recorded per the spec's
+instruction to report judgment calls.** The wave file's sketch assumed
+NASA would offer a "standard web format" (PNG/TIF) directly; in
+reality SVS only publishes this layer as EXR (plus a 1024×512 JPEG
+preview, too small to use). Two options were weighed:
+
+1. **Ship the EXR via `three`'s bundled `EXRLoader`.** Zero new
+   dependency, no lossy re-encode, genuinely linear HDR data. Rejected
+   because `deferredTextureCache.ts` — the app's ONE deferred-loading
+   contract, used by every other texture — wraps `THREE.TextureLoader`
+   only; adding an EXR branch means changing shared infrastructure
+   every other texture consumer depends on, for one caller. Also
+   costs ~85 MB VRAM (HalfFloat RGBA, 4k, with mips) versus the
+   ~33 MB an 8-bit RGB texture costs for the same pixel count.
+2. **Re-encode to an 8-bit sRGB image and reuse the existing
+   `useDeferredTexture` path unchanged.** Chosen. Matches the wave
+   file's own "pragmatic fallback" framing (a standard web format is
+   what the spec expected to be available) and needs zero changes to
+   shared code.
+
+KTX2/UASTC was evaluated first, per the spec's instruction to prefer
+it if encodable via an npm-only devDependency: confirmed (via
+research) that `three`'s bundled `KTX2Loader` can only **decode** an
+existing `.ktx2`; no encoder exists in `package.json`'s current
+devDependencies, and adding one (e.g. `@gltf-transform/cli`) was
+judged out of scope for this change — recorded here as the **KTX2
+upgrade path** for whoever next touches texture encoding pipeline-wide
+(the tiled-streaming line is the natural owner, since it already
+touches `deferredTextureCache.ts`).
+
+**The build step:** the source EXR (linear, half-float) was decoded
+with `three`'s own `EXRLoader.parse()` run headless in Node (same
+decoder the app would otherwise use, so no independent
+reimplementation to drift), normalised by a measured 99.9th-percentile
+luminance ceiling (0.382635 — a robust near-max that excludes a
+handful of literal-1.0 outlier texels, not the true max), clamped to
+[0,1], sRGB-encoded, and saved as `public/textures/4k_milkyway_2020_gal.jpg`
+(quality 95 mozjpeg, 3.6 MB, PSNR ≈37 dB against the lossless
+intermediate). Full derivation, including the exact anchor numbers
+measured off the real pixel data, is in `milkyWayOrientation.ts`'s
+`MILKY_WAY_BRIGHTNESS_MULTIPLIER` doc comment. The source EXR itself
+is NOT committed (nothing at runtime reads it; keeping it would be
+dead weight).
+
+**VRAM math** (per `deferredTextureCache.ts`'s own estimator,
+`inferTextureEdge` correctly reads the `4k_` filename prefix): 4096×2048
+RGBA8 with mips ≈ 44.7 MB estimated / ~33 MB measured actual — small
+against the tiled-streaming wave's measured admission-control budgets
+(ultra 512 MB / high 256 MB / balanced 64 MB; only `constrained` at
+32 MB would be tight, and the layer self-unmounts there anyway, same
+gate as `ZodiacalLightSkybox`). No LFS: repo has no `.gitattributes`
+and already commits larger plain blobs (`4k_oberon.png` ≈37.8 MB) —
+this asset follows existing practice, not a new one.
+
+**Orientation — the classic failure mode, and how it was caught.**
+`gridOrientation.ts`'s cited Euler recipe (`R=32.93192°, Q=27.12825°,
+P=192.85948°` via `getRotationMatrix(alpha,beta,gamma) =
+Ry(gamma)·Rz(beta)·Ry(alpha)`, attributed to Gaia Sky's
+`Coordinates.java:153-157`) was re-implemented and numerically checked
+against the two facts a galactic rotation must reproduce (NGP at RA
+192.85948°/Dec 27.12825°; Galactic Center at RA 266.405°/Dec −28.936°)
+— **it reproduced neither, off by tens of degrees.** Rather than
+guess at a different multiplication order from a comment citing a
+file not in this repo, `milkyWayOrientation.ts` constructs the
+rotation directly from the SAME three cited angles via an unambiguous
+Gram-Schmidt method (two known vector correspondences — NGP↔galactic
+pole, NCP↔galactic-frame position — fix the rotation uniquely) and
+cross-checks the result against the independently published numeric
+ICRS↔Galactic matrix (Liu, Zhu & Zhang 2010 / ESA Hipparcos catalogue)
+to 1e-12.
+
+The map's OWN convention needed a second, independent check: NASA's
+page documents the longitude direction ("centered at 0°, longitude
+increases to the LEFT") but not which pole is at the image's top edge.
+That half was determined empirically — the LMC and SMC are isolated,
+unambiguous bright features at known galactic coordinates well south
+of the plane; sampling the actual downloaded EXR at both candidate
+polarities found the LMC ~14× brighter than same-latitude baseline sky
+under "row 0 = south galactic pole", and statistically indistinguishable
+from baseline under "row 0 = north" (SMC independently gave ~9×). **Row
+0 = south galactic pole**, opposite the "north up" default a Plate
+Carrée map would otherwise be assumed to use — exactly the kind of
+convention a wrong assumption would have shipped silently.
+
+**Test result:** `milkyWayOrientation.test.ts`, 16 tests, all passing.
+Includes the exact pin the spec named — galactic center (l=0,b=0) →
+ecliptic lon 266.8395° / lat −5.5363° against the target (266.84°,
+−5.54°), well inside a 0.05° tolerance chosen to still catch a
+tens-of-degrees wrong-handedness bug — plus an independent second pin
+(NGP → ecliptic lon 180.02°/lat 29.81°, not given in the task text, so
+a rotation that happened to pass the first pin by coincidence would
+still be caught), a determinant/orthogonality check, a forward/inverse
+round-trip check, and the UV-mapping/LMC-polarity assertions.
+
+**Calibration.** Same discipline as `zodiacalLightLut.ts`: two
+anchors measured off the real image (row-average — not single-pixel —
+luminance at the disk's brightest latitude, and at ±20° from it, so a
+resolved nebula or the LMC core cannot set the scale), mapped via the
+same geometric-mean-into-the-visible-window construction. Result:
+`MILKY_WAY_BRIGHTNESS_MULTIPLIER ≈ 3.201`, putting the disk's own
+brightest latitude band right at the bloom gate (≈1.02×, a soft kiss)
+and the ±20° edge at the display black point (≈0.162×) — clearly
+subordinate to the zodiacal band's peak (19.7× black point / 3.26×
+bloom), per the spec's explicit "do not make it dominate" requirement.
+Isolated real hotspots the row-average smooths over (Carina Nebula,
+measured directly at ≈0.447 linear, above the JPEG's normalisation
+ceiling) clip and bloom harder in the actual texture — comparable in
+degree to zodiacal's own near-Sun overshoot, confined to the same
+handful of resolved nebular knots in the source data.
+
+**Renderer.** `MilkyWaySkybox.tsx` mirrors `ZodiacalLightSkybox.tsx`'s
+structure: camera-centered `BackSide` icosphere (radius 1e8, same as
+zodiacal), additive `CustomBlending`/`AddEquation`/`OneFactor` into the
+HalfFloat composer buffer, `depthTest`/`depthWrite` both false,
+`frustumCulled={false}`. `renderOrder = -50`, between the zodiacal
+band (`-100`, furthest back) and the star catalogue (`-2`) — read from
+the live files rather than assumed, since the wave file's own
+"Worktree hygiene" section warned line numbers/values could have
+drifted. Colour space: the JPEG is sRGB; `texture.colorSpace =
+THREE.SRGBColorSpace` (the deferred cache's own default, passed
+explicitly for the record) makes the GPU decode to linear on sample —
+one place, documented, no manual `pow()` in the shader. Loads through
+`useDeferredTexture` (pinned, priority 3, lowest) exactly like every
+other scene texture; never blocks boot. Tier gate is the same
+`qualityProfile.name !== "constrained"` self-gate `ZodiacalLightSkybox`
+uses.
+
+**e2e outcome: unchanged, and here is why that is the correct
+(not merely convenient) result.** `npx playwright test e2e/` — 12/12
+passing, including `boot.spec.ts`'s pixel-diff gate — needed **no
+re-bless**. Per the spec's own standing order, `test-results/` was
+inspected before concluding this: the boot test still passes against
+the existing baseline, meaning headless Chromium's frame is
+byte-for-byte within tolerance of the pre-#4 baseline. Root cause,
+confirmed by the same tier-detection finding this wave already
+documented for the LightGlow audit: headless Playwright resolves to
+`qualityTier: constrained` (SwiftShader software rasteriser), where
+`Scene.tsx` swaps in `DirectRenderPass` instead of the
+`EffectComposer` — `MilkyWaySkybox` (like `ZodiacalLightSkybox`) never
+mounts there, so there is genuinely nothing for the pixel gate to
+change. **Zero change is the correct outcome here, not an inconclusive
+one** — it does not mean the layer is broken, and it does not mean
+the layer is confirmed correct either; it means this test exercises a
+tier the layer intentionally excludes.
+
+**Owner's Browser-pane attempt this session:** tried once, per the
+"inspect before blessing" standing order and to see if anything new
+was learnable. Same structural block the lighting-audit session
+already recorded: `document.hidden === true` /
+`visibilityState === "hidden"`, confirmed via a direct JS probe;
+`requestAnimationFrame` never fires because the pane never composites
+in this non-interactive session. No new information beyond
+re-confirming the prior finding — not attempted-and-inconclusive,
+structurally blocked, same as every other visual check this wave has
+tried.
+
+**Owed to the owner** (same status as the zodiacal band, plus the
+licensing check): a human-eye pass on real hardware, composer tier,
+confirming (a) the panorama band appears where the real Milky Way
+should relative to the ecliptic/zodiacal band, (b) it reads as
+subordinate to zodiacal light rather than washing it out, (c) no
+double-counted bright stars are visible against the HYG catalogue's
+own points, and (d) the formal licensing determination for
+redistributing the NASA asset.
+
+---
+
+## Outstanding calibration (NOT BLOCKING, but visible)
+
+**2026-07-29 — this section's suspicion (failure mode 1 below) was
+right, and the layer was broken in four independent ways. All four are
+now fixed; see "Zodiacal rebuild" immediately below. The eye pass is
+still owed.**
+
+### Zodiacal rebuild (2026-07-29)
+
+An external review, independently reproduced, found the layer shipped
+in 48a3acc could not have rendered correctly. Four defects, in the
+order they would have bitten:
+
+1. **The shader never compiled.** `u_sunDir` was read in `main()` but
+   declared nowhere. A `ShaderMaterial`'s fragment prefix carries
+   three.js built-ins only (verified against
+   `three/build/three.module.js`'s `prefixFragment`), so an undeclared
+   custom uniform is a link failure, not a warning. The layer had
+   therefore never produced a pixel on any tier — which is also why no
+   amount of eye-checking would have surfaced defects 2-4.
+2. **The table axes were transposed verbatim.** The file declared
+   rows = β over 19 values reaching 180°, which is not a latitude any
+   sky has, and cols = λ−λ☉ over 10 stopping at 75°. Leinert Table 16
+   is the other way round: rows = λ−λ☉ (19 knots, 0…180°),
+   cols = β (10 knots, 0…75°). The DATA was always in Table-16 order;
+   only the labels and every consumer's sampling math were wrong.
+   Consequences: sampling at λ−λ☉ = 15°, β = 0° returned 0 instead of
+   the table's 9000 S10☉ peak, and `v = |β|/180` left rows 10-18 dead.
+3. **Both axes are non-uniform** (5° then 15°, on each axis) while the
+   TS sampler and the GLSL both assumed a uniform grid.
+4. **λ−λ☉ was computed as the 3D angular separation**
+   `acos(dot(dir, sunDir))`. That is a different quantity off the
+   ecliptic: `cos ε = cos β · cos Δλ` pulls ε toward 90°, so the old
+   path sampled too far from the Sun inside quadrature and too near it
+   beyond. At β = 60°, Δλ = 120° the two differ by 15.5°.
+
+Plus a comment that promised a "smoothstep fade" past 75° which was a
+`clamp` plateau. It is gone; the domain now reaches the pole, so there
+is nothing to fade.
+
+**What replaced it** (`src/lib/zodiacalLightLut.ts`,
+`ZodiacalLightSkybox.tsx`, `src/lib/zodiacalLightLut.test.ts`):
+
+- Table 16 kept verbatim with correct axis labels, and blank cells now
+  `null` rather than `0` — "no datum" and "no light" are opposite
+  claims and the gap between them is 9000 S10☉ wide. Every blank cell
+  is inside 15° of the Sun (pinned by test); that solid angle is the
+  solar F-corona, a component this layer does not model. They are
+  filled by holding the innermost tabulated value of the same β column
+  inward: a constant extension that invents no shape and deliberately
+  under-states a region that is in reality far brighter.
+- The grid is extended with a β = 90° column of a constant 60 S10☉ —
+  Leinert's own published pole brightness, 60 ± 3, which the table's
+  own β = 75° column (56-78) brackets. Not decoration: ecliptic
+  longitude is undefined at the pole, so a grid stopping at 75° makes
+  the pixels around the pole sample a λ-dependent value the geometry
+  cannot resolve, i.e. a ±20 % pinwheel.
+- **Non-uniform axes resolved at build time, not in the shader.**
+  `buildZodiacalUniformGrid()` resamples onto a uniform 5° lattice
+  (37 λ × 19 β = 703 texels, RGBA16F ≈ 5.6 KB). Every source knot is a
+  multiple of 5°, so the lattice reproduces the table EXACTLY at its
+  knots and linearly between — it is not an approximation of the
+  non-uniform table, it is the same piecewise-bilinear function, and
+  the GPU's uniform `LinearFilter` fetch of it is then correct with no
+  axis LUT in GLSL. Pinned by a test that walks all 171 tabulated cells.
+- Angles from projections rather than the `cos ε / cos β` inversion:
+  β = asin(dir.y) (scene +Y is the ecliptic pole — the three.js Y-up
+  remap in `orbital/analytical/coordUtils.ts`), and |Δλ| = the angle
+  between the XZ-plane projections of `dir` and `sunDir`. No division
+  by `cos β`, and exact when the observer is off the ecliptic, where
+  the Sun itself is no longer at β = 0.
+- Every GLSL constant is interpolated from the TypeScript, so the
+  shader and the pure-TS mirrors cannot drift. The old file kept its
+  own GLSL copy of `ZODIACAL_S10_TO_LINEAR` and its own axis maxima.
+
+### The derived visibility constant
+
+`ZODIACAL_S10_TO_LINEAR = 4.0e-9` was a **discretionary tunable**, not
+a calibration, and it was arithmetically invisible: it put the
+brightest cell in the whole table at `9000 × 4.0e-9 = 3.6e-5` linear,
+4600× below `STAR_DISPLAY_BLACK_POINT = 0.165` and still 286× below it
+at `SCENE_EXPOSURE_MAX = 16`. Failure mode 1 was not a risk, it was
+the shipped state.
+
+It is now derived against the pipeline's own two numbers, the same
+discipline `starfieldShaderMath.ts` uses:
+
+- The graded pipeline's visible window for a diffuse surface is
+  `[STAR_DISPLAY_BLACK_POINT = 0.165, Bloom luminanceThreshold = 1.0]`
+  — a span of **6.06:1**. (Bloom runs before the tone-mapping pass, so
+  it gates on raw linear buffer values; that is why the ceiling is the
+  bloom gate and not a post-operator number.)
+- The band's own contrast range along the ecliptic runs from
+  9000 S10☉ (λ−λ☉ = 15°) to 140 S10☉ (the minimum at 135-150°, between
+  the cone and the gegenschein) — **64.3:1**.
+- It does not fit. The only choice free of taste is equal margin at
+  both ends: map the geometric mean of the band's range to the
+  geometric mean of the window.
+
+```
+k = √(0.165 × 1.0) / √(9000 × 140) = 0.406202 / 1122.50 = 3.618734e-4
+```
+
+Each end overshoots by exactly `√((9000/140)/(1.0/0.165))` = **3.257×**,
+by construction. The constant is 90 468× larger than what shipped.
+
+What that puts on screen at 1 AU, neutral exposure (linear, ×black point):
+
+| λ−λ☉, β=0° | S10☉ | linear | × black point      |
+| ---------- | ---- | ------ | ------------------ |
+| 15°        | 9000 | 3.257  | 19.7 (3.26× bloom) |
+| 25°        | 3000 | 1.086  | 6.58 (1.09× bloom) |
+| 30°        | 1940 | 0.702  | 4.25               |
+| 45°        | 710  | 0.257  | 1.56               |
+| 60°        | 395  | 0.143  | 0.87               |
+| 90°        | 202  | 0.0731 | 0.44               |
+| 180°       | 180  | 0.0651 | 0.39 (gegenschein) |
+| pole       | 60   | 0.0217 | 0.13               |
+
+So the band crosses the black point at λ−λ☉ ≈ 57° in the ecliptic and
+the bloom gate at ≈ 26°: a visible cone about 30° long with a bloomed
+root at the Sun. The gegenschein sits at 0.39× the black point — below
+threshold until eye adaptation lifts exposure past ≈ 2.5×, which is
+the honest answer for a feature most observers have never seen.
+
+**The bright end is accepted, not clamped, and it is stated here
+rather than hidden.** The near-Sun cells cross the bloom gate by up to
+3.26×. The 64:1 ratio is measured data; squashing it would falsify the
+one thing a tabulated model is for. The region above the gate reaches
+≈ 26° from the Sun along the ecliptic and ≈ 20° across it, which is
+the same solid angle the Sun's own disc and bloom already occupy, and
+AgX's shoulder is downstream of it on every tier that mounts the layer.
+
+**If the eye pass says "too dim"**, the derived alternative is to
+anchor the canonical quadrature value (λ−λ☉ = 90°, β = 0°, 202 S10☉)
+directly on the black point: `k = 0.165/202 = 8.168e-4`, 2.26×
+brighter, band visible out to 90° elongation, peak at 7.35× the bloom
+gate. For a smaller correction the dial is `u_brightnessMul`, which
+needs no material rebuild.
+
+**Boot frame is unaffected by construction.** The boot camera parks at
+~148 AU (be78310), where `R^-2.5 = 3.75e-6` puts even the 9000 S10☉
+peak at 1.2e-5 linear — two orders below the black point. `e2e/boot.spec.ts`
+re-run after the change: pass, no re-bless.
+
+### Original note (kept for the failure modes, which still frame the eye pass)
+
+The physical constant from Leinert Table 2 is 1.28e-8 W/m²/sr/µm per
+S10_sun; the extra factor is what makes the band visible against
+the starfield+atmosphere composite, and the right value depends on
+eye adaptation behaviour that 1d ships.
+
+**1d has landed in code (see "What was done and why" above) but its
+runtime effect on the band's visibility has not been eye-checked yet**
+— this session was CLI-only, same caveat as 1a/1b/1c/#3. Three failure
+modes to check now that 1d is in the pipeline:
+
+1. Band so dim it stays below `STAR_DISPLAY_BLACK_POINT` and is
+   never visible (raise `u_brightnessMul` or `ZODIACAL_S10_TO_LINEAR`).
+   — **2026-07-29: confirmed as the shipped state, and fixed.** The
+   band is now above the black point out to ≈ 57° elongation by
+   construction. Still worth checking that it reads as a cone and not
+   as a wash.
+2. Band so bright it dominates the starfield (lower the same).
+   — Untested. The band peaks at 4.25× the black point at 30°
+   elongation, against a magnitude-8 star's 1.0×; a bright star is
+   ~6×. Plausible but unverified.
+3. Band clips as a flat disk near the Sun because Leinert's 9000
+   S10 value doesn't pass Bloom's `luminanceThreshold=1.0`.
+   — **2026-07-29: inverted.** It now passes the gate deliberately, at
+   3.26×, over a region ≈ 26° × 20° around the Sun. This is the single
+   most likely thing the eye pass will object to. The escape hatch is
+   `u_brightnessMul`; a fade near the Sun is NOT the right fix, because
+   the blank-cell wedge is already a constant hold rather than a ramp.
+
+CreditsModal provenance has landed (8598028, wording updated
+2026-07-29). A single human-eye calibration pass is what remains
+before declaring this sub-pull done.
+
+**2026-07-28 runtime-verification attempt (lighting-audit session):
+still NOT runtime-verified — blocked by tooling, not attempted-and-
+inconclusive.** This session's Browser pane never composited a frame
+(see the LightGlow section above for the full diagnostic — `Viewport:
+0x0`, `document.hidden === true`, no screenshot possible; this is a
+non-interactive session, nobody's screen shows this pane, so it cannot
+be made to render). No screenshots were taken of the eye-adaptation
+behavior or the zodiacal band, so none of the three failure modes above
+can be reported on with evidence. Recording "not verified" rather than
+guessing.
+
+A substitute headless-Playwright pass (see the LightGlow section) was
+tried for the eye-adaptation check too, but it is voided by the SAME
+`constrained`-tier finding: `EyeAdaptationBridge` only does anything
+when `toneMappingRef` is non-null, which requires a mounted
+`<ToneMapping>` pass inside `PostProcessingPipeline` — and that
+component never mounts on `constrained` (Scene.tsx swaps in
+`DirectRenderPass` instead). Per the coordinator's explicit
+precondition ("if… the composer actually mounts there"), the cheap
+exposure-registry read-back was skipped rather than run against a path
+that structurally cannot exercise the code under test. Same applies to
+`ZodiacalLightSkybox` — it does not mount on `constrained` either (see
+its own "Tier gate" note above) — so a zodiacal screenshot from this
+environment would show nothing regardless of the real shader's
+behavior and would not be honest evidence either way.
+
+**Owed to the owner:** a human-eye pass on real hardware (ultra tier,
+default scene) covering all of: the three zodiacal failure modes listed
+above, whether 1d's eye-adaptation is perceptible/smooth/flicker-free,
+and the resulting calibration decision on `ZODIACAL_S10_TO_LINEAR`. None
+of that can be produced from this sandbox — every environment available
+to it (non-compositing pane, headless-Playwright-on-SwiftShader) either
+cannot render a frame or hard-floors to the tier where the effects under
+test don't mount.
+
+**2026-07-29: still owed, and now it is the ONLY thing owed on this
+layer.** The rebuild above is math that puts the band inside the
+visible window by construction — every number in it is checked by unit
+test — but no frame of it has been seen by anyone. To do the pass:
+camera near 1 AU (the boot pose at ~148 AU shows nothing, correctly),
+ultra tier, look 30-60° off the Sun along the ecliptic, then pan to
+frame the Sun (failure mode 3), then to the antisolar point
+(gegenschein) and to the ecliptic pole (should be black).
+
+---
+
+## Worktree hygiene — what is NOT this wave's scope
+
+The worktree `starfield-visual-upgrade-11bd96` has work from at least
+two parallel waves plus this wave. Specifically, commits **not part
+of this handoff**:
+
+```
+338312e  merge: tiled-streaming-corrections into starfield-visual-upgrade
+632d49d  feat(starfield): Pogson photometry + pixel-integrated PSF;
+                                          delete NASA Eyes preset
+611c424  docs(vram): the shadow-map row measured something that does not exist
+849d1ca fix(camera): focusing a moon no longer frames its unlit side
+d8d9317 docs(status): W5 stage B is still open ...
+65d81ab fix(vrm): close two admission-control regressions found in review
+ca0eea6 test(e2e): free the flight and boot gates from headless
+                                       frame-pacing assumptions
+```
+
+Those represent:
+
+- The **tiled-streaming / texture inventory** wave
+  (`tasks/waves/tiled-streaming-2026-07-28.md`): the deletion of
+  `public/data/nasa-stars/` and `src/components/canvas/NASAStarfield.tsx`,
+  the starfield Pogson+PSF rewrite (θ.2 era), etc.
+- VRAM admission-control corrections.
+- E2E frame-pacing fix in `e2e/boot.spec.ts`.
+
+These waves **may have touched files this wave depends on**. The
+`Starfield.tsx` line numbers in this handoff were captured **at this
+session's HEAD** (`ca0eea6`); if the next agent rebases or the
+starfield file is touched again, line numbers will drift. Use grep
+or symbol lookups, not line citations.
+
+**Do not roll these back as part of picking up this handoff.** They
+are independent work with their own merge gates. The visual-upgrade
+sub-pulls (1a, 1b, 1c, #3) only tightened pipeline parameters and
+added new files — none of them modify the existing starfield Pogson
+math, the multi-star catalogue, or the texture loader.
+
+---
+
+## Honest disclosure (this session, plus the 1d follow-up)
+
+Three of the prior session's commits (200e13d, 1a45230, 48a3acc) did
+not get a visual runtime verification. This session's 1d commit did
+not either — also CLI-only. Verification for 1d was:
+
+- `npm run test:run` → 2427 passes (all pre-existing tests green; zero
+  new tests added, per AGENTS.md §6's "experimental look work needs
+  zero new unit tests" — no new `ToneMappingName` value was added, so
+  no `resolver.test.ts` differential to extend either).
+- `npx tsc -b` → clean (including the narrow undeclared-property type
+  augmentation in `EyeAdaptationBridge.tsx` — see that file's module
+  doc comment).
+- `npm run lint` → clean.
+- `npm run docs:check` pre-commit gate → clean.
+
+This is **unit-level forgetting**. Specifically NOT verified:
+
+1. Whether the AgX curve actually produces reference-quality highlights
+   vs. a taste regression (the audit recommended AgX over ACES, but
+   that's literature, not user preference).
+2. Whether the bloom base values (0.35 / 0.3 / 0.15) feel right
+   against the starfield Pogson intensities. The history of this
+   repo contains a "Sun too white" bug from adding Bloom alone; the
+   Threshold=1.0 selective contract is supposed to prevent that but
+   has not been verified at runtime after 1b.
+3. Whether the zodiacal band is actually visible
+   (see "Outstanding calibration" above). The intensity constant is
+   a documented estimate, not measured against the rest of the
+   composer's output.
+4. Whether 1d's eye-adaptation is visually perceptible at all, whether
+   its 1-frame GPU-readback lag reads as smooth or as a stutter, and
+   whether the library's default `adaptationRate` (tau=1) paces
+   correctly for this scene — see the 1d section above.
+
+A single human-eye calibration pass (suggested: 1080p fullscreen,
+ultra tier, default scene, camera at Earth-orbit looking towards
+ecliptic pole + looking towards Sun, then panning to frame the Sun)
+would close this. Until then, do not claim this wave is "done" beyond
+the commit log.
+
+---
+
+## Source citations
+
+The audit (fable-5) referenced specific primary sources:
+
+- **Leinert et al. 1998**: "The 1997 reference of diffuse night sky
+  brightness". A&AS 127, 1-99 (1998). Table 16 is the S10_sun
+  brightness grid used in `zodiacalLightLut.ts`. Table 2 has the
+  1.28e-8 W/m²/sr/µm conversion factor.
+- **Dumont 1983**: fan-cloud integral giving R⁻²·⁵ density scaling;
+  canonical reference. Search the paper before reimplementing;
+  the exponent may be cited differently in later work (Tsumura 2023
+  cites Leinert etc. for the same scaling).
+- **NASA Eyes on the Solar System** (bundle JS): the audit downloaded
+  and read the production bundle to establish that the three light
+  modes (Flood / Natural / Shadow) ship with default "shadow" = 15%
+  camera headlight + 0.005 ambient floor. This is the audit's
+  evidence for "atlas ambient-0 is the industry outlier". NOT
+  involved in 1a/1b/1c/#3 — context only for the fable-5 critique.
+- **OpenSpace renderableglobe.cpp** + **Stellarium Planet.cpp** +
+  **Stellarium issue #669**: same audit established that OpenSpace
+  ships 0.05 ambient default and Stellarium 0.02 hard-coded; Stellarium
+  closed a "make this realistic" ticket as wontfix. Same context only.
+
+The pre-existing sweep `tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md
+§127/§129/§139/§141/§153` independently verified all of the same bugs
+this wave fixed (AgX, selective bloom, exposure registry, optional
+grade-only tier, real Milky Way asset) — confirm by reading the sweep
+before re-investigating anything; do not re-derive its numbers.
+
+---
+
+## Handoff for the next agent: suggested first steps
+
+1. **Read this file, then `tasks/STATUS.md`, then `AGENTS.md`.** The
+   constitution there explicitly permits deleting impl-pinning tests
+   frozen yesterday's form and explicitly makes Gaia a reference not
+   a merge gate.
+2. ~~Pick up 1d (eye-adaptation).~~ **Shipped** — see "What was done
+   and why" above. First runtime look should confirm the adaptation is
+   perceptible and not a stutter (see "Honest disclosure" item 4)
+   before considering a 1e per-shader follow-up.
+3. Update **`CreditsModal.tsx`** for AgX + zodiacal provenance. Cheap
+   honest disclosure; high value-of-information.
+4. ~~Run the **LightGlow audit** with a runtime FPS measurer.~~
+   **Attempted 2026-07-28, blocked** — see the LightGlow section above.
+   No environment available that session could produce a real-GPU
+   number (non-compositing pane; headless Playwright hard-floors to
+   `constrained` tier, where LightGlow never mounts). Shipped
+   `GraphicsOverrides.lightGlowEnabled` (default `true`, DisplayPanel
+   toggle) as an instrument instead of guessing a default. The real
+   measurement + gate decision is still owed — whoever has real GPU
+   access next should flip the toggle live, compare frame times, and
+   update `PRESET_DEFAULTS` per the recorded decision rule.
+5. ~~Defer **#4 (Milky Way HDR)** until the user's licensing check is
+   done AND the parallel tiled-streaming wave settles on whether
+   KTX2 is in scope.~~ **Shipped 2026-07-29** — owner explicitly
+   approved implementing ahead of the licensing check (see "#4
+   shipped" section above). KTX2 was evaluated and deferred as a
+   documented upgrade path, not blocked on; the 8-bit JPEG fallback
+   needed no changes to the tiled-streaming line's territory
+   (`deferredTextureCache.ts` was read, not modified). The licensing
+   determination itself is still owed to the owner.
+6. After CreditsModal lands, do the **calibration pass** for zodiacal
+   intensity (now unblocked on the 1d side — see "Outstanding
+   calibration"). Document the final `ZODIACAL_S10_TO_LINEAR` value +
+   commit message that explains why it's the chosen value (not "we
+   tuned it" — the AGENTS.md §honesty requires this).
+7. **Verify everything** at runtime by booting `npm run dev` once
+   before declaring the wave complete. The CLI-only test pipeline is
+   a sanity check, not a visual regression gate. This now includes
+   confirming 1d's eye-adaptation doesn't fight the zodiacal
+   calibration in step 6 — do them in the same sitting.
+   **2026-07-28: still not done** (see "Outstanding calibration"
+   above) — this session's environment could not render a frame at
+   all. `npm run test:e2e -- e2e/boot.spec.ts` WAS run this session
+   (build + Playwright preview server, separate from the blocked
+   interactive pane) — both tests passed cleanly, including the
+   `boot-frozen.png` pixel-diff gate, with no baseline changes needed.
+   That confirms 1d's neutral-exposure boot pose doesn't move boot
+   pixels as the wave doc predicted, but it is not a substitute for the
+   human-eye pass — it only covers one frozen frame far from the Sun.
+
+---
+
+_Last updated: 2026-07-28. 1d (eye-adaptation) shipped by a follow-up
+session; CreditsModal, LightGlow audit, and #4 remain open._
+
+_2026-07-28 (lighting-audit session): e2e boot gate re-run clean, no
+re-bless needed. LightGlow audit attempted, blocked by environment
+(non-compositing pane + headless-Playwright SwiftShader → constrained
+tier); shipped `lightGlowEnabled` toggle (default true) as an
+instrument instead of a measurement-gated default — see the LightGlow
+section for the full trail. 1d/zodiacal runtime verification attempted,
+also blocked by the same environment limits — still owed a human-eye
+pass. CreditsModal and #4 untouched this session (out of scope for this
+pass)._
+
+_2026-07-29: **#4 (Milky Way HDR panorama) shipped** — see "#4 shipped
+(2026-07-29)" above for the full asset/orientation/calibration trail.
+CreditsModal also gained the Milky Way disclosure entry (AgX's own
+CreditsModal entry was already present from an earlier session; not
+re-verified this pass). `npm run test:run` (2502 tests), `tsc -b`,
+`lint`, `docs:check`, `build`, and `npx playwright test e2e/` (12/12,
+including the boot pixel gate, no re-bless) all clean. Runtime eye
+verification remains structurally impossible from this sandbox
+(confirmed again this session — `document.hidden === true`, same as
+every prior attempt) and is owed to the owner, same as the zodiacal
+band and 1d. LightGlow audit and W5/eye-adaptation items untouched
+this session._

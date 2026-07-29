@@ -4,16 +4,18 @@
  * The 5 presets carry context-tuned grading + lighting values that
  * `useVisualPresetLerp` smooth-interpolates between as `getPresetForContext`
  * re-classifies the camera. Grading is applied in the post chain after
- * the optional tone-mapping pass; Gaia default keeps that pass disabled.
+ * the optional tone-mapping pass; tone mapping defaults to AgX on
+ * composer tiers as of 1a (see src/lib/graphics/resolver.ts), with
+ * "none" available as a Display-panel opt-in for Gaia parity.
  *
  * Per-preset intent:
  *
  * - CLOSE_FLYBY (camera < 200 from a body): surface-detail mode. Bloom
- *   knocked down so planet textures aren't washed by star halos; slight
- *   brightness bump (brightness +0.02) for dark-side readability when
- *   the terminator crosses the frame. Shadow / envMap tuning used to
- *   differentiate this preset but was retired when T2.5/T2.6 aligned
- *   both fields to Gaia-invariant values.
+ *   is knocked down (0.15) so planet textures aren't washed by star
+ *   halos; slight brightness bump (brightness +0.02) for dark-side
+ *   readability when the terminator crosses the frame. Shadow / envMap
+ *   tuning used to differentiate this preset but was retired when
+ *   T2.5/T2.6 aligned both fields to Gaia-invariant values.
  *
  * - PLANET_ORBIT (camera 200–2000): balanced default — the values that felt
  *   right across the representative-views iteration.
@@ -27,10 +29,10 @@
  *   through Pluto and the near Kuiper belt. Cooler and less saturated.
  *
  * - DEEP_SPACE (distanceFromSun ≥ 50 AU): scattered disk + Sedna-like
- *   orbits. Moody/clinical. Slightly more bloom so remaining bright
- *   stars feel like the only sources in frame; contrast up a touch for
- *   that empty-space feel; saturation low (no nearby colored bodies to
- *   support richer mids).
+ *   orbits. Moody/clinical. Slightly more bloom (0.35) so remaining
+ *   bright stars feel like the only sources in frame; contrast up a
+ *   touch for that empty-space feel; saturation low (no nearby colored
+ *   bodies to support richer mids).
  *
  * Gaia-fidelity lighting baselines are intentionally invariant across
  * presets: global ambient is Gaia's `scene.renderer.ambient: 0.0`
@@ -39,14 +41,26 @@
  * `envMapIntensity = 0` mirrors Gaia's lack of a diffuse irradiance
  * cubemap — `pbr.fragment.glsl:620-621` uses the reflection skybox
  * only for specular (`finalReflection = reflectionColor * AO`), never
- * for diffuse IBL. `shadowIntensity` is the one residual atlas-only
- * supplement: Three.js DirectionalLights carry shadow maps, so the
- * focused-body helper needs a non-zero intensity to cast crater /
- * cloud self-shadows. Held at an empirical floor (0.4) that preserves
- * visible self-shadow contrast while keeping the focused-body
- * over-brightness vs Gaia ≈1.4× (down from ≈2.5× pre-T2.5) — Option 1
- * in `ROADMAP.md §T2.5`. Option 3 (point-shadow cubemap at origin)
- * would drop the drift to 0 at higher perf cost, tracked for later.
+ * for diffuse IBL. `shadowIntensity` fed the focused-body directional
+ * helper (now dead — see below).
+ *
+ * `ambientIntensity: 0.0` here is NOT what the app renders: a display
+ * viewing floor (`AMBIENT_VIEWING_FLOOR` in
+ * `src/components/canvas/scene/visualPresetOverrides.ts`, Onda 1.3) is
+ * composed on top of this value every frame, downstream of this table.
+ * These 0.0s stay untouched as the physically-honest baseline the
+ * floor is added to — do not "fix" them here.
+ *
+ * **`shadowIntensity` currently changes nothing, 2026-07-28.** It drives
+ * `SmartSunLight`, which `SmartSunLight.tsx:74` puts on layer 1 while the
+ * render camera stays on layer 0 — and three collects lights only when
+ * `object.layers.test(camera.layers)` passes. That light therefore emits
+ * neither light nor shadow, and no shadow map is ever allocated. The
+ * earlier text here claimed the value was "held at an empirical floor
+ * (0.4) that preserves visible self-shadow contrast" with a measured
+ * "over-brightness vs Gaia ≈1.4×"; neither can be true of an inert light,
+ * so both are removed rather than restated. What self-shadowing the app
+ * does show comes from the analytical eclipse path, not from a shadow map.
  *
  * `distanceFromSun` is the body's physical heliocentric distance in AU.
  * For bodies with a parentId the engine returns parent-centered
@@ -80,7 +94,15 @@ export interface VisualPreset {
 
 export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
   DEEP_SPACE: {
-    bloomIntensity: 0.0,
+    // 1b: selective bloom on the HDR-allow-list (Sun + bright stars)
+    // now fires by default. 0.35 base × tier multiplier (1 on ultra/high,
+    // 0.75 on balanced, 0 on constrained — see PRESET_DEFAULTS) gives a
+    // gentle glare that reads as "overwhelming light source" without
+    // washing the black. `luminanceThreshold=1.0` keeps it selective:
+    // only genuinely-HDR pixels (Sun disk, sun-glint, lit terminator
+    // through AgX) cross — planets stay matte. See
+    // tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §129.
+    bloomIntensity: 0.35,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.16,
@@ -94,7 +116,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   PLANET_ORBIT: {
-    bloomIntensity: 0.0,
+    bloomIntensity: 0.3,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.18,
@@ -108,7 +130,11 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   CLOSE_FLYBY: {
-    bloomIntensity: 0.0,
+    // Knocked down so planet textures aren't washed by star halos at
+    // surface-detail magnification — the Sun is still on the HDR
+    // allow-list so it keeps its glow, but the threshold=1.0 contract
+    // + lower intensity keeps regolith crisp.
+    bloomIntensity: 0.15,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.18,
@@ -122,7 +148,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   INNER_SYSTEM: {
-    bloomIntensity: 0.0,
+    bloomIntensity: 0.3,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.22,
@@ -136,7 +162,7 @@ export const VISUAL_PRESETS: Record<VisualPresetType, VisualPreset> = {
     vectorIntensity: 1.0,
   },
   OUTER_SYSTEM: {
-    bloomIntensity: 0.0,
+    bloomIntensity: 0.3,
     bloomThreshold: 1.0,
     bloomRadius: 0.3,
     saturation: 0.15,

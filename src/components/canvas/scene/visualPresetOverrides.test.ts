@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { VISUAL_PRESETS } from "../../../config/visualPresets";
 import {
+  AMBIENT_VIEWING_FLOOR,
   resolveLerpRefTargets,
   type GraphicsOverrides,
 } from "./visualPresetOverrides";
@@ -9,7 +10,7 @@ import {
 const BASE_PRESET = VISUAL_PRESETS.DEEP_SPACE;
 
 describe("resolveLerpRefTargets — Wave 0 identity invariant", () => {
-  it("with empty overrides and bloomIntensityMultiplier=1, every field matches the preset base (identity)", () => {
+  it("with empty overrides and bloomIntensityMultiplier=1, every field matches the preset base (identity) — except the Onda 1.3 ambient floor", () => {
     const result = resolveLerpRefTargets(BASE_PRESET, {}, 1);
 
     expect(result.bloomIntensity).toBe(BASE_PRESET.bloomIntensity);
@@ -17,7 +18,10 @@ describe("resolveLerpRefTargets — Wave 0 identity invariant", () => {
     expect(result.saturation).toBe(BASE_PRESET.saturation);
     expect(result.contrast).toBe(BASE_PRESET.contrast);
     expect(result.brightness).toBe(BASE_PRESET.brightness);
-    expect(result.ambientIntensity).toBe(BASE_PRESET.ambientIntensity);
+    // Not identity: the display ambient floor is active by default
+    // (mul defaults to 1) and the preset's own ambientIntensity is 0.0
+    // on every preset, so the floor always wins the max().
+    expect(result.ambientIntensity).toBe(AMBIENT_VIEWING_FLOOR);
     expect(result.sunIntensity).toBe(BASE_PRESET.sunIntensity);
     expect(result.shadowIntensity).toBe(BASE_PRESET.shadowIntensity);
     expect(result.envMapIntensity).toBe(BASE_PRESET.envMapIntensity);
@@ -34,7 +38,7 @@ describe("resolveLerpRefTargets — Wave 0 identity invariant", () => {
     );
     expect(result.bloomThreshold).toBe(BASE_PRESET.bloomThreshold);
     expect(result.saturation).toBe(BASE_PRESET.saturation);
-    expect(result.ambientIntensity).toBe(BASE_PRESET.ambientIntensity);
+    expect(result.ambientIntensity).toBe(AMBIENT_VIEWING_FLOOR);
   });
 
   it("with empty overrides and bloomIntensityMultiplier=0 (constrained tier), bloomIntensity collapses to 0", () => {
@@ -51,33 +55,42 @@ describe("resolveLerpRefTargets — override composition", () => {
   it("bloomIntensity is absolute so users can opt into bloom over Gaia's 0 default", () => {
     const result = resolveLerpRefTargets(
       BASE_PRESET,
-      { bloomIntensity: 0.8, bloomIntensityMul: 2 },
+      { bloomIntensity: 0.8 },
       0.75
     );
     expect(result.bloomIntensity).toBe(0.8);
   });
 
-  it("bloomIntensityMul doubles the bloom target", () => {
-    const result = resolveLerpRefTargets(
-      BASE_PRESET,
-      { bloomIntensityMul: 2 },
-      1
-    );
+  it("bloomIntensityMultiplier composes with the preset base exactly once", () => {
+    // balanced tier (0.75) resolves against the preset base with no
+    // second multiply — the resolver already fused any user
+    // `bloomIntensityMul` knob into this one argument before calling in.
+    const result = resolveLerpRefTargets(BASE_PRESET, {}, 0.75);
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
   });
 
-  it("bloomIntensityMul composes multiplicatively with bloomIntensityMultiplier", () => {
-    // balanced tier (0.75) + user turns bloom up 2x → net 1.5x
+  it("a stray bloomIntensityMul on the overrides object has no effect (regression pin)", () => {
+    // 2026-07-29 double-multiply bug: this function used to ALSO multiply
+    // by `overrides.bloomIntensityMul`, on top of a `bloomIntensityMultiplier`
+    // argument that the resolver already fuses tier x user knob into —
+    // producing `tier x user^2` instead of `tier x user` whenever the user
+    // moved that knob off its default of 1. `bloomIntensityMul` was
+    // therefore removed from this file's `GraphicsOverrides` (see its
+    // JSDoc); this pins that a stray one on the real (superset) store
+    // object still can't sneak back in and get re-applied.
+    const overridesWithStrayMul = {
+      bloomIntensityMul: 2,
+    } as unknown as Parameters<typeof resolveLerpRefTargets>[1];
     const result = resolveLerpRefTargets(
       BASE_PRESET,
-      { bloomIntensityMul: 2 },
+      overridesWithStrayMul,
       0.75
     );
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 0.75 * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
   });
@@ -120,44 +133,44 @@ describe("resolveLerpRefTargets — override composition", () => {
     expect(result.saturation).toBeCloseTo(BASE_PRESET.saturation * 1.5, 10);
   });
 
-  it("every *Mul field scales the matching preset field independently", () => {
+  it("every surviving *Mul field scales the matching preset field independently", () => {
+    // shadowIntensityMul / envMapIntensityMul were deleted in Onda 1.1
+    // (dead controls — see resolver.ts's GraphicsOverrides JSDoc trail).
     const overrides: GraphicsOverrides = {
       ambientIntensityMul: 2,
       sunIntensityMul: 0.5,
-      shadowIntensityMul: 1.25,
-      envMapIntensityMul: 3,
     };
     const result = resolveLerpRefTargets(BASE_PRESET, overrides, 1);
-    expect(result.ambientIntensity).toBeCloseTo(
-      BASE_PRESET.ambientIntensity * 2,
-      10
-    );
+    // Floor composition (Onda 1.3): max(preset 0.0, floor 0.02) * mul.
+    expect(result.ambientIntensity).toBeCloseTo(AMBIENT_VIEWING_FLOOR * 2, 10);
     expect(result.sunIntensity).toBeCloseTo(BASE_PRESET.sunIntensity * 0.5, 10);
-    expect(result.shadowIntensity).toBeCloseTo(
-      BASE_PRESET.shadowIntensity * 1.25,
-      10
+    // shadowIntensity / envMapIntensity always pass the preset value
+    // through now — no override can move them.
+    expect(result.shadowIntensity).toBe(BASE_PRESET.shadowIntensity);
+    expect(result.envMapIntensity).toBe(BASE_PRESET.envMapIntensity);
+  });
+
+  it("ambientIntensityMul=0 zeroes the floor (true unassisted black)", () => {
+    const result = resolveLerpRefTargets(
+      BASE_PRESET,
+      { ambientIntensityMul: 0 },
+      1
     );
-    expect(result.envMapIntensity).toBeCloseTo(
-      BASE_PRESET.envMapIntensity * 3,
-      10
-    );
+    expect(result.ambientIntensity).toBe(0);
   });
 
   it("all override types combined produce the expected composite", () => {
     const overrides: GraphicsOverrides = {
-      bloomIntensityMul: 2,
       bloomThreshold: 0.5,
       saturationMul: 1.5,
       contrastDelta: 0.1,
       brightnessDelta: -0.2,
       ambientIntensityMul: 2,
       sunIntensityMul: 0.5,
-      shadowIntensityMul: 1.25,
-      envMapIntensityMul: 3,
     };
     const result = resolveLerpRefTargets(BASE_PRESET, overrides, 0.75);
     expect(result.bloomIntensity).toBeCloseTo(
-      BASE_PRESET.bloomIntensity * 0.75 * 2,
+      BASE_PRESET.bloomIntensity * 0.75,
       10
     );
     expect(result.bloomThreshold).toBe(0.5);

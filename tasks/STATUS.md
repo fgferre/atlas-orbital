@@ -3,7 +3,112 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-27 (W1–W4 + W6 done, **W5 stage B still open**; browser smokes BATCHED to the end of the wave; next is **W5 stage B or W7**)._
+_Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+
+---
+
+## Parallel line — starfield visual upgrade (partial, handoff)
+
+**[`tasks/waves/starfield-visual-upgrade-2026-07-28.md`](./waves/starfield-visual-upgrade-2026-07-28.md)**
+
+**#4 (Milky Way HDR panorama) is now code-complete** — see the wave
+file's "#4 shipped (2026-07-29)" section for the asset, orientation
+(Gram-Schmidt from cited R/Q/P, pinned to 1e-12 against the published
+matrix + the task's own ecliptic pin), calibration, and VRAM tradeoff
+record. All gates clean (2502 tests, `tsc -b`, `lint`, `docs:check`,
+`build`, `npx playwright test e2e/` 12/12, no re-bless — same
+`constrained`-tier self-gate as `ZodiacalLightSkybox`). **Owed to the
+owner:** a human-eye pass (this sandbox cannot composite a frame) and
+the formal licensing determination for the NASA asset.
+
+Remaining open in this wave: eye-adaptation runtime verification (1d
+shipped, not eye-checked) and the LightGlow performance audit (blocked
+on real-GPU access). CreditsModal now covers AgX + zodiacal + Milky
+Way. Next agent: pick one of those, or close the wave pending the
+owner's eye pass. Read the wave file's "Honest disclosure" section
+before labelling any earlier sub-pull done — green gates are not a
+runtime look.
+
+---
+
+## Parallel line — lighting redesign
+
+**[`tasks/waves/lighting-redesign-2026-07-28.md`](./waves/lighting-redesign-2026-07-28.md)**
+
+Runs in the same worktree as the starfield visual-upgrade line, source is
+the owner's `handoffiluminacao.md` (repo-worktree root, read-only). Onda 1
+items **1** (deleted the 5 dead lighting controls, kept + repurposed
+Ambient → "Ambient Floor ×") and **3** (default 0.02 ambient viewing floor,
+composed inside `resolveLerpRefTargets`, mid-industry between NASA Eyes
+0.005 / Stellarium 0.02 / OpenSpace 0.05), item **2** (per-light regolith
+`RE_Direct` wrapper), **Onda 2.1** (per-body solar irradiance from ephemeris
+AU) and **Onda 2.2** (unified fidelity badge + assist control) are all
+**shipped**.
+
+**Onda 2.2 is the step where the lighting became visible.** The assist
+default is now `"assisted"` — `fused = E^0.35`, a third position between
+`"real"` and the old `"compensated"` — and it ships together with its
+disclosure: `ScalePill` is replaced by `FidelityBadge`, ONE expandable
+surface grouping Scale + Brightness (owner decision 2026-07-29), plus a
+`Sunlight` Select in the Display panel. The four `PlanetModel` bodies
+(haumea, vesta, pallas, hygiea) were the open blocker on this step and they
+**joined** the policy — no exclusion, runtime-verified. Read the wave file's
+"Onda 2.2" section before touching `solarIrradiance.ts` or the badge.
+
+**E2E baseline unchanged, twice over** — the ambient floor did not move the
+frozen boot frame, and neither did the badge redesign or the assisted
+default (wide shot, no resolvable disc, per `boot.spec.ts`'s own comment).
+**No re-bless spent this wave; the budget is still unspent.** `boot.spec.ts`
+now also asserts the badge is present and names both axes — the pixel gate
+provably could not catch it disappearing (its footprint is ~0.92 % of frame
+against a 1 % tolerance).
+
+**Owner decision 2026-07-29 (default scale mode → realistic, boot = system
+overview) SHIPPED**, second attempt same day — `store.ts`'s `scaleMode`
+default is now `"realistic"`, and `AstroPhysics.resolveFocusExtent` grew a
+realistic-mode system-overview branch (Sun focus only, mirrors the
+didactic inclusion set: planets + dwarfs with `orbit.a <= 40` AU, so Pluto
+is in and Eris is out) so the boot camera parks ≈148 AU out — orbit lines,
+labels, and the outer dwarfs/TNOs all visible, planets point-light-sized,
+NASA-Eyes style. `FidelityBadge` boots `TRUE SCALE · ASSISTED`. Boot pixel
+baseline re-blessed from an inspected, healthy frame (this wave's re-bless
+budget is now spent). See the wave file's "Queue step 2 shipped
+2026-07-29 (second attempt)" section for the extent numbers and full
+verification; "Queue step 2 attempted 2026-07-29" (kept above it) is the
+first attempt's record of the real blocker this second attempt resolved.
+
+---
+
+## Parallel line — texture VRAM & tiled streaming
+
+**[`tasks/waves/tiled-streaming-2026-07-28.md`](./waves/tiled-streaming-2026-07-28.md)**
+— runs independently of the fidelity-honesty wave. Opened after the desktop
+render failure was traced to VRAM.
+
+Two things were already fixed and pushed before the cheap fixes (composer MSAA
+was taking the library default of 8, ~1.6 GB on a 4K desktop; and the context
+asked for `antialias` under an active composer, which could not change a pixel).
+
+**All three cheap fixes are now code-complete** — admission control in
+`deferredTextureCache.ts`, the resize of the three textures that exceeded
+`MAX_TEXTURE_SIZE`, and a GPU signal in tier detection. **They owe a human
+render check on real desktop hardware**, which no gate here can substitute:
+Playwright renders on SwiftShader, which has neither a VRAM ceiling nor a
+`MAX_TEXTURE_SIZE` to exceed. Tiling work (S1–S4) is next and unstarted.
+
+Read the wave file's **"Measured baseline"** section first. Every number in it
+was measured against the real files and survived an adversarial refutation pass;
+re-deriving them costs hours. In particular do not re-measure: Earth focus is
+853.3 MB at ultra (**still true — Earth was not resized**) and the overview band
+allocates the same 440.6 MB on `constrained` as on `ultra` (**still true and
+still untouched**). `4k_enceladus.jpg` **was** 15960x7980 and is now 4096x2048,
+with the canonical moved to `8k_enceladus.jpg` at 8192x4096 — that one row of
+the baseline is superseded by the resize, and the wave file records the
+before/after table.
+
+Closed predecessor: [`texture-inventory-2026-07-27.md`](./waves/texture-inventory-2026-07-27.md)
+— the orphan verdict table, the five measurement traps, and the source sweeps
+(NASA 3D Resources, CelestiaContent, Stellarium) with per-asset licences.
 
 ---
 

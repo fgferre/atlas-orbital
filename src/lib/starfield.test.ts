@@ -62,8 +62,8 @@ describe("starfield metadata", () => {
   });
 
   it("falls back to the canonical load error copy when no error object exists", () => {
-    expect(getStarfieldLoadErrorMessage("nasa", null)).toBe(
-      "Failed to load NASA Eyes catalog"
+    expect(getStarfieldLoadErrorMessage("hyg", null)).toBe(
+      "Failed to load HYG v4.2 catalog"
     );
     expect(getStarfieldLoadErrorMessage("hyg", undefined)).toBe(
       "Failed to load HYG v4.2 catalog"

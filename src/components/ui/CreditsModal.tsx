@@ -92,16 +92,34 @@ export const CreditsModal = () => {
               </h3>
               <ul className="space-y-3">
                 <CreditItem
-                  title={STARFIELD_SOURCE_METADATA.nasa.creditsTitle}
-                  description={
-                    STARFIELD_SOURCE_METADATA.nasa.creditsDescription
-                  }
-                  link={STARFIELD_SOURCE_METADATA.nasa.creditsLink}
-                />
-                <CreditItem
                   title={STARFIELD_SOURCE_METADATA.hyg.creditsTitle}
                   description={STARFIELD_SOURCE_METADATA.hyg.creditsDescription}
                   link={STARFIELD_SOURCE_METADATA.hyg.creditsLink}
+                />
+                <CreditItem
+                  title="Star rendering — what is measured, what is not"
+                  description="Star brightness is measured: apparent magnitude follows Pogson's ratio from the catalog's absolute magnitude and the live distance, so a star's screen flux is its real flux. Colour is derived from the catalog's B−V index through Ballesteros' temperature fit and CIE chromaticity, with a fixed +0.16 HSV saturation lift carried over from Gaia Sky — a deliberate, disclosed exaggeration, since true stellar colours are far paler than most renderings suggest. The rest is display, not sky: stars are drawn with a 0.62-pixel Gaussian point-spread function, which is a rendering choice and NOT the star's angular size, and stars bright enough to clip the display gain a halo modelled on the human eye's own scattering (the ciliary-corona r⁻³ lobe of Spencer et al., SIGGRAPH 1995). That halo is an observer artefact — the star has none. Diffraction spikes are off by default because they belong to a telescope's support vanes, never to a star; the Display panel's Star Optics control names the aperture being simulated when you turn them on."
+                />
+                <CreditItem
+                  title="Display transform — AgX tone mapping"
+                  description="HDR scene light is mapped to the screen through the AgX display transform (Troy Sobotka's AgX, as implemented in the postprocessing library), enabled by default on composer-capable hardware tiers. AgX is a rendering choice, not a physical claim: it compresses real high-dynamic-range values the display cannot show. The Display panel's Tone Mapping control can switch operators or disable it entirely."
+                />
+                <CreditItem
+                  title="Sunlight brightness — three positions, one of them assisted by default"
+                  description="Each world's sunlight is scaled by the inverse square of its REAL heliocentric distance from the ephemeris, in both scale modes — so brightness always tells the true story even when the didactic scale mode does not. How much of that range you actually see is a choice, named in the fidelity badge at the top-left. True brightness applies it uncorrected (Mercury ~10× Earth's, Neptune ~1/900) — physically faithful, and it spends the whole display range on the inner planets. Assisted, the default, raises the irradiance to the power 0.35: a compression exponent that is a chosen display constant with no physical derivation, disclosed here as such. It preserves the real ORDERING and direction of every brightness change while compressing a ~9400:1 range into ~25:1 that a screen can show. Equalized lights every world as if it sat at Earth's distance, which is the pre-2026 behaviour and tells you nothing about distance. The 1 AU reference point is itself provisional: no absolute radiometric claim (W/m², or EV) is made anywhere."
+                />
+                <CreditItem
+                  title="Ambient light — a display floor, not physics"
+                  description="The only physical light source in the scene is a single Sun point light with zero falloff exponent, so an unassisted render leaves every shadowed surface true black. A small ambient floor (0.02 by default) is added on top so dark terrain stays readable off a phone or projector — the same assist every comparable solar-system app ships: NASA Eyes on the Solar System defaults to 0.005, Stellarium hard-codes 0.02, OpenSpace defaults to 0.05. The Display panel's Ambient Floor × control scales it to 0 for the unassisted render."
+                />
+                <CreditItem
+                  title="Zodiacal light — Leinert et al. (1998)"
+                  description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127 Table 16, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted; its blank cells near the Sun are held constant rather than invented, and the ecliptic-pole value is Leinert's own 60 S10. The overall visibility factor is still a display calibration, not a photometric conversion: the table spans a wider brightness range than the graded image can show, so it is centred on that range with equal margin at both ends: the brightest region near the Sun overflows into bloom, and the antisolar gegenschein sits below the visible floor until the view adapts. Disclosed in the source, pending a final human-eye pass."
+                />
+                <CreditItem
+                  title="Milky Way panorama — NASA SVS Deep Star Maps 2020"
+                  description="The diffuse Milky Way backdrop is the `milkyway_2020` layer of NASA's Deep Star Maps 2020 (Scientific Visualization Studio; Gaia DR2 data, ESA/Gaia/DPAC), a synthesis of Gaia stars fainter than the Hipparcos/Tycho catalogue cut with the catalogued bright stars deliberately OMITTED — so it composes with this app's own HYG star catalogue without drawing any star twice. Re-encoded once from the source linear EXR to an 8-bit sRGB texture; the panorama's galactic-to-scene orientation and its display brightness are both derived and pinned by unit test, not eyeballed, and disclosed in `milkyWayOrientation.ts`. Formal licensing review for redistribution is still owed to the project owner — implementation shipped ahead of that check by explicit owner request."
+                  link="https://svs.gsfc.nasa.gov/4851"
                 />
                 <CreditItem
                   title="NASA JPL Horizons"

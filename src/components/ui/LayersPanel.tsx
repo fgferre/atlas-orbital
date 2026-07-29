@@ -23,7 +23,6 @@ import {
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   RIGHT_CONTROL_BUTTONS,
   SCENE_SCALE_OPTIONS,
-  SCENE_SOURCE_OPTIONS,
   type RightControlPanelId,
 } from "./controlPanelConfig";
 import { DisplayPanel } from "./DisplayPanel";
@@ -92,14 +91,12 @@ export const LayersPanel = ({
   const toggleScaleMode = useStore((state) => state.toggleScaleMode);
   const showStarfield = useStore((state) => state.showStarfield);
   const toggleShowStarfield = useStore((state) => state.toggleShowStarfield);
-  const starfieldSource = useStore((state) => state.starfieldSource);
-  const setStarfieldSource = useStore((state) => state.setStarfieldSource);
   const activeStarfieldProviderState = useStore(
     (state) => state.starfieldProviderStates[state.starfieldSource]
   );
   const visibility = useStore((state) => state.visibility);
   const toggleVisibility = useStore((state) => state.toggleVisibility);
-  const activeStarfieldLabel = STARFIELD_SOURCE_LABELS[starfieldSource];
+  const activeStarfieldLabel = STARFIELD_SOURCE_LABELS.hyg;
 
   const starfieldStatusMessage = useMemo(() => {
     if (activeStarfieldProviderState.status === "loading") {
@@ -304,23 +301,6 @@ export const LayersPanel = ({
               onChange={toggleShowStarfield}
             />
             <div className="space-y-3 border border-white/5 bg-black/20 p-3">
-              <div>
-                <SubsectionLabel>Starfield Source</SubsectionLabel>
-                <div
-                  role="group"
-                  aria-label="Starfield source"
-                  className="grid grid-cols-2 gap-2"
-                >
-                  {SCENE_SOURCE_OPTIONS.map((option) => (
-                    <ChoiceButton
-                      key={option.id}
-                      label={option.label}
-                      isActive={starfieldSource === option.id}
-                      onClick={() => setStarfieldSource(option.id)}
-                    />
-                  ))}
-                </div>
-              </div>
               <div
                 aria-live="polite"
                 className={`text-[11px] leading-relaxed ${
@@ -331,7 +311,7 @@ export const LayersPanel = ({
               >
                 {showStarfield
                   ? starfieldStatusMessage
-                  : `Background stars hidden. Re-enable Starfield to compare ${STARFIELD_SOURCE_LABELS.hyg} and ${STARFIELD_SOURCE_LABELS.nasa}.`}
+                  : `Background stars hidden. Re-enable Starfield to draw the ${STARFIELD_SOURCE_LABELS.hyg} catalog.`}
               </div>
             </div>
           </div>

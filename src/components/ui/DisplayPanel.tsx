@@ -4,19 +4,36 @@
  * Wave α Commit 3 (R2 Wave 1). Ships the E- and H-class rows from
  * graphics-settings-design.md §3:
  *   - Rendering: Preset, Auto-detect, Resolution Scale, Antialias
- *     (read-only), Shadow Map Size, Env Map Resolution.
+ *     (read-only).
  *   - Post-Processing: Bloom (enabled), Bloom Intensity, Bloom
  *     Threshold, Tone Mapping, Contrast, Brightness, Saturation.
- *   - Atmosphere & Sun: Ambient, Sun Brightness, Shadow Light, Env
- *     Reflections, Sun Render.
+ *   - Atmosphere & Sun: Ambient Floor, Sun Brightness, Sun Render.
+ *
+ * lighting-redesign Onda 1.1 (2026-07-28) removed four controls that
+ * measurably did nothing: Shadow Map Size + Env Map Resolution fed an
+ * inert `SmartSunLight` (layer-1 light the render camera never sees —
+ * `SceneLighting.tsx`) and a cubemap whose `envMapIntensity` every
+ * preset force-zeroes (`visualPresets.ts`); Shadow Light × and Env
+ * Reflections × were their live-value siblings. Ambient Light × was
+ * kept and repurposed as "Ambient Floor ×" — see Onda 1.3's
+ * `AMBIENT_VIEWING_FLOOR` in `visualPresetOverrides.ts`. Full trail in
+ * `tasks/waves/lighting-redesign-2026-07-28.md`.
  *
  * Deferred from Wave 1 per Finding 7 + scope:
  *   - Exposure slider: `@react-three/postprocessing` tone mapping has
  *     no user-exposed exposure prop and `gl.toneMappingExposure` is a
- *     no-op under the renderer-level `NoToneMapping` contract.
- *     Implementing a real compositor exposure path is Wave η.6 scope;
- *     shipping the slider now would ship a dead control. Amendment
- *     note lives in tasks/graphics-settings-design.md §3.
+ *     no-op under the renderer-level `NoToneMapping` contract noted in
+ *     Scene.tsx:508. Sub-pull 1c shipped the plumbing
+ *     (`src/lib/graphics/exposureRegistry.ts` + the
+ *     `ExposureBridge` that pushes the registry scalar into
+ *     `gl.toneMappingExposure` per frame), so the path now exists.
+ *     The slider itself stays deferred until 1d (the value is
+ *     currently driven by eye-adaptation or a future photometric-EV
+ *     readout, not directly by a UI control); shipping the slider now
+ *     without 1d would expose the registry as a manual stop dial,
+ *     which is a different control than the planned canonical
+ *     exposure UI. Amendment note lives in
+ *     tasks/graphics-settings-design.md §3.
  *   - Camera Effects + Textures & LoD sections: hidden until the R1
  *     effects and LoD system land (Waves γ / η / R3).
  *
@@ -25,9 +42,18 @@
  * any per-frame store surface.
  */
 
+import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { VISUAL_PRESETS } from "../../config/visualPresets";
 import { useStore } from "../../store";
+import {
+  DEFAULT_SUNLIGHT_ASSIST_POLICY,
+  getSunlightAssistPolicy,
+  setSunlightAssistPolicy,
+  subscribeSunlightAssistPolicy,
+  type SunlightAssistPolicy,
+} from "../../lib/graphics/solarIrradiance";
 import {
   useActiveGraphicsPreset,
   useEffectiveGraphics,
@@ -37,6 +63,7 @@ import type {
   GraphicsPresetName,
   ToneMappingName,
 } from "../../lib/graphics/resolver";
+import type { StarOpticsProfile } from "../../lib/starfieldShaderMath";
 import { Slider } from "./primitives/Slider";
 
 const PRESET_OPTIONS: Array<{
@@ -57,8 +84,42 @@ const TONE_MAPPING_OPTIONS: Array<{ id: ToneMappingName; label: string }> = [
   { id: "cineon", label: "Cineon" },
 ];
 
-const SHADOW_OPTIONS = [1024, 2048, 4096] as const;
-const ENV_RES_OPTIONS = [64, 128, 256] as const;
+/**
+ * Simulated aperture for the star field's diffraction spikes.
+ *
+ * Labelled by the optics that produce them rather than by a look name,
+ * because the spike COUNT is real geometry — N support vanes give N
+ * spikes for even N, and JWST's hexagonal segments give six — while a
+ * star itself has none. Default is the unaided eye, so nothing is added
+ * to the sky unless the user asks for it and can see what they asked
+ * for. The Credits panel names the active profile.
+ */
+/**
+ * How much of each body's real solar irradiance the viewer is shown.
+ *
+ * Labelled by visible consequence, never by provenance: no position may be
+ * called "Scientific" while `SceneLighting.tsx`'s `pointLight` still carries
+ * `decay = 0` (`handoffiluminacao.md` §6 item 3) — that would claim a rigour
+ * the scene light does not have. Unlike everything else in this panel these
+ * are **content** positions, not display ones, so the fidelity badge in the
+ * top-left names the active one and colours itself amber for the two that
+ * deviate. See `src/lib/graphics/solarIrradiance.ts`.
+ */
+const SUNLIGHT_ASSIST_OPTIONS: Array<{
+  id: SunlightAssistPolicy;
+  label: string;
+}> = [
+  { id: "real", label: "True" },
+  { id: "assisted", label: "Assisted" },
+  { id: "compensated", label: "Equalized" },
+];
+
+const STAR_OPTICS_OPTIONS: Array<{ id: StarOpticsProfile; label: string }> = [
+  { id: "none", label: "Unaided eye" },
+  { id: "newtonian", label: "Reflector (4-vane)" },
+  { id: "jwst", label: "Segmented (6-spike)" },
+  { id: "cinema", label: "Camera iris (8-blade)" },
+];
 
 export const DisplayPanel = () => {
   const {
@@ -67,6 +128,7 @@ export const DisplayPanel = () => {
     graphicsOverrides,
     customBase,
     sunRenderMode,
+    visualPreset,
     setGraphicsPreset,
     setGraphicsAutoMode,
     setGraphicsOverride,
@@ -79,12 +141,23 @@ export const DisplayPanel = () => {
       graphicsOverrides: state.graphicsOverrides,
       customBase: state.customBase,
       sunRenderMode: state.sunRenderMode,
+      visualPreset: state.visualPreset,
       setGraphicsPreset: state.setGraphicsPreset,
       setGraphicsAutoMode: state.setGraphicsAutoMode,
       setGraphicsOverride: state.setGraphicsOverride,
       resetGraphicsOverrides: state.resetGraphicsOverrides,
       setSunRenderMode: state.setSunRenderMode,
     }))
+  );
+
+  // Not a store field: the render path reads this singleton imperatively from
+  // inside `useFrame`, so React subscribes to the same object instead of
+  // keeping a second copy that could drift. Same subscription the fidelity
+  // badge uses, so the two surfaces can never disagree.
+  const sunlightAssist = useSyncExternalStore(
+    subscribeSunlightAssistPolicy,
+    getSunlightAssistPolicy,
+    getSunlightAssistPolicy
   );
 
   const effective = useEffectiveGraphics();
@@ -190,30 +263,6 @@ export const DisplayPanel = () => {
             </span>
           </div>
         </div>
-
-        <Select
-          label="Shadow Map Size"
-          value={effective.shadowMapSize}
-          options={SHADOW_OPTIONS.map((v) => ({ id: v, label: `${v}` }))}
-          onChange={(v) => setGraphicsOverride("shadowMapSize", v)}
-          onReset={
-            graphicsOverrides.shadowMapSize !== undefined
-              ? () => setGraphicsOverride("shadowMapSize", undefined)
-              : undefined
-          }
-        />
-
-        <Select
-          label="Env Map Resolution"
-          value={effective.environmentResolution}
-          options={ENV_RES_OPTIONS.map((v) => ({ id: v, label: `${v}` }))}
-          onChange={(v) => setGraphicsOverride("environmentResolution", v)}
-          onReset={
-            graphicsOverrides.environmentResolution !== undefined
-              ? () => setGraphicsOverride("environmentResolution", undefined)
-              : undefined
-          }
-        />
       </section>
 
       {/* ── Post-Processing ─────────────────────────────────────────── */}
@@ -228,9 +277,38 @@ export const DisplayPanel = () => {
           }
         />
 
+        {/* LightGlow (theta.3) — cone-spiral halo on the brightest
+            catalog stars, on top of the starfield's own analytical
+            theta.2 halo. Default true (unaudited — a real-GPU FPS A/B
+            couldn't be completed; see resolver.ts's lightGlowEnabled
+            JSDoc). Exposed so the owner can A/B it on their own
+            hardware. */}
+        <Toggle
+          label="Light Glow"
+          checked={effective.lightGlowEnabled}
+          onChange={() =>
+            setGraphicsOverride("lightGlowEnabled", !effective.lightGlowEnabled)
+          }
+        />
+
+        {/* The fallback is the ACTUALLY-APPLIED value, not 0. `effective
+            .bloomIntensity` is the absolute override alone, so it is
+            `undefined` until the user drags this slider — and rendering that
+            as 0 made the control lie in the one direction a control must
+            never lie: it read "off" while bloom was running at the preset's
+            0.15–0.35, so the first drag UP (to 0.05) made the scene DARKER.
+            `resolveLerpRefTargets` composes the real value as
+            `overrides.bloomIntensity ?? preset.bloomIntensity ×
+            bloomIntensityMultiplier`, and `effective.bloomIntensityMul` is
+            that multiplier — so this expression is the same number the
+            renderer uses, read from the same two inputs. */}
         <Slider
           label="Bloom Intensity"
-          value={effective.bloomIntensity ?? 0}
+          value={
+            effective.bloomIntensity ??
+            VISUAL_PRESETS[visualPreset].bloomIntensity *
+              effective.bloomIntensityMul
+          }
           min={0}
           max={2}
           step={0.05}
@@ -241,7 +319,7 @@ export const DisplayPanel = () => {
               ? () => setGraphicsOverride("bloomIntensity", undefined)
               : undefined
           }
-          hint="Gaia default is 0. Raise for cinematic bloom."
+          hint="Selective HDR bloom — only genuinely-bright pixels glow."
         />
 
         <Slider
@@ -268,6 +346,18 @@ export const DisplayPanel = () => {
           onReset={
             graphicsOverrides.toneMapping !== undefined
               ? () => setGraphicsOverride("toneMapping", undefined)
+              : undefined
+          }
+        />
+
+        <Select
+          label="Star Optics"
+          value={effective.starOptics}
+          options={STAR_OPTICS_OPTIONS}
+          onChange={(next) => setGraphicsOverride("starOptics", next)}
+          onReset={
+            graphicsOverrides.starOptics !== undefined
+              ? () => setGraphicsOverride("starOptics", undefined)
               : undefined
           }
         />
@@ -319,8 +409,32 @@ export const DisplayPanel = () => {
       <section className="space-y-3">
         <SectionLabel>Atmosphere &amp; Sun</SectionLabel>
 
+        {/* Onda 2.2 — the content-assist control. Unlike its neighbours this
+            one changes what the render CLAIMS, not how it is displayed, so
+            it is disclosed by the fidelity badge (top-left) rather than
+            being a silent per-device preference. */}
+        <Select
+          label="Sunlight"
+          value={sunlightAssist}
+          options={SUNLIGHT_ASSIST_OPTIONS}
+          onChange={setSunlightAssistPolicy}
+          onReset={
+            sunlightAssist !== DEFAULT_SUNLIGHT_ASSIST_POLICY
+              ? () => setSunlightAssistPolicy(DEFAULT_SUNLIGHT_ASSIST_POLICY)
+              : undefined
+          }
+          hint="How much of each world's real solar irradiance you see. True = uncorrected inverse-square (Mercury ~10×, Neptune ~1/900). Assisted (default) keeps the real ordering on a compressed range. Equalized lights every world as if it were at Earth's distance."
+        />
+
+        {/* Onda 1.3 — repurposed from the pre-lighting-redesign "Ambient
+            Light ×" control. Scales a display-only ambient viewing
+            floor (default 0.02, mid-industry — see
+            AMBIENT_VIEWING_FLOOR's JSDoc in visualPresetOverrides.ts
+            for the NASA Eyes / Stellarium / OpenSpace citations), not
+            the always-0.0 preset ambient itself. 0 = true unassisted
+            black; 1 (default) = the floor active out of the box. */}
         <Slider
-          label="Ambient Light ×"
+          label="Ambient Floor ×"
           value={graphicsOverrides.ambientIntensityMul ?? 1}
           min={0}
           max={5}
@@ -331,6 +445,7 @@ export const DisplayPanel = () => {
               ? () => setGraphicsOverride("ambientIntensityMul", undefined)
               : undefined
           }
+          hint="Minimum dark-side brightness so shadowed terrain isn't pure black. 0 = physically-accurate darkness."
         />
 
         <Slider
@@ -343,34 +458,6 @@ export const DisplayPanel = () => {
           onReset={
             graphicsOverrides.sunIntensityMul !== undefined
               ? () => setGraphicsOverride("sunIntensityMul", undefined)
-              : undefined
-          }
-        />
-
-        <Slider
-          label="Shadow Light ×"
-          value={graphicsOverrides.shadowIntensityMul ?? 1}
-          min={0}
-          max={5}
-          step={0.1}
-          onChange={(v) => setGraphicsOverride("shadowIntensityMul", v)}
-          onReset={
-            graphicsOverrides.shadowIntensityMul !== undefined
-              ? () => setGraphicsOverride("shadowIntensityMul", undefined)
-              : undefined
-          }
-        />
-
-        <Slider
-          label="Env Reflections ×"
-          value={graphicsOverrides.envMapIntensityMul ?? 1}
-          min={0}
-          max={5}
-          step={0.1}
-          onChange={(v) => setGraphicsOverride("envMapIntensityMul", v)}
-          onReset={
-            graphicsOverrides.envMapIntensityMul !== undefined
-              ? () => setGraphicsOverride("envMapIntensityMul", undefined)
               : undefined
           }
         />
@@ -518,6 +605,11 @@ interface SelectProps<T extends string | number> {
   disabled?: boolean;
   /** Tooltip + caption below the group when the Select is disabled. */
   disabledHint?: string;
+  /**
+   * Always-visible caption below the group, same role as `Slider`'s `hint`.
+   * Used where the option labels alone cannot carry the disclosure.
+   */
+  hint?: string;
 }
 
 const Select = <T extends string | number>({
@@ -528,6 +620,7 @@ const Select = <T extends string | number>({
   onReset,
   disabled = false,
   disabledHint,
+  hint,
 }: SelectProps<T>) => (
   <div>
     <SubsectionLabel>
@@ -564,6 +657,9 @@ const Select = <T extends string | number>({
       <div className="mt-1 text-[10px] leading-snug text-white/45">
         {disabledHint}
       </div>
+    )}
+    {!disabled && hint && (
+      <div className="mt-1 text-[10px] leading-snug text-white/45">{hint}</div>
     )}
   </div>
 );

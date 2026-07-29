@@ -15,9 +15,10 @@
  * - `graphicsOverrides = {}` yields the preset base; all *Mul fields
  *   default to 1, all *Delta fields default to 0, bare fields are
  *   absolute overrides (undefined = fall through).
- * - Auto-mode picks a preset from device signals using the existing
- *   `calculateQualityScore` heuristic; Custom keeps `customBase` in
- *   `graphicsSlice` so "Reset to High" stays meaningful.
+ * - Auto-mode picks a preset from device signals via
+ *   `resolveQualityTierFromSignals` (the score heuristic plus the GPU
+ *   capability ceiling); Custom keeps `customBase` in `graphicsSlice`
+ *   so "Reset to High" stays meaningful.
  */
 
 import type {
@@ -25,7 +26,8 @@ import type {
   ResolvedQualityProfile,
   DeviceSignals,
 } from "../qualityProfile";
-import { calculateQualityScore } from "./deviceSignals";
+import type { StarOpticsProfile } from "../starfieldShaderMath";
+import { resolveQualityTierFromSignals } from "./deviceSignals";
 
 /** User-facing preset identifier. `custom` = at least one override is set. */
 export type GraphicsPresetName = "low" | "medium" | "high" | "ultra" | "custom";
@@ -47,14 +49,17 @@ export interface GraphicsOverrides {
   contrastDelta?: number;
   /** Additive delta over `visualPreset.brightness`. */
   brightnessDelta?: number;
-  /** Multiplier on `visualPreset.ambientIntensity`. */
+  /**
+   * Multiplier on the display ambient floor composed in
+   * `resolveLerpRefTargets` (Onda 1.3) — see that function's JSDoc and
+   * `AMBIENT_VIEWING_FLOOR` in `visualPresetOverrides.ts` for the
+   * citations. Field name kept from the pre-Onda-1 "ambient intensity
+   * multiplier" control it repurposes; the DisplayPanel label changed
+   * to "Ambient Floor ×" to describe the new behavior.
+   */
   ambientIntensityMul?: number;
   /** Multiplier on `visualPreset.sunIntensity`. */
   sunIntensityMul?: number;
-  /** Multiplier on `visualPreset.shadowIntensity`. */
-  shadowIntensityMul?: number;
-  /** Multiplier on `visualPreset.envMapIntensity`. */
-  envMapIntensityMul?: number;
   /**
    * Multiplier on the COMPLEX `LensFlareEffect` `u_flareIntensity`
    * knob (atlas-only UX tuning, not in Gaia). Default 1.0; users can
@@ -64,20 +69,44 @@ export interface GraphicsOverrides {
    * additive contribution before the composer ADD blend.
    */
   lensFlareIntensityMul?: number;
-  /** User-selected tone mapping operator; defaults to Gaia's `none`. */
+  /**
+   * User-selected tone mapping operator. Default per preset is "agx" on
+   * composer-enabled tiers (ultra/high/medium) — see PRESET_DEFAULTS — and
+   * "none" on `low` because Scene.tsx unmounts the EffectComposer there.
+   */
   toneMapping?: ToneMappingName;
   /** Resolution scale override (dprMax). */
   resolutionScale?: number;
   /** Antialias override (reload-required per graphics-settings-design §8). */
   antialias?: boolean;
-  /** Shadow map size override. */
-  shadowMapSize?: 1024 | 2048 | 4096;
-  /** Env-map resolution override. */
-  environmentResolution?: 64 | 128 | 256;
   /** Bloom enable override. */
   bloomEnabled?: boolean;
+  /**
+   * LightGlow (theta.3) enable override. Default `true` — unaudited
+   * change from the pre-existing always-on behavior. A runtime FPS A/B
+   * was attempted (starfield-visual-upgrade wave) but every environment
+   * available in that session resolved to the `constrained` quality tier
+   * (no real GPU), which unmounts the whole EffectComposer including
+   * LightGlow — so the audit could not produce a real-hardware number.
+   * This flag exists so the decision (>=10% frame-time win on a real
+   * ultra/high tier -> flip this default to false) can be made from an
+   * actual measurement instead of guessed. See the wave file's "LightGlow
+   * performance audit" section for the full trail.
+   */
+  lightGlowEnabled?: boolean;
   /** vfxHdrGain absolute override (preset base ignored). */
   vfxHdrGain?: number;
+  /**
+   * Simulated aperture for the star field's diffraction spikes.
+   *
+   * Not a look preset: a star has no spikes, they are the Fourier
+   * transform of whatever obstructs a specific instrument's aperture.
+   * Rendering them unlabelled would present an instrument artefact as
+   * sky, so the choice is the user's, it is named after the aperture it
+   * simulates, and the Credits panel states which one is active. The
+   * default is `none` — the unaided eye.
+   */
+  starOptics?: StarOpticsProfile;
 }
 
 export type ToneMappingName = "none" | "agx" | "aces" | "reinhard" | "cineon";
@@ -87,12 +116,18 @@ export type ToneMappingName = "none" | "agx" | "aces" | "reinhard" | "cineon";
  * from `(presetBase, overrides, deviceSignals)` by `resolveEffectiveGraphics`.
  */
 export interface EffectiveGraphics {
-  // Rendering (byte-match qualityProfile RESOLVED_PROFILES numerics)
+  // Rendering (byte-match qualityProfile RESOLVED_PROFILES numerics).
+  // shadowMapSize / environmentResolution are tier-only (not user
+  // overridable) — see resolver.ts's GraphicsOverrides JSDoc trail for
+  // why the Onda 1.1 removal left them here: SceneLighting's
+  // SmartSunLight and the Environment cubemap still consume them, they
+  // just no longer take a DisplayPanel override.
   resolutionScale: number;
   antialias: boolean;
   shadowMapSize: 1024 | 2048 | 4096;
   environmentResolution: 64 | 128 | 256;
   bloomEnabled: boolean;
+  lightGlowEnabled: boolean;
   vfxHdrGain: number;
   // Post-process override layer (multiplicative / additive over visualPreset)
   bloomIntensityMul: number;
@@ -104,9 +139,8 @@ export interface EffectiveGraphics {
   brightnessDelta: number;
   ambientIntensityMul: number;
   sunIntensityMul: number;
-  shadowIntensityMul: number;
-  envMapIntensityMul: number;
   lensFlareIntensityMul: number;
+  starOptics: StarOpticsProfile;
 }
 
 /**
@@ -125,18 +159,27 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 4096,
     environmentResolution: 256,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 4.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    // AgX is now the default display transform. Atlas's EffectComposer runs
+    // on a HalfFloat target end-to-end (see PostProcessingPipeline.tsx:167),
+    // so without a filmic operator every genuinely-HDR pixel — Sun disk,
+    // sun-glint, lit terminator — hard-clips to flat white. AgX preserves
+    // hue through the shoulder and gives highlights shape, which is exactly
+    // the 2-magnitude grey range the starfield black-point note in
+    // starfieldShaderMath.ts was fighting. User can switch to ACES / Reinhard
+    // / Cineon / None from the Display panel; the override composes cleanly.
+    // See tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   high: {
     resolutionScale: 1.75,
@@ -144,18 +187,18 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 4096,
     environmentResolution: 256,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 3.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   medium: {
     resolutionScale: 1.5,
@@ -163,18 +206,18 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 2048,
     environmentResolution: 128,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 2.5,
     bloomIntensityMul: 0.75,
     bloomIntensity: undefined,
-    toneMapping: "none",
+    toneMapping: "agx",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
   low: {
     resolutionScale: 1,
@@ -182,18 +225,29 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 1024,
     environmentResolution: 64,
     bloomEnabled: false,
+    // Moot in practice: Scene.tsx unmounts the whole EffectComposer (and
+    // therefore LightGlowSlot) on this tier regardless of this value —
+    // kept `true` for consistency with the other tiers rather than
+    // carrying a value nothing reads.
+    lightGlowEnabled: true,
     vfxHdrGain: 1.0,
     bloomIntensityMul: 0,
     bloomIntensity: undefined,
+    // Constrained tier keeps `none`: Scene.tsx unmounts the entire
+    // EffectComposer when name === "constrained" (see Scene.tsx:522),
+    // so no ToneMapping pass ever runs here — making the field a no-op
+    // rather than a misleading default. Also preserves strict Gaia
+    // parity (config.yaml: bloom.intensity 0, tonemapping NONE) as the
+    // honest floor of the adaptive ladder, per
+    // tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
     toneMapping: "none",
     saturationMul: 1,
     contrastDelta: 0,
     brightnessDelta: 0,
     ambientIntensityMul: 1,
     sunIntensityMul: 1,
-    shadowIntensityMul: 1,
-    envMapIntensityMul: 1,
     lensFlareIntensityMul: 1,
+    starOptics: "none",
   },
 };
 
@@ -246,19 +300,15 @@ export const mapPresetToTier = (
 };
 
 /**
- * Auto-resolve a preset from device signals using the same scoring
- * heuristic that `qualityProfile.ts:resolveQualityProfile` applies in
- * `"auto"` mode. Keeps behavior identical when a user opts into Auto.
+ * Auto-resolve a preset from device signals. Delegates to
+ * `resolveQualityTierFromSignals` rather than repeating the threshold
+ * ladder, so the score cutoffs and the GPU ceiling live in exactly one
+ * place — this is the only auto path with runtime consumers.
  */
 export const autoResolvePreset = (
   signals: DeviceSignals
-): Exclude<GraphicsPresetName, "custom"> => {
-  const score = calculateQualityScore(signals);
-  if (score >= 4) return "ultra";
-  if (score >= 2) return "high";
-  if (score >= -1) return "medium";
-  return "low";
-};
+): Exclude<GraphicsPresetName, "custom"> =>
+  mapTierToPreset(resolveQualityTierFromSignals(signals));
 
 /**
  * Core resolver. Given the persisted state and live device signals,
@@ -299,10 +349,15 @@ export const resolveEffectiveGraphics = (
   return {
     resolutionScale: ov.resolutionScale ?? base.resolutionScale,
     antialias: ov.antialias ?? base.antialias,
-    shadowMapSize: ov.shadowMapSize ?? base.shadowMapSize,
-    environmentResolution:
-      ov.environmentResolution ?? base.environmentResolution,
+    // Onda 1.1: shadowMapSize / environmentResolution are no longer
+    // user-overridable (the DisplayPanel controls drove an inert
+    // SmartSunLight shadow map and a cubemap whose intensity is force-
+    // zeroed by every preset — see visualPresets.ts's envMapIntensity
+    // JSDoc). Tier value only.
+    shadowMapSize: base.shadowMapSize,
+    environmentResolution: base.environmentResolution,
     bloomEnabled: ov.bloomEnabled ?? base.bloomEnabled,
+    lightGlowEnabled: ov.lightGlowEnabled ?? base.lightGlowEnabled,
     vfxHdrGain: ov.vfxHdrGain ?? base.vfxHdrGain,
     bloomIntensityMul: base.bloomIntensityMul * (ov.bloomIntensityMul ?? 1),
     bloomIntensity: ov.bloomIntensity,
@@ -314,10 +369,9 @@ export const resolveEffectiveGraphics = (
     ambientIntensityMul:
       base.ambientIntensityMul * (ov.ambientIntensityMul ?? 1),
     sunIntensityMul: base.sunIntensityMul * (ov.sunIntensityMul ?? 1),
-    shadowIntensityMul: base.shadowIntensityMul * (ov.shadowIntensityMul ?? 1),
-    envMapIntensityMul: base.envMapIntensityMul * (ov.envMapIntensityMul ?? 1),
     lensFlareIntensityMul:
       base.lensFlareIntensityMul * (ov.lensFlareIntensityMul ?? 1),
+    starOptics: ov.starOptics ?? base.starOptics,
   };
 };
 
@@ -332,12 +386,22 @@ export const resolveEffectiveGraphics = (
  * `effective` (caller provides it since `EffectiveGraphics` itself is
  * name-less after the merge).
  */
+const COMPOSER_MULTISAMPLING: Record<ResolvedQualityName, number> = {
+  ultra: 4,
+  high: 2,
+  balanced: 0,
+  constrained: 0,
+};
+
 export const projectToLegacyShape = (
   effective: EffectiveGraphics,
   presetName: Exclude<GraphicsPresetName, "custom">
 ): ResolvedQualityProfile => ({
   name: mapPresetToTier(presetName),
   antialias: effective.antialias,
+  // Derived from the tier rather than carried on EffectiveGraphics: composer
+  // MSAA is a VRAM budget decision, not a user-facing graphics slider.
+  composerMultisampling: COMPOSER_MULTISAMPLING[mapPresetToTier(presetName)],
   dprMax: effective.resolutionScale,
   shadowMapSize: effective.shadowMapSize,
   environmentResolution: effective.environmentResolution,

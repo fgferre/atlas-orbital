@@ -80,8 +80,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
         </p>
         <ul className="space-y-1">
           <li>
-            • View — bodies, guides, starfield ({STARFIELD_SOURCE_LABELS.hyg}/
-            {STARFIELD_SOURCE_LABELS.nasa}), and scale mode
+            • View — bodies, guides, starfield ({STARFIELD_SOURCE_LABELS.hyg}),
+            and scale mode
           </li>
           <li>• Display — graphics quality and per-feature tuning</li>
           <li>• Access — motion and UI scale</li>
@@ -120,10 +120,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     content: (
       <ul className="space-y-1">
         <li>• Press Ctrl+Shift+T to Replay Tutorial</li>
-        <li>
-          • Switch Starfield Source between {STARFIELD_SOURCE_LABELS.hyg} and{" "}
-          {STARFIELD_SOURCE_LABELS.nasa} catalogs
-        </li>
+        <li>• Hover a star to read its catalog entry; click to fly to it</li>
       </ul>
     ),
     target: null,

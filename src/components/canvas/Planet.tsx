@@ -61,6 +61,8 @@ import {
   computeDynamicAtmosphereUniforms,
   resolveAtmosphereDynamicConfig,
 } from "./shaders/atmosphereDynamics";
+import { SOLAR_IRRADIANCE_UNIFORM } from "./shaders/solarIrradiancePatch";
+import { useBodySunlightScalar } from "./planet/useBodySunlightScalar";
 
 const ORBIT_POINTS_CACHE = new Map<string, THREE.Vector3[]>();
 const MAX_ORBIT_CACHE_ENTRIES = 256;
@@ -171,6 +173,14 @@ const PlanetVisual = ({
     focusId,
     cameraInterest,
   });
+
+  /**
+   * Onda 2.1 — the per-body fused sunlight scalar
+   * (`irradiance × assistGain`, see `lib/graphics/solarIrradiance.ts`),
+   * behind the shared 1 s bucket cache. `PlanetModel.tsx` reads the same
+   * hook for the four model-path bodies.
+   */
+  const readSunlightScalar = useBodySunlightScalar(body.id);
 
   // The pole is NOT memoised. IAU poles are functions of time — Earth's α₀
   // moves 0.641°/century, Mars's δ₀ carries a 1.6° periodic term — so freezing
@@ -443,6 +453,26 @@ const PlanetVisual = ({
           uActive.value = active;
         }
       }
+    }
+
+    // 3. Solar irradiance — Onda 2.1. ONE uniform per material carrying
+    // `irradiance(ephemeris AU) × assistGain`, multiplying the DIRECT
+    // sunlight only (`solarIrradiancePatch.ts` wraps `RE_Direct`; ambient
+    // and every emissive are deliberately outside it). A per-frame uniform
+    // write is the safe half of the pipeline: the material is never
+    // recreated, unlike the `sunEmissive` / `nightLightIntensity` family
+    // which are `useMemo` deps and would rebuild the material every tick.
+    //
+    // The uniform lookup comes FIRST so the Sun — a `MeshBasicMaterial`
+    // with no shader, and the one body whose heliocentric distance is
+    // exactly zero — never reaches the resolver.
+    const irradianceUniform = (
+      planetMaterial?.userData?.shader as
+        | { uniforms: { [key: string]: THREE.IUniform } }
+        | undefined
+    )?.uniforms?.[SOLAR_IRRADIANCE_UNIFORM];
+    if (irradianceUniform) {
+      irradianceUniform.value = readSunlightScalar();
     }
   });
   /* eslint-enable react-hooks/immutability */

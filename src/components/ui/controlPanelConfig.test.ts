@@ -13,7 +13,6 @@ import {
   RIGHT_CONTROL_BUTTONS,
   RIGHT_CONTROL_TRIGGER_SELECTOR,
   SCENE_SCALE_OPTIONS,
-  SCENE_SOURCE_OPTIONS,
   SEARCH_QUICK_TARGETS,
   resolveRightControlPanelExit,
   resolveRightControlPanelRequest,
@@ -42,11 +41,7 @@ describe("controlPanelConfig", () => {
     ]);
   });
 
-  it("keeps both starfield sources and scale modes visible", () => {
-    expect(SCENE_SOURCE_OPTIONS.map((option) => option.label)).toEqual([
-      "HYG v4.2",
-      "NASA Eyes",
-    ]);
+  it("keeps both scale modes visible", () => {
     expect(SCENE_SCALE_OPTIONS.map((option) => option.label)).toEqual([
       "Didactic",
       "Realistic",

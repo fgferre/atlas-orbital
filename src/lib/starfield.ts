@@ -1,21 +1,23 @@
 import { parseHygBinaryBuffer, type HygCatalogData } from "../utils/hygBinary";
-import { parseNASAStarFile, type NASAStar } from "../utils/nasaStarParser";
 import type { ResolvedQualityName } from "./qualityProfile";
-import { telemetry } from "./telemetry";
 
-export type { NASAStar } from "../utils/nasaStarParser";
 export type { HygCatalogData } from "../utils/hygBinary";
 
 /**
  * Available starfield providers.
  *
- * - `hyg`: the primary preset, backed by the Astronexus HYG v4.2 database
+ * - `hyg`: the only preset, backed by the Astronexus HYG v4.2 database
  *   delivered as the binary assets under `public/data/hyg-stars/`. Carries
  *   real B-V colour, per-magnitude size and proper motion.
- * - `nasa`: the NASA "Eyes on the Solar System" asset family, kept around
- *   as a visual comparison reference.
+ *
+ * The NASA "Eyes on the Solar System" comparison preset was removed
+ * 2026-07-28 — the HYG renderer had long superseded it and the second
+ * catalog was dead weight in the loader, the UI and the credits. The type
+ * stays a (one-member) union because the provider-state plumbing
+ * (`useStarfieldCatalog`, `loaderStages`, `store.starfieldProviderStates`)
+ * is keyed by it and is genuinely provider-agnostic.
  */
-export type StarfieldSource = "hyg" | "nasa";
+export type StarfieldSource = "hyg";
 export type StarfieldLoadStatus = "idle" | "loading" | "ready" | "error";
 
 export interface StarfieldSourceMetadata {
@@ -43,19 +45,10 @@ export const STARFIELD_SOURCE_METADATA: Record<
     creditsLink: "https://www.astronexus.com/hyg",
     loadErrorMessage: "Failed to load HYG v4.2 catalog",
   },
-  nasa: {
-    label: "NASA Eyes",
-    creditsTitle: "NASA Eyes on the Solar System",
-    creditsDescription:
-      "Alternate starfield mode backed by the NASA Eyes asset split in public/data/nasa-stars, also used as a visual comparison reference.",
-    creditsLink: "https://eyes.nasa.gov/",
-    loadErrorMessage: "Failed to load NASA Eyes catalog",
-  },
 };
 
 export const STARFIELD_SOURCE_LABELS: Record<StarfieldSource, string> = {
   hyg: STARFIELD_SOURCE_METADATA.hyg.label,
-  nasa: STARFIELD_SOURCE_METADATA.nasa.label,
 };
 
 export const getStarfieldLoadErrorMessage = (
@@ -69,70 +62,7 @@ export const getStarfieldLoadErrorMessage = (
   return error.message;
 };
 
-// --- NASA catalog loading (unchanged from the NASA Eyes binary family) -----
-
-const NASA_STAR_FILES = [
-  "galaxies.0.bin",
-  "stars.0.bin",
-  "stars.1.bin",
-  "stars.2.bin",
-  "stars.3.bin",
-  "stars.4.bin",
-  "stars.5.bin",
-] as const;
-
-const getNASAStarFilePath = (filename: string) =>
-  `${import.meta.env.BASE_URL || "/"}data/nasa-stars/${filename}`;
-
-let nasaStarCatalogCache: NASAStar[] | null = null;
-let nasaStarCatalogPromise: Promise<NASAStar[]> | null = null;
-
-export const getCachedNASAStarCatalog = () => nasaStarCatalogCache;
-
-export const loadNASAStarCatalog = async (): Promise<NASAStar[]> => {
-  if (nasaStarCatalogCache) {
-    return nasaStarCatalogCache;
-  }
-
-  if (!nasaStarCatalogPromise) {
-    nasaStarCatalogPromise = Promise.allSettled(
-      NASA_STAR_FILES.map((file) =>
-        parseNASAStarFile(getNASAStarFilePath(file))
-      )
-    )
-      .then((results) => {
-        const allStars: NASAStar[] = [];
-
-        for (const result of results) {
-          if (result.status === "fulfilled") {
-            allStars.push(...result.value);
-            continue;
-          }
-
-          telemetry.warn("asset", "Failed to load NASA star file", {
-            reason: result.reason,
-          });
-        }
-
-        if (allStars.length === 0) {
-          throw new Error(
-            "No NASA star data loaded. Run: npm run download:nasa-stars"
-          );
-        }
-
-        nasaStarCatalogCache = allStars;
-        return allStars;
-      })
-      .catch((error: unknown) => {
-        nasaStarCatalogPromise = null;
-        throw error;
-      });
-  }
-
-  return nasaStarCatalogPromise;
-};
-
-// --- HYG catalog loading (new pipeline) -------------------------------------
+// --- HYG catalog loading ----------------------------------------------------
 //
 // The HYG binary ships under `public/data/hyg-stars/` in four LOD tiers. For
 // HYG-B we always fetch the `full` tier; HYG-C will wire tier selection into
@@ -151,23 +81,27 @@ const DEFAULT_HYG_TIER: HygTier = "full";
  * clicks produce a visible density change (the earlier
  * `balanced → high` collapse made Medium and High render identically).
  *
- * Current mapping:
- *   constrained → low    (~8 KB gzip,   ~500 stars — mobile / 3G)
- *   balanced    → medium (~250 KB,  ~10 000 stars — gives Medium a
+ * Current mapping (gzip sizes measured from the on-disk v3 binaries
+ * 2026-07-28 — the pre-v3 figures this docstring used to carry were
+ * stale by up to 1.8×, which matters because they are exactly the
+ * numbers a mobile / 3G tier decision reads):
+ *   constrained → low    (19.5 KB gzip,     500 stars — mobile / 3G)
+ *   balanced    → medium (304 KB gzip,   10 000 stars — gives Medium a
  *                         distinct density from High; keeps load
  *                         cost moderate for mid-range hardware)
- *   high        → high   (~810 KB,   ~50 000 stars — broadband
+ *   high        → high   (1.42 MB gzip,  50 000 stars — broadband
  *                         default; recovers tycho2-era density
  *                         without forcing the 109 k decode cost)
- *   ultra       → full   (~1.77 MB, ~109 400 stars — opt-in ceiling;
+ *   ultra       → full   (3.04 MB gzip, 109 400 stars — opt-in ceiling;
  *                         every surviving HYG row after the offline
  *                         filter removes the Sun / invalid rows /
  *                         distance-sentinel entries)
+ * The named-star sidecar (`hyg-v1.names.json`, 340 KB) is fetched
+ * separately and only when hover labels are first used.
  *
- * Perceived density is driven partly by the shader transfer curve
- * (see Starfield.tsx) — the graduated faint-star lift (§L13) pairs
- * with this tier selection to keep the sky looking consistent across
- * presets.
+ * Density is a pure count change: since the θ.2 rewrite every star is
+ * drawn with the same flux-conserving PSF regardless of tier, so a
+ * lower tier removes stars rather than dimming the ones that remain.
  */
 export function hygTierForQuality(name: ResolvedQualityName): HygTier {
   switch (name) {

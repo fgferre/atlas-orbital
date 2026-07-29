@@ -133,6 +133,49 @@ describe("progressive texture ladder", () => {
     ).toEqual([]);
   });
 
+  it("can reach every map a body declares as its canonical", () => {
+    // The 2026-07-27 inventory found four bodies — jupiter, uranus, europa,
+    // titan — whose declared `textures.map` no profile or salience could ever
+    // select. `inferCanonicalTier` reads the tier off the *basename*, so an
+    // untiered name like `jupiter_vgr1_2025.jpg` lands only under the
+    // `canonical` key, and `canonical` appears in no preference order. If the
+    // body also had a manifest 2k variant, `pickVariant` matched that and
+    // returned before the canonical was ever considered. Jupiter's declared
+    // 7200x3600 map was shadowed by a 2048x1024 one, on ultra, on focus.
+    //
+    // Nothing caught it: the sibling test above only asserts that requestable
+    // files exist, and `availablePaths` counts a path as reachable that the
+    // loader never asks for — `usePlanetAssets` fetches `selectedPath` alone.
+    // So this asserts the direction that actually matters: declared means
+    // reachable.
+    const unreachable: string[] = [];
+
+    for (const body of SOLAR_SYSTEM_BODIES) {
+      const canonical = body.textures?.map;
+      if (!canonical) continue;
+
+      const selectable = PROFILES.some((profile) =>
+        SALIENCES.some(
+          (salience) =>
+            resolveTextureRequest(
+              body,
+              "map",
+              profile,
+              salience,
+              TEXTURE_VARIANT_MANIFEST
+            ).selectedPath === canonical
+        )
+      );
+
+      if (!selectable) unreachable.push(`${body.id} -> ${canonical}`);
+    }
+
+    expect(
+      unreachable,
+      `these bodies declare a canonical map that no (profile, salience) can select, so the declared asset never renders and a lesser tier is served in its place:\n  ${unreachable.join("\n  ")}`
+    ).toEqual([]);
+  });
+
   it("serves a small tier in the overview band for every profile", () => {
     // Guards the VRAM fix itself, not just file existence: if this regresses,
     // ultra allocates full-res for every body at boot again.
@@ -161,4 +204,93 @@ describe("progressive texture ladder", () => {
     );
     expect(focused.selectedPath).toContain("8k_earth_daymap");
   });
+});
+
+describe("texture VRAM ceiling", () => {
+  // The 2026-07-28 VRAM audit found the overview band — the tier every body
+  // sits in when nothing is focused — had no light rung for eris (4096x2048,
+  // 42.7 MB decoded) or haumea. That is 133% of the entire 32 MB `constrained`
+  // texture budget, for one dwarf planet nobody is looking at, on the weakest
+  // hardware we ship to.
+  //
+  // The rule is deliberately keyed on MEASURED PIXELS, not on the `2k_`/`8k_`
+  // filename token. This repo has files whose names understate their real
+  // size — `4k_mimas.jpg` is 6356x3178 where the name claims 4096 wide — so a
+  // name-based ceiling would pass while the GPU allocates several times the
+  // budget.
+  const MAX_OVERVIEW_PIXELS = 2048 * 1024;
+
+  it("gives every body a rung small enough for the overview band", async () => {
+    const sharp = (await import("sharp")).default;
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve("public/textures");
+
+    const oversized: string[] = [];
+
+    for (const body of SOLAR_SYSTEM_BODIES) {
+      for (const profile of PROFILES) {
+        const selected = resolveTextureRequest(
+          body,
+          "map",
+          profile,
+          0.5, // overview: below OVERVIEW_SALIENCE_THRESHOLD
+          TEXTURE_VARIANT_MANIFEST
+        ).selectedPath;
+        if (!selected) continue;
+
+        const file = path.join(dir, selected.split("/").pop()!);
+        if (!fs.existsSync(file)) continue;
+
+        const { width = 0, height = 0 } = await sharp(file).metadata();
+        const pixels = width * height;
+        if (pixels > MAX_OVERVIEW_PIXELS) {
+          oversized.push(
+            `${body.id}/${profile}: ${selected.split("/").pop()} is ${width}x${height} = ${(pixels / 1e6).toFixed(1)} Mpx (${((pixels * 4 * 4) / 3 / 1048576).toFixed(1)} MB decoded)`
+          );
+        }
+      }
+    }
+
+    expect(
+      oversized,
+      `these bodies have no rung light enough for the overview band, so an unfocused body allocates full-resolution VRAM:\n  ${oversized.join("\n  ")}`
+    ).toEqual([]);
+  }, 120_000);
+
+  it("never ships a map above the GPU edge limit", async () => {
+    // Above MAX_TEXTURE_SIZE three.js does NOT fail the upload — r181's
+    // `resizeImage` redraws the HTMLImageElement through a 2D canvas at the
+    // GPU limit and logs a warning. The cost is still real and worse than it
+    // looks: the full plate is decoded at full size first, then a synchronous
+    // main-thread canvas resize throws most of it away. And the clamp only
+    // helps below the limit — on a 16384-max GPU `4k_enceladus.jpg` was under
+    // the ceiling, so it really did allocate 647.8 MB of VRAM. That hardware
+    // split is why the 2026-07-28 blowup reproduced on some desktops and not
+    // others. 8192 is what every other map on disk already respects.
+    const MAX_EDGE = 8192;
+    const sharp = (await import("sharp")).default;
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve("public/textures");
+
+    const oversized: string[] = [];
+
+    for (const url of enumerateRequestablePaths()) {
+      const fileName = url.split("/").pop()!;
+      const file = path.join(dir, fileName);
+      if (!fs.existsSync(file)) continue;
+
+      // Dispatch on content, not extension: `8k_pluto.jpg` is really a PNG.
+      const { width = 0, height = 0 } = await sharp(file).metadata();
+      if (Math.max(width, height) > MAX_EDGE) {
+        oversized.push(`${fileName} is ${width}x${height}`);
+      }
+    }
+
+    expect(
+      oversized,
+      `these maps exceed the MAX_TEXTURE_SIZE of many GPUs, so they are decoded at full size and then downscaled on the main thread — and on a GPU whose limit they fit under, allocated in full:\n  ${oversized.join("\n  ")}`
+    ).toEqual([]);
+  }, 120_000);
 });

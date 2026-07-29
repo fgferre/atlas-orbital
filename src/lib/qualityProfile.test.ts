@@ -108,6 +108,58 @@ describe("qualityProfile", () => {
     );
   });
 
+  it("lets a hardware fact lower the auto tier, but never raise it", () => {
+    // Signals that score >= 4 on their own, so any downgrade below is the
+    // GPU ceiling doing it and not the score.
+    const strongDesktop = {
+      deviceMemory: 16,
+      hardwareConcurrency: 12,
+      effectiveType: "4g",
+      viewportWidth: 1600,
+      viewportHeight: 1200,
+      devicePixelRatio: 2,
+    };
+
+    // A renderer that names itself software cannot be talked out of it by
+    // a big CPU/RAM total — which an additive score would have allowed.
+    expect(
+      resolveQualityProfile("auto", {
+        ...strongDesktop,
+        softwareRenderer: true,
+      }).name
+    ).toBe("constrained");
+
+    // A 4096-limit GPU fits `high`'s 4096-wide texture promotion exactly
+    // (the "4k" tier's canonical files, e.g. `4k_enceladus.jpg`, are
+    // 4096x2048 on disk) — only `ultra`'s 8192-wide promotion is out of
+    // reach, so the ceiling should land on `high`, not skip past it.
+    expect(
+      resolveQualityProfile("auto", {
+        ...strongDesktop,
+        maxTextureSize: 4096,
+      }).name
+    ).toBe("high");
+
+    // Below 4096 even `high`'s promotion is downscaled by the driver
+    // anyway, so it is paid for and thrown away.
+    expect(
+      resolveQualityProfile("auto", {
+        ...strongDesktop,
+        maxTextureSize: 2048,
+      }).name
+    ).toBe("balanced");
+
+    // Unreadable renderer string: fails open. We did not measure it, so we
+    // do not invent a downgrade.
+    expect(
+      resolveQualityProfile("auto", {
+        ...strongDesktop,
+        softwareRenderer: undefined,
+        maxTextureSize: 16384,
+      }).name
+    ).toBe("ultra");
+  });
+
   it("returns manual profiles verbatim", () => {
     expect(resolveQualityProfile("high")).toEqual(
       expect.objectContaining({

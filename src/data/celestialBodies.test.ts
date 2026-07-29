@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SOLAR_SYSTEM_BODIES } from "./celestialBodies";
-import { getVisualAssetByBodyPath } from "./assetManifest";
+import { getVisualAssetByBodyPath, getVisualAssetById } from "./assetManifest";
 import {
   AstroPhysics,
   KM_TO_3D_UNITS,
@@ -191,6 +191,27 @@ describe("non-measured visual assets declare provenance", () => {
       }
     }
   );
+
+  // The regex above reads the *filename*, and that is exactly the signal the
+  // 2026-07-27 texture inventory found to be worthless. A DeviantArt upload
+  // renamed `2k_io.jpg` passes it clean; six bodies were rendering files from
+  // one undocumented 1264x632 set with no caveat shown to anyone. So this
+  // asks the manifest instead: whatever we ship, if its licence is not
+  // documented, the user has to be told — either it gets real provenance or
+  // it gets labelled a placeholder. Those are the only two honest states.
+  it.each(CATALOG_CASES)("%s discloses an undocumented map", (id, body) => {
+    const map = body.textures?.map;
+    if (!map) return;
+
+    const entry = getVisualAssetByBodyPath(id, map, "texture");
+    if (!entry || entry.license !== "not documented in repo") return;
+
+    expect(
+      body.visualProvenance,
+      `${id} renders ${entry.filePath}, whose licence is "not documented in repo", but shows the user no visualProvenance. Either resolve the provenance or declare it a placeholder.`
+    ).toBeDefined();
+    expect(body.visualProvenance!.fidelity).not.toBe("measured");
+  });
 });
 
 describe("minor-body visual provenance", () => {
@@ -328,10 +349,19 @@ describe("minor-body visual provenance", () => {
     expect(getBody("hygiea").textures?.map).toContain(
       "hygiea_vlt_2017_2018_map"
     );
-    expect(getBody("titan").textures?.map).toContain(
+    // Titan and Europa deliberately do NOT declare the USGS mosaics here.
+    // They did from 2026-04-06 to 2026-07-27, and the app never once
+    // rendered them — the tier ladder shadowed the untiered canonical, so
+    // this line asserted an intent the runtime did not honour. The mosaics
+    // are also not droppable as-is (monochrome; Europa has a solid no-data
+    // gore at the south pole), so `textures.map` now names what actually
+    // renders and the mosaics are `*-mosaic-reference` entries.
+    expect(getBody("titan").textures?.map).toContain("2k_titan");
+    expect(getBody("europa").textures?.map).toContain("2k_europa");
+    expect(getVisualAssetById("titan-mosaic-reference")?.filePath).toContain(
       "titan_cassini_iss_global_mosaic_4km"
     );
-    expect(getBody("europa").textures?.map).toContain(
+    expect(getVisualAssetById("europa-mosaic-reference")?.filePath).toContain(
       "europa_voyager_galileo_global_mosaic_500m"
     );
     expect(getBody("quaoar").shapeScale).toEqual([1.18, 0.99, 0.86]);

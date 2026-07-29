@@ -75,12 +75,26 @@ describe("getPresetForContext — system region by heliocentric AU", () => {
   });
 });
 
-describe("VISUAL_PRESETS — Gaia lighting/postprocess defaults", () => {
-  it("keeps ambient, central sun, and bloom defaults aligned with Gaia config", () => {
+describe("VISUAL_PRESETS — lighting/postprocess defaults", () => {
+  it("ambient stays Gaia 0 and central sun stays 1 across all contexts", () => {
     for (const preset of Object.values(VISUAL_PRESETS)) {
       expect(preset.ambientIntensity).toBe(0);
       expect(preset.sunIntensity).toBe(1);
-      expect(preset.bloomIntensity).toBe(0);
     }
+  });
+
+  // 1b: bloomIntensity is no longer uniformly 0 — each context now
+  // carries a tuned selective-bloom base that the tier multiplier
+  // compounds (see visualPresets.ts comment + the sweep §129 note).
+  // The per-context values are the Atlas-opinion defaults; users can
+  // override via the Display panel Bloom Intensity slider, and the
+  // `shouldMountBloom` gate in Scene.tsx falls through to this base
+  // when no override is set.
+  it("bloomIntensity is non-zero and per-context tuned", () => {
+    expect(VISUAL_PRESETS.DEEP_SPACE.bloomIntensity).toBe(0.35);
+    expect(VISUAL_PRESETS.PLANET_ORBIT.bloomIntensity).toBe(0.3);
+    expect(VISUAL_PRESETS.CLOSE_FLYBY.bloomIntensity).toBe(0.15);
+    expect(VISUAL_PRESETS.INNER_SYSTEM.bloomIntensity).toBe(0.3);
+    expect(VISUAL_PRESETS.OUTER_SYSTEM.bloomIntensity).toBe(0.3);
   });
 });

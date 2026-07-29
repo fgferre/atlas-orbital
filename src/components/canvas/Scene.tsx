@@ -47,6 +47,11 @@ import { GridRecursive } from "./GridRecursive";
 import { resolveVisualRadiusWorld } from "./useSunScreenProjection";
 
 import { useStore } from "../../store";
+import { VISUAL_PRESETS } from "../../config/visualPresets";
+import { ExposureBridge } from "./scene/ExposureBridge";
+import { EyeAdaptationBridge } from "./scene/EyeAdaptationBridge";
+import { ZodiacalLightSkybox } from "./scene/ZodiacalLightSkybox";
+import { MilkyWaySkybox } from "./scene/MilkyWaySkybox";
 
 // Lazy: procedural shader module only loads when sun render mode is "procedural".
 // Photo-mode users (majority) never download the shader chunk.
@@ -74,6 +79,7 @@ import {
   addZoomImpulse,
   consumeZoomVelocity,
 } from "../../lib/camera/zoomPhysics";
+import type { ToneMappingEffect } from "postprocessing";
 import {
   PostProcessingPipeline,
   type BloomController,
@@ -432,6 +438,12 @@ export const Scene = () => {
   const sunRenderMode = useStore((state) => state.sunRenderMode);
   const showEclipticGrid = useStore((state) => state.showEclipticGrid);
   const scaleMode = useStore((state) => state.scaleMode);
+  // 1b: read the current visual context (DEEP_SPACE / PLANET_ORBIT / …)
+  // so the bloom-mount gate can fall back to the visual preset's
+  // `bloomIntensity` base when the user has not set an explicit
+  // `graphicsOverrides.bloomIntensity`. See the gate call below and
+  // `src/lib/graphics/bloomGate.ts` for the full rationale.
+  const visualPreset = useStore((state) => state.visualPreset);
   const qualityProfile = useQualityProfile(qualityMode);
   const effectiveGraphics = useEffectiveGraphics();
   // Wave α P1.1 fix: pull graphicsOverrides from the slice so the
@@ -444,7 +456,14 @@ export const Scene = () => {
     () => resolveSunRenderMode(sunRenderMode, qualityProfile.name),
     [qualityProfile.name, sunRenderMode]
   );
-  const [rendererAntialias] = useState(() => qualityProfile.antialias);
+  // When `PostProcessingPipeline` is mounted it owns antialiasing: the scene
+  // is drawn into the composer's own multisampled render target and reaches the
+  // default framebuffer as a fullscreen quad, which has no geometry edges for
+  // context MSAA to resolve. Asking for both allocates a second full-resolution
+  // multisampled backbuffer that provably cannot change a pixel.
+  const [rendererAntialias] = useState(
+    () => qualityProfile.antialias && qualityProfile.name === "constrained"
+  );
   const canvasDpr = useMemo(
     () => [1, qualityProfile.dprMax] as [number, number],
     [qualityProfile.dprMax]
@@ -527,6 +546,9 @@ export const Scene = () => {
         console.info("[atlas] WebGL renderer info:", {
           vendor,
           renderer,
+          // Beside the hardware facts that produced it, so a silent auto
+          // downgrade explains itself in a user-pasted console.
+          qualityTier: qualityProfile.name,
           maxTextureSize: webglCtx.getParameter(webglCtx.MAX_TEXTURE_SIZE),
           maxCubeMapSize: webglCtx.getParameter(
             webglCtx.MAX_CUBE_MAP_TEXTURE_SIZE
@@ -581,12 +603,17 @@ export const Scene = () => {
         import.meta.hot.dispose(detachContextLossHandlers);
       }
     },
-    [setContextLost]
+    // `qualityProfile.name` is read by the diagnostic above. R3F invokes
+    // `onCreated` once per Canvas mount and not again on prop identity
+    // change, so widening the deps costs nothing at runtime — it just
+    // keeps the compiler's inferred set and the declared set in agreement.
+    [qualityProfile.name, setContextLost]
   );
 
   const bloomRef = useRef<BloomController | null>(null);
   const hueSatRef = useRef<HueSaturationController | null>(null);
   const brightnessRef = useRef<BrightnessContrastController | null>(null);
+  const toneMappingRef = useRef<ToneMappingEffect | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const sunLightRef = useRef<THREE.PointLight | null>(null);
   const smartSunLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -718,6 +745,34 @@ export const Scene = () => {
           bloomIntensityMultiplier={qualityProfile.bloomIntensityMultiplier}
           userOverrides={graphicsOverrides}
         />
+        {/* 1c — exposure registry bridge. Pushes the central
+            `sceneExposure` scalar into `gl.toneMappingExposure` per
+            frame so the AgX EffectPass scales its curve consistently.
+            No-op while registry stays at default 1.0; 1d
+            (eye-adaptation) and a future photometric-EV readout will
+            write to it. See `src/lib/graphics/exposureRegistry.ts`. */}
+        <ExposureBridge />
+        {/* 1d — eye-adaptation. Drives the SAME `sceneExposure` scalar
+            `ExposureBridge` carries into `gl.toneMappingExposure`, using
+            the composer's own adaptive-luminance downsample as the
+            input signal. `toneMappingRef` is `null` (no-op) whenever no
+            ToneMapping pass is mounted — see EyeAdaptationBridge.tsx for
+            the full empirical write-up. */}
+        <EyeAdaptationBridge toneMappingRef={toneMappingRef} />
+        {/* #3 — zodiacal light. Leinert et al. (1998) tabulated band,
+            analytically camera-distance-modulated via the Dumont
+            R^-2.5 fan-cloud density law so flying outward dims it and
+            flying inward brightens it. The #3-of-the-visual-upgrade
+            item from the user's report. See
+            `src/lib/zodiacalLightLut.ts` + `ZodiacalLightSkybox.tsx`. */}
+        <ZodiacalLightSkybox />
+        {/* #4 -- Milky Way panorama. NASA SVS Deep Star Maps 2020
+            `milkyway_2020` diffuse layer (Gaia DR2 stars below the HYG
+            catalogue cut -- no double-counting against the star
+            catalogue), camera-centered and additively composited
+            between the zodiacal band and the resolved star catalogue.
+            See `src/lib/milkyWayOrientation.ts` + `MilkyWaySkybox.tsx`. */}
+        <MilkyWaySkybox />
         <color attach="background" args={["#000000"]} />
         {showEclipticGrid && <GridRecursive />}
         {showEclipticGrid && <GridDecadeLabel />}
@@ -825,11 +880,25 @@ export const Scene = () => {
             bloomRef={bloomRef}
             hueSatRef={hueSatRef}
             brightnessRef={brightnessRef}
+            toneMappingRef={toneMappingRef}
+            lightGlowMounted={effectiveGraphics.lightGlowEnabled}
             bloomMounted={shouldMountBloom(
               qualityProfile.bloomEnabled,
-              effectiveGraphics.bloomIntensity
+              // 1b: when the user has set an explicit bloomIntensity
+              // override, that is authoritative (including 0 → unmount).
+              // When they have NOT (resolver yields `undefined`), fall
+              // back to the current visual context's `bloomIntensity`
+              // base — which is now non-zero (0.35 / 0.3 / 0.15 / 0.3 /
+              // 0.3) so the Bloom effect mounts on composer tiers by
+              // default instead of being permanently inert. The `??`
+              // only falls through on `undefined`, so a 0 override
+              // correctly unmounts (saving the 5-mip pass when the user
+              // explicitly asks for no bloom).
+              effectiveGraphics.bloomIntensity ??
+                VISUAL_PRESETS[visualPreset].bloomIntensity
             )}
             toneMapping={effectiveGraphics.toneMapping}
+            composerMultisampling={qualityProfile.composerMultisampling}
           />
         ) : (
           <DirectRenderPass />

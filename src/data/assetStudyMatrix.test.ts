@@ -36,8 +36,20 @@ describe("asset study matrix", () => {
     expect(getAssetStudyRow("uranus")?.candidateAssetIds).toEqual([]);
   });
 
-  it("promotes Europa and Titan after the external sweep", () => {
-    expect(getAssetStudyRow("titan")?.verdict).toBe("substituir");
-    expect(getAssetStudyRow("europa")?.verdict).toBe("substituir");
+  // Was "promotes Europa and Titan after the external sweep". The promotion
+  // was recorded on 2026-04-06 but never reached the runtime, and when the
+  // mosaics were finally rendered on a sphere (2026-07-27) both turned out to
+  // be undroppable as-is: monochrome, and Europa has a solid no-data gore at
+  // the south pole. The row now records the blocker instead of a promotion
+  // that did not happen.
+  it("holds Europa and Titan mosaics as alternatives until they are renderable", () => {
+    expect(getAssetStudyRow("titan")?.verdict).toBe("manter como alternativa");
+    expect(getAssetStudyRow("europa")?.verdict).toBe("manter como alternativa");
+    expect(getAssetStudyRow("titan")?.candidateAssetIds).toEqual([
+      "titan-mosaic-reference",
+    ]);
+    expect(getAssetStudyRow("europa")?.candidateAssetIds).toEqual([
+      "europa-mosaic-reference",
+    ]);
   });
 });

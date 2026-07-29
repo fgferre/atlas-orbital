@@ -28,6 +28,12 @@ import {
   getSurfaceFillLight,
   shouldRenderDirectSurfaceMap,
 } from "../../utils/proceduralSurface";
+import { useBodySunlightScalar } from "./planet/useBodySunlightScalar";
+import {
+  applyPlanetDirectLightCacheKey,
+  applyPlanetDirectLightPatch,
+  SOLAR_IRRADIANCE_UNIFORM,
+} from "./shaders/solarIrradiancePatch";
 
 interface PlanetModelProps {
   body: CelestialBody;
@@ -88,13 +94,100 @@ const releaseGlbSource = (path: string, scene: THREE.Object3D) => {
   }, GLB_SOURCE_IDLE_EVICTION_MS);
 };
 
+/**
+ * Onda 2.2 — install the same direct-light chain the sphere path installs
+ * (`usePlanetMaterials.ts`'s `patchDirectLights`) on a material built here.
+ *
+ * ## Why this file needed its own copy of the call
+ *
+ * The four bodies that render through `PlanetModel` — haumea, vesta, pallas,
+ * hygiea, i.e. every catalog record with a `model` field — build their
+ * materials in this file, not in `usePlanetMaterials`, and until now neither
+ * loader path set `onBeforeCompile` at all. Every per-material lighting
+ * mechanism therefore skipped them: first the Lommel-Seeliger regolith
+ * photometry (documented as a known exclusion in
+ * `regolithPhotometryPatch.ts` since Onda 1.2), then `u_solarIrradiance`
+ * (Onda 2.1). Harmless while the assist default was `"compensated"` and the
+ * fused scalar was 1.0 everywhere — and a glaring artefact the moment it is
+ * not: all four sit in the 30–45 AU belt/TNO range, so they would have
+ * rendered at full 1 AU brightness next to neighbours dimmed to ~1/11.
+ *
+ * ## One rule, not a special case
+ *
+ * `regolith` is read from `body.airlessRegolith` exactly as the sphere path
+ * reads it, so these four join on the same terms as every other body instead
+ * of getting a bespoke irradiance-only carve-out. As of today none of the
+ * four actually carries that flag — the seven that do (mercury, moon,
+ * ganymede, callisto, io, europa, enceladus) all render through the sphere
+ * path — so in practice this installs the irradiance wrapper alone and the
+ * Lommel-Seeliger photometry stays off for them. Wiring it through the flag
+ * rather than hard-coding `false` means the day someone flags Vesta airless
+ * (it is, physically), the photometry follows without a second edit here.
+ *
+ * The GLB path clones its materials before this runs
+ * (`cloneGlbSceneForRuntime`) and the OBJ path constructs fresh ones, so
+ * neither call reaches back into a loader-cached material.
+ */
+const patchModelMaterial = (material: THREE.Material, body: CelestialBody) => {
+  const options = { regolith: !!body.airlessRegolith };
+  material.onBeforeCompile = (shader) => {
+    material.userData.shader = shader;
+    applyPlanetDirectLightPatch(shader, options);
+  };
+  // Same discipline as the sphere path: the regolith flag is read from a
+  // captured variable, so it does NOT appear in `onBeforeCompile`'s source
+  // text — which is three's default program cache key. Without this, two
+  // model materials differing only in that flag would share one program.
+  applyPlanetDirectLightCacheKey(material, options);
+};
+
+/**
+ * Per-frame `u_solarIrradiance` write for the model path.
+ *
+ * Materials are collected at construction time rather than by traversing the
+ * scene graph every frame: the uniform only exists after three compiles the
+ * program, so the read is `material.userData.shader?.uniforms[…]` — the same
+ * idiom `Planet.tsx` uses — and a material that has not compiled yet is
+ * simply skipped until it has. The value itself comes from the shared
+ * 1 s-bucket cache, so this costs one `Map` lookup per material per frame.
+ */
+const useModelSolarIrradiance = (
+  bodyId: string,
+  materials: THREE.Material[]
+) => {
+  const readSunlightScalar = useBodySunlightScalar(bodyId);
+
+  /* eslint-disable react-hooks/immutability --
+   * Same scoped exception `Planet.tsx` carries for the identical write:
+   * `uniform.value = …` mutates a three.js uniform object, which is mutable
+   * by design, from inside `useFrame` — outside React's render, so no render
+   * output depends on it. The rule reads the write as mutating the
+   * `materials` argument; the alternative it suggests (a local copy) would
+   * not reach the GPU. */
+  useFrame(() => {
+    if (materials.length === 0) return;
+    const value = readSunlightScalar();
+    for (const material of materials) {
+      const uniform = (
+        material.userData.shader as
+          | { uniforms?: { [key: string]: THREE.IUniform } }
+          | undefined
+      )?.uniforms?.[SOLAR_IRRADIANCE_UNIFORM];
+      if (uniform) uniform.value = value;
+    }
+  });
+  /* eslint-enable react-hooks/immutability */
+};
+
 // Sub-component for GLB models
 const GLBModel = ({
+  body,
   path,
   scale,
   roughness,
   metalness,
 }: {
+  body: CelestialBody;
   path: string;
   scale?: number;
   roughness?: number;
@@ -106,8 +199,9 @@ const GLBModel = ({
   // rejected by the production CSP (`script-src 'self' blob:`).
   const { scene } = useGLTF(path, false, false);
 
-  const { cloned, normalizationScale } = useMemo(
-    () =>
+  const { cloned, normalizationScale, litMaterials } = useMemo(() => {
+    const collected: THREE.Material[] = [];
+    const { cloned: clonedScene, normalizationScale: normalization } =
       cloneGlbSceneForRuntime(scene, (material) => {
         if (
           material instanceof THREE.MeshStandardMaterial ||
@@ -115,10 +209,18 @@ const GLBModel = ({
         ) {
           if (roughness !== undefined) material.roughness = roughness;
           if (metalness !== undefined) material.metalness = metalness;
+          patchModelMaterial(material, body);
+          collected.push(material);
         }
-      }),
-    [scene, roughness, metalness]
-  );
+      });
+    return {
+      cloned: clonedScene,
+      normalizationScale: normalization,
+      litMaterials: collected,
+    };
+  }, [scene, roughness, metalness, body]);
+
+  useModelSolarIrradiance(body.id, litMaterials);
 
   useEffect(() => {
     retainGlbSource(path, scene);
@@ -181,8 +283,9 @@ const OBJModel = ({
     };
   }, [proceduralTexture]);
 
-  const { cloned, normalizationScale } = useMemo(() => {
+  const { cloned, normalizationScale, litMaterials } = useMemo(() => {
     const c = obj.clone();
+    const collected: THREE.Material[] = [];
     c.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       child.geometry = prepareObjMeshGeometry(child.geometry);
@@ -201,12 +304,21 @@ const OBJModel = ({
         materialParams.map = surfaceTexture;
       }
 
-      child.material = new THREE.MeshStandardMaterial(materialParams);
-      applyDepthSettings(child.material);
+      const material = new THREE.MeshStandardMaterial(materialParams);
+      applyDepthSettings(material);
+      patchModelMaterial(material, body);
+      collected.push(material);
+      child.material = material;
     });
 
-    return { cloned: c, normalizationScale: normalizeToUnitSphereScale(c) };
-  }, [obj, surfaceTexture, surfaceFillLight, roughness, metalness, body.color]);
+    return {
+      cloned: c,
+      normalizationScale: normalizeToUnitSphereScale(c),
+      litMaterials: collected,
+    };
+  }, [obj, surfaceTexture, surfaceFillLight, roughness, metalness, body]);
+
+  useModelSolarIrradiance(body.id, litMaterials);
 
   useEffect(() => {
     return () => {
@@ -318,6 +430,7 @@ export const PlanetModel = ({
           >
             {isGLTF ? (
               <GLBModel
+                body={body}
                 path={body.model!.path}
                 scale={1} // Visual scale handled by parent group now? No, kept logic same.
                 roughness={roughness}

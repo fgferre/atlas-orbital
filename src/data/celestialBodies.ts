@@ -449,7 +449,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Phobos is the larger and closer of the two natural satellites of Mars. It is a small, irregularly shaped object with a mean radius of 11 km. Phobos orbits Mars much closer than any other major moon orbits its planet, completing an orbit in just 7 hours and 39 minutes. As a result, it rises in the west, moves across the sky in 4 hours and 15 minutes, and sets in the east, twice each Martian day.",
     distanceFromParent: "9,376 km",
     info: "Mars moon.",
-    textures: { map: TEXTURE_PATH + "2k_phobos.jpg" },
+    textures: { map: TEXTURE_PATH + "phobos_nasa_3d_resource.jpg" },
   },
   {
     id: "deimos",
@@ -528,7 +528,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Deimos is the smaller and outer of the two natural satellites of Mars. It has a mean radius of 6.2 km and takes 30.3 hours to orbit Mars. Like Phobos, Deimos has a lumpy, non-spherical shape and is heavily cratered, though its craters are generally smaller and filled with regolith, giving it a smoother appearance.",
     distanceFromParent: "23,463 km",
     info: "Mars moon.",
-    textures: { map: TEXTURE_PATH + "2k_deimos.jpg" },
+    textures: { map: TEXTURE_PATH + "deimos_nasa_3d_resource.jpg" },
   },
   {
     id: "jupiter",
@@ -589,6 +589,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "778,330,000 km",
     info: "Gas giant.",
     textures: { map: TEXTURE_PATH + "jupiter_vgr1_2025.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Jupiter's belts, zones and Great Red Spot follow Voyager imagery, but this is a processed 7200x3600 map whose exact origin is unresolved, so treat the fine cloud structure as illustrative rather than a measured epoch.",
+      limitationReason:
+        "The shipped file's source and licence are recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (jupiter-map-active). The 2026-07-27 sweep found no better replacement: NASA's own Jupiter texture is 720x360, a hundredth of the pixel count.",
+      sources: [
+        {
+          label: "NASA Science - Jupiter",
+          url: "https://science.nasa.gov/jupiter/",
+        },
+      ],
+    },
   },
   {
     id: "saturn",
@@ -1127,7 +1140,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Io is the innermost and third-largest of the four Galilean moons of the planet Jupiter. It is the fourth-largest moon in the Solar System, has the highest density of all the moons, and has the lowest amount of water (by atomic ratio) of any known astronomical object in the Solar System. With over 400 active volcanoes, Io is the most geologically active object in the Solar System.",
     distanceFromParent: "421,800 km",
     info: "Volcanic world.",
-    textures: { map: TEXTURE_PATH + "2k_io.jpg" },
+    textures: { map: TEXTURE_PATH + "jupiter_nasa_io_b_3d_resource.jpg" },
   },
   {
     id: "europa",
@@ -1200,8 +1213,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Europa is the smallest of the four Galilean moons orbiting Jupiter, and the sixth-closest to the planet of all the 95 known moons of Jupiter. It is also the sixth-largest moon in the Solar System. Europa has the smoothest surface of any known solid object in the Solar System. The apparent youth and smoothness of the surface have led to the hypothesis that a water ocean exists beneath the surface.",
     distanceFromParent: "670,900 km",
     info: "Subsurface ocean.",
+    // The USGS Voyager/Galileo mosaic is on disk and is the better *data*, but
+    // it cannot be the render map as shipped: it is single-channel and carries
+    // a 68 px (3.3%) solid-black no-data gore at the south pole, which maps to
+    // a black hole over Europa's south polar cap on a UV sphere. Recorded as
+    // `europa-mosaic-reference`; promoting it needs the gore filled first.
     textures: {
-      map: TEXTURE_PATH + "europa_voyager_galileo_global_mosaic_500m.jpg",
+      map: TEXTURE_PATH + "2k_europa.jpg",
+    },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Europa's surface here is a colourised repo-local map. The lineae pattern follows the Voyager/Galileo mosaic, but the colour and the polar fill are artistic, not measured radiometry.",
+      limitationReason:
+        "The official USGS Voyager/Galileo global mosaic shipped alongside it is monochrome and has a solid no-data gore at the south pole, so it is kept as a documented reference (europa-mosaic-reference) rather than rendered.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Europa Voyager/Galileo SSI global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/europa_voyager_galileo_ssi_global_mosaic_500m",
+        },
+      ],
     },
   },
   // Saturn's Major Moons
@@ -1246,8 +1277,26 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Titan is the largest moon of Saturn and the second-largest natural satellite in the Solar System. It is the only moon known to have a dense atmosphere, and the only known body in space, other than Earth, where clear evidence of stable bodies of surface liquid has been found. Titan is 50% larger (in diameter) than Earth's Moon and 80% more massive.",
     distanceFromParent: "1,222,000 km",
     info: "Thick atmosphere.",
+    // Cassini's ISS mosaic images the surface *through* the methane window;
+    // it is monochrome and its tile seams are plainly visible on a sphere.
+    // Titan seen from space is an orange haze ball, which is what this map
+    // shows, so the mosaic stays a documented reference (titan-mosaic-reference)
+    // instead of the render map.
     textures: {
-      map: TEXTURE_PATH + "titan_cassini_iss_global_mosaic_4km.jpg",
+      map: TEXTURE_PATH + "2k_titan.jpg",
+    },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Titan is rendered from a repo-local haze map. The overall colour and the smooth, featureless disc are right - Titan's surface is not visible through its atmosphere - but the cloud detail is artistic, not measured.",
+      limitationReason:
+        "The official Cassini ISS / USGS global mosaic shipped alongside it is a single-channel surface product with visible mosaic seams; it shows what lies under the haze, not what Titan looks like, so it is kept as a documented reference (titan-mosaic-reference) rather than rendered.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Titan Cassini ISS global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/titan_cassini_iss_global_mosaic_4005m",
+        },
+      ],
     },
   },
   {
@@ -1307,6 +1356,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "527,000 km",
     info: "Icy body.",
     textures: { map: TEXTURE_PATH + "2k_rhea.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The cratering follows Cassini imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The 2026-07-27 source sweep found no better shippable map: NASA's Rhea texture is greyscale and visibly flatter than this one, and the licence on the best community maps forbids redistribution.",
+      sources: [
+        {
+          label: "NASA 3D Resources - textures collection",
+          url: "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures",
+        },
+      ],
+    },
   },
   {
     id: "iapetus",
@@ -1347,7 +1409,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Iapetus is the third-largest natural satellite of Saturn. It is famous for its dramatic two-tone coloration; one hemisphere is bright as snow, while the other is dark as coal. Iapetus has a low density, indicating it is composed mostly of ice with a small amount of rocky materials.",
     distanceFromParent: "3,560,820 km",
     info: "Two-tone moon.",
-    textures: { map: TEXTURE_PATH + "4k_iapetus.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_iapetus.jpg" },
   },
   {
     id: "dione",
@@ -1397,6 +1459,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "377,400 km",
     info: "Cratered ice.",
     textures: { map: TEXTURE_PATH + "2k_dione.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The wispy fault terrain follows Cassini imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The 2026-07-27 source sweep found no better shippable map: NASA's Dione texture is greyscale and carries less surface detail than this one.",
+      sources: [
+        {
+          label: "NASA 3D Resources - textures collection",
+          url: "https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures",
+        },
+      ],
+    },
   },
   {
     id: "tethys",
@@ -1509,7 +1584,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Enceladus is the sixth-largest moon of Saturn. It is about 500 kilometers in diameter, about a tenth of that of Saturn's largest moon, Titan. Enceladus is covered by fresh, clean ice, making it one of the most reflective bodies of the Solar System. Consequently, its surface temperature at noon only reaches −198 °C.",
     distanceFromParent: "238,020 km",
     info: "Ice geysers.",
-    textures: { map: TEXTURE_PATH + "4k_enceladus.jpg" },
+    textures: { map: TEXTURE_PATH + "8k_enceladus.jpg" },
   },
   {
     id: "mimas",
@@ -2056,6 +2131,19 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "413,700,000 km",
     info: "Asteroid belt.",
     textures: { map: TEXTURE_PATH + "2k_ceres.jpg" },
+    visualProvenance: {
+      fidelity: "interpretive",
+      summary:
+        "Placeholder map. The crater pattern follows Dawn Framing Camera imagery, but the file's origin is not documented and its colour balance is not measured.",
+      limitationReason:
+        "The measured upgrade is the DLR/Dawn controlled global mosaic at USGS Astrogeology; it has not been integrated yet.",
+      sources: [
+        {
+          label: "USGS Astrogeology - Ceres Dawn FC global mosaic",
+          url: "https://astrogeology.usgs.gov/search/map/ceres_dawn_fc_global_mosaic_140m",
+        },
+      ],
+    },
   },
   {
     id: "haumea",
@@ -2232,13 +2320,13 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Eris is the most massive and second-largest known dwarf planet in the Solar System. It is a trans-Neptunian object (TNO) in the scattered disk and has a high-eccentricity orbit. Eris was discovered in January 2005 by a Palomar Observatory-based team led by Mike Brown and verified later that year.",
     distanceFromParent: "10,120,000,000 km",
     info: "Massive dwarf.",
-    textures: { map: TEXTURE_PATH + "2k_eris.jpg" },
+    textures: { map: TEXTURE_PATH + "4k_eris_fictional.jpg" },
     visualProvenance: {
       fidelity: "interpretive",
       summary:
-        "The shipped map is a community-authored artist rendering of Eris; only the very high albedo and methane-ice colour are observationally grounded.",
+        "The shipped map is explicitly fictional at its source - Solar System Scope publish it as an imagined Eris. Only the very high albedo and the methane-ice colour are observationally grounded; every surface feature is invented.",
       limitationReason:
-        "Eris has only ever been observed as a point source plus stellar occultations, so no measured global surface map exists; the file's licence is recorded as 'not documented in repo' in VISUAL_ASSET_MANIFEST (eris-map-active).",
+        "Eris has only ever been observed as a point source plus stellar occultations, so no measured global surface map exists and none can until a spacecraft or a far larger telescope resolves it. Licensed CC BY 4.0 (eris-map-active).",
       sources: [
         {
           label: "NASA Science - Eris",

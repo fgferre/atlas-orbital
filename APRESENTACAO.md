@@ -86,33 +86,35 @@ Z = distância × sin(Dec)
 
 **Renderização Física das Estrelas**
 
-Shader customizado portado do transfer curve que a NASA Eyes usa no navegador:
+Shader customizado com fotometria de Pogson e uma PSF integrada por pixel:
 
 **1. Cores Estelares Realistas (Radiação de Corpo Negro)**
 
-- Converte o **Índice de Cor B-V** em RGB usando aproximação de blackbody
+- Converte o **Índice de Cor B-V** em temperatura efetiva (ajuste de Ballesteros) e daí em cromaticidade CIE
 - **B-V = -0.4** (estrelas azuis quentes como Rigel) → RGB com máximo de azul
 - **B-V = 0.65** (estrelas tipo Sol amarelas) → RGB equilibrado
 - **B-V = 2.0** (estrelas vermelhas frias como Betelgeuse) → RGB com máximo de vermelho
-- Preserva a aparência científica: estrelas O/B são azuis, K/M são laranjas/vermelhas
+- A cor chega à GPU em **sRGB linear**, e o fragmento aplica exatamente uma curva de transferência; antes o valor já vinha codificado e o compositor codificava de novo, então a mesma estrela tinha cores diferentes em tiers diferentes
+- A saturação recebe um reforço fixo de +0,16 em HSV (herdado do Gaia Sky) — exagero deliberado e declarado nos Créditos, já que as cores estelares reais são bem mais pálidas
 
-**2. Compressão Logarítmica de Brilho (curva tipo NASA Eyes)**
+**2. Fotometria de Pogson (sem curva de transferência)**
 
-- `flux = 10^(-mag × 0.4)` (definição de Pogson do fluxo relativo).
-- `brightness = 2 × log(1 + flux × 250)` — uma única etapa log que já respeita a lei de Fechner, então o mesmo valor alimenta tamanho e alfa preservando a ordem de magnitude ponta a ponta.
-- Tamanho do sprite clampado em `[5, 50]` px depois de escalar por `particleSize`, e alfa clampado em `[0.05, 1.0]`. Estrelas brilhantes saturam suavemente; estrelas do limite do catálogo ficam num floor discreto.
-- O DPR efetivo vem de `gl.getPixelRatio()` (respeita o clamp de qualidade do renderer), evitando sprites exagerados em displays Retina sob o perfil constrained.
+- Cada estrela carrega `10^(-0.4 × M)` (magnitude absoluta); o vértice divide pela distância ao quadrado **viva**, então aproximar-se de uma estrela a ilumina pelo inverso do quadrado por aritmética, não por ajuste.
+- A PSF é **integrada sobre o fragmento**, não amostrada no centro dele: uma gaussiana separável integra ao produto de duas diferenças de `erf`, o que conserva energia exatamente e torna o valor por pixel uma função suave da posição sub-pixel da estrela. É isso que elimina a cintilação do sprite pré-assado (que oscilava 106% no pico).
+- O grade de contraste da cena deixa só ~2 magnitudes de faixa útil de cinza, então **a magnitude é carregada pelo tamanho**: quando o núcleo satura, o excedente vai para um lóbulo de glare `r⁻³` com raio em forma fechada. Estrelas brilhantes ficam visivelmente maiores.
+- O campo próximo é limitado a 5% da menor dimensão da viewport, para que o sprite convirja e passe o bastão para a malha procedural sem salto.
 
 **3. Seleção de Tier por Perfil de Qualidade**
 
 - A densidade do catálogo é escolhida offline pelo `qualityProfile` (constrained / balanced / high / ultra), não pela distância da câmera — o `LOD dinâmico` que existia em versões anteriores foi removido por gerar popping visível quando o usuário se afastava.
-- `ultra` carrega ~109.400 estrelas (1,77 MB gzip); `high` ~50k; `balanced/medium` ~10k; `constrained/low` ~500. Detalhes em `src/lib/starfield.ts`.
+- `ultra` carrega ~109.400 estrelas (3,04 MB gzip); `high` ~50k; `balanced/medium` ~10k; `constrained/low` ~500. Detalhes em `src/lib/starfield.ts`.
 
 **Realismo Espacial (Sem Atmosfera)**
 
 - **Estrelas nítidas e pontuais**: simulam difração limitada, não há "brilho atmosférico" como na Terra
 - **Sem cintilação**: no espaço, estrelas não piscam (diferente da visão da superfície terrestre)
-- **Falloff acentuado**: `alpha = pow(d, 5)` no fragmento, seguindo o shader de referência da NASA Eyes.
+- **Halo de glare**: o lóbulo `r⁻³` é a corona ciliar do olho humano (Spencer et al., SIGGRAPH 1995) — artefato do observador, declarado como tal nos Créditos
+- **Spikes de difração**: desligados por padrão. Pertencem às hastes de um telescópio, nunca a uma estrela; o controle Star Optics no painel Display nomeia a abertura simulada
 - **Blending aditivo**: estrelas sobrepostas somam luz realisticamente
 
 **Precisão de Coordenadas**
@@ -359,4 +361,4 @@ Navegue pelo Sistema Solar com um motor orbital analítico calibrado contra dado
 
 ---
 
-_Baseado em referências e ativos de: NASA Eyes, NASA Science/JPL/USGS, ESA, Catálogo HYG v4.2 (Hipparcos/Yale/Gliese), missões Parker Solar Probe, Perseverance, New Horizons, Voyager, Cassini-Huygens, Galileo e MESSENGER, além de dados astronômicos documentados no repositório._
+_Baseado em referências e ativos de: NASA Science/JPL/USGS, ESA, Catálogo HYG v4.2 (Hipparcos/Yale/Gliese), missões Parker Solar Probe, Perseverance, New Horizons, Voyager, Cassini-Huygens, Galileo e MESSENGER, além de dados astronômicos documentados no repositório._

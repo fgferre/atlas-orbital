@@ -11,10 +11,11 @@
  */
 
 export {
-  calculateQualityScore,
   collectDeviceSignals,
+  resolveQualityTierFromSignals,
   type DeviceConnectionLike,
   type DeviceSignals,
+  type GpuCapabilitySignals,
   type NavigatorLike,
   type WindowLike,
 } from "../qualityProfile";

@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 import {
   freezeSimulation,
   pageHasSizedCanvas,
-  screenshotWithRetry,
   visitAtlasAndWaitForReady,
+  waitForStableFrame,
 } from "./helpers";
 
 test.describe("boot", () => {
@@ -50,6 +50,21 @@ test.describe("boot", () => {
     // "Initializing Simulation" loader is no longer on screen.
     await expect(page.getByText("Initializing Simulation")).toHaveCount(0);
 
+    // Honesty gate, and specifically a BLIND SPOT of the pixel baseline
+    // below. Atlas boots with one disclosed deviation from the measured
+    // truth — assisted sunlight (scale itself boots FAITHFUL since the
+    // 2026-07-29 owner decision flipped the default to "realistic") — and
+    // the fidelity badge is the only surface that says so. If it silently
+    // stopped rendering, the frozen-frame diff would be ~0.92 % of the
+    // frame (the badge's own footprint), which sits UNDER that test's 1 %
+    // tolerance: the pixel gate would stay green while the app quietly
+    // started making undisclosed claims. Assert the surface exists and
+    // names both axes.
+    const badge = page.getByTestId("fidelity-badge");
+    await expect(badge).toBeVisible();
+    await expect(badge).toContainText("TRUE SCALE");
+    await expect(badge).toContainText("ASSISTED");
+
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);
   });
 
@@ -83,9 +98,35 @@ test.describe("boot", () => {
   //   2. Intro animation settles — `INTRO_DURATION_MS = 12000` in
   //      `InitialCameraAnimation.tsx:11`, so a 13 s ceiling on the
   //      loader-exit poll gives headroom.
-  //   3. `waitForTimeout(1000)` for post-intro lerp settle (replaces
-  //      the pre-T5.6 3500 ms flat wait — intro finishes before the
-  //      loader hides, so only the lerp tail matters after exit).
+  //   3. `waitForStableFrame` polls until the frame stops changing
+  //      (replaces the pre-T5.6 3500 ms flat wait, and then the 1000 ms
+  //      one that followed it).
+  //
+  // **θ.2 (2026-07-28)** — that 1000 ms settle was not enough and no
+  // fixed number was the right answer. Measured, sim frozen, 1280×720:
+  //
+  //   • WITHIN one page: +2 s → 17.8 % of pixels still changing frame
+  //     to frame, +4 s → 0.012 %, flat out to +16 s. That residual
+  //     floor is LightGlow's wall-clock polar-mask animation, which
+  //     never settles and sits two orders of magnitude under the gate.
+  //   • ACROSS page loads, which is what this gate actually compares:
+  //     +4 s → 16.7 % different, +8 s → 0 pixels different on the dev
+  //     server. The camera is damped, so two boots reach
+  //     visually-static-but-different poses well before they converge
+  //     on the same one — a within-page stability check would have
+  //     passed at +4 s and the gate would still have been flaky.
+  //   • The production build then settled on a different schedule again
+  //     and +8 s failed at 4 %, which is what retired fixed timings
+  //     here for good.
+  //
+  // The race was always here; it only became visible when the θ.2 star
+  // field stopped being sparse and dim. The old renderer put 97.5 % of
+  // stars on the same 3.75 px quad at low opacity, so a mid-settle
+  // camera still produced a near-identical frame. A dense field with
+  // real size hierarchy does not, and the gate started failing at 3 %
+  // against a 1 % tolerance on a scene rendering perfectly. Waiting
+  // for actual convergence is the fix; loosening the tolerance would
+  // have hidden the race instead.
   test("boot visual identity (frozen sim)", async ({ page }) => {
     test.skip(
       process.platform !== "win32",
@@ -103,13 +144,35 @@ test.describe("boot", () => {
     await expect(page.getByTestId("atlas-loader")).toHaveCount(0, {
       timeout: 55_000,
     });
-    // Post-loader lerp settle. 1 s covers the useVisualPresetLerp
-    // convergence tail; the prior 3.5 s flat wait was also picking up
-    // the loader window, which is no longer necessary.
-    await page.waitForTimeout(1000);
-    const screenshot = await screenshotWithRetry(page, {
-      animations: "disabled",
-    });
+    // Wait for the intro flight to END before polling for a stable
+    // frame. The θ.2 starfield made this gate necessary: the intro
+    // starts ~5 kpc from the origin, and under real Pogson photometry
+    // the whole HYG catalog is genuinely invisible from there (the
+    // retired renderer's solid-angle floor kept stars visible from
+    // anywhere). Early intro is therefore a near-black sky moving
+    // slowly — two frames 750 ms apart differ by less than the
+    // convergence tolerance, the poll latches, and the gate captures a
+    // mid-intro frame that the standing order above forbids blessing.
+    // `isIntroAnimating` is the same store gate `hyg-focus.spec.ts`
+    // waits on; the hook exists whenever `__ATLAS_TEST_FREEZE__` is
+    // set, which `freezeSimulation` did above.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const w = window as unknown as {
+              __ATLAS_TEST_STORE__?: {
+                getState: () => { isIntroAnimating: boolean };
+              };
+            };
+            return w.__ATLAS_TEST_STORE__?.getState().isIntroAnimating ?? true;
+          }),
+        { timeout: 30_000 }
+      )
+      .toBe(false);
+    // Poll until the frame stops changing, rather than guessing how
+    // long convergence takes on this machine and this build.
+    const screenshot = await waitForStableFrame(page);
     expect(screenshot).toMatchSnapshot("boot-frozen.png", {
       maxDiffPixelRatio: 0.01,
     });

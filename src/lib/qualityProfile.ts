@@ -1,3 +1,5 @@
+import { probeWebglCapabilities } from "./graphics/webglSupport";
+
 export type QualityMode =
   | "auto"
   | "ultra"
@@ -14,7 +16,24 @@ export interface DeviceSignals {
   viewportWidth?: number;
   viewportHeight?: number;
   devicePixelRatio?: number;
+  /**
+   * `gl.MAX_TEXTURE_SIZE` from the boot probe. A capability, not a speed:
+   * a weak integrated GPU reports 16384 exactly like a discrete one. It
+   * may lower a tier, never raise one.
+   */
+  maxTextureSize?: number;
+  /**
+   * `true` only when the renderer names itself software. `undefined`
+   * means unreadable, not hardware.
+   */
+  softwareRenderer?: boolean;
 }
+
+/** The GPU-derived subset of {@link DeviceSignals}. */
+export type GpuCapabilitySignals = Pick<
+  DeviceSignals,
+  "maxTextureSize" | "softwareRenderer"
+>;
 
 export interface DeviceConnectionLike {
   effectiveType?: string;
@@ -52,6 +71,15 @@ export interface WindowLike {
 export interface ResolvedQualityProfile {
   name: ResolvedQualityName;
   antialias: boolean;
+  /**
+   * MSAA sample count for the `EffectComposer`'s internal HalfFloat render
+   * targets. Explicit because @react-three/postprocessing defaults to 8, and
+   * that default was never a decision here: two full-resolution HalfFloat
+   * buffers at 8x MSAA cost ~1.6 GB of VRAM on a 4K desktop, which is an order
+   * of magnitude more than every planetary texture in the app combined. It
+   * scales with devicePixelRatio squared, so desktop pays the most.
+   */
+  composerMultisampling: number;
   dprMax: number;
   shadowMapSize: number;
   environmentResolution: number;
@@ -88,6 +116,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   ultra: {
     name: "ultra",
     antialias: true,
+    composerMultisampling: 4,
     dprMax: 2,
     shadowMapSize: 4096,
     environmentResolution: 256,
@@ -98,6 +127,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   high: {
     name: "high",
     antialias: true,
+    composerMultisampling: 2,
     dprMax: 1.75,
     shadowMapSize: 4096,
     environmentResolution: 256,
@@ -108,6 +138,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   balanced: {
     name: "balanced",
     antialias: false,
+    composerMultisampling: 0,
     dprMax: 1.5,
     shadowMapSize: 2048,
     environmentResolution: 128,
@@ -118,6 +149,7 @@ const RESOLVED_PROFILES: Record<ResolvedQualityName, ResolvedQualityProfile> = {
   constrained: {
     name: "constrained",
     antialias: false,
+    composerMultisampling: 0,
     dprMax: 1,
     shadowMapSize: 1024,
     environmentResolution: 64,
@@ -137,7 +169,11 @@ const getViewportMaxSide = (signals: DeviceSignals) => {
 };
 
 export const collectDeviceSignals = (
-  windowLike?: WindowLike
+  windowLike?: WindowLike,
+  // A default parameter rather than caller injection: a future call site
+  // that forgot to pass it would silently lose the GPU signal, which is
+  // the exact bug class this exists to close.
+  gpu: GpuCapabilitySignals = probeWebglCapabilities()
 ): DeviceSignals => {
   if (!windowLike) {
     return {};
@@ -159,6 +195,8 @@ export const collectDeviceSignals = (
     viewportWidth,
     viewportHeight,
     devicePixelRatio: windowLike.devicePixelRatio,
+    maxTextureSize: gpu.maxTextureSize,
+    softwareRenderer: gpu.softwareRenderer,
   };
 };
 
@@ -201,6 +239,76 @@ export const calculateQualityScore = (signals: DeviceSignals): number => {
   return score;
 };
 
+/**
+ * GL-derived ceiling on the auto-resolved tier.
+ *
+ * One-way by construction. WebGL exposes capability, not throughput, so
+ * these facts can prove a machine is *below* a tier and can never prove
+ * it is above one. Folding them into the additive score instead would
+ * let a large CPU/RAM total cancel a hard limit — a 32-core box on a
+ * software rasterizer would still reach `high`.
+ *
+ * Known gap, stated rather than hidden: no static WebGL query separates
+ * a weak integrated GPU from a discrete one (both report 16384), so the
+ * 4K-desktop-on-a-weak-iGPU case is *not* caught here. Closing that
+ * needs a measured signal — a frame-time sample after boot — which is a
+ * different and larger change.
+ */
+const resolveGlTierCeiling = (signals: DeviceSignals): ResolvedQualityName => {
+  if (signals.softwareRenderer === true) {
+    return "constrained";
+  }
+
+  // `high` and `ultra` promote to 4096- and 8192-wide equirect maps
+  // respectively (the "4k" tier's canonical files are 4096x2048 on disk —
+  // e.g. `4k_enceladus.jpg` — so a 4096-limit GPU fits `high`'s promotion
+  // exactly; it just can't reach `ultra`'s 8192 one). Below each tier's
+  // own texture width the driver downscales that promotion anyway, so the
+  // decode and the upload are paid for nothing — but the ceiling must not
+  // overshoot past the tier that still fits.
+  if (
+    typeof signals.maxTextureSize === "number" &&
+    signals.maxTextureSize > 0
+  ) {
+    if (signals.maxTextureSize < 4096) {
+      return "balanced";
+    }
+    if (signals.maxTextureSize < 8192) {
+      return "high";
+    }
+  }
+
+  return "ultra";
+};
+
+/**
+ * Single source of truth for auto tier selection — the score ladder and
+ * the hardware ceiling, in one place. `graphics/resolver.ts` maps the
+ * result onto its own preset names rather than repeating the thresholds.
+ */
+export const resolveQualityTierFromSignals = (
+  signals: DeviceSignals
+): ResolvedQualityName => {
+  const score = calculateQualityScore(signals);
+  const scored: ResolvedQualityName =
+    score >= 4
+      ? "ultra"
+      : score >= 2
+        ? "high"
+        : score >= -1
+          ? "balanced"
+          : "constrained";
+
+  // QUALITY_PROFILE_ORDER runs best → worst, so the larger index is the
+  // more constrained tier and always wins.
+  return QUALITY_PROFILE_ORDER[
+    Math.max(
+      QUALITY_PROFILE_ORDER.indexOf(scored),
+      QUALITY_PROFILE_ORDER.indexOf(resolveGlTierCeiling(signals))
+    )
+  ];
+};
+
 export const resolveQualityProfile = (
   mode: QualityMode,
   signals: DeviceSignals = {}
@@ -209,12 +317,7 @@ export const resolveQualityProfile = (
     return RESOLVED_PROFILES[mode];
   }
 
-  const score = calculateQualityScore(signals);
-
-  if (score >= 4) return RESOLVED_PROFILES.ultra;
-  if (score >= 2) return RESOLVED_PROFILES.high;
-  if (score >= -1) return RESOLVED_PROFILES.balanced;
-  return RESOLVED_PROFILES.constrained;
+  return RESOLVED_PROFILES[resolveQualityTierFromSignals(signals)];
 };
 
 export const getResolvedQualityProfileOptions = () => RESOLVED_PROFILES;

@@ -191,13 +191,11 @@ interface AppState {
   setVisualPreset: (preset: VisualPresetType) => void;
   toggleAutoPreset: () => void;
   toggleShowStarfield: () => void;
-  setStarfieldSource: (source: StarfieldSource) => void;
   setHoveredStar: (next: HoveredStarInfo | null) => void;
   setStarfieldProviderState: (
     source: StarfieldSource,
     nextState: Partial<StarfieldProviderState>
   ) => void;
-  toggleStarfieldImplementation: () => void;
   toggleCredits: () => void;
   focusHome: () => void;
   focusBack: () => void;
@@ -269,7 +267,14 @@ export const useStore = create<AppState>()(
       showEclipticGrid: true,
       surfaceModeActive: false,
       showProgradeVector: true,
-      scaleMode: "didactic",
+      // Owner decision 2026-07-29 (tasks/waves/lighting-redesign-2026-07-28.md
+      // "Owner decisions"): boots in REAL distance ("realistic"), not the
+      // exaggerated didactic layout. Not in the persist `partialize`
+      // allowlist, so this literal is the sole boot default for everyone —
+      // see `resolveFocusExtent`'s realistic-Sun-overview branch
+      // (src/lib/astrophysics.ts) for the system-overview camera framing
+      // this default now requires at boot.
+      scaleMode: "realistic",
       // Defaults overwritten by the persist middleware's rehydration
       // step when a previously-saved (or legacy-migrated) value is
       // available in localStorage.
@@ -298,7 +303,6 @@ export const useStore = create<AppState>()(
       starfieldSource: "hyg",
       starfieldProviderStates: {
         hyg: { status: "idle", error: null },
-        nasa: { status: "idle", error: null },
       },
       hoveredStar: null,
       showCredits: false,
@@ -384,12 +388,6 @@ export const useStore = create<AppState>()(
         set((state) => ({ showProgradeVector: !state.showProgradeVector })),
       toggleShowStarfield: () =>
         set((state) => ({ showStarfield: !state.showStarfield })),
-      setStarfieldSource: (starfieldSource) =>
-        set((state) =>
-          state.starfieldSource === starfieldSource
-            ? state
-            : { starfieldSource }
-        ),
       setHoveredStar: (hoveredStar) =>
         set((state) =>
           state.hoveredStar === hoveredStar ? state : { hoveredStar }
@@ -416,10 +414,6 @@ export const useStore = create<AppState>()(
             },
           };
         }),
-      toggleStarfieldImplementation: () =>
-        set((state) => ({
-          starfieldSource: state.starfieldSource === "nasa" ? "hyg" : "nasa",
-        })),
       toggleCredits: () =>
         set((state) => ({ showCredits: !state.showCredits })),
       focusHome: () =>

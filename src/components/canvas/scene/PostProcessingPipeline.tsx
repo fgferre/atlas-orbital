@@ -1,4 +1,4 @@
-import { memo, useCallback, type RefObject } from "react";
+import { memo, useCallback, useEffect, type RefObject } from "react";
 import * as THREE from "three";
 import {
   EffectComposer,
@@ -7,14 +7,30 @@ import {
   BrightnessContrast,
   ToneMapping,
 } from "@react-three/postprocessing";
-import { ToneMappingMode } from "postprocessing";
+import { ToneMappingMode, type ToneMappingEffect } from "postprocessing";
 import { LensFlareSlot } from "./LensFlareInjector";
 import { LightGlowSlot } from "./LightGlowInjector";
 import type { ToneMappingName } from "../../../lib/graphics/resolver";
+import { setSunlightToneMappingMounted } from "../../../lib/graphics/solarIrradiance";
+import { STAR_DISPLAY_BLACK_POINT } from "../../../lib/starfieldShaderMath";
 
+/**
+ * Structural shape of the real `postprocessing` `BloomEffect` instance
+ * `<Bloom ref>` forwards (verified against `node_modules/postprocessing`).
+ *
+ * `BloomEffect` itself has no `luminanceThreshold` property — only
+ * `intensity`. The threshold lives one level down, on the `LuminanceMaterial`
+ * (`luminanceMaterial.threshold`, a live GPU uniform write — see
+ * `useVisualPresetLerp.ts` for why writing it every frame is safe). An
+ * earlier version of this interface declared a `luminanceThreshold` field
+ * that didn't exist on the real object: TypeScript's structural typing let
+ * that compile silently, and the write from `useVisualPresetLerp` landed on
+ * a dead own-property nothing read, making the DisplayPanel's bloom
+ * threshold slider inert. Fixed 2026-07-29.
+ */
 export interface BloomController {
   intensity: number;
-  luminanceThreshold: number;
+  luminanceMaterial: { threshold: number };
 }
 
 export interface HueSaturationController {
@@ -31,6 +47,22 @@ interface PostProcessingPipelineProps {
   hueSatRef: RefObject<HueSaturationController | null>;
   brightnessRef: RefObject<BrightnessContrastController | null>;
   /**
+   * 1d — lets `EyeAdaptationBridge` reach the mounted `ToneMappingEffect`
+   * instance and drive its internal adaptive-luminance passes. `null`
+   * whenever no ToneMapping pass is mounted (toneMapping="none", or the
+   * constrained tier which never renders this component at all).
+   */
+  toneMappingRef: RefObject<ToneMappingEffect | null>;
+  /**
+   * True when `LightGlowSlot` (theta.3) should be mounted into the
+   * composer. Backed by `GraphicsOverrides.lightGlowEnabled`
+   * (`resolver.ts`), default `true` — preserves the pre-existing
+   * always-on behavior. See that field's JSDoc for why this is a toggle
+   * rather than a flipped default: the FPS audit that would justify
+   * flipping it could not get a real-GPU measurement.
+   */
+  lightGlowMounted: boolean;
+  /**
    * True when the Bloom effect should be mounted into the composer.
    * Computed at Scene level via `shouldMountBloom(bloomEnabled,
    * effectiveBloomIntensity)` (see `src/lib/graphics/bloomGate.ts`).
@@ -40,6 +72,8 @@ interface PostProcessingPipelineProps {
    * `bloomEnabled && intensity > 0`.
    */
   bloomMounted: boolean;
+  /** MSAA samples for the composer's internal RTs. See `ResolvedQualityProfile`. */
+  composerMultisampling: number;
   toneMapping: ToneMappingName;
 }
 
@@ -55,8 +89,11 @@ export const PostProcessingPipeline = memo(
     bloomRef,
     hueSatRef,
     brightnessRef,
+    toneMappingRef,
+    lightGlowMounted,
     bloomMounted,
     toneMapping,
+    composerMultisampling,
   }: PostProcessingPipelineProps) => {
     const assignBloomRef = useCallback(
       (effect: BloomController | null) => {
@@ -75,6 +112,12 @@ export const PostProcessingPipeline = memo(
         brightnessRef.current = effect;
       },
       [brightnessRef]
+    );
+    const assignToneMappingRef = useCallback(
+      (effect: ToneMappingEffect | null) => {
+        toneMappingRef.current = effect;
+      },
+      [toneMappingRef]
     );
 
     // Effect ordering:
@@ -114,9 +157,14 @@ export const PostProcessingPipeline = memo(
     // Kept matching the preset so the boot frame and the first lerp
     // tick don't disagree.
     //
-    // Gaia default tone mapping is NONE (`config.yaml`), so the
-    // ToneMapping pass is omitted unless the user explicitly selects
-    // a cinematic operator in the Display panel.
+    // Tone mapping is applied as a dedicated pass here only when the
+    // selected operator ≠ "none". As of 1a the cascade-default for
+    // composer tiers (ultra/high/medium) is AgX, which gives
+    // highlights shape against the HalfFloat target — see
+    // PRESET_DEFAULTS in src/lib/graphics/resolver.ts and the sweep
+    // note at tasks/archive/sweeps/opportunity-sweep-findings-v2-2026-06-16.md §127.
+    // Gaia itself still ships NONE in config.yaml; users who want byte
+    // parity can pick "none" from the Display panel.
     //
     // The HDR contract stays `luminanceThreshold=1.0` (prompt R1 #2):
     // only surfaces on the HDR-emissive allow-list cross the
@@ -163,9 +211,27 @@ export const PostProcessingPipeline = memo(
     // scalar inside `LensFlareSlot`.
     const toneMappingMode = TONE_MAPPING_MODE[toneMapping];
 
+    // Onda 2.2 — publish "an operator is mounted" to the per-body solar
+    // irradiance scalar, which caps itself at 1.0 without one (see
+    // `SUNLIGHT_UNMAPPED_CEILING`: no shoulder ⇒ anything above 1.0 hard-clips
+    // AND crosses Bloom's `luminanceThreshold = 1.0` contract into a halo).
+    // The flag is written HERE, next to the mount decision it describes,
+    // rather than recomputed at the consumer from `toneMapping` + tier — the
+    // consumer would then be a second copy of this condition, free to drift.
+    // The cleanup returning `false` is what covers the `constrained` tier:
+    // Scene.tsx unmounts this whole component there, and the flag's initial
+    // value is already `false` for the case where it never mounted at all.
+    useEffect(() => {
+      setSunlightToneMappingMounted(toneMappingMode !== undefined);
+      return () => setSunlightToneMappingMounted(false);
+    }, [toneMappingMode]);
+
     return (
-      <EffectComposer frameBufferType={THREE.HalfFloatType}>
-        <LightGlowSlot />
+      <EffectComposer
+        frameBufferType={THREE.HalfFloatType}
+        multisampling={composerMultisampling}
+      >
+        {lightGlowMounted ? <LightGlowSlot /> : <></>}
         <LensFlareSlot />
         {bloomMounted ? (
           <Bloom
@@ -179,7 +245,18 @@ export const PostProcessingPipeline = memo(
           <></>
         )}
         {toneMappingMode !== undefined ? (
-          <ToneMapping mode={toneMappingMode} />
+          // 1d — `minLuminance` floors the library's OWN internal
+          // adaptive-luminance sample (see EyeAdaptationBridge.tsx for
+          // why AGX mode never runs that pass on its own and why we
+          // force it on separately). Anchored to the same
+          // STAR_DISPLAY_BLACK_POINT constant the starfield shader math
+          // calibrates the display black point against, so the GPU-side
+          // floor and EyeAdaptationBridge's JS-side floor agree.
+          <ToneMapping
+            ref={assignToneMappingRef}
+            mode={toneMappingMode}
+            minLuminance={STAR_DISPLAY_BLACK_POINT}
+          />
         ) : (
           <></>
         )}

@@ -72,42 +72,75 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_jupiter.jpg`,
+        // 4096x2048 despite the `8k_` filename (Solar System Scope ships the
+        // name, not the size). Placed by measured pixel count, not by prefix.
+        "4k": `${TEXTURE_PATH}8k_jupiter.jpg`,
+        // Jupiter's canonical. `inferCanonicalTier` cannot read a tier out of
+        // an untiered basename, so without this line the ladder topped out at
+        // 2k and the 7200x3600 map the body record declares never loaded.
+        "8k": `${TEXTURE_PATH}jupiter_vgr1_2025.jpg`,
       },
     },
   },
   saturn: {
     map: {
       boot: `${TEXTURE_PATH}boot_saturn.jpg`,
+      variants: {
+        // Canonical is `2k_saturn.jpg`, so focus/ultra could never exceed
+        // 2048x1024 while the same imagery sat on disk at 4096x2048
+        // (`8k_saturn.jpg` is 4k by pixel count, whatever its name says).
+        "4k": `${TEXTURE_PATH}8k_saturn.jpg`,
+      },
     },
     ring: {
       boot: `${TEXTURE_PATH}boot_saturn_ring_alpha.png`,
+      variants: {
+        // Middle rung of a deliberate boot/2k/8k trio (1024x62, 2048x125,
+        // 8192x500 of the same plate) that the manifest never listed.
+        "2k": `${TEXTURE_PATH}2k_saturn_ring_alpha.png`,
+      },
     },
   },
   uranus: {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_uranus.jpg`,
+        // Uranus's canonical, untiered basename — same shadowing as Jupiter.
+        "8k": `${TEXTURE_PATH}uranus_texture_map_8k_by_floridaemojicat_dj4s9vd.jpg`,
       },
     },
   },
-  europa: {
+  // Eris's canonical is a 4096x2048 plate — 42.7 MB decoded, which is 133% of
+  // the entire 32 MB constrained texture budget, and the overview band had no
+  // lighter rung to fall back to. Restoring the canonical without this line
+  // made Eris 10.5x heavier at *every* profile and salience.
+  eris: {
     map: {
       variants: {
-        "2k": `${TEXTURE_PATH}2k_europa.jpg`,
+        "2k": `${TEXTURE_PATH}2k_eris_fictional.jpg`,
       },
     },
   },
-  titan: {
+  // Same defect, pre-existing: Haumea's only rung was the 4096x2048 plate.
+  haumea: {
     map: {
       variants: {
-        "2k": `${TEXTURE_PATH}2k_titan.jpg`,
+        "2k": `${TEXTURE_PATH}2k_haumea_fictional.jpg`,
       },
     },
   },
+  // Europa and Titan are deliberately absent: their canonical basenames now
+  // carry a `2k_` prefix, so `inferCanonicalTier` places them on the ladder by
+  // itself. Re-listing them here would be the same fact in two places.
   iapetus: {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_iapetus.jpg`,
+        // Downscaled 2026-07-28 from the 11741x5871 plate that used to sit
+        // under this filename. The canonical moved to the `8k` key, and
+        // PROFILE_PREFERENCES.high is ["4k","2k","8k"] — without this rung
+        // `high` focus would fall all the way to 2048x1024.
+        "4k": `${TEXTURE_PATH}4k_iapetus.jpg`,
       },
     },
   },
@@ -122,6 +155,10 @@ export const TEXTURE_VARIANT_MANIFEST: TextureVariantManifest = {
     map: {
       variants: {
         "2k": `${TEXTURE_PATH}2k_enceladus.jpg`,
+        // Same as iapetus above: downscaled from the 15960x7980 plate, and
+        // this rung is what keeps `high` focus at 4096x2048 now that the
+        // canonical sits on the `8k` key.
+        "4k": `${TEXTURE_PATH}4k_enceladus.jpg`,
       },
     },
   },

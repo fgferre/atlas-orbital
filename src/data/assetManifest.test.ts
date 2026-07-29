@@ -53,12 +53,38 @@ describe("visual asset manifest", () => {
     );
   });
 
-  it("marks Titan and Europa official mosaics as active runtime maps", () => {
+  // Replaces "marks Titan and Europa official mosaics as active runtime maps"
+  // (2026-04-06 → 2026-07-27). That assertion was false about the product: the
+  // mosaics were declared active but the tier ladder never resolved to them,
+  // so the app served 2k_titan.jpg / 2k_europa.jpg the whole time. `active`
+  // has to mean "this is what renders", or the manifest is decoration.
+  it("reserves 'active' for the map the runtime actually renders", () => {
     expect(getVisualAssetById("titan-map-active")?.filePath).toContain(
-      "titan_cassini_iss_global_mosaic_4km"
+      "2k_titan"
     );
     expect(getVisualAssetById("europa-map-active")?.filePath).toContain(
-      "europa_voyager_galileo_global_mosaic_500m"
+      "2k_europa"
     );
+    expect(getVisualAssetById("io-map-active")?.filePath).toContain(
+      "jupiter_nasa_io_b_3d_resource"
+    );
+  });
+
+  it("keeps the official mosaics as measured references, not runtime maps", () => {
+    for (const id of ["titan-mosaic-reference", "europa-mosaic-reference"]) {
+      const entry = getVisualAssetById(id);
+      expect(entry?.status, `${id} must not claim to be the runtime map`).toBe(
+        "candidate"
+      );
+      expect(entry?.sourceUrl).toContain("astrogeology.usgs.gov");
+    }
+  });
+
+  it("files the NASA Io map under Io", () => {
+    // It lived under bodyId "jupiter" because NASA publishes it on a Jupiter
+    // page. The image is Io, so the Jupiter study row was comparing a Jupiter
+    // map against an Io map.
+    expect(getVisualAssetById("io-map-active")?.bodyId).toBe("io");
+    expect(getVisualAssetById("jupiter-map-candidate")).toBeNull();
   });
 });

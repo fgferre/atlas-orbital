@@ -19,7 +19,6 @@ const resetStore = () => {
       visibility: { ...initialState.visibility },
       starfieldProviderStates: {
         hyg: { ...initialState.starfieldProviderStates.hyg },
-        nasa: { ...initialState.starfieldProviderStates.nasa },
       },
       selectedId: null,
       focusId: null,
