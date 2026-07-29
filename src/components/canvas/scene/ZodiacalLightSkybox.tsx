@@ -39,19 +39,23 @@ import {
  * rendered behind everything (`renderOrder = -100`, no depth-write).
  * The material is a `ShaderMaterial` that:
  *   • Computes the fragment's world direction `dir`.
- *   • Decides ecliptic latitude β = asin(dir.y) directly — the scene
- *     frame's Y axis is the ecliptic pole.
- *   • Computes solar elongation λ-λ_sun as `acos(dot(dir, sunDir))`.
- *   • Looks up the Leinert S10 value in `u_zodiacalLut` and scales by
- *     `pow(u_cameraR_AU, -2.5)` (Dumont distance law) and
- *     `ZODIACAL_S10_TO_LINEAR` (photometric unit — see zodiacalLightLut.ts).
+ *   • Resolves the helioecliptic pair (β, |λ−λ☉|) via `zodiacalAngles`
+ *     — the scene frame's Y axis is the ecliptic pole, so β is the
+ *     elevation and λ−λ☉ is the angle between the XZ-plane projections
+ *     of `dir` and `sunDir`. It is a LONGITUDE DIFFERENCE, not the 3D
+ *     angular separation; the two agree only in the ecliptic plane.
+ *   • Looks the pair up in `u_zodiacalLut` (a uniform 5° resampling of
+ *     Leinert Table 16) and scales by `pow(R_AU, -2.5)` (Dumont
+ *     distance law) and `ZODIACAL_S10_TO_LINEAR` — a derived
+ *     calibration, see the arithmetic in `zodiacalLightLut.ts`.
  *
  * The output is a vec3 with the band brightness in linear scene
  * radiance units, added into the HalfFloat composer buffer via
- * `BlendingEq: ADD`. Paste-white near the Sun is correct: Leinert's
- * table values trend to 9000 S10 near elongation 15° (β=15), which
- * is real and goes through bloom's luminanceThreshold=1.0 gate
- * (sub-pull 1b) so it reads as over-bright scatter, not a flat disk.
+ * `BlendingEq: ADD`. Crossing bloom's `luminanceThreshold = 1.0` near
+ * the Sun is intended and bounded — the calibration puts the peak at
+ * 3.26× the gate, confined to roughly 26° of the Sun along the ecliptic
+ * where the Sun's own disc and bloom already live. That ceiling is
+ * derived, not eyeballed; `zodiacalLightLut.ts` states the whole window.
  *
  * ## Tier gate
  *
@@ -89,7 +93,12 @@ export const ZodiacalLightSkybox = () => {
       u_brightnessMul: { value: 1.0 },
       // Sun direction in world/ecliptic frame. Set per-frame; default is
       // (0,0,1) which would be invalid only if R never updates — keep
-      // a sensible boot seed.
+      // a sensible boot seed. Declared in `ZODIACAL_FRAGMENT_GLSL`
+      // alongside the others: a ShaderMaterial's fragment prefix carries
+      // only three.js built-ins, so an undeclared custom uniform is a
+      // compile error, not a warning. This one WAS undeclared before
+      // 2026-07-29, which is why the layer had never drawn a pixel —
+      // the program failed to link on every tier that mounts it.
       u_sunDir: { value: new THREE.Vector3(0, 0, 1) },
     }),
     [lutTexture]
@@ -126,14 +135,12 @@ export const ZodiacalLightSkybox = () => {
           "void main() {",
           "  // Need normalized rasterisable direction.",
           "  vec3 dir = normalize(v_dir);",
-          "  // Ecliptic latitude is the elevation above the XZ plane.",
-          "  float betaDeg = degrees(asin(clamp(dir.y, -1.0, 1.0)));",
-          "  // Solar elongation: angle between the fragment direction",
-          "  // and the Sun direction. acos orientation is the canonical",
-          "  // elongation measure used by Leinert.",
-          "  vec3 sunDir = normalize(u_sunDir);",
-          "  float cosE = clamp(dot(dir, sunDir), -1.0, 1.0);",
-          "  float lambdaDeg = degrees(acos(cosE));",
+          "  // Helioecliptic coordinates of this fragment: ecliptic",
+          "  // latitude and longitude difference from the Sun, which are",
+          "  // exactly Leinert Table 16's two axes.",
+          "  float betaDeg;",
+          "  float lambdaDeg;",
+          "  zodiacalAngles(dir, normalize(u_sunDir), betaDeg, lambdaDeg);",
           "  float zl = zodiacalBrightness(betaDeg, lambdaDeg);",
           "  // The scattered light has approximately solar colour",
           "  // (Leinert 3.3: solar spectrum reddened slightly at UV,",

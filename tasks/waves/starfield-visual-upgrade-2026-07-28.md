@@ -504,11 +504,154 @@ parallel line may invalidate file paths assumed below.
 
 ## Outstanding calibration (NOT BLOCKING, but visible)
 
-The zodiacal light band's `ZODIACAL_S10_TO_LINEAR = 4.0e-9` constant
-is a **discretionary tunable**, not a measured calibration. The
-physical constant from Leinert Table 2 is 1.28e-8 W/m²/sr/µm per
-S10_sun; the extra factor is meant to make the band visible against
-the starfield+atmosphere composite, but the right value depends on
+**2026-07-29 — this section's suspicion (failure mode 1 below) was
+right, and the layer was broken in four independent ways. All four are
+now fixed; see "Zodiacal rebuild" immediately below. The eye pass is
+still owed.**
+
+### Zodiacal rebuild (2026-07-29)
+
+An external review, independently reproduced, found the layer shipped
+in 48a3acc could not have rendered correctly. Four defects, in the
+order they would have bitten:
+
+1. **The shader never compiled.** `u_sunDir` was read in `main()` but
+   declared nowhere. A `ShaderMaterial`'s fragment prefix carries
+   three.js built-ins only (verified against
+   `three/build/three.module.js`'s `prefixFragment`), so an undeclared
+   custom uniform is a link failure, not a warning. The layer had
+   therefore never produced a pixel on any tier — which is also why no
+   amount of eye-checking would have surfaced defects 2-4.
+2. **The table axes were transposed verbatim.** The file declared
+   rows = β over 19 values reaching 180°, which is not a latitude any
+   sky has, and cols = λ−λ☉ over 10 stopping at 75°. Leinert Table 16
+   is the other way round: rows = λ−λ☉ (19 knots, 0…180°),
+   cols = β (10 knots, 0…75°). The DATA was always in Table-16 order;
+   only the labels and every consumer's sampling math were wrong.
+   Consequences: sampling at λ−λ☉ = 15°, β = 0° returned 0 instead of
+   the table's 9000 S10☉ peak, and `v = |β|/180` left rows 10-18 dead.
+3. **Both axes are non-uniform** (5° then 15°, on each axis) while the
+   TS sampler and the GLSL both assumed a uniform grid.
+4. **λ−λ☉ was computed as the 3D angular separation**
+   `acos(dot(dir, sunDir))`. That is a different quantity off the
+   ecliptic: `cos ε = cos β · cos Δλ` pulls ε toward 90°, so the old
+   path sampled too far from the Sun inside quadrature and too near it
+   beyond. At β = 60°, Δλ = 120° the two differ by 15.5°.
+
+Plus a comment that promised a "smoothstep fade" past 75° which was a
+`clamp` plateau. It is gone; the domain now reaches the pole, so there
+is nothing to fade.
+
+**What replaced it** (`src/lib/zodiacalLightLut.ts`,
+`ZodiacalLightSkybox.tsx`, `src/lib/zodiacalLightLut.test.ts`):
+
+- Table 16 kept verbatim with correct axis labels, and blank cells now
+  `null` rather than `0` — "no datum" and "no light" are opposite
+  claims and the gap between them is 9000 S10☉ wide. Every blank cell
+  is inside 15° of the Sun (pinned by test); that solid angle is the
+  solar F-corona, a component this layer does not model. They are
+  filled by holding the innermost tabulated value of the same β column
+  inward: a constant extension that invents no shape and deliberately
+  under-states a region that is in reality far brighter.
+- The grid is extended with a β = 90° column of a constant 60 S10☉ —
+  Leinert's own published pole brightness, 60 ± 3, which the table's
+  own β = 75° column (56-78) brackets. Not decoration: ecliptic
+  longitude is undefined at the pole, so a grid stopping at 75° makes
+  the pixels around the pole sample a λ-dependent value the geometry
+  cannot resolve, i.e. a ±20 % pinwheel.
+- **Non-uniform axes resolved at build time, not in the shader.**
+  `buildZodiacalUniformGrid()` resamples onto a uniform 5° lattice
+  (37 λ × 19 β = 703 texels, RGBA16F ≈ 5.6 KB). Every source knot is a
+  multiple of 5°, so the lattice reproduces the table EXACTLY at its
+  knots and linearly between — it is not an approximation of the
+  non-uniform table, it is the same piecewise-bilinear function, and
+  the GPU's uniform `LinearFilter` fetch of it is then correct with no
+  axis LUT in GLSL. Pinned by a test that walks all 171 tabulated cells.
+- Angles from projections rather than the `cos ε / cos β` inversion:
+  β = asin(dir.y) (scene +Y is the ecliptic pole — the three.js Y-up
+  remap in `orbital/analytical/coordUtils.ts`), and |Δλ| = the angle
+  between the XZ-plane projections of `dir` and `sunDir`. No division
+  by `cos β`, and exact when the observer is off the ecliptic, where
+  the Sun itself is no longer at β = 0.
+- Every GLSL constant is interpolated from the TypeScript, so the
+  shader and the pure-TS mirrors cannot drift. The old file kept its
+  own GLSL copy of `ZODIACAL_S10_TO_LINEAR` and its own axis maxima.
+
+### The derived visibility constant
+
+`ZODIACAL_S10_TO_LINEAR = 4.0e-9` was a **discretionary tunable**, not
+a calibration, and it was arithmetically invisible: it put the
+brightest cell in the whole table at `9000 × 4.0e-9 = 3.6e-5` linear,
+4600× below `STAR_DISPLAY_BLACK_POINT = 0.165` and still 286× below it
+at `SCENE_EXPOSURE_MAX = 16`. Failure mode 1 was not a risk, it was
+the shipped state.
+
+It is now derived against the pipeline's own two numbers, the same
+discipline `starfieldShaderMath.ts` uses:
+
+- The graded pipeline's visible window for a diffuse surface is
+  `[STAR_DISPLAY_BLACK_POINT = 0.165, Bloom luminanceThreshold = 1.0]`
+  — a span of **6.06:1**. (Bloom runs before the tone-mapping pass, so
+  it gates on raw linear buffer values; that is why the ceiling is the
+  bloom gate and not a post-operator number.)
+- The band's own contrast range along the ecliptic runs from
+  9000 S10☉ (λ−λ☉ = 15°) to 140 S10☉ (the minimum at 135-150°, between
+  the cone and the gegenschein) — **64.3:1**.
+- It does not fit. The only choice free of taste is equal margin at
+  both ends: map the geometric mean of the band's range to the
+  geometric mean of the window.
+
+```
+k = √(0.165 × 1.0) / √(9000 × 140) = 0.406202 / 1122.50 = 3.618734e-4
+```
+
+Each end overshoots by exactly `√((9000/140)/(1.0/0.165))` = **3.257×**,
+by construction. The constant is 90 468× larger than what shipped.
+
+What that puts on screen at 1 AU, neutral exposure (linear, ×black point):
+
+| λ−λ☉, β=0° | S10☉ | linear | × black point      |
+| ---------- | ---- | ------ | ------------------ |
+| 15°        | 9000 | 3.257  | 19.7 (3.26× bloom) |
+| 25°        | 3000 | 1.086  | 6.58 (1.09× bloom) |
+| 30°        | 1940 | 0.702  | 4.25               |
+| 45°        | 710  | 0.257  | 1.56               |
+| 60°        | 395  | 0.143  | 0.87               |
+| 90°        | 202  | 0.0731 | 0.44               |
+| 180°       | 180  | 0.0651 | 0.39 (gegenschein) |
+| pole       | 60   | 0.0217 | 0.13               |
+
+So the band crosses the black point at λ−λ☉ ≈ 57° in the ecliptic and
+the bloom gate at ≈ 26°: a visible cone about 30° long with a bloomed
+root at the Sun. The gegenschein sits at 0.39× the black point — below
+threshold until eye adaptation lifts exposure past ≈ 2.5×, which is
+the honest answer for a feature most observers have never seen.
+
+**The bright end is accepted, not clamped, and it is stated here
+rather than hidden.** The near-Sun cells cross the bloom gate by up to
+3.26×. The 64:1 ratio is measured data; squashing it would falsify the
+one thing a tabulated model is for. The region above the gate reaches
+≈ 26° from the Sun along the ecliptic and ≈ 20° across it, which is
+the same solid angle the Sun's own disc and bloom already occupy, and
+AgX's shoulder is downstream of it on every tier that mounts the layer.
+
+**If the eye pass says "too dim"**, the derived alternative is to
+anchor the canonical quadrature value (λ−λ☉ = 90°, β = 0°, 202 S10☉)
+directly on the black point: `k = 0.165/202 = 8.168e-4`, 2.26×
+brighter, band visible out to 90° elongation, peak at 7.35× the bloom
+gate. For a smaller correction the dial is `u_brightnessMul`, which
+needs no material rebuild.
+
+**Boot frame is unaffected by construction.** The boot camera parks at
+~148 AU (be78310), where `R^-2.5 = 3.75e-6` puts even the 9000 S10☉
+peak at 1.2e-5 linear — two orders below the black point. `e2e/boot.spec.ts`
+re-run after the change: pass, no re-bless.
+
+### Original note (kept for the failure modes, which still frame the eye pass)
+
+The physical constant from Leinert Table 2 is 1.28e-8 W/m²/sr/µm per
+S10_sun; the extra factor is what makes the band visible against
+the starfield+atmosphere composite, and the right value depends on
 eye adaptation behaviour that 1d ships.
 
 **1d has landed in code (see "What was done and why" above) but its
@@ -518,13 +661,25 @@ modes to check now that 1d is in the pipeline:
 
 1. Band so dim it stays below `STAR_DISPLAY_BLACK_POINT` and is
    never visible (raise `u_brightnessMul` or `ZODIACAL_S10_TO_LINEAR`).
+   — **2026-07-29: confirmed as the shipped state, and fixed.** The
+   band is now above the black point out to ≈ 57° elongation by
+   construction. Still worth checking that it reads as a cone and not
+   as a wash.
 2. Band so bright it dominates the starfield (lower the same).
+   — Untested. The band peaks at 4.25× the black point at 30°
+   elongation, against a magnitude-8 star's 1.0×; a bright star is
+   ~6×. Plausible but unverified.
 3. Band clips as a flat disk near the Sun because Leinert's 9000
-   S10 value doesn't pass Bloom's `luminanceThreshold=1.0`. If so,
-   add a soft smoothstep fade near elongation < 15° in the shader.
+   S10 value doesn't pass Bloom's `luminanceThreshold=1.0`.
+   — **2026-07-29: inverted.** It now passes the gate deliberately, at
+   3.26×, over a region ≈ 26° × 20° around the Sun. This is the single
+   most likely thing the eye pass will object to. The escape hatch is
+   `u_brightnessMul`; a fade near the Sun is NOT the right fix, because
+   the blank-cell wedge is already a constant hold rather than a ramp.
 
-Once CreditsModal provenance also lands, recommend a single human-eye
-calibration pass before declaring this sub-pull done.
+CreditsModal provenance has landed (8598028, wording updated
+2026-07-29). A single human-eye calibration pass is what remains
+before declaring this sub-pull done.
 
 **2026-07-28 runtime-verification attempt (lighting-audit session):
 still NOT runtime-verified — blocked by tooling, not attempted-and-
@@ -560,6 +715,15 @@ of that can be produced from this sandbox — every environment available
 to it (non-compositing pane, headless-Playwright-on-SwiftShader) either
 cannot render a frame or hard-floors to the tier where the effects under
 test don't mount.
+
+**2026-07-29: still owed, and now it is the ONLY thing owed on this
+layer.** The rebuild above is math that puts the band inside the
+visible window by construction — every number in it is checked by unit
+test — but no frame of it has been seen by anyone. To do the pass:
+camera near 1 AU (the boot pose at ~148 AU shows nothing, correctly),
+ultra tier, look 30-60° off the Sun along the ecliptic, then pan to
+frame the Sun (failure mode 3), then to the antisolar point
+(gegenschein) and to the ecliptic pole (should be black).
 
 ---
 

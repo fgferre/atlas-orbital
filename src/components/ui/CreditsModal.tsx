@@ -114,7 +114,7 @@ export const CreditsModal = () => {
                 />
                 <CreditItem
                   title="Zodiacal light — Leinert et al. (1998)"
-                  description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted. The overall visibility factor is a calibration constant, disclosed in the source, pending a final human-eye pass."
+                  description="The faint band of sunlight scattered by interplanetary dust is computed from the tabulated brightness grid of Leinert et al. (1998), A&AS 127 Table 16, with Dumont (1983) R^-2.5 heliocentric density scaling and a solar-spectrum colour approximation. The table is used verbatim, not fitted; its blank cells near the Sun are held constant rather than invented, and the ecliptic-pole value is Leinert's own 60 S10. The overall visibility factor is still a display calibration, not a photometric conversion: the table spans a wider brightness range than the graded image can show, so it is centred on that range with equal margin at both ends: the brightest region near the Sun overflows into bloom, and the antisolar gegenschein sits below the visible floor until the view adapts. Disclosed in the source, pending a final human-eye pass."
                 />
                 <CreditItem
                   title="NASA JPL Horizons"
