@@ -15,10 +15,10 @@ _Last updated: 2026-07-29 (halo-alignment fix — `LightGlowInjector.tsx`'s four
 (2026-07-29)** — verdict: "muito ruim, confuso e não integrado com o
 starfield. ele some nos fly-bys". `MilkyWaySkybox.tsx` + its `Scene.tsx`
 mount + CreditsModal entry removed; `milkyWayOrientation.ts` (verified
-transform) and the source JPEG (now unreferenced) kept for a future
-rethink. See the wave file's "#4 pulled (2026-07-29)" section.
-Rethink pending — do not re-attempt the same additive-shell approach
-without addressing the recorded failure-mode hypotheses.
+transform) and the source JPEG kept for the rethink. Do not re-attempt
+the additive-shell approach — [`galaxy volumetric`](./waves/galaxy-volumetric-2026-07-29.md)
+plan ready, M1 awaits owner go + GPU answers (§8; §0.1's
+`ZodiacalLightSkybox` camera-outrun spin-off fixed separately).
 
 **2026-07-29 (halo-alignment fix):** `LightGlowInjector.tsx`, a fourth
 missed `hygFrame.ts` call site, now routes through `hygEquatorialToScene`
