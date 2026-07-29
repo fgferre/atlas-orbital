@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (forced-ultra headless verification pass — DEFECT FOUND, live on `main`: planetshine (`26cb756`) never compiles, two undeclared GLSL uniforms, Io/Europa/Moon render broken; see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section, not fixed, docs-only brief. Prior: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (planetshine GLSL-compile defect FIXED — `planetshinePatch.ts` (`26cb756`) now declares `u_shineDir`/`u_shineRadiance` at the `lights_physical_pars_fragment` anchor it shares with `solarIrradiancePatch.ts`; Io, Europa and the Moon render correctly again. New permanent regression net: `e2e/ultra-shaders.spec.ts` (forced-ultra focus sweep over one representative per patched material family, asserts zero console errors — this is the gate that would have caught the defect before ship). Prior: forced-ultra headless verification pass found the defect (see lighting-redesign wave file's "2026-07-29 (forced-ultra headless verification pass)" section for the original report, now closed). Before that: halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Before that: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -76,7 +76,7 @@ baseline re-blessed from an inspected, healthy frame (this wave's re-bless
 budget is now spent). See the wave file's "Queue step 2 shipped
 2026-07-29 (second attempt)" section for the extent numbers and full
 verification; "Queue step 2 attempted 2026-07-29" (kept above it) is the
-first attempt's record of the real blocker this second attempt resolved.
+first attempt's record of the real blocker this second attempt resolved. **Onda 2.3's planetshine GLSL-compile defect is FIXED (2026-07-29)** — see the wave file's "2026-07-29 (planetshine GLSL-compile defect — FIXED)" section; regression net is `e2e/ultra-shaders.spec.ts`.
 
 ---
 

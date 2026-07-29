@@ -1277,3 +1277,116 @@ this session (it sits below the captured viewport fold and a text-regex
 extraction attempt found nothing) — moot until the compile failure
 above is fixed, since the material doesn't render correctly regardless
 of phase.
+
+---
+
+## 2026-07-29 (planetshine GLSL-compile defect — FIXED)
+
+Follow-up to the "DEFECT FOUND" section immediately above. The one-line
+fix that section predicted was directionally right but incomplete: the
+declarations cannot land inline where `buildPlanetshinePatch()` reads
+them, because that call site (`#include <lights_fragment_begin>`) is
+already inside `main()` and GLSL forbids a `uniform` declaration inside a
+function body.
+
+**The fix.** `planetshinePatch.ts` gained a second export,
+`PLANETSHINE_PARS_PATCH`, injected at the SAME `#include
+<lights_physical_pars_fragment>` anchor `solarIrradiancePatch.ts` already
+owns:
+
+```glsl
+uniform vec3 u_shineDir;
+uniform vec3 u_shineRadiance;
+#include <lights_physical_pars_fragment>
+```
+
+This works because both branches of `buildPlanetDirectLightPatch`
+(regolith and lambert) re-emit that literal `#include
+<lights_physical_pars_fragment>` token verbatim as the first line of their
+own replacement text — so after `applyPlanetDirectLightPatch` runs, the
+token still appears in the shader exactly once, embedded in what it just
+inserted, and `applyPlanetshinePatch`'s own `.replace()` against that same
+token finds it and prepends the two declarations ahead of it. This makes
+call order **load-bearing, not incidental**: `applyPlanetshinePatch` must
+run after `applyPlanetDirectLightPatch` on the same shader object, which
+`usePlanetMaterials.ts`'s `patchDirectLights` closure already does for
+every branch. `applyPlanetshinePatch`'s docstring (previously claiming
+"order does not actually matter") was corrected to say so.
+
+**CPU-side binding was already correct.** `shader.uniforms[u_shineDir]` /
+`[u_shineRadiance]` were registered by `applyPlanetshinePatch` from the
+start, and `Planet.tsx`'s per-frame write already read
+`material.userData.shader.uniforms[...]` correctly — the JS-side objects
+simply had no matching GLSL declaration to bind to at compile time. No
+change was needed on that side.
+
+**Root cause of how it escaped `test:run`.** `planetshinePatch.test.ts`'s
+"composes cleanly with the direct-light patch on the same shader" test
+asserted chunk PRESENCE (`toContain("IncidentLight shineLight;")`,
+`toContain("void RE_Direct_SolarIrradiance(")`) but never that a
+referenced identifier was actually DECLARED — `String.prototype.includes`
+cannot see a GLSL compile error. Hardened with a shared static-consistency
+helper, `src/components/canvas/shaders/shaderUniformAudit.ts`
+(`findUndeclaredUniforms` / `assertAllUniformsDeclared`): strips GLSL
+comments, then flags any `u_`-prefixed identifier referenced in a composed
+shader string with no matching `uniform` declaration in that same string.
+Applied to the whole `onBeforeCompile` patch family —
+`planetshinePatch.test.ts` (against the fully composed shader, both
+`regolith` variants — this is the assert that fails on `26cb756` and
+passes on the fix), `solarIrradiancePatch.test.ts` (defensive pin;
+`u_solarIrradiance` was already declared correctly) and
+`regolithPhotometry.test.ts` (defensive pin; that patch carries no custom
+uniforms today).
+
+**New permanent regression net: `e2e/ultra-shaders.spec.ts`.** The static
+check above proves internal consistency of the shader TEXT, not that a
+real GPU accepts it — so a runtime net was also added, committing the
+"forced-ultra headless verification pass" technique that found this
+defect as a permanent gate instead of a one-off throwaway harness. Single
+page load, `__ATLAS_TEST_STORE__`-driven `setGraphicsAutoMode(false)` +
+`setGraphicsPreset("ultra")` immediately after the test store appears
+(bypassing headless SwiftShader's `constrained`-tier auto-detect
+ceiling), then sequential `setFocusId` across one representative per
+patched material family — `moon` + `io` (the shine recipients this defect
+broke), `mercury` (airless-regolith, non-recipient), `earth` (day/night
+branch), `saturn` (ring-shadow branch) — asserting zero console errors
+throughout. Runtime ≈ 40–48 s.
+
+**Verified the regression net actually catches the defect** (not just
+asserted): temporarily reverted `planetshinePatch.ts` to the pre-fix
+`26cb756` shape, rebuilt, and ran `e2e/ultra-shaders.spec.ts` alone — it
+failed red with the exact reported errors (`ERROR: … 'u_shineDir' :
+undeclared identifier`, `ERROR: … 'u_shineRadiance' : undeclared
+identifier`) for Io, Europa and the Moon. Restored the fix, rebuilt, and
+the same spec passed clean.
+
+**Visual confirmation.** Forced-ultra screenshots of the Moon and Io,
+focused individually post-fix: the Moon renders as a proper lit sphere
+with visible terminator and crater texture (not the pre-fix flat white
+polygon); Io renders with its mottled sulfur-yellow/red lit hemisphere and
+a dark limb (not the pre-fix flat black disc). One loose end from the
+original report was run down and resolved as a non-issue: the "separate
+corrupted glowing white/yellow flat polygon artifact floating near" Io in
+the pre-fix screenshots is the app's existing off-screen/nearby-body
+direction-indicator arrow UI (confirmed by focusing Europa and Jupiter
+individually and seeing the same arrow, correctly labelled, pointing at
+Callisto and the Sun respectively) — an unrelated, pre-existing, working
+feature that happened to sit next to Io's own broken disc in that frame,
+not a second shader defect.
+
+**Verification.**
+
+- `npm run test:run` — 2536 passed / 125 files (net +1 file:
+  `shaderUniformAudit.ts` is not itself a test file; the 3 patch-family
+  test files gained one assert each except `planetshinePatch.test.ts`,
+  which gained the composed-shader regression pin). No test deleted or
+  weakened.
+- `npx tsc -b` — clean. `npm run lint` — clean. `npm run docs:check` —
+  clean. `npm run build` — clean.
+- **E2E gate:** `npx playwright test e2e/` — 13/13 passed (the new
+  `ultra-shaders.spec.ts` plus the existing 12). One run hit
+  `hyg-focus.spec.ts`'s already-documented worker-contention flake on its
+  "intermediate frame" sampler (see the "Onda 2.2" section's own note on
+  this exact flake); it passed alone and passed again in a clean full
+  re-run. The boot pixel baseline needed no re-blessing — this defect and
+  its fix never touch the wide, disc-free boot frame.
