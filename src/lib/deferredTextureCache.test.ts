@@ -259,6 +259,43 @@ describe("deferredTextureCache", () => {
     }
   });
 
+  it("retries once after a timeout instead of stranding the texture", async () => {
+    // The bug this fixes: a component that stays mounted with unchanged
+    // `useDeferredTexture` deps never calls `acquireDeferredTexture` again,
+    // so a stuck `"error"` entry used to be a permanent downgrade for that
+    // mount. One bounded automatic retry recovers it without a full retry
+    // framework.
+    vi.useFakeTimers();
+    try {
+      let attempt = 0;
+      vi.spyOn(THREE.TextureLoader.prototype, "loadAsync").mockImplementation(
+        () => {
+          attempt += 1;
+          return attempt === 1
+            ? new Promise<THREE.Texture<HTMLImageElement>>(() => {}) // first attempt stalls forever
+            : Promise.resolve(makeLoadedTexture(2048, 1024)); // retry succeeds
+        }
+      );
+
+      acquireDeferredTexture("/textures/2k_retry.jpg", { priority: 0 });
+
+      await vi.advanceTimersByTimeAsync(60_000); // LOAD_TIMEOUT_MS
+      expect(getDeferredTextureSnapshot("/textures/2k_retry.jpg").status).toBe(
+        "error"
+      );
+
+      await vi.advanceTimersByTimeAsync(5_000); // LOAD_TIMEOUT_RETRY_DELAY_MS
+      await vi.waitFor(() =>
+        expect(
+          getDeferredTextureSnapshot("/textures/2k_retry.jpg").status
+        ).toBe("ready")
+      );
+      expect(attempt).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not let a stale priority stamp outrank the focused body", async () => {
     const requested: string[] = [];
     const pending: Array<(texture: THREE.Texture<HTMLImageElement>) => void> =

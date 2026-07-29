@@ -22,6 +22,8 @@ interface DeferredTextureEntry extends DeferredTextureSnapshot {
   colorSpace: THREE.ColorSpace;
   queued: boolean;
   loadPriority: number;
+  /** See {@link scheduleTimeoutRetry} — caps the automatic retry at one. */
+  timeoutRetried: boolean;
 }
 
 export interface DeferredTextureEvictionCandidate {
@@ -49,6 +51,12 @@ const IDLE_EVICTION_MS = 20_000;
  * permanent stall, not to police slow networks.
  */
 const LOAD_TIMEOUT_MS = 60_000;
+/**
+ * Backoff before {@link scheduleTimeoutRetry}'s single automatic retry.
+ * Short relative to `LOAD_TIMEOUT_MS` — this is giving a transient stall a
+ * moment to clear, not a second full attempt at patience.
+ */
+const LOAD_TIMEOUT_RETRY_DELAY_MS = 5_000;
 const MAX_CONCURRENT_TEXTURE_LOADS = 4;
 const LOWEST_LOAD_PRIORITY = 3;
 const MIPMAP_BYTE_FACTOR = 4 / 3;
@@ -331,6 +339,14 @@ const withLoadTimeout = (
     );
   });
 
+/**
+ * Distinguishes a `withLoadTimeout` rejection from every other load
+ * failure (404, decode error, …). Only the timeout case is worth an
+ * automatic retry — the others will fail identically a second time.
+ */
+const isTimeoutError = (message: string | null) =>
+  message != null && message.startsWith("Timed out loading ");
+
 const scheduleBudgetEviction = () => {
   if (budgetEvictionScheduled) {
     return;
@@ -380,6 +396,7 @@ const ensureEntry = (url: string, colorSpace?: THREE.ColorSpace) => {
     colorSpace: colorSpace ?? THREE.SRGBColorSpace,
     queued: false,
     loadPriority: LOWEST_LOAD_PRIORITY,
+    timeoutRetried: false,
   };
   syncEntrySnapshot(entry);
   entries.set(url, entry);
@@ -472,6 +489,9 @@ const pumpLoadQueue = () => {
         entry.status = "ready";
         entry.error = null;
         entry.lastUsedAt = getNow();
+        // A successful load earns a fresh retry budget for any future
+        // timeout — this one is spent, not the entry's only chance ever.
+        entry.timeoutRetried = false;
         syncEntrySnapshot(entry);
         notifyEntry(entry);
 
@@ -490,6 +510,7 @@ const pumpLoadQueue = () => {
         entry.error = error instanceof Error ? error.message : "Failed to load";
         syncEntrySnapshot(entry);
         notifyEntry(entry);
+        scheduleTimeoutRetry(entry);
       })
       .finally(() => {
         if (entry.promise === loaded) {
@@ -540,6 +561,41 @@ const startLoad = (entry: DeferredTextureEntry, priority: number) => {
   syncEntrySnapshot(entry);
   notifyEntry(entry);
   pumpLoadQueue();
+};
+
+/**
+ * One bounded automatic retry for an entry that failed on
+ * `LOAD_TIMEOUT_MS`, not on a genuine load error. Without this, a stuck
+ * `"error"` entry only recovers when something calls `acquireDeferredTexture`
+ * again — `startLoad`'s guard above already tolerates re-entry from
+ * `"error"` (it only early-returns on a live promise or `"ready"`), but a
+ * component that stays mounted with unchanged `useDeferredTexture` deps
+ * never re-acquires, so one slow network blip would otherwise downgrade
+ * that texture for the rest of the mount. `entry.timeoutRetried` caps this
+ * at exactly one automatic attempt — a specific state transition, not a
+ * retry framework; a second timeout is left as a real `"error"` for the
+ * caller's existing fallback UI.
+ */
+const scheduleTimeoutRetry = (entry: DeferredTextureEntry) => {
+  if (entry.timeoutRetried) {
+    return;
+  }
+  if (!isTimeoutError(entry.error)) {
+    return;
+  }
+  entry.timeoutRetried = true;
+  // Plain global `setTimeout`, matching `withLoadTimeout` above rather than
+  // `scheduleIdleEviction`'s `window`-gated cache housekeeping — this is a
+  // reliability mechanism for the load itself, not a browser-only extra,
+  // so it should work anywhere `setTimeout` exists (and stay exercisable
+  // under the `"node"` vitest environment, which has no `window`).
+  setTimeout(() => {
+    // Only resume if someone still wants this texture and it is still
+    // sitting in the failed state a fresh acquire hasn't already cleared.
+    if (entry.refCount > 0 && entry.status === "error") {
+      startLoad(entry, entry.loadPriority);
+    }
+  }, LOAD_TIMEOUT_RETRY_DELAY_MS);
 };
 
 export const setDeferredTextureBudget = (budgetBytes: number) => {
