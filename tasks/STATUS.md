@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-07-29 (halo-alignment fix — `LightGlowInjector.tsx`'s fourth missed `hygFrame.ts` call site, see starfield-upgrade section below. Prior: lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
 
 ---
 
@@ -20,13 +20,15 @@ rethink. See the wave file's "#4 pulled (2026-07-29)" section.
 Rethink pending — do not re-attempt the same additive-shell approach
 without addressing the recorded failure-mode hypotheses.
 
-Remaining open in this wave: eye-adaptation runtime verification (1d
-shipped, not eye-checked) and the LightGlow performance audit (blocked
-on real-GPU access). CreditsModal now covers AgX + zodiacal + Milky
-Way. Next agent: pick one of those, or close the wave pending the
-owner's eye pass. Read the wave file's "Honest disclosure" section
-before labelling any earlier sub-pull done — green gates are not a
-runtime look.
+**2026-07-29 (halo-alignment fix):** `LightGlowInjector.tsx`, a fourth
+missed `hygFrame.ts` call site, now routes through `hygEquatorialToScene`
+— trail in the wave file. Owner: re-check the sky at home. Remaining
+open in this wave: eye-adaptation runtime verification (1d shipped, not
+eye-checked) and the LightGlow performance audit (blocked on real-GPU
+access). CreditsModal now covers AgX + zodiacal + Milky Way. Next agent:
+pick one of those, or close the wave pending the owner's eye pass. Read
+the wave file's "Honest disclosure" section before labelling any
+earlier sub-pull done — green gates are not a runtime look.
 
 ---
 

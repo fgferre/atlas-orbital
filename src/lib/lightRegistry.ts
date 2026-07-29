@@ -31,6 +31,7 @@
 
 import * as THREE from "three";
 import type { HygCatalogData } from "./starfield";
+import { hygEquatorialToScene } from "./starfield/hygFrame";
 import {
   absoluteMagnitudeToPseudoSize,
   apparentToAbsMag,
@@ -197,14 +198,7 @@ const pickTopHygByBrightness = (
   catalog: HygCatalogData,
   maxCount: number,
   backBufferHeight: number,
-  fovFactor: number,
-  /**
-   * Pre-computed rotation matrix if the starfield parent applies a
-   * world rotation (e.g. J2000 obliquity). Callers pass `null` when
-   * the catalog positions are already in the same frame as the
-   * camera.
-   */
-  obliquityMatrix: THREE.Matrix3 | null
+  fovFactor: number
 ): HygCandidate[] => {
   const positions = catalog.positions;
   const mags = catalog.magnitudes;
@@ -252,8 +246,19 @@ const pickTopHygByBrightness = (
     )
       continue;
 
-    tmp.set(px * DISTANCE_SCALE, py * DISTANCE_SCALE, pz * DISTANCE_SCALE);
-    if (obliquityMatrix) tmp.applyMatrix3(obliquityMatrix);
+    // Equatorial J2000 → scene frame, via the same helper `Starfield`
+    // bakes into its instance buffer and `StarHoverPicker`/
+    // `hygFocusResolver` use — see hygFrame.ts's doc comment on why
+    // this must be the ONLY place this rotation is expressed. Scale
+    // first (parsec → scene units), then rotate — the map is linear
+    // so the order doesn't change the result, and this matches the
+    // convention `StarHoverPicker.buildPickCandidates` already uses.
+    hygEquatorialToScene(
+      px * DISTANCE_SCALE,
+      py * DISTANCE_SCALE,
+      pz * DISTANCE_SCALE,
+      tmp
+    );
 
     sink({
       index: i,
@@ -275,9 +280,9 @@ const pickTopHygByBrightness = (
 // pickTopHygByBrightness scans the whole catalog (~109k stars) with
 // transcendental brightness math. Its result depends ONLY on inputs that
 // are static frame-to-frame in steady state (catalog, oversample,
-// backbuffer height, fovFactor, obliquity) — NOT on the camera. The
-// per-frame camera dependency lives entirely in the cheap NDC projection
-// in updateLightRegistry. Caching the candidate list collapses the
+// backbuffer height, fovFactor) — NOT on the camera. The per-frame
+// camera dependency lives entirely in the cheap NDC projection in
+// updateLightRegistry. Caching the candidate list collapses the
 // per-frame cost from O(catalog) to O(slots) whenever the user is not
 // actively zooming / resizing / changing quality tier.
 let cachedCandidates: HygCandidate[] | null = null;
@@ -285,22 +290,19 @@ let cachedCatalog: HygCatalogData | null = null;
 let cachedOversample = -1;
 let cachedBackBufferHeight = -1;
 let cachedFovFactor = -1;
-let cachedObliquity: THREE.Matrix3 | null = null;
 
 const getTopHygCandidates = (
   catalog: HygCatalogData,
   oversample: number,
   backBufferHeight: number,
-  fovFactor: number,
-  obliquityMatrix: THREE.Matrix3 | null
+  fovFactor: number
 ): HygCandidate[] => {
   if (
     cachedCandidates !== null &&
     cachedCatalog === catalog &&
     cachedOversample === oversample &&
     cachedBackBufferHeight === backBufferHeight &&
-    cachedFovFactor === fovFactor &&
-    cachedObliquity === obliquityMatrix
+    cachedFovFactor === fovFactor
   ) {
     return cachedCandidates;
   }
@@ -308,15 +310,13 @@ const getTopHygCandidates = (
     catalog,
     oversample,
     backBufferHeight,
-    fovFactor,
-    obliquityMatrix
+    fovFactor
   );
   cachedCandidates = candidates;
   cachedCatalog = catalog;
   cachedOversample = oversample;
   cachedBackBufferHeight = backBufferHeight;
   cachedFovFactor = fovFactor;
-  cachedObliquity = obliquityMatrix;
   return candidates;
 };
 
@@ -339,12 +339,6 @@ export interface UpdateLightRegistryParams {
    * Used to divide `solidAngleApparent` per `GraphUpdater.java:182`.
    */
   fovFactor: number;
-  /**
-   * Optional rotation matrix for the HYG catalog's parent transform
-   * (J2000 obliquity). `null` if the catalog sits at world origin
-   * without rotation.
-   */
-  obliquityMatrix: THREE.Matrix3 | null;
   /** In-place output (avoids per-frame allocations). */
   output: LightRegistryOutput;
 }
@@ -359,15 +353,8 @@ export interface UpdateLightRegistryParams {
 export const updateLightRegistry = (
   params: UpdateLightRegistryParams
 ): LightRegistryOutput => {
-  const {
-    catalog,
-    camera,
-    backBufferHeight,
-    nSlots,
-    fovFactor,
-    obliquityMatrix,
-    output,
-  } = params;
+  const { catalog, camera, backBufferHeight, nSlots, fovFactor, output } =
+    params;
   const slots = Math.max(0, Math.min(MAX_LIGHTS, nSlots));
   let written = 0;
 
@@ -401,8 +388,7 @@ export const updateLightRegistry = (
       catalog,
       oversample,
       backBufferHeight,
-      fovFactor,
-      obliquityMatrix
+      fovFactor
     );
     for (const c of candidates) {
       if (written >= slots) break;

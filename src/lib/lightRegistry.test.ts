@@ -14,6 +14,7 @@ import {
   updateLightRegistry,
 } from "./lightRegistry";
 import type { HygCatalogData } from "./starfield";
+import { hygEquatorialToScene } from "./starfield/hygFrame";
 import {
   MAX_QUAD_SOLID_ANGLE_LITERAL,
   U_MIN_QUAD_SOLID_ANGLE_1440P_BASELINE,
@@ -22,6 +23,29 @@ import {
 const makeCamera = (): THREE.PerspectiveCamera => {
   const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1e12);
   cam.position.set(0, 0, DISTANCE_SCALE * 1); // 1 pc behind origin
+  cam.lookAt(0, 0, 0);
+  cam.updateMatrixWorld();
+  cam.updateProjectionMatrix();
+  return cam;
+};
+
+/**
+ * Camera for the `updateLightRegistry` HYG-catalog fixtures below.
+ * `pickTopHygByBrightness` now unconditionally rotates every catalog
+ * position through `hygEquatorialToScene`, so a camera built the same
+ * way `makeCamera()` is (sitting on the *raw* equatorial +z axis) would
+ * no longer face the fixture stars below (which sit near raw equatorial
+ * -z). Conjugating the camera position through the same rotation
+ * preserves the exact relative geometry those fixtures rely on — a
+ * rotation is an isometry, so in-frustum/behind-camera/ranking
+ * assertions are unaffected by which frame they're expressed in, as
+ * long as camera and catalog agree (which is the whole point of the
+ * fix this file pins).
+ */
+const makeHygCamera = (): THREE.PerspectiveCamera => {
+  const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1e12);
+  const camPos = hygEquatorialToScene(0, 0, DISTANCE_SCALE);
+  cam.position.copy(camPos);
   cam.lookAt(0, 0, 0);
   cam.updateMatrixWorld();
   cam.updateProjectionMatrix();
@@ -184,7 +208,6 @@ describe("updateLightRegistry — top-N HYG ranking", () => {
       backBufferHeight: 1440,
       nSlots: 4,
       fovFactor: 1,
-      obliquityMatrix: null,
       output,
     });
     expect(output.nLights).toBe(0);
@@ -203,16 +226,13 @@ describe("updateLightRegistry — top-N HYG ranking", () => {
       { xPc: 0, yPc: 0.1, zPc: -149.9, mag: 0.5, ci: 1.5 },
     ]);
     const output = makeEmptyRegistry();
-    const cam = makeCamera();
-    cam.far = 1e12;
-    cam.updateProjectionMatrix();
+    const cam = makeHygCamera();
     updateLightRegistry({
       catalog,
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
       fovFactor: 1,
-      obliquityMatrix: null,
       output,
     });
     expect(output.nLights).toBe(3);
@@ -230,14 +250,13 @@ describe("updateLightRegistry — top-N HYG ranking", () => {
       { xPc: 0, yPc: -0.05, zPc: -5, mag: 0.4, ci: 0.0 },
     ]);
     const output = makeEmptyRegistry();
-    const cam = makeCamera();
+    const cam = makeHygCamera();
     updateLightRegistry({
       catalog,
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
       fovFactor: 1,
-      obliquityMatrix: null,
       output,
     });
     expect(output.nLights).toBe(3);
@@ -251,14 +270,13 @@ describe("updateLightRegistry — top-N HYG ranking", () => {
       { xPc: 0, yPc: 0, zPc: -50, mag: 0.0, ci: 0.0 }, // in front
     ]);
     const output = makeEmptyRegistry();
-    const cam = makeCamera();
+    const cam = makeHygCamera();
     updateLightRegistry({
       catalog,
       camera: cam,
       backBufferHeight: 1440,
       nSlots: 3,
       fovFactor: 1,
-      obliquityMatrix: null,
       output,
     });
     expect(output.nLights).toBe(1);
@@ -273,11 +291,74 @@ describe("updateLightRegistry — top-N HYG ranking", () => {
       backBufferHeight: 1440,
       nSlots: 0,
       fovFactor: 1,
-      obliquityMatrix: null,
       output,
     });
     expect(output.nLights).toBe(0);
     expect(output.positions.length).toBe(MAX_LIGHTS * 2);
     expect(output.colors.length).toBe(MAX_LIGHTS * 3);
+  });
+});
+
+describe("updateLightRegistry — hygFrame alignment regression", () => {
+  // Fourth call site of the hygFrame migration bug (2026-07-23): before
+  // this fix, `pickTopHygByBrightness` rotated HYG positions with a bare
+  // R_x(23.4°) obliquity matrix and skipped the ecliptic->three.js
+  // remap `hygEquatorialToScene` applies — the same bug `hygFrame.ts`
+  // was created to kill in `Starfield.tsx`, `StarHoverPicker.tsx`, and
+  // `hygFocusResolver.ts`. That put HYG light-glow halos ~132-136° away
+  // from the stars the starfield itself draws (measured: Sirius 131.96°,
+  // Vega 134.62°, alpha Cen 119.19°, Canopus 136.26°).
+  //
+  // This pins the registry's projected NDC position for a real bright
+  // star (Sirius: RA 101.287°, Dec -16.716°, ~2.637 pc) against
+  // `hygEquatorialToScene`'s own output for the same raw equatorial
+  // input, so the rotation path can never silently re-diverge from the
+  // starfield's transform.
+  it("projects a Sirius-direction HYG light through the same hygEquatorialToScene transform the starfield uses", () => {
+    const raRad = (101.287 * Math.PI) / 180;
+    const decRad = (-16.716 * Math.PI) / 180;
+    const distPc = 2.637;
+    const xPc = distPc * Math.cos(decRad) * Math.cos(raRad);
+    const yPc = distPc * Math.cos(decRad) * Math.sin(raRad);
+    const zPc = distPc * Math.sin(decRad);
+
+    const catalog = makeCatalog([{ xPc, yPc, zPc, mag: -1.46, ci: 0.0 }]);
+
+    // Independently compute the scene-frame world position via the
+    // starfield's own helper — this is the ground truth the registry
+    // must match.
+    const expectedWorld = hygEquatorialToScene(
+      xPc * DISTANCE_SCALE,
+      yPc * DISTANCE_SCALE,
+      zPc * DISTANCE_SCALE
+    );
+
+    // Camera at the origin, aimed at the expected scene-frame direction.
+    // If the registry rotates the star into any other direction (e.g.
+    // the old bare-R_x bug), it will project away from screen center
+    // and away from `expectedNdc` below — this is not circular, it
+    // discriminates the two transforms.
+    const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1e12);
+    cam.position.set(0, 0, 0);
+    cam.lookAt(expectedWorld.x, expectedWorld.y, expectedWorld.z);
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+
+    const expectedNdc = projectToNdc01(expectedWorld, cam);
+    expect(expectedNdc).not.toBeNull();
+
+    const output = makeEmptyRegistry();
+    updateLightRegistry({
+      catalog,
+      camera: cam,
+      backBufferHeight: 1440,
+      nSlots: 1,
+      fovFactor: 1,
+      output,
+    });
+
+    expect(output.nLights).toBe(1);
+    expect(output.positions[0]).toBeCloseTo(expectedNdc![0], 6);
+    expect(output.positions[1]).toBeCloseTo(expectedNdc![1], 6);
   });
 });

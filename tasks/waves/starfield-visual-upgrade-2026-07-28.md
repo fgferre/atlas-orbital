@@ -1193,3 +1193,36 @@ the CreditsModal disclosure entry were removed; see "#4 pulled
 unreferenced and parked), and the failure-mode hypotheses recorded for
 a future retry. This is a product pull per explicit owner instruction,
 not a bug fix — no attempt was made to fix the integration in place._
+
+_2026-07-29 (halo-alignment fix session): **Fixed a fourth missed call
+site of the 2026-07-23 `hygFrame.ts` migration**, found by a read-only
+audit. `LightGlowInjector.tsx` (`LightGlowSlot`) built a bare
+`R_x(23.4°)` obliquity `Matrix3` for LightGlow light positions instead
+of the composed equatorial→scene transform (`hygEquatorialToScene`) the
+starfield, `StarHoverPicker`, and `hygFocusResolver` already went
+through — same bug class as the original three sites, just never
+migrated. Measured world-direction error at HEAD: Sirius 131.96°, Vega
+134.62°, α Cen 119.19°, Canopus 136.26° — halos rendered over the wrong
+patch of sky or not at all for on-screen bright stars, default-on on
+every tier except `constrained`. **Fix (deletion-shaped):**
+`lightRegistry.ts`'s `pickTopHygByBrightness` now calls
+`hygEquatorialToScene` directly (scale-then-rotate, matching
+`StarHoverPicker.buildPickCandidates`'s convention); the `obliquityMatrix:
+THREE.Matrix3 | null` parameter and its cache-key plumbing were deleted
+end to end (`pickTopHygByBrightness`, `getTopHygCandidates`,
+`UpdateLightRegistryParams`, `updateLightRegistry`), and
+`LightGlowInjector.tsx`'s hand-rolled matrix + its pass-through were
+removed — one transform, one owner. `hygFrame.ts`'s doc comment now
+names `lightRegistry.ts` as a fourth consumer. New regression pin in
+`lightRegistry.test.ts` ("hygFrame alignment regression" describe
+block): a real Sirius direction (RA 101.287°, Dec −16.716°, 2.637 pc)
+projects to the same NDC position via `updateLightRegistry` as via
+`hygEquatorialToScene` directly, within 1e-6 — the rotation path was
+previously untested (`obliquityMatrix: null` in every existing test).
+Three pre-existing ranking/frustum tests needed a new `makeHygCamera()`
+fixture (conjugates the old camera position through the same rotation)
+since they were built assuming no rotation. All gates green: `npm run
+test:run` (2503 tests), `tsc -b`, `lint`, `build`,
+`npx playwright test e2e/boot.spec.ts` (2/2, no pixel-diff regression —
+confirms `constrained` still never mounts LightGlow headless). Shipped
+on `main` directly per solo-dev workflow._

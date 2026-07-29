@@ -67,6 +67,14 @@ const SIN_OBLIQUITY = Math.sin(HYG_OBLIQUITY_RAD);
  * Writes into `out` (default: a fresh `Vector3`) and returns it —
  * mirroring atlas's existing math-lib idiom (`cameraRelative.ts:90`)
  * so hot callers can pass a scratch vector and allocate nothing.
+ *
+ * Consumers: `Starfield.tsx` (via `transformHygEquatorialTripletsInPlace`
+ * below), `StarHoverPicker.tsx`, `hygFocusResolver.ts`, and
+ * `lightRegistry.ts` (`pickTopHygByBrightness` — found 2026-07-29 as a
+ * fourth site carrying the bare-R_x version of this bug, missed by the
+ * original 2026-07-23 migration because `LightGlowInjector.tsx` was not
+ * touched that day). If you add a fifth HYG-position consumer, it goes
+ * through this function too — do not fork the rotation again.
  */
 export const hygEquatorialToScene = (
   x: number,

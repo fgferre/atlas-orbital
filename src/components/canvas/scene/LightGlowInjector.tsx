@@ -127,17 +127,6 @@ export function LightGlowSlot(): JSX.Element | null {
 
   const registry = useMemo(() => makeEmptyRegistry(), []);
 
-  const obliquityMatrix = useMemo(() => {
-    // The HYG starfield parent applies a R_x(23.4°) obliquity
-    // rotation so the J2000 equatorial frame lines up with the
-    // scene's ecliptic frame. Light positions must go through the
-    // same transform before projection.
-    const obliq = (23.4 * Math.PI) / 180;
-    const cosT = Math.cos(obliq);
-    const sinT = Math.sin(obliq);
-    return new THREE.Matrix3().set(1, 0, 0, 0, cosT, -sinT, 0, sinT, cosT);
-  }, []);
-
   // Lazy-init the start time inside useEffect to keep the render
   // body pure (eslint react-hooks/purity).
   const startRef = useRef<number | null>(null);
@@ -178,7 +167,6 @@ export function LightGlowSlot(): JSX.Element | null {
       backBufferHeight,
       nSlots,
       fovFactor,
-      obliquityMatrix,
       output: registry,
     });
     effect.setLightData(
