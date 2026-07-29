@@ -1,4 +1,4 @@
-import { memo, useCallback, type RefObject } from "react";
+import { memo, useCallback, useEffect, type RefObject } from "react";
 import * as THREE from "three";
 import {
   EffectComposer,
@@ -11,6 +11,7 @@ import { ToneMappingMode, type ToneMappingEffect } from "postprocessing";
 import { LensFlareSlot } from "./LensFlareInjector";
 import { LightGlowSlot } from "./LightGlowInjector";
 import type { ToneMappingName } from "../../../lib/graphics/resolver";
+import { setSunlightToneMappingMounted } from "../../../lib/graphics/solarIrradiance";
 import { STAR_DISPLAY_BLACK_POINT } from "../../../lib/starfieldShaderMath";
 
 export interface BloomController {
@@ -195,6 +196,21 @@ export const PostProcessingPipeline = memo(
     // Starburst spike drift is driven by the camera-direction
     // scalar inside `LensFlareSlot`.
     const toneMappingMode = TONE_MAPPING_MODE[toneMapping];
+
+    // Onda 2.2 — publish "an operator is mounted" to the per-body solar
+    // irradiance scalar, which caps itself at 1.0 without one (see
+    // `SUNLIGHT_UNMAPPED_CEILING`: no shoulder ⇒ anything above 1.0 hard-clips
+    // AND crosses Bloom's `luminanceThreshold = 1.0` contract into a halo).
+    // The flag is written HERE, next to the mount decision it describes,
+    // rather than recomputed at the consumer from `toneMapping` + tier — the
+    // consumer would then be a second copy of this condition, free to drift.
+    // The cleanup returning `false` is what covers the `constrained` tier:
+    // Scene.tsx unmounts this whole component there, and the flag's initial
+    // value is already `false` for the case where it never mounted at all.
+    useEffect(() => {
+      setSunlightToneMappingMounted(toneMappingMode !== undefined);
+      return () => setSunlightToneMappingMounted(false);
+    }, [toneMappingMode]);
 
     return (
       <EffectComposer

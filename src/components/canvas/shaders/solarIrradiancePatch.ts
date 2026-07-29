@@ -46,10 +46,14 @@
  * ## Cost
  *
  * One `float` uniform and one multiply per direct light per fragment, on
- * materials that in most cases already carry an `onBeforeCompile`. At the
- * shipped default the uniform is exactly `1.0`, so the multiply is an
- * IEEE-754 identity and the rendered output is bit-identical to HEAD — the
- * no-op contract `e2e/boot.spec.ts` verifies at the pixel level.
+ * materials that in most cases already carry an `onBeforeCompile`.
+ *
+ * The uniform is registered at `1.0` so a material that draws before
+ * `Planet.tsx`'s first per-frame write is lit neutrally. It no longer STAYS
+ * there: Onda 2.2 moved the default policy to `"assisted"`, so the shipped
+ * value is `E^0.35` per body. (Onda 2.1 shipped this file under
+ * `"compensated"`, whose gain is exactly `1/E` — that was what made the
+ * introduction of this patch a bit-identical no-op at the time.)
  */
 
 import { REGOLITH_PHOTOMETRY_LIGHTS_PATCH } from "./regolithPhotometryPatch";
@@ -108,6 +112,67 @@ interface PatchableShader {
   uniforms: { [name: string]: { value: unknown } };
   fragmentShader: string;
 }
+
+/** Minimal structural view of the material fields the cache key touches. */
+interface CacheKeyedMaterial {
+  onBeforeCompile: (...args: never[]) => void;
+  customProgramCacheKey: () => string;
+}
+
+/**
+ * Discriminator appended to a planet material's program cache key, naming
+ * every choice in {@link buildPlanetDirectLightPatch} that changes the
+ * generated GLSL. Extend this string — do not add a second mechanism — if a
+ * future option makes the emitted chain vary again.
+ */
+const resolveDirectLightVariant = ({
+  regolith,
+}: {
+  regolith: boolean;
+}): string => (regolith ? "planet-regolith" : "planet-lambert");
+
+/**
+ * Make three's program cache see the two direct-light chains as different
+ * programs. **Required wherever {@link applyPlanetDirectLightPatch} is used.**
+ *
+ * ## The bug this prevents
+ *
+ * `THREE.Material.customProgramCacheKey()` defaults to
+ * `this.onBeforeCompile.toString()` (three r181,
+ * `src/materials/Material.js`) — the SOURCE TEXT of the callback, not what it
+ * does. Onda 2.1 routed every planet-material branch through one hoisted
+ * `patchDirectLights` closure, which is exactly right for keeping the chain
+ * order in one place and exactly wrong for that cache key: the closure's text
+ * is byte-identical whether `body.airlessRegolith` is true or false, because
+ * the flag is read from a captured variable rather than written into the
+ * source. Two materials that agree on every other program parameter
+ * therefore hash to the same key, and three hands the second one the FIRST
+ * one's compiled program.
+ *
+ * Consequence, before this fix: whichever cohort compiled first won. Either
+ * the airless bodies (mercury, moon, io, europa, ganymede, callisto,
+ * enceladus) silently lost their Lommel-Seeliger photometry, or venus / mars
+ * / the giants / titan / the sphere-path TNOs silently gained it — decided by
+ * render order, reported by nothing, with no error and no visual that reads
+ * as "broken" rather than "a bit off".
+ *
+ * The key is composed as `default ⊕ variant`, never `variant` alone: the
+ * per-branch callbacks (Earth day/night, the ring shadow solve, the eclipse
+ * branch) generate genuinely different GLSL and rely on their own source text
+ * to stay distinct. Replacing the key with a bare variant string would
+ * collapse THOSE into each other — a worse bug than the one being fixed.
+ *
+ * Reads `onBeforeCompile` lazily, so it may be called before the callback is
+ * assigned.
+ */
+export const applyPlanetDirectLightCacheKey = (
+  material: CacheKeyedMaterial,
+  options: { regolith: boolean }
+): void => {
+  const variant = resolveDirectLightVariant(options);
+  material.customProgramCacheKey = () =>
+    `${material.onBeforeCompile.toString()}|${variant}`;
+};
 
 /**
  * Install the direct-light chain on a shader inside `onBeforeCompile`.

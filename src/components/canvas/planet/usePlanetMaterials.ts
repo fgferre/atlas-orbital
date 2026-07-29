@@ -19,7 +19,10 @@ import {
   ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
   ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
 } from "../shaders/eclipseShaderPatch";
-import { applyPlanetDirectLightPatch } from "../shaders/solarIrradiancePatch";
+import {
+  applyPlanetDirectLightCacheKey,
+  applyPlanetDirectLightPatch,
+} from "../shaders/solarIrradiancePatch";
 import type { ResolvedSunRenderMode } from "../../../lib/sunRenderMode";
 
 /**
@@ -390,6 +393,17 @@ export function usePlanetMaterials({
         regolith: !!body.airlessRegolith,
       });
     };
+
+    // …and the flag that closure reads has to reach the PROGRAM CACHE KEY as
+    // well, or three serves one cohort the other's compiled shader. Hoisting
+    // `patchDirectLights` made every branch's `onBeforeCompile` source text
+    // identical across the regolith/lambert split, and that source text is
+    // three's default cache key. See `applyPlanetDirectLightCacheKey`.
+    // Set once here rather than per branch: it reads `onBeforeCompile`
+    // lazily, so it is correct no matter which branch assigns it below.
+    applyPlanetDirectLightCacheKey(mat, {
+      regolith: !!body.airlessRegolith,
+    });
 
     // Apply Earth day/night shader (takes priority over ring shadows)
     if (body.id === "earth" && textureNight) {

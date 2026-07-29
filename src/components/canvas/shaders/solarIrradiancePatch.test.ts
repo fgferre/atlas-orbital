@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SOLAR_IRRADIANCE_UNIFORM,
+  applyPlanetDirectLightCacheKey,
   applyPlanetDirectLightPatch,
   buildPlanetDirectLightPatch,
 } from "./solarIrradiancePatch";
@@ -71,5 +72,46 @@ describe("solar irradiance direct-light patch", () => {
     expect(
       shader.fragmentShader.match(/void RE_Direct_SolarIrradiance\(/g)
     ).toHaveLength(1);
+  });
+
+  it("gives the two direct-light chains different program cache keys", () => {
+    // The regression this pins is invisible without it. Every planet-material
+    // branch routes through ONE hoisted `patchDirectLights` closure, so the
+    // regolith flag lives in a captured variable and never appears in
+    // `onBeforeCompile.toString()` — which is three's DEFAULT program cache
+    // key (`Material.customProgramCacheKey`). Two materials that agree on
+    // every other program parameter then hash identically and three serves
+    // the second one the first one's compiled program: either the airless
+    // bodies silently lose Lommel-Seeliger or the lambert ones silently gain
+    // it, decided by render order, reported by nothing.
+    const sharedOnBeforeCompile = () => {};
+
+    const regolith = {
+      onBeforeCompile: sharedOnBeforeCompile,
+      customProgramCacheKey: () => "",
+    };
+    const lambert = {
+      onBeforeCompile: sharedOnBeforeCompile,
+      customProgramCacheKey: () => "",
+    };
+
+    // Precondition: this is what three would have keyed on, and it collides.
+    expect(regolith.onBeforeCompile.toString()).toBe(
+      lambert.onBeforeCompile.toString()
+    );
+
+    applyPlanetDirectLightCacheKey(regolith, { regolith: true });
+    applyPlanetDirectLightCacheKey(lambert, { regolith: false });
+
+    expect(regolith.customProgramCacheKey()).not.toBe(
+      lambert.customProgramCacheKey()
+    );
+    // Composed as `default ⊕ variant`, never the bare variant: the per-branch
+    // callbacks (Earth day/night, ring shadow) rely on their own source text
+    // to stay distinct from each other, and replacing the key outright would
+    // collapse THOSE together.
+    expect(regolith.customProgramCacheKey()).toContain(
+      sharedOnBeforeCompile.toString()
+    );
   });
 });

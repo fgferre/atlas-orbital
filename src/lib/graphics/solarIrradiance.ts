@@ -57,16 +57,14 @@
  * then fight, and no single place can answer "how much light is this body
  * actually getting".
  *
- * ## Today's default is a visual NO-OP, by construction
+ * ## The shipped default is `"assisted"`, and it ships with its badge
  *
- * {@link DEFAULT_SUNLIGHT_ASSIST_POLICY} is `"compensated"`, whose gain is
- * exactly `1 / E` — so the fused scalar is 1.0 for every body and this
- * infrastructure changes not one pixel. That is deliberate: real irradiance
- * is a **content** claim (a body genuinely rendered dimmer than the viewer
- * might expect), and per the plan a content claim ships together with its
- * disclosure UI, never ahead of it. The next agent in the queue owns the
- * unified fidelity badge + assist control and flips
- * {@link DEFAULT_SUNLIGHT_ASSIST_POLICY} to `"real"` in that same change.
+ * {@link DEFAULT_SUNLIGHT_ASSIST_POLICY} is `"assisted"`: the fused scalar is
+ * `E^SIGMA` with SIGMA = {@link SUNLIGHT_ASSIST_EXPONENT}. That is a **content**
+ * claim (bodies are genuinely rendered at different brightnesses now), so per
+ * the plan it landed in the same change as the disclosure surface — the
+ * unified fidelity badge (`FidelityBadge.tsx`), whose Brightness line reads
+ * amber for `"assisted"` / `"compensated"` and emerald for `"real"`.
  *
  * ## What this scalar does NOT touch
  *
@@ -115,48 +113,148 @@ export const SOLAR_IRRADIANCE_MIN_AU = 0.05;
 export const SOLAR_IRRADIANCE_MAX_AU = 1000;
 
 /**
- * How much of the real irradiance the viewer is shown.
+ * How much of the real irradiance the viewer is shown. Three positions, each
+ * named in the UI by its **visible consequence** — never by a provenance word
+ * like "scientific", which `SceneLighting.tsx`'s `decay = 0` would make a
+ * false claim (`handoffiluminacao.md` §4 item 5 / §6 item 3).
  *
- * - `"compensated"` — gain is `1 / E`, so the fused scalar is 1.0 everywhere:
- *   every body is lit as though it sat at the anchor distance. This is
- *   today's shipped behaviour and reproduces the pre-Onda-2 picture exactly.
- * - `"real"` — gain is 1, so the fused scalar IS the irradiance. Mercury
- *   ~10.4×, Neptune ~1/900. A content claim; ships with its disclosure badge.
- *
- * A third, interpolating position (a compressive curve between the two — the
- * plan's "Realçado") is the natural next member. It is deliberately NOT
- * declared until something implements it: an unimplemented union member is a
- * branch every consumer has to handle for no behaviour.
+ * - `"real"` — "True brightness". Gain is 1, so the fused scalar IS the
+ *   irradiance. Mercury ~10.4×, Neptune ~1/900. The unassisted position: the
+ *   badge's Brightness line reads emerald here and nowhere else.
+ * - `"assisted"` — "Assisted", the shipped default. See
+ *   {@link SUNLIGHT_ASSIST_EXPONENT}.
+ * - `"compensated"` — "Equalized". Gain is `1 / E`, so the fused scalar is
+ *   1.0 everywhere: every body is lit as though it sat at the anchor
+ *   distance. This is the pre-Onda-2 picture, kept as an explicit choice
+ *   rather than an accident of plumbing.
  */
-export type SunlightAssistPolicy = "compensated" | "real";
+export type SunlightAssistPolicy = "compensated" | "assisted" | "real";
+
+/**
+ * The compression exponent of the `"assisted"` position: `fused = E^SIGMA`.
+ *
+ * **A discretionary display tunable, not a measured constant.** It is chosen,
+ * disclosed in the Credits panel, and the one number in this file with no
+ * physical derivation behind it. What it buys:
+ *
+ * | body    | real E  | E^0.35 |
+ * |---------|---------|--------|
+ * | Mercury | 10.4×   | 2.27×  |
+ * | Earth   | 1.0×    | 1.0×   |
+ * | Neptune | 1/900   | 1/10.8 |
+ *
+ * — i.e. it takes a ~9400:1 dynamic range that no display can show at once
+ * and compresses it to ~25:1, which one can. The property that makes it
+ * honest rather than decorative is that `x ↦ x^0.35` is **strictly
+ * increasing**: every body keeps its true brightness ORDERING and its true
+ * SIGN of change as it moves along its orbit. `"compensated"` destroys both
+ * (everything is 1.0); `"real"` keeps both but spends the entire display
+ * range on bodies inside 2 AU and renders the outer system as black.
+ *
+ * 0.35 specifically: the smallest exponent tried that still keeps Neptune
+ * above the ~1/16 point where the 0.02 ambient viewing floor
+ * (`visualPresetOverrides.ts`) starts to dominate its direct sunlight — below
+ * that the outer planets stop being *lit* and start being *ambient-washed*,
+ * which is a different and worse lie than compression. Nothing downstream
+ * depends on the exact value; changing it changes only how compressed the
+ * `"assisted"` picture is.
+ */
+export const SUNLIGHT_ASSIST_EXPONENT = 0.35;
 
 /**
  * The policy in force out of the box.
  *
- * `"compensated"` makes Onda 2.1 a visual no-op. The badge + assist-control
- * agent flips this to `"real"` **together with** the disclosure UI — that is
- * the whole reason the plumbing lands first and the default flip lands later.
+ * `"assisted"` per the owner's product decision (`handoffiluminacao.md` §1.3
+ * — assisted-by-default, on the triple precedent that Atlas already ships
+ * `scaleMode: "didactic"` disclosed by a badge, that NASA Eyes defaults to
+ * its assisted "Shadow" light mode, and that the whole comparison set ships a
+ * non-zero ambient floor). It is disclosed, not hidden: the fidelity badge's
+ * Brightness line reads amber and names the position.
  */
-export const DEFAULT_SUNLIGHT_ASSIST_POLICY: SunlightAssistPolicy =
-  "compensated";
+export const DEFAULT_SUNLIGHT_ASSIST_POLICY: SunlightAssistPolicy = "assisted";
 
 /**
  * Live policy holder, same `{ value }` singleton idiom as
  * {@link file://./exposureRegistry.ts}'s `sceneExposure`: consumers read it
  * imperatively from inside `useFrame` (no React subscription on a
  * 60 Hz path), and one write propagates on the next frame.
+ *
+ * React surfaces (the badge, the DisplayPanel select) subscribe through
+ * {@link subscribeSunlightAssistPolicy} + `useSyncExternalStore` rather than
+ * mirroring the value into the zustand store — one source of truth, and this
+ * module stays free of store imports so it can be unit-tested as a pure lib.
  */
 export const sunlightAssistPolicy: { value: SunlightAssistPolicy } = {
   value: DEFAULT_SUNLIGHT_ASSIST_POLICY,
 };
 
+const policyListeners = new Set<() => void>();
+
 /** Read the policy in force. Pure, alloc-free, safe on the hot path. */
 export const getSunlightAssistPolicy = (): SunlightAssistPolicy =>
   sunlightAssistPolicy.value;
 
+/**
+ * Subscribe to policy changes. The `useSyncExternalStore` half of the pair —
+ * returns its own unsubscribe, so a component can pass it straight through.
+ */
+export const subscribeSunlightAssistPolicy = (
+  onChange: () => void
+): (() => void) => {
+  policyListeners.add(onChange);
+  return () => {
+    policyListeners.delete(onChange);
+  };
+};
+
 /** Set the policy in force. The assist control's only write surface. */
 export const setSunlightAssistPolicy = (next: SunlightAssistPolicy): void => {
+  if (sunlightAssistPolicy.value === next) return;
   sunlightAssistPolicy.value = next;
+  for (const listener of policyListeners) listener();
+};
+
+/**
+ * Ceiling on the fused scalar when **no tone-mapping operator is mounted**.
+ *
+ * `PostProcessingPipeline.tsx` mounts a `ToneMapping` pass only on
+ * composer-capable tiers AND only when the user's operator is not `"none"`;
+ * the `constrained` tier unmounts the whole `EffectComposer`. Without an
+ * operator the pipeline has no shoulder: anything above 1.0 hard-clips to
+ * flat white, and worse, `Bloom`'s `luminanceThreshold = 1.0` contract
+ * (`PostProcessingPipeline.tsx`) treats those surfaces as emissive and wraps
+ * them in a halo. `"assisted"` puts Mercury at ~2.27 and `"real"` at ~10.4,
+ * so both would trip it.
+ *
+ * This is a **display-clipping guard, not a photometric statement**: values
+ * above 1.0 are unrepresentable on that path anyway, so the cap removes the
+ * bloom artefact without discarding anything the viewer could have seen. It
+ * is inactive whenever an operator is mounted, which is the default on every
+ * composer tier (AgX — see `PRESET_DEFAULTS` in `resolver.ts`).
+ *
+ * Satisfies `handoffiluminacao.md` §6 checklist item 4 ("gain ≠ 1 requires a
+ * mounted tone-mapping operator, or a cap below the bloom threshold").
+ */
+export const SUNLIGHT_UNMAPPED_CEILING = 1;
+
+/**
+ * Whether a tone-mapping operator is currently mounted in the composer.
+ *
+ * Written by `PostProcessingPipeline.tsx` itself — the component that makes
+ * the mount decision — so this flag cannot drift from the pipeline it
+ * describes. Starts `false`, which is also the correct value for the
+ * `constrained` tier, where that component never mounts at all and therefore
+ * never runs the effect that would set it.
+ */
+export const sunlightToneMappingMounted: { value: boolean } = { value: false };
+
+/** Read the mount flag. Pure, alloc-free, safe on the hot path. */
+export const getSunlightToneMappingMounted = (): boolean =>
+  sunlightToneMappingMounted.value;
+
+/** Set the mount flag. `PostProcessingPipeline`'s only write surface. */
+export const setSunlightToneMappingMounted = (mounted: boolean): void => {
+  sunlightToneMappingMounted.value = mounted;
 };
 
 /**
@@ -179,17 +277,33 @@ export const solarIrradianceAtAU = (heliocentricDistanceAU: number): number => {
 /**
  * The didactic assist gain for a body already carrying `irradiance`.
  *
- * Under `"compensated"` this is the exact inverse, which is what makes the
- * fused product 1.0 and the whole feature invisible until the default moves.
+ * Each position is defined by the FUSED result it produces, and the gain is
+ * whatever gets there from `E`:
+ *
+ *   - `"compensated"` → fused 1: gain is the exact inverse `1 / E`.
+ *   - `"assisted"`    → fused `E^σ`: gain is `E^(σ-1)`.
+ *   - `"real"`        → fused `E`: gain is exactly 1, an IEEE-754 identity,
+ *     which is what makes "no assist ≡ pure physics" a bit-level claim rather
+ *     than an approximate one.
  */
 export const resolveAssistGain = (
   irradiance: number,
   policy: SunlightAssistPolicy
-): number => (policy === "compensated" ? 1 / irradiance : 1);
+): number => {
+  switch (policy) {
+    case "compensated":
+      return 1 / irradiance;
+    case "assisted":
+      return Math.pow(irradiance, SUNLIGHT_ASSIST_EXPONENT - 1);
+    case "real":
+      return 1;
+  }
+};
 
 /**
  * The fused scalar a planet material multiplies its direct sunlight by:
- * `E(d) × assistGain(d)`.
+ * `E(d) × assistGain(d)`, capped at {@link SUNLIGHT_UNMAPPED_CEILING} when no
+ * tone-mapping operator is mounted to roll values above 1.0 off.
  *
  * Named argument, because the one thing that must never happen to this
  * function is being handed a world-space distance — `resolveFusedSunlightScalar(d)`
@@ -199,12 +313,19 @@ export const resolveAssistGain = (
 export const resolveFusedSunlightScalar = ({
   heliocentricDistanceAU,
   policy = getSunlightAssistPolicy(),
+  toneMapped = getSunlightToneMappingMounted(),
 }: {
   heliocentricDistanceAU: number;
   policy?: SunlightAssistPolicy;
+  /**
+   * Whether a tone-mapping operator will roll off values above 1.0. Defaults
+   * to the live pipeline flag; passed explicitly by tests.
+   */
+  toneMapped?: boolean;
 }): number => {
   const irradiance = solarIrradianceAtAU(heliocentricDistanceAU);
-  return irradiance * resolveAssistGain(irradiance, policy);
+  const fused = irradiance * resolveAssistGain(irradiance, policy);
+  return toneMapped ? fused : Math.min(fused, SUNLIGHT_UNMAPPED_CEILING);
 };
 
 /**
@@ -224,9 +345,11 @@ export const resolveFusedSunlightScalar = ({
 export const resolveBodySunlightScalar = (
   bodyId: string,
   date: Date,
-  policy: SunlightAssistPolicy = getSunlightAssistPolicy()
+  policy: SunlightAssistPolicy = getSunlightAssistPolicy(),
+  toneMapped: boolean = getSunlightToneMappingMounted()
 ): number =>
   resolveFusedSunlightScalar({
     heliocentricDistanceAU: resolveHeliocentricDistanceAU(bodyId, date),
     policy,
+    toneMapped,
   });

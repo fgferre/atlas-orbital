@@ -88,11 +88,29 @@
  *   • Ring emissive — `ringEmissive` / `RING_EMISSIVE_POWER`.
  *   • Starfield — `u_exposure`, already a registry participant.
  *
- * At the shipped `"compensated"` default the fused scalar is exactly
- * 1.0 for every body, so nothing detaches today. The agent that flips
- * the default owns deciding, per family, whether it joins this
- * registry, gets its own irradiance term, or is documented as
- * deliberately body-independent.
+ * **Decided when the default flipped to `"assisted"` (Onda 2.2): all six
+ * stay body-independent, deliberately, and none of them joins the
+ * irradiance term in that change.** The reasoning is per family and it
+ * is not "we ran out of time":
+ *
+ *   • Sun disc — it is the SOURCE. Its own surface radiance does not
+ *     fall off with the distance to whoever is looking at it; only the
+ *     apparent size does, which the projection already handles.
+ *   • Earth night lights — city lights are not sunlight. Scaling them
+ *     by Earth's solar irradiance would dim a lamp because the Sun is
+ *     far away, which is backwards.
+ *   • Atmosphere shell + cloud layer — these DO need to follow, and
+ *     cannot yet: the atmosphere's ShaderMaterial ignores scene lights
+ *     and carries hardcoded exposures, and the cloud COLOR blend is not
+ *     invariant to luminance scale. Both are real pending work, and
+ *     both are bounded today because `SUNLIGHT_ASSIST_EXPONENT = 0.35`
+ *     keeps Earth (the only body with either) at exactly 1.0 — the
+ *     fixed point of every position. The detachment becomes visible the
+ *     first time another atmosphere body ships, or if the anchor moves.
+ *   • Ring emissive — Saturn only; same 9.6 AU as its planet, so it
+ *     detaches by a constant factor rather than a varying one. Recorded,
+ *     not fixed.
+ *   • Starfield — stars are not lit by our Sun. Correct as is.
  */
 
 /**
