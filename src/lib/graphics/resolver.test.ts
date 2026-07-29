@@ -209,6 +209,22 @@ describe("resolveEffectiveGraphics — overrides", () => {
     expect(result.resolutionScale).toBe(PRESET_DEFAULTS.high.resolutionScale);
   });
 
+  it("lightGlowEnabled defaults true on every tier and an override can flip it off", () => {
+    // Default true preserves the pre-existing always-on LightGlow
+    // behavior — the starfield-visual-upgrade wave's FPS audit could not
+    // get a real-GPU measurement to justify flipping the default, so it
+    // shipped as an opt-out toggle instead. See resolver.ts's
+    // lightGlowEnabled JSDoc for the full trail.
+    for (const preset of ["ultra", "high", "medium", "low"] as const) {
+      expect(PRESET_DEFAULTS[preset].lightGlowEnabled).toBe(true);
+    }
+    const result = resolveEffectiveGraphics(
+      stateFor("high", { lightGlowEnabled: false }),
+      NO_SIGNALS
+    );
+    expect(result.lightGlowEnabled).toBe(false);
+  });
+
   it("bloomIntensityMul composes multiplicatively with preset base", () => {
     // medium preset has bloomIntensityMul 0.75 → with override 2× → 1.5.
     const result = resolveEffectiveGraphics(

@@ -82,6 +82,19 @@ export interface GraphicsOverrides {
   environmentResolution?: 64 | 128 | 256;
   /** Bloom enable override. */
   bloomEnabled?: boolean;
+  /**
+   * LightGlow (theta.3) enable override. Default `true` — unaudited
+   * change from the pre-existing always-on behavior. A runtime FPS A/B
+   * was attempted (starfield-visual-upgrade wave) but every environment
+   * available in that session resolved to the `constrained` quality tier
+   * (no real GPU), which unmounts the whole EffectComposer including
+   * LightGlow — so the audit could not produce a real-hardware number.
+   * This flag exists so the decision (>=10% frame-time win on a real
+   * ultra/high tier -> flip this default to false) can be made from an
+   * actual measurement instead of guessed. See the wave file's "LightGlow
+   * performance audit" section for the full trail.
+   */
+  lightGlowEnabled?: boolean;
   /** vfxHdrGain absolute override (preset base ignored). */
   vfxHdrGain?: number;
   /**
@@ -110,6 +123,7 @@ export interface EffectiveGraphics {
   shadowMapSize: 1024 | 2048 | 4096;
   environmentResolution: 64 | 128 | 256;
   bloomEnabled: boolean;
+  lightGlowEnabled: boolean;
   vfxHdrGain: number;
   // Post-process override layer (multiplicative / additive over visualPreset)
   bloomIntensityMul: number;
@@ -143,6 +157,7 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 4096,
     environmentResolution: 256,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 4.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
@@ -172,6 +187,7 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 4096,
     environmentResolution: 256,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 3.0,
     bloomIntensityMul: 1,
     bloomIntensity: undefined,
@@ -192,6 +208,7 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 2048,
     environmentResolution: 128,
     bloomEnabled: true,
+    lightGlowEnabled: true,
     vfxHdrGain: 2.5,
     bloomIntensityMul: 0.75,
     bloomIntensity: undefined,
@@ -212,6 +229,11 @@ export const PRESET_DEFAULTS: Record<
     shadowMapSize: 1024,
     environmentResolution: 64,
     bloomEnabled: false,
+    // Moot in practice: Scene.tsx unmounts the whole EffectComposer (and
+    // therefore LightGlowSlot) on this tier regardless of this value —
+    // kept `true` for consistency with the other tiers rather than
+    // carrying a value nothing reads.
+    lightGlowEnabled: true,
     vfxHdrGain: 1.0,
     bloomIntensityMul: 0,
     bloomIntensity: undefined,
@@ -337,6 +359,7 @@ export const resolveEffectiveGraphics = (
     environmentResolution:
       ov.environmentResolution ?? base.environmentResolution,
     bloomEnabled: ov.bloomEnabled ?? base.bloomEnabled,
+    lightGlowEnabled: ov.lightGlowEnabled ?? base.lightGlowEnabled,
     vfxHdrGain: ov.vfxHdrGain ?? base.vfxHdrGain,
     bloomIntensityMul: base.bloomIntensityMul * (ov.bloomIntensityMul ?? 1),
     bloomIntensity: ov.bloomIntensity,

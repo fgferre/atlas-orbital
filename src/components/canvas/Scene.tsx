@@ -873,6 +873,7 @@ export const Scene = () => {
             hueSatRef={hueSatRef}
             brightnessRef={brightnessRef}
             toneMappingRef={toneMappingRef}
+            lightGlowMounted={effectiveGraphics.lightGlowEnabled}
             bloomMounted={shouldMountBloom(
               qualityProfile.bloomEnabled,
               // 1b: when the user has set an explicit bloomIntensity

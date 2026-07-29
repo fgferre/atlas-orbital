@@ -254,6 +254,20 @@ export const DisplayPanel = () => {
           }
         />
 
+        {/* LightGlow (theta.3) — cone-spiral halo on the brightest
+            catalog stars, on top of the starfield's own analytical
+            theta.2 halo. Default true (unaudited — a real-GPU FPS A/B
+            couldn't be completed; see resolver.ts's lightGlowEnabled
+            JSDoc). Exposed so the owner can A/B it on their own
+            hardware. */}
+        <Toggle
+          label="Light Glow"
+          checked={effective.lightGlowEnabled}
+          onChange={() =>
+            setGraphicsOverride("lightGlowEnabled", !effective.lightGlowEnabled)
+          }
+        />
+
         <Slider
           label="Bloom Intensity"
           value={effective.bloomIntensity ?? 0}

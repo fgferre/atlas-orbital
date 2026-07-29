@@ -384,6 +384,73 @@ spiral that pre-dated θ.2. There is no evidence users have seen both
 side by side at runtime. **Pure measurement.grad the gate on the
 measurement, not on speculation.**
 
+**RUNTIME AUDIT ATTEMPTED 2026-07-28 (lighting-audit session) — no
+real-GPU number obtained; toggle shipped instead of a default flip.**
+
+Two independent tool paths were tried, both structurally blocked:
+
+1. **Claude Browser preview pane.** Every tab in this session reported
+   `Viewport: 0x0` from `read_page`, `computer{screenshot}` errored
+   "the Browser pane is not displayed, so the page is not compositing
+   frames" on every attempt (including a full `preview_stop` +
+   `preview_start` cycle per the HMR-accumulation lesson), and a direct
+   probe confirmed `document.hidden === true` /
+   `visibilityState === "hidden"` with `requestAnimationFrame` never
+   firing (30 s timeout, zero callbacks). This session is
+   non-interactive — nobody's screen shows this pane — so real-GPU
+   visual/FPS verification is structurally impossible from here, not a
+   transient bug to retry.
+2. **Headless Playwright (substitute path).** Drove the dev server
+   directly with `playwright`'s `chromium.launch({headless: true})`,
+   using the repo's existing test-only hooks
+   (`window.__ATLAS_TEST_STORE__`, `window.__ATLAS_TEST_CAMERA__`) —
+   this DOES run real frames (rAF fires normally in a real headless
+   Chromium page, unlike the non-compositing pane above) and produced
+   numbers: two 5 s rAF-counted runs at **8.28 fps** and **8.40 fps**
+   with `LightGlowSlot` mounted. **These numbers are NON-DECISIONAL.**
+   Confirmed via the `console.info("[atlas] WebGL renderer info", …)`
+   diagnostic Scene.tsx already logs at boot:
+   `renderer: ANGLE (…, SwiftShader Device …)`, `qualityTier:
+constrained`. `resolveGlTierCeiling` in `src/lib/qualityProfile.ts`
+   hard-ceilings any `softwareRenderer === true` GPU to `constrained`
+   regardless of CPU/RAM signals, and on `constrained` Scene.tsx
+   unmounts the entire `EffectComposer` — so `LightGlowSlot`,
+   `<Bloom>`, `<ToneMapping>`, and `ZodiacalLightSkybox` never mount at
+   all under headless Playwright. The A/B this audit needs (LightGlow
+   mounted vs. unmounted on a real ultra/high-tier composer) cannot run
+   in ANY environment available this session — headless Chromium always
+   resolves to the software-renderer floor unless launched with real
+   GPU passthrough (`--use-gl=angle` + a real backend), which this
+   sandbox does not provide either.
+
+**What shipped instead of a measurement-gated default:** per the
+coordinator's call, `GraphicsOverrides.lightGlowEnabled` (new,
+`src/lib/graphics/resolver.ts`) — same idiom as `bloomEnabled` —
+default **`true`** on every tier (preserves current visuals exactly,
+zero behavior change out of the box), plus a "Light Glow" toggle in
+`DisplayPanel.tsx` right after the "Bloom" toggle, and
+`PostProcessingPipeline`'s `<LightGlowSlot />` now conditional on a new
+`lightGlowMounted` prop threaded from `Scene.tsx`'s
+`effectiveGraphics.lightGlowEnabled`. This converts the blocked audit
+into an instrument: the owner (or anyone with a real GPU) can flip the
+toggle live and feel the frame-time difference on their own hardware.
+Minimal differential test added in `resolver.test.ts` ("lightGlowEnabled
+defaults true on every tier and an override can flip it off"), mirroring
+the existing `bloomEnabled` test — AGENTS.md §6, new product-contract
+field.
+
+**The decision rule from the original ask still stands, unexecuted:**
+if removing LightGlow improves frame time by ≥10 % on a **real**
+ultra/high-tier GPU, flip `PRESET_DEFAULTS.*.lightGlowEnabled` to
+`false` (or just the composer tiers where it matters) and update this
+section. If <10 %, leave the default `true` and close this item. Do
+NOT use the SwiftShader numbers above for that call even directionally
+— a software rasterizer's bottleneck profile (pixel-fill / texture-
+sample bound) is not guaranteed to track a real GPU's the same way, and
+in this case the tier ceiling makes the comparison void outright (both
+arms of the A/B ran on `constrained`, where LightGlow was never even
+mounted).
+
 ### #4 — Milky Way HDR panorama (NASA SVS)
 
 Last item from the user's original report. Quote: "vamos
@@ -458,6 +525,41 @@ modes to check now that 1d is in the pipeline:
 
 Once CreditsModal provenance also lands, recommend a single human-eye
 calibration pass before declaring this sub-pull done.
+
+**2026-07-28 runtime-verification attempt (lighting-audit session):
+still NOT runtime-verified — blocked by tooling, not attempted-and-
+inconclusive.** This session's Browser pane never composited a frame
+(see the LightGlow section above for the full diagnostic — `Viewport:
+0x0`, `document.hidden === true`, no screenshot possible; this is a
+non-interactive session, nobody's screen shows this pane, so it cannot
+be made to render). No screenshots were taken of the eye-adaptation
+behavior or the zodiacal band, so none of the three failure modes above
+can be reported on with evidence. Recording "not verified" rather than
+guessing.
+
+A substitute headless-Playwright pass (see the LightGlow section) was
+tried for the eye-adaptation check too, but it is voided by the SAME
+`constrained`-tier finding: `EyeAdaptationBridge` only does anything
+when `toneMappingRef` is non-null, which requires a mounted
+`<ToneMapping>` pass inside `PostProcessingPipeline` — and that
+component never mounts on `constrained` (Scene.tsx swaps in
+`DirectRenderPass` instead). Per the coordinator's explicit
+precondition ("if… the composer actually mounts there"), the cheap
+exposure-registry read-back was skipped rather than run against a path
+that structurally cannot exercise the code under test. Same applies to
+`ZodiacalLightSkybox` — it does not mount on `constrained` either (see
+its own "Tier gate" note above) — so a zodiacal screenshot from this
+environment would show nothing regardless of the real shader's
+behavior and would not be honest evidence either way.
+
+**Owed to the owner:** a human-eye pass on real hardware (ultra tier,
+default scene) covering all of: the three zodiacal failure modes listed
+above, whether 1d's eye-adaptation is perceptible/smooth/flicker-free,
+and the resulting calibration decision on `ZODIACAL_S10_TO_LINEAR`. None
+of that can be produced from this sandbox — every environment available
+to it (non-compositing pane, headless-Playwright-on-SwiftShader) either
+cannot render a frame or hard-floors to the tier where the effects under
+test don't mount.
 
 ---
 
@@ -588,8 +690,16 @@ before re-investigating anything; do not re-derive its numbers.
    before considering a 1e per-shader follow-up.
 3. Update **`CreditsModal.tsx`** for AgX + zodiacal provenance. Cheap
    honest disclosure; high value-of-information.
-4. Run the **LightGlow audit** with a runtime FPS measurer. Don't
-   cancel on speculation; gate on measurement.
+4. ~~Run the **LightGlow audit** with a runtime FPS measurer.~~
+   **Attempted 2026-07-28, blocked** — see the LightGlow section above.
+   No environment available that session could produce a real-GPU
+   number (non-compositing pane; headless Playwright hard-floors to
+   `constrained` tier, where LightGlow never mounts). Shipped
+   `GraphicsOverrides.lightGlowEnabled` (default `true`, DisplayPanel
+   toggle) as an instrument instead of guessing a default. The real
+   measurement + gate decision is still owed — whoever has real GPU
+   access next should flip the toggle live, compare frame times, and
+   update `PRESET_DEFAULTS` per the recorded decision rule.
 5. Defer **#4 (Milky Way HDR)** until the user's licensing check is
    done AND the parallel tiled-streaming wave settles on whether
    KTX2 is in scope (check `tasks/STATUS.md` heritor for that
@@ -604,8 +714,27 @@ before re-investigating anything; do not re-derive its numbers.
    a sanity check, not a visual regression gate. This now includes
    confirming 1d's eye-adaptation doesn't fight the zodiacal
    calibration in step 6 — do them in the same sitting.
+   **2026-07-28: still not done** (see "Outstanding calibration"
+   above) — this session's environment could not render a frame at
+   all. `npm run test:e2e -- e2e/boot.spec.ts` WAS run this session
+   (build + Playwright preview server, separate from the blocked
+   interactive pane) — both tests passed cleanly, including the
+   `boot-frozen.png` pixel-diff gate, with no baseline changes needed.
+   That confirms 1d's neutral-exposure boot pose doesn't move boot
+   pixels as the wave doc predicted, but it is not a substitute for the
+   human-eye pass — it only covers one frozen frame far from the Sun.
 
 ---
 
 _Last updated: 2026-07-28. 1d (eye-adaptation) shipped by a follow-up
 session; CreditsModal, LightGlow audit, and #4 remain open._
+
+_2026-07-28 (lighting-audit session): e2e boot gate re-run clean, no
+re-bless needed. LightGlow audit attempted, blocked by environment
+(non-compositing pane + headless-Playwright SwiftShader → constrained
+tier); shipped `lightGlowEnabled` toggle (default true) as an
+instrument instead of a measurement-gated default — see the LightGlow
+section for the full trail. 1d/zodiacal runtime verification attempted,
+also blocked by the same environment limits — still owed a human-eye
+pass. CreditsModal and #4 untouched this session (out of scope for this
+pass)._

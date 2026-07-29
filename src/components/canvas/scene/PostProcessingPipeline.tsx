@@ -39,6 +39,15 @@ interface PostProcessingPipelineProps {
    */
   toneMappingRef: RefObject<ToneMappingEffect | null>;
   /**
+   * True when `LightGlowSlot` (theta.3) should be mounted into the
+   * composer. Backed by `GraphicsOverrides.lightGlowEnabled`
+   * (`resolver.ts`), default `true` — preserves the pre-existing
+   * always-on behavior. See that field's JSDoc for why this is a toggle
+   * rather than a flipped default: the FPS audit that would justify
+   * flipping it could not get a real-GPU measurement.
+   */
+  lightGlowMounted: boolean;
+  /**
    * True when the Bloom effect should be mounted into the composer.
    * Computed at Scene level via `shouldMountBloom(bloomEnabled,
    * effectiveBloomIntensity)` (see `src/lib/graphics/bloomGate.ts`).
@@ -66,6 +75,7 @@ export const PostProcessingPipeline = memo(
     hueSatRef,
     brightnessRef,
     toneMappingRef,
+    lightGlowMounted,
     bloomMounted,
     toneMapping,
     composerMultisampling,
@@ -191,7 +201,7 @@ export const PostProcessingPipeline = memo(
         frameBufferType={THREE.HalfFloatType}
         multisampling={composerMultisampling}
       >
-        <LightGlowSlot />
+        {lightGlowMounted ? <LightGlowSlot /> : <></>}
         <LensFlareSlot />
         {bloomMounted ? (
           <Bloom
