@@ -127,9 +127,20 @@ interface CacheKeyedMaterial {
  */
 const resolveDirectLightVariant = ({
   regolith,
+  eclipse = "none",
 }: {
   regolith: boolean;
-}): string => (regolith ? "planet-regolith" : "planet-lambert");
+  /**
+   * W7 — the eclipse output patch is a second within-branch GLSL variant
+   * read from a captured variable (`body.eclipsingBodyId`), invisible to
+   * the closure's source text exactly like the regolith flag. Without this
+   * discriminator the Moon (refraction floor) and the five regolith moons
+   * (neutral shading) hash to one program key and three serves one cohort
+   * the other's compiled shader, decided by render order.
+   */
+  eclipse?: "none" | "neutral" | "refraction";
+}): string =>
+  `${regolith ? "planet-regolith" : "planet-lambert"}|eclipse-${eclipse}`;
 
 /**
  * Make three's program cache see the two direct-light chains as different
@@ -167,7 +178,7 @@ const resolveDirectLightVariant = ({
  */
 export const applyPlanetDirectLightCacheKey = (
   material: CacheKeyedMaterial,
-  options: { regolith: boolean }
+  options: { regolith: boolean; eclipse?: "none" | "neutral" | "refraction" }
 ): void => {
   const variant = resolveDirectLightVariant(options);
   material.customProgramCacheKey = () =>

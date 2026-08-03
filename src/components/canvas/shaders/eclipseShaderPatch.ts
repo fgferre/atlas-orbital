@@ -34,6 +34,13 @@ import {
  * Eclipse uniforms (declared via `ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY`,
  * written per-frame by the driver):
  *   - `uEclipsingBodyPos`        — synthetic eclipser position (wu).
+ *   - `uEclipsingSunPos`         — synthetic Sun position (wu): the ray's
+ *     target, `receiverWorld − s·R`. The world origin exactly in realistic
+ *     mode. Aiming the ray at the RENDER Sun instead is wrong in didactic
+ *     mode — the synthetic eclipser lands near the render Sun's distance
+ *     and the per-fragment offset collapses ~300×, dimming the whole disc
+ *     instead of sweeping a spot (post-ship adversarial review finding,
+ *     reproduced numerically).
  *   - `uEclipsingUmbraRadius`    — umbra radius at the receiver (wu, ≥ 0).
  *   - `uEclipsingPenumbraRadius` — penumbra radius at the receiver (wu).
  *   - `uEclipsingMinShadow`      — on-axis light floor: 0 for a total
@@ -45,15 +52,13 @@ import {
  *     geometry alone (Earth's shadow exists whether or not Earth's mesh is
  *     mounted).
  *
- * Standing law 2 note: this wave's +2 uniforms (net) across the three
- * declaration sites are the sanctioned exception named in the wave's exit
- * criteria — one radius uniform became umbra + penumbra, plus the derived
- * annular floor.
- *
- * The didactic-mode ray uses the render Sun position (world origin), whose
- * direction differs from the physically mapped Sun direction by the render
- * parallax across the disc — under 0.1% of the receiver radius at every
- * reachable framing. Disclosed, not corrected.
+ * Standing law 2 note: net +3 uniforms over the pre-W7 patch, across four
+ * declaration sites (three JS, one GLSL). The wave's exit criteria
+ * sanctioned +2 (umbra + penumbra replacing one radius, plus the derived
+ * annular floor); `uEclipsingSunPos` is the third, added when the
+ * adversarial review proved the similarity transform needs all THREE
+ * bodies mapped — no built-in can supply a synthetic Sun, so the uniform
+ * is justified in writing here as that law requires.
  */
 
 /** Vertex-shader declarations for the world-space varyings the eclipse patch consumes. */
@@ -75,6 +80,7 @@ export const ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN = /* glsl */ `
  */
 export const ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY = /* glsl */ `
   uniform vec3 uEclipsingBodyPos;
+  uniform vec3 uEclipsingSunPos;
   uniform float uEclipsingUmbraRadius;
   uniform float uEclipsingPenumbraRadius;
   uniform float uEclipsingMinShadow;
@@ -132,19 +138,25 @@ export const ECLIPSE_FRAGMENT_HELPERS = /* glsl */ `
     return distance(p, projection);
   }
 
+  // coneLightDirection aims at the SYNTHETIC Sun (uEclipsingSunPos) — the
+  // third body of the similarity transform. renderLightDirection aims at
+  // the render Sun and drives only the terminator fade, which is a
+  // screen-side anti-artefact ramp and must track the terminator the
+  // lighting actually draws. The two coincide in realistic mode.
   float gs_computeEclipseShadow(
     vec3 fragPosWorld,
     vec3 normalVector,
-    vec3 lightDirection
+    vec3 coneLightDirection,
+    vec3 renderLightDirection
   ) {
-    vec3 fl = fragPosWorld + lightDirection * uEclipsingVrScale;
+    vec3 fl = fragPosWorld + coneLightDirection * uEclipsingVrScale;
     float dist = gs_distSegmentPoint(fragPosWorld, fl, uEclipsingBodyPos);
     vec3 n = normalize(normalVector);
     float dot_NM = dot(n, normalize(uEclipsingBodyPos - fragPosWorld));
     if (dot_NM <= ${ECLIPSE_NEAR_SIDE_DOT_THRESHOLD}) {
       return 1.0;
     }
-    float dot_NL = dot(n, lightDirection);
+    float dot_NL = dot(n, renderLightDirection);
     float edgeFade = smoothstep(${ECLIPSE_EDGE_FADE_LO}, ${ECLIPSE_EDGE_FADE_HI}, dot_NL);
     float ramp = clamp(
       (dist - uEclipsingUmbraRadius) /
@@ -159,11 +171,13 @@ export const ECLIPSE_FRAGMENT_HELPERS = /* glsl */ `
 
 const outputPatchBody = (shadowMultiplier: string): string => /* glsl */ `
   if (uEclipsingActive > 0.5) {
-    vec3 eclipseLightDir = normalize(uSunPositionWorld - vWorldPos);
+    vec3 eclipseConeDir = normalize(uEclipsingSunPos - vWorldPos);
+    vec3 eclipseRenderDir = normalize(uSunPositionWorld - vWorldPos);
     float eclipseShadow = gs_computeEclipseShadow(
       vWorldPos,
       vWorldNormal,
-      eclipseLightDir
+      eclipseConeDir,
+      eclipseRenderDir
     );
     outgoingLight *= ${shadowMultiplier};
   }

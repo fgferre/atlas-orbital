@@ -109,16 +109,30 @@ export interface EclipseConeGeometry {
  * through a **similarity transform anchored at the receiver's centre**.
  *
  * With `s = receiverRenderRadius / receiverRadiusKm` (world units per km),
- * the synthetic eclipser position is `receiverWorld + s·(E − R)` and every
- * radius scales by `s` — which preserves every angular relationship per
- * fragment, so the shader's segment-distance machinery stays valid
- * unmodified. In realistic mode `s = KM_TO_3D_UNITS` and the transform
- * degenerates to the identity: "realistic is scale-faithful" holds by
- * construction, not by testing. Pinned in `eclipseGeometry.test.ts`.
+ * the synthetic eclipser position is `receiverWorld + s·(E − R)`, the
+ * synthetic Sun is `receiverWorld − s·R` (the Sun is the AU-frame origin),
+ * and every radius scales by `s`. **All three bodies must be mapped** —
+ * that is what preserves every angular relationship per fragment and keeps
+ * the shader's segment-distance machinery valid unmodified. The first W7
+ * cut mapped only the eclipser and aimed the shader ray at the RENDER Sun
+ * (world origin); in didactic mode the render Sun is not
+ * similarity-consistent — the synthetic Moon lands almost exactly at the
+ * render Sun's distance, the per-fragment offset coefficient collapses
+ * from ~1 to ~0.003, and a solar eclipse dims Earth's whole disc instead
+ * of sweeping a localized spot (found by the post-ship adversarial
+ * review, reproduced numerically with these resolvers). In realistic mode
+ * `s = KM_TO_3D_UNITS`, so the synthetic Sun IS the world origin and the
+ * transform degenerates to the identity: "realistic is scale-faithful"
+ * holds by construction. Pinned in `eclipseGeometry.test.ts`.
  */
 export interface EclipseRenderConfig {
   /** Synthetic eclipser position in render world units. */
   eclipserPosWorld: THREE.Vector3;
+  /**
+   * Synthetic Sun position in render world units — the shader's ray
+   * target. Equals the world origin exactly in realistic mode.
+   */
+  sunPosWorld: THREE.Vector3;
   /** Umbra radius in world units, clamped ≥ 0 (the annular floor moves to `minShadow`). */
   umbraRadiusWu: number;
   /** Penumbra radius in world units. */
@@ -142,6 +156,7 @@ export const createEclipseConeGeometry = (): EclipseConeGeometry => ({
 
 export const createEclipseRenderConfig = (): EclipseRenderConfig => ({
   eclipserPosWorld: new THREE.Vector3(),
+  sunPosWorld: new THREE.Vector3(),
   umbraRadiusWu: 0,
   penumbraRadiusWu: 0,
   vrScaleWu: 0,
@@ -259,6 +274,13 @@ export const resolveEclipseRenderConfig = (
     .sub(receiverPosAU)
     .multiplyScalar(AU_IN_KM * s);
   out.eclipserPosWorld.copy(receiverWorldPos).add(TMP_REL_KM);
+
+  // s·(S − R) with the Sun at the AU-frame origin: the synthetic Sun the
+  // shader ray must aim at. Reusing the render Sun (world origin) here is
+  // only correct in realistic mode — in didactic mode it collapses the
+  // per-fragment geometry (see the interface JSDoc).
+  TMP_REL_KM.copy(receiverPosAU).multiplyScalar(AU_IN_KM * s);
+  out.sunPosWorld.copy(receiverWorldPos).sub(TMP_REL_KM);
 
   out.umbraRadiusWu = Math.max(cone.umbraRadiusKm, 0) * s;
   out.penumbraRadiusWu = cone.penumbraRadiusKm * s;

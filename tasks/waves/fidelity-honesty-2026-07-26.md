@@ -1864,6 +1864,32 @@ Io ingress gradient, copper totality), adaptive unchanged (hidden receivers
 skip; no new per-frame cost off-screen). Deletions: 26 mirror tests + two
 dead mirror files; the needle guard replaces them at the failure class.
 
+**Post-ship adversarial review (same day) found two real defects; both
+fixed in the follow-up commit.** (1) The similarity transform mapped only
+TWO of its three bodies: the shader ray aimed at the RENDER Sun (world
+origin), which is similarity-consistent only in realistic mode. In
+didactic mode the synthetic Moon lands at ~439 wu from Earth against a
+render Sun ~440 wu away — the per-fragment offset coefficient collapses
+~300×, so a solar eclipse would have dimmed Earth's whole disc instead of
+sweeping a spot, and the lunar sweep came out mirrored. Three independent
+review lenses found it and each reproduced the numbers with the repo's own
+resolvers. Fix: `uEclipsingSunPos` — the synthetic Sun
+`receiverWorld − s·R` — is the ray target (the render-Sun direction still
+drives the terminator fade, which must track the DRAWN terminator);
+degenerates to the origin in realistic mode; pinned by a didactic-mode
+test asserting the synthetic Sun sits ~183 000 wu out, not 440. Net
+uniforms are now +3, justified in the patch header per standing law 2.
+(2) The refraction-vs-neutral GLSL variant was invisible to three's
+program cache key — the same captured-variable trap `solarIrradiancePatch`
+already documents for the regolith flag: the Moon and the five regolith
+moons hash identically, so one cohort deterministically inherited the
+other's shader (blood moon black, or airless moons copper). Fix: the
+eclipse variant joins `resolveDirectLightVariant`'s discriminator string.
+One review claim was refuted (the sign-flip test-blindness claim
+misread the anchors). Reviewers also quantified that the cloud material's
+`cloudEclipseEnabled` sits in the same cache-key class — single occupant
+today (only Earth has clouds), noted in place, not fixed speculatively.
+
 ---
 
 ### W8 — Reach and discovery · medium · 3.5-4 days

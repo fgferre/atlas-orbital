@@ -471,6 +471,7 @@ const PlanetVisual = ({
             | undefined;
           if (!s) continue;
           const uPos = s.uniforms.uEclipsingBodyPos;
+          const uSunPos = s.uniforms.uEclipsingSunPos;
           const uUmbra = s.uniforms.uEclipsingUmbraRadius;
           const uPenumbra = s.uniforms.uEclipsingPenumbraRadius;
           const uMinShadow = s.uniforms.uEclipsingMinShadow;
@@ -478,6 +479,7 @@ const PlanetVisual = ({
           const uActive = s.uniforms.uEclipsingActive;
           if (
             !uPos ||
+            !uSunPos ||
             !uUmbra ||
             !uPenumbra ||
             !uMinShadow ||
@@ -487,6 +489,7 @@ const PlanetVisual = ({
             continue;
           if (active) {
             (uPos.value as THREE.Vector3).copy(config.eclipserPosWorld);
+            (uSunPos.value as THREE.Vector3).copy(config.sunPosWorld);
             uUmbra.value = config.umbraRadiusWu;
             uPenumbra.value = config.penumbraRadiusWu;
             uMinShadow.value = config.minShadow;

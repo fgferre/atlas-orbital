@@ -198,6 +198,61 @@ describe("similarity transform into render space", () => {
     // Segment reach: past the eclipser with margin, regardless of scale mode.
     const eclipserOffsetWu = config.eclipserPosWorld.clone().sub(receiverWorld);
     expect(config.vrScaleWu).toBeGreaterThan(2 * eclipserOffsetWu.length());
+    // The synthetic Sun is the third mapped body: receiverWorld − s·R. In
+    // realistic mode s·R IS the physically mapped receiver position, so
+    // when receiverWorld is the true render position the synthetic Sun is
+    // the world origin — asserted as the offset identity here because this
+    // test passes an arbitrary receiverWorld.
+    const sunOffsetWu = receiverWorld.clone().sub(config.sunPosWorld);
+    const mappedReceiverWu = receiverAU
+      .clone()
+      .multiplyScalar(1000 /* AU_TO_3D_UNITS */);
+    expect(sunOffsetWu.distanceTo(mappedReceiverWu)).toBeLessThan(1e-6);
+  });
+
+  it("didactic mode: the synthetic Sun sits ~183 000 wu out, NOT at the render Sun ~440 wu away", () => {
+    // The first W7 cut aimed the shader ray at the render Sun (world
+    // origin). In didactic mode Earth renders ~440 wu from the origin
+    // while the synthetic Moon lands at ~439 wu from Earth — almost
+    // exactly the render Sun's distance — which collapses the
+    // per-fragment offset by ~300× and dims the whole disc instead of
+    // sweeping a spot. The similarity-consistent Sun must sit at
+    // s·1 AU ≈ 183 000 wu. Found by the post-ship adversarial review.
+    const at = new Date("2024-04-08T18:18:00Z");
+    const eclipserAU = resolveHeliocentricPositionAU("moon", at);
+    const receiverAU = resolveHeliocentricPositionAU("earth", at);
+    const earth = BODIES_BY_ID.get("earth")!;
+    const cone = createEclipseConeGeometry();
+    resolveEclipseConeGeometry(
+      eclipserAU,
+      receiverAU,
+      bodiesFor("moon", "earth"),
+      cone
+    );
+    const didacticRadius = AstroPhysics.resolveSemanticBodyRadius({
+      body: earth,
+      scaleMode: "didactic",
+    });
+    const receiverWorld = new THREE.Vector3(300, 0, 320);
+    const config = createEclipseRenderConfig();
+    resolveEclipseRenderConfig(
+      cone,
+      eclipserAU,
+      receiverAU,
+      receiverWorld,
+      didacticRadius,
+      earth.radiusKm,
+      config
+    );
+    const s = didacticRadius / earth.radiusKm;
+    const sunDistanceWu = config.sunPosWorld.distanceTo(receiverWorld);
+    const expectedWu = s * receiverAU.length() * 149_597_870.7;
+    expect(sunDistanceWu / expectedWu).toBeCloseTo(1, 6);
+    // Two orders of magnitude beyond the eclipser — the regime the render
+    // Sun at the origin could never reproduce.
+    const eclipserDistanceWu =
+      config.eclipserPosWorld.distanceTo(receiverWorld);
+    expect(sunDistanceWu).toBeGreaterThan(100 * eclipserDistanceWu);
   });
 
   it("penumbral spot spans ≈0.54 Earth radii on 2024-04-08 — the render-side anchor W6 makes checkable", () => {

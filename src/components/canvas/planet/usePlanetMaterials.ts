@@ -103,6 +103,11 @@ export function usePlanetMaterials({
     // above it. Atlas previously patched eclipse only into the planet
     // material, so during a solar eclipse the surface would darken but
     // clouds stayed fully lit — a visible layered artefact.
+    // Cache-key note: this flag changes the generated GLSL from a captured
+    // variable, the same trap `applyPlanetDirectLightCacheKey` guards the
+    // planet material against. Safe today only because Earth is the single
+    // body with a cloud texture — if a second cloudy body ships, this
+    // material needs a custom program cache key naming the flag.
     const cloudEclipseEnabled = !!body.eclipsingBodyId;
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
@@ -121,6 +126,9 @@ export function usePlanetMaterials({
       // fragment shader (see L645 for the ring-material pattern).
       if (cloudEclipseEnabled) {
         shader.uniforms.uEclipsingBodyPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingSunPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
         shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
@@ -406,6 +414,15 @@ export function usePlanetMaterials({
     // lazily, so it is correct no matter which branch assigns it below.
     applyPlanetDirectLightCacheKey(mat, {
       regolith: !!body.airlessRegolith,
+      // W7 — the eclipse patch variant is ALSO read from captured state, so
+      // it must reach the key: the Moon's copper refraction floor and the
+      // regolith moons' neutral shading differ only here, with byte-equal
+      // closure text (found by the post-ship adversarial review).
+      eclipse: body.eclipsingBodyId
+        ? body.eclipsingBodyId === "earth"
+          ? "refraction"
+          : "neutral"
+        : "none",
     });
 
     // Apply Earth day/night shader (takes priority over ring shadows)
@@ -424,6 +441,9 @@ export function usePlanetMaterials({
         // from the shadow-cone predicate in `eclipseGeometry.ts`.
         if (eclipseEnabled) {
           shader.uniforms.uEclipsingBodyPos = {
+            value: new THREE.Vector3(0, 0, 0),
+          };
+          shader.uniforms.uEclipsingSunPos = {
             value: new THREE.Vector3(0, 0, 0),
           };
           shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
@@ -532,6 +552,9 @@ export function usePlanetMaterials({
           value: new THREE.Vector3(0, 0, 0),
         };
         shader.uniforms.uEclipsingBodyPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingSunPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
         shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
