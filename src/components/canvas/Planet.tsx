@@ -539,7 +539,17 @@ const PlanetVisual = ({
           {/* 1. Base Planet Sphere */}
           {planetMaterial ? (
             <mesh
-              castShadow={body.type !== "star"}
+              // W7 — castShadow deliberately absent. The surface sphere is
+              // convex, so its own casting can never produce a legitimate
+              // self-shadow; all it ever painted was other bodies' hard
+              // silhouettes through the SmartSunLight map (the Moon's full
+              // disc onto Earth on 2024-04-08 — 27× the real umbra), a
+              // second eclipse renderer competing with the analytical cone
+              // in `eclipseGeometry.ts`. The cloud mesh keeps casting (its
+              // shadow on the surface below is the map's one legitimate
+              // consumer) and this mesh keeps RECEIVING it. The GLB path
+              // is audited separately — Vesta is non-convex, so
+              // self-shadowing there is a real and different question.
               receiveShadow={body.type !== "star"}
               raycast={THREE.Mesh.prototype.raycast}
             >
