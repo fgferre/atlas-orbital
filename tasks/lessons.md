@@ -41,6 +41,27 @@ Product constitution + §6.
 
 ---
 
+## L42 — A commit message is prose too; re-open work only against the diff
+
+**Trigger**: about to mark shipped work as "open / not started" in
+STATUS or a wave table — or two queue docs disagree on whether an
+increment landed. (Specialises M1: the inverse direction — falsely
+re-opening done work — is as costly as falsely closing it.)
+
+**Rule**: the diff is canonical; the commit message and every table
+row are claims about it. A message may promise a doc edit its diff
+never contained, and the stale row then outlives the truth.
+
+**Action**: before re-opening, run `git log --all -S "<marker>"` for
+the increment's distinctive string plus a 30-second grep of the code
+it would have touched. If the code has it, fix the row, not the code.
+
+**Source**: `d5c6ebb` shipped W5 stage B; `dc5b819`'s message claimed
+the Progress-table update but its diff only touched the smoke gate;
+`d8d9317` trusted the stale row and re-opened a done stage for 6 days.
+
+---
+
 ## M1. Ground truth is the wired runtime, not prose
 
 Any claim about what the code / data / scene does — docstring, ROADMAP

@@ -57,22 +57,22 @@ darkening)** belongs beside it.
 
 ## Progress
 
-| Wave                                    | Status                            | Commit                                                                                                                                                                   |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| W1 Correct the record                   | code done, **user smoke pending** | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                                                |
-| W2 The panel stops contradicting itself | code done, **user smoke pending** | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                                    |
-| W3 Photometry and the exposure floor    | code done, **user smoke pending** | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                                    |
-| W4 The star surfaces stop lying         | code done, **user smoke pending** | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                                                |
-| W5 Body figure                          | **stage A done**, stage B open    | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · stage B (Saturn, F-09, ring shaders) not started                                                                          |
-| W6 One pole, one spin                   | **done**                          | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (Moon + 20 satellites, Pluto/Charon, Triton, OPP-PC, kernel parser) |
-| W7 Eclipses happen when eclipses happen | not started                       | —                                                                                                                                                                        |
-| W8 Reach and discovery                  | not started                       | —                                                                                                                                                                        |
-| W9 The rings transmit                   | not started                       | —                                                                                                                                                                        |
-| W10 Atmosphere on the disc              | not started                       | —                                                                                                                                                                        |
-| — CHECKPOINT —                          | —                                 | —                                                                                                                                                                        |
-| W11 J2 secular precession               | not decided                       | —                                                                                                                                                                        |
-| W12 Uranus stops being a bare ball      | not decided                       | —                                                                                                                                                                        |
-| W13 Enceladus erupts                    | not decided                       | —                                                                                                                                                                        |
+| Wave                                    | Status                                 | Commit                                                                                                                                                                                                                                                         |
+| --------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W1 Correct the record                   | code done, **user smoke pending**      | `6528d48` F-11 · `7e50574` F-10 · `f56d701` D-05 · `61a26b8` OPP-VALIDITY                                                                                                                                                                                      |
+| W2 The panel stops contradicting itself | code done, **user smoke pending**      | `52c4c0c` F-08 · `c32e652` F-07 · `cfc6867` D-03 · `4837596` OPP-EARTHCMP · `a67c778` OPP-ELONG · `31bb225` tilt cell                                                                                                                                          |
+| W3 Photometry and the exposure floor    | code done, **user smoke pending**      | `5415992` P-01 · `e2e09aa` BRDF-A · `d52e8e8` F-05 · `24c4d33` BRDF-B                                                                                                                                                                                          |
+| W4 The star surfaces stop lying         | code done, **user smoke pending**      | `07a6ec5` F-06 · `8ec84bb` OPP-STAR-PANEL                                                                                                                                                                                                                      |
+| W5 Body figure                          | **done**                               | `2d26f5e` stage A (F-04 · OPP-SHAPE · NEW-1) · `d5c6ebb` stage B (Saturn figure · F-09 ring ratios · ellipsoid ring shadow). This row said "not started" until 2026-08-03 — `dc5b819`'s message claimed the table update but its diff never contained it (L42) |
+| W6 One pole, one spin                   | **done**                               | `569fd27` GMST ruler · stage A (helper, schema, Sun+8 planets, F-01/F-02/NEW-2, deletions) · stage B (Moon + 20 satellites, Pluto/Charon, Triton, OPP-PC, kernel parser)                                                                                       |
+| W7 Eclipses happen when eclipses happen | **code done**, smokes in deferred gate | `13ee995` cone + shader + driver + needle guard + deletions · `0d3ff5e` shadow-map caster deleted · `9bc7767` 13 receivers + Rømer                                                                                                                             |
+| W8 Reach and discovery                  | not started                            | —                                                                                                                                                                                                                                                              |
+| W9 The rings transmit                   | not started                            | —                                                                                                                                                                                                                                                              |
+| W10 Atmosphere on the disc              | not started                            | —                                                                                                                                                                                                                                                              |
+| — CHECKPOINT —                          | —                                      | —                                                                                                                                                                                                                                                              |
+| W11 J2 secular precession               | not decided                            | —                                                                                                                                                                                                                                                              |
+| W12 Uranus stops being a bare ball      | not decided                            | —                                                                                                                                                                                                                                                              |
+| W13 Enceladus erupts                    | not decided                            | —                                                                                                                                                                                                                                                              |
 
 ---
 
@@ -133,6 +133,21 @@ worked. If not, option B (re-origin the field) is next and C was insufficient.
   sub-solar latitudes, and the shadow edge must not warp along an in-plane axis
   (that would be the Z-vs-Y trap surviving). In didactic mode the Saturnian moons
   must still sit outside the rings.
+- **W7** — all on real hardware, console open at error **and** warn.
+  **(a)** Didactic mode, 2024-04-08 18:18 UTC, Earth focused: a **soft**
+  penumbral spot ≈ 0.54 × Earth's rendered radius, centred over northern
+  Mexico / Texas (W6 makes the geography checkable). **(b)** Step to
+  2024-05-08 03:22 UTC: the disc completely clean — before W7 the shadow-map
+  blob fired on ~86% of new moons. **(c)** Repeat both in realistic. NOTE:
+  realistic is NOT "identical to main" any more — main drew the Moon's hard
+  shadow-map silhouette (27× the real umbra); W7 deleted that caster, so the
+  correct render is the soft spot from (a), not the old disc. **(d)** A known
+  Io ingress: darkening through a visible gradient, not a snap; then a full
+  Io orbit at a non-eclipse time as negative control. **(e)** 2025-03-14
+  ~06:59 UTC, Moon focused: totality renders a dim copper disc (Danjon
+  L2–L3), never black, never the old orange band on a SOLAR receiver.
+  **(f)** Frame time at 1 yr/s with Jupiter and all four Galileans on
+  screen, before/after comparison vs any earlier build.
 - **W5A** — Quaoar through one 17.68 h period: silhouette visibly changes width.
   **Counterintuitive:** the _wrong_ axis mapping would swing it 37%, the correct one
   19% — "looks like less" is the correct reading. In **realistic** mode Io–Jupiter
@@ -1781,6 +1796,99 @@ to ~16.6 minutes across Earth's orbit — is literally how Rømer measured the s
 of light in 1676. One curiosity string on Io plus one JSDoc line on the scan
 ("times are geometric; light-travel delay, up to ~17 min at Jupiter, is not
 modelled") converts a model limitation into the best teaching hook in the app.
+
+#### Shipped 2026-08-03 — what was decided and what the gates actually proved
+
+Three commits: `13ee995` (cone + shader + driver + deletions, the coupled
+land), `0d3ff5e` (surface-mesh `castShadow` deletion), `9bc7767` (thirteen
+receivers + Rømer). What a later session must not re-derive:
+
+**The anchors were recomputed from the providers and reproduced this file's
+numbers exactly.** With catalog radii (sun 696 340 / moon 1737 / earth 6371)
+and ELP+VSOP at 2024-04-08T18:18Z: umbra **+64.9 km**, penumbra
+**3 417.5 km**, axis distance ≈ 2 192 km vs published gamma 2 188 km. The 13
+anchor asserts in `eclipseGeometry.test.ts` compute positions from the
+providers **at test time**, so they cannot rot: 2024-04-08 total,
+2024-05-08 inactive, 2023-10-14 annular (obscuration window around the
+published ~0.905), 2025-03-14 lunar total at ~2.6 R_moon, an ordinary full
+moon inactive, and Io's shadow pass matching the 69 558 / 70 343 km figures
+derived from `radiusKm` 69 911.
+
+**Judgement calls taken as this file recommended, now settled:** the solar
+diffraction tint is deleted (neutral penumbra); the spectrum's hot end and a
+4e-4 Danjon L2–L3 floor became the lunar refraction term, compile-time keyed
+to eclipser === earth, with the honesty disclosure beside the constant in
+`eclipseMath.ts`. `uEclipsingMinShadow` is derived, never tuned. The
+throttle is the interest gate (hidden receivers skip; visible ones resolve
+per frame) per the third round, not the sim-time throttle in the original
+prose. NEW-4 dissolved with the `getObjectByName` deletion and `active` is
+keyed off the predicate alone.
+
+**The thirteen were never enumerated here — the selection is now recorded**
+in the `eclipsingBodyId` schema JSDoc: 4 Galileans + 7 major Saturnians +
+Triton + Charon; the five Uranian moons deliberately out (~42-year eclipse
+seasons; perf); Phobos/Deimos not assigned but data-only to add. A catalog
+contract test pins: eclipser resolves and is the moon's parent, **no ringed
+planet is a receiver** (the branch-order landmine), and the five regolith
+moons keep their Lommel-Seeliger route.
+
+**The rename really was the silent-failure trap this file predicted.** One
+uniform became three (`uUmbra`/`uPenumbra`/`uMinShadow` — net +2, the
+sanctioned standing-law-2 exception) across FOUR declaration sites, not
+three: the wave's count missed the GLSL declaration block in
+`eclipseShaderPatch.ts` itself. Driver read sites moved in the same commit.
+`shaderNeedles.test.ts` now walks every replaced `#include` needle against
+the installed three.
+
+**What headless could and could not do.** The first-act browser check was
+attempted three ways (scripted store drive via `__ATLAS_TEST_STORE__` to
+2024-04-08, realistic, Earth focused); the camera fly-to cannot be driven
+to convergence under SwiftShader — the flight integrates per frame and
+headless renders near 1 Hz; even the reduced-motion snap did not converge.
+The `castShadow` deletion therefore stands on the third round's enumeration
+of the map's consumers, each premise re-verified against HEAD (ring opted
+out, clouds don't receive, surface is convex, light layer-pinned). A boot
+console sweep at error+warn ran headless and came back **clean of shader
+errors** — all patched materials compile at boot since the overview renders
+every body; the one flagged line was a `Failed to fetch` pageerror from the
+sandbox's blocked external network, unrelated to GLSL. Everything visual is
+in the **Deferred smoke gate** above, including
+the note that realistic mode is deliberately NOT identical to main any
+more — main's hard Moon silhouette was the second renderer this wave
+deleted.
+
+**Ratchet check:** fidelity up (real cone vs tuned ratios; annular renders
+annular; blood moon has physics), honesty up (disclosed omissions with
+magnitudes; Rømer note disclosing geometric times), wow up (soft penumbra,
+Io ingress gradient, copper totality), adaptive unchanged (hidden receivers
+skip; no new per-frame cost off-screen). Deletions: 26 mirror tests + two
+dead mirror files; the needle guard replaces them at the failure class.
+
+**Post-ship adversarial review (same day) found two real defects; both
+fixed in the follow-up commit.** (1) The similarity transform mapped only
+TWO of its three bodies: the shader ray aimed at the RENDER Sun (world
+origin), which is similarity-consistent only in realistic mode. In
+didactic mode the synthetic Moon lands at ~439 wu from Earth against a
+render Sun ~440 wu away — the per-fragment offset coefficient collapses
+~300×, so a solar eclipse would have dimmed Earth's whole disc instead of
+sweeping a spot, and the lunar sweep came out mirrored. Three independent
+review lenses found it and each reproduced the numbers with the repo's own
+resolvers. Fix: `uEclipsingSunPos` — the synthetic Sun
+`receiverWorld − s·R` — is the ray target (the render-Sun direction still
+drives the terminator fade, which must track the DRAWN terminator);
+degenerates to the origin in realistic mode; pinned by a didactic-mode
+test asserting the synthetic Sun sits ~183 000 wu out, not 440. Net
+uniforms are now +3, justified in the patch header per standing law 2.
+(2) The refraction-vs-neutral GLSL variant was invisible to three's
+program cache key — the same captured-variable trap `solarIrradiancePatch`
+already documents for the regolith flag: the Moon and the five regolith
+moons hash identically, so one cohort deterministically inherited the
+other's shader (blood moon black, or airless moons copper). Fix: the
+eclipse variant joins `resolveDirectLightVariant`'s discriminator string.
+One review claim was refuted (the sign-flip test-blindness claim
+misread the anchors). Reviewers also quantified that the cloud material's
+`cloudEclipseEnabled` sits in the same cache-key class — single occupant
+today (only Earth has clouds), noted in place, not fixed speculatively.
 
 ---
 

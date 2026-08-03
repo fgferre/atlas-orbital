@@ -15,6 +15,7 @@ import {
   ECLIPSE_FRAGMENT_ECLIPSE_UNIFORMS_ONLY,
   ECLIPSE_FRAGMENT_HELPERS,
   ECLIPSE_FRAGMENT_OUTPUT_PATCH,
+  ECLIPSE_FRAGMENT_OUTPUT_PATCH_REFRACTION,
   ECLIPSE_FRAGMENT_UNIFORMS,
   ECLIPSE_VERTEX_WORLD_VARYINGS_ASSIGN,
   ECLIPSE_VERTEX_WORLD_VARYINGS_DECL,
@@ -97,14 +98,16 @@ export function usePlanetMaterials({
       metalness: 0.0,
     });
 
-    // T3.3 cloud-layer eclipse port (2026-04-22 codex audit drift
-    // #5 fix). Gaia includes `eclipses.glsl` in the cloud shader
-    // (`cloud.fragment.glsl:65`) and applies `eclipseBlend` at
-    // lines 170-172, so a solar eclipse darkens BOTH the Earth
-    // surface AND the clouds above it. Atlas previously patched
-    // eclipse only into the planet material, so during a solar
-    // eclipse the Earth surface would darken but clouds stayed
-    // fully lit — a visible layered artefact.
+    // Cloud-layer eclipse (2026-04-22 codex audit drift #5 fix): a
+    // solar eclipse must darken BOTH the Earth surface AND the clouds
+    // above it. Atlas previously patched eclipse only into the planet
+    // material, so during a solar eclipse the surface would darken but
+    // clouds stayed fully lit — a visible layered artefact.
+    // Cache-key note: this flag changes the generated GLSL from a captured
+    // variable, the same trap `applyPlanetDirectLightCacheKey` guards the
+    // planet material against. Safe today only because Earth is the single
+    // body with a cloud texture — if a second cloudy body ships, this
+    // material needs a custom program cache key naming the flag.
     const cloudEclipseEnabled = !!body.eclipsingBodyId;
     mat.onBeforeCompile = (shader) => {
       mat.userData.shader = shader;
@@ -125,7 +128,12 @@ export function usePlanetMaterials({
         shader.uniforms.uEclipsingBodyPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
-        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.uEclipsingSunPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
+        shader.uniforms.uEclipsingPenumbraRadius = { value: 0 };
+        shader.uniforms.uEclipsingMinShadow = { value: 0 };
         shader.uniforms.uEclipsingVrScale = { value: 1 };
         shader.uniforms.uEclipsingActive = { value: 0 };
       }
@@ -199,17 +207,20 @@ export function usePlanetMaterials({
         `
       );
 
-      // T3.3 cloud-layer eclipse — inject the same output patch
-      // planet materials use; the `#define` aliases above let the
-      // shared helpers reference `vCloudWorldPos` / `vCloudWorldNormal`
-      // transparently. Matches Gaia `cloud.fragment.glsl:170-172`:
-      //   fragColor.rgb = eclipseBlend(fragColor.rgb, diffractionTint, eclshdw);
+      // Cloud-layer eclipse — inject the same output patch planet
+      // materials use; the `#define` aliases above let the shared
+      // helpers reference `vCloudWorldPos` / `vCloudWorldNormal`
+      // transparently, so a solar eclipse darkens the clouds above the
+      // surface in the same pass. W7: the needle is `opaque_fragment` —
+      // three renamed the chunk in r152 and the old `output_fragment`
+      // needle made this whole patch a silent no-op for three waves
+      // (`shaderNeedles.test.ts` now guards every needle in this file).
       if (cloudEclipseEnabled) {
         shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <output_fragment>",
+          "#include <opaque_fragment>",
           `
           ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-          #include <output_fragment>
+          #include <opaque_fragment>
           `
         );
       }
@@ -403,6 +414,15 @@ export function usePlanetMaterials({
     // lazily, so it is correct no matter which branch assigns it below.
     applyPlanetDirectLightCacheKey(mat, {
       regolith: !!body.airlessRegolith,
+      // W7 — the eclipse patch variant is ALSO read from captured state, so
+      // it must reach the key: the Moon's copper refraction floor and the
+      // regolith moons' neutral shading differ only here, with byte-equal
+      // closure text (found by the post-ship adversarial review).
+      eclipse: body.eclipsingBodyId
+        ? body.eclipsingBodyId === "earth"
+          ? "refraction"
+          : "neutral"
+        : "none",
     });
 
     // Apply Earth day/night shader (takes priority over ring shadows)
@@ -417,13 +437,18 @@ export function usePlanetMaterials({
         };
         shader.uniforms.uNightLightIntensity = { value: nightLightIntensity };
 
-        // T3.3 eclipse uniforms — populated per-frame by `Planet.tsx`
-        // via `body.eclipsingBodyId` scene-graph lookup.
+        // W7 eclipse uniforms — populated per-frame by `Planet.tsx`
+        // from the shadow-cone predicate in `eclipseGeometry.ts`.
         if (eclipseEnabled) {
           shader.uniforms.uEclipsingBodyPos = {
             value: new THREE.Vector3(0, 0, 0),
           };
-          shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+          shader.uniforms.uEclipsingSunPos = {
+            value: new THREE.Vector3(0, 0, 0),
+          };
+          shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
+          shader.uniforms.uEclipsingPenumbraRadius = { value: 0 };
+          shader.uniforms.uEclipsingMinShadow = { value: 0 };
           shader.uniforms.uEclipsingVrScale = { value: 1 };
           shader.uniforms.uEclipsingActive = { value: 0 };
         }
@@ -500,15 +525,15 @@ export function usePlanetMaterials({
           `
         );
 
-        // T3.3 — inject eclipse shadow blend before output_fragment
-        // so the multiplication hits outgoingLight pre-tonemap
-        // (matches Gaia pbr.fragment.glsl:671,676 call site).
+        // Inject the eclipse shadow multiply before `opaque_fragment`
+        // so it hits outgoingLight pre-tonemap. W7 fixed the needle —
+        // see the cloud site's comment for the r152 rename history.
         if (eclipseEnabled) {
           shader.fragmentShader = shader.fragmentShader.replace(
-            "#include <output_fragment>",
+            "#include <opaque_fragment>",
             `
             ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-            #include <output_fragment>
+            #include <opaque_fragment>
             `
           );
         }
@@ -529,7 +554,12 @@ export function usePlanetMaterials({
         shader.uniforms.uEclipsingBodyPos = {
           value: new THREE.Vector3(0, 0, 0),
         };
-        shader.uniforms.uEclipsingBodyRadius = { value: 0 };
+        shader.uniforms.uEclipsingSunPos = {
+          value: new THREE.Vector3(0, 0, 0),
+        };
+        shader.uniforms.uEclipsingUmbraRadius = { value: 0 };
+        shader.uniforms.uEclipsingPenumbraRadius = { value: 0 };
+        shader.uniforms.uEclipsingMinShadow = { value: 0 };
         shader.uniforms.uEclipsingVrScale = { value: 1 };
         shader.uniforms.uEclipsingActive = { value: 0 };
 
@@ -544,15 +574,24 @@ export function usePlanetMaterials({
           `
         );
 
+        // W7 — the Moon's eclipser is Earth, whose limb atmosphere
+        // refracts a copper floor into the umbra (the blood moon);
+        // every other eclipser in the catalog is airless-or-treated-so
+        // and shades neutrally. Compile-time choice: the eclipser is
+        // known when the material builds.
+        const outputPatch =
+          body.eclipsingBodyId === "earth"
+            ? ECLIPSE_FRAGMENT_OUTPUT_PATCH_REFRACTION
+            : ECLIPSE_FRAGMENT_OUTPUT_PATCH;
         shader.fragmentShader = `
           ${ECLIPSE_FRAGMENT_UNIFORMS}
           ${ECLIPSE_FRAGMENT_HELPERS}
           ${shader.fragmentShader}
         `.replace(
-          "#include <output_fragment>",
+          "#include <opaque_fragment>",
           `
-          ${ECLIPSE_FRAGMENT_OUTPUT_PATCH}
-          #include <output_fragment>
+          ${outputPatch}
+          #include <opaque_fragment>
           `
         );
 

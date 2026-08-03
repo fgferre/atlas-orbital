@@ -238,15 +238,28 @@ export interface CelestialBody {
   atmosphereScattering?: AtmosphereScatteringConfig;
 
   /**
-   * T3.3 eclipse geometry: the id of the body whose shadow can fall
-   * on THIS body (the receiver). Presence of this field switches on
-   * the eclipse shader patch in `usePlanetMaterials` + per-frame
-   * uniform wiring in `Planet.tsx`. Mirrors Gaia's
-   * `eclipsingBodyFlag` define at `eclipses.glsl:4`.
+   * The id of the body whose shadow can fall on THIS body (the
+   * receiver). Presence of this field switches on the eclipse shader
+   * patch in `usePlanetMaterials` and the per-frame cone resolve in
+   * `Planet.tsx`, both fed by the single predicate in
+   * `eclipseGeometry.ts`.
    *
-   * Standard atlas pairing:
-   * - Earth.eclipsingBodyId = "moon" (solar eclipse — Moon eclipses Sun)
-   * - Moon.eclipsingBodyId = "earth" (lunar eclipse — Earth casts shadow)
+   * **The selection below is a perf criterion, not a physics one.**
+   * Since W7 the shadow is the real umbra/penumbra cone, so
+   * over-assignment is safe — a moon whose geometry never lines up
+   * simply never darkens. Assigned: Earth↔Moon, the four Galileans,
+   * the seven major Saturnians, Triton, and Charon (whose Pluto
+   * mutual events, 1985–1990, are how both bodies' radii and albedos
+   * were first measured). The five Uranian moons are deliberately
+   * left out: Uranus lies on its side, so its eclipse seasons come
+   * ~42 years apart — itself a nice teaching fact — and each receiver
+   * costs a per-frame resolve while on screen. Adding one is a
+   * data-only change.
+   *
+   * One id per receiver: Jupiter would need four to render its moons'
+   * shadow transits ON the planet, so that stays deferred (see the
+   * wave appendix — a ringed planet must NOT get this field, or the
+   * eclipse branch silently replaces its ring-shadow shader).
    */
   eclipsingBodyId?: string;
 

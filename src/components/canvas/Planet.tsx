@@ -51,6 +51,16 @@ import {
   computeSpinAngleRad,
 } from "../../lib/bodyOrientation";
 import { dateToTDB } from "../../lib/orbital/time";
+import {
+  createEclipseConeGeometry,
+  createEclipseRenderConfig,
+  resolveEclipseConeGeometry,
+  resolveEclipseRenderConfig,
+  type EclipseConeBodies,
+  type EclipseConeGeometry,
+  type EclipseRenderConfig,
+} from "../../lib/eclipseGeometry";
+import { resolveHeliocentricPositionAU } from "../../lib/orbital/heliocentric";
 import { PlanetMotionOverlays } from "./planet/PlanetMotionOverlays";
 // T5.1 — per-frame atmosphere dynamic-uniform recompute. Mirrors
 // Gaia's `updateAtmosphericScatteringParams` at
@@ -83,7 +93,6 @@ const TMP_ATMO_CAMERA_WORLD = new THREE.Vector3();
 const TMP_ATMO_CAMERA_LOCAL = new THREE.Vector3();
 const TMP_ATMO_SUN_LOCAL = new THREE.Vector3();
 const TMP_ECLIPSE_RECEIVER_POS = new THREE.Vector3();
-const TMP_ECLIPSE_ECLIPSING_POS = new THREE.Vector3();
 
 // Atmospheric super-rotation: Earth's equatorial clouds drift east roughly
 // 3% faster than the solid body. Applied to any body that renders a cloud layer.
@@ -182,6 +191,23 @@ const PlanetVisual = ({
    */
   const readSunlightScalar = useBodySunlightScalar(body.id);
 
+  // W7 — static cone inputs plus the allocation-free out-parameters for the
+  // per-frame eclipse resolve. Lazy on both counts: only receivers with an
+  // `eclipsingBodyId` ever allocate them.
+  const eclipseBodies = useMemo<EclipseConeBodies | null>(() => {
+    if (!body.eclipsingBodyId) return null;
+    const eclipser = BODIES_BY_ID.get(body.eclipsingBodyId);
+    const sun = BODIES_BY_ID.get("sun");
+    if (!eclipser || !sun) return null;
+    return {
+      sunRadiusKm: sun.radiusKm,
+      eclipserRadiusKm: eclipser.radiusKm,
+      receiverRadiusKm: body.radiusKm,
+    };
+  }, [body]);
+  const eclipseConeRef = useRef<EclipseConeGeometry | null>(null);
+  const eclipseConfigRef = useRef<EclipseRenderConfig | null>(null);
+
   // The pole is NOT memoised. IAU poles are functions of time — Earth's α₀
   // moves 0.641°/century, Mars's δ₀ carries a 1.6° periodic term — so freezing
   // the quaternion in a `useMemo` keyed on scalars would pin the axis at
@@ -242,7 +268,7 @@ const PlanetVisual = ({
    * whole component; removing it let the analysis reach code that has been
    * here since T5.1. The narrow fix is this scoped disable, not putting the
    * suppression comment back on a hook that no longer exists. */
-  useFrame(({ camera, scene }) => {
+  useFrame(({ camera }) => {
     if (!groupRef.current) return;
 
     // 1. Scaling. W5 — this stays UNIFORM at the largest semi-axis. The pole
@@ -380,55 +406,59 @@ const PlanetVisual = ({
         }
       }
 
-      // T3.3 — Eclipse uniforms. Runs for any body with an
-      // `eclipsingBodyId` (Earth during solar eclipse, Moon during
-      // lunar eclipse). Looks up the eclipsing body's mesh via
-      // `scene.getObjectByName`, writes its world-pos + radius into
-      // the shader uniforms every frame. Matches Gaia's
-      // `MainPostProcessor.java:633-679` (light-position update
-      // handler) pattern: driver pushes CPU-computed world-space
-      // eclipse geometry; shader reads as-is.
-      // Shared block — computes the eclipse state once, writes to all
-      // materials that have eclipse uniforms. Post 2026-04-22 codex
-      // audit fix #5, the cloud material also needs eclipse so a solar
-      // eclipse darkens clouds above the Earth surface, matching Gaia
-      // `cloud.fragment.glsl:170-172`.
-      if (body.eclipsingBodyId) {
-        const eclipsingBody = BODIES_BY_ID.get(body.eclipsingBodyId);
-        const eclipsingMesh = scene.getObjectByName(body.eclipsingBodyId);
-        let pos: THREE.Vector3 | null = null;
-        let radius = 0;
-        let vrScale = 1;
+      // W7 — Eclipse uniforms, from the shadow-cone predicate instead of a
+      // scene-graph lookup. `resolveEclipseConeGeometry` runs on the
+      // physical AU chain (`heliocentric.ts` — scene positions would lie in
+      // didactic mode) and `resolveEclipseRenderConfig` similarity-maps the
+      // cone into render space anchored at this receiver, so the shader's
+      // segment-distance machinery stays valid in both scale modes. `active`
+      // is keyed off the geometry alone — Earth's shadow on the Moon exists
+      // whether or not Earth's mesh is mounted — which also deleted the
+      // per-frame whole-scene `getObjectByName` DFS (NEW-4 dissolved).
+      //
+      // Cost gate: hidden receivers skip the resolve entirely; the handful
+      // on screen resolve per frame. `resolveHeliocentricPositionAU` clones
+      // one vector per parent-chain level — bounded by the on-screen count.
+      // Measure before optimising further.
+      if (body.eclipsingBodyId && eclipseBodies) {
+        if (!eclipseConeRef.current || !eclipseConfigRef.current) {
+          eclipseConeRef.current = createEclipseConeGeometry();
+          eclipseConfigRef.current = createEclipseRenderConfig();
+        }
+        const cone = eclipseConeRef.current;
+        const config = eclipseConfigRef.current;
         let active = 0;
-        if (eclipsingBody && eclipsingMesh) {
-          eclipsingMesh.getWorldPosition(TMP_ECLIPSE_ECLIPSING_POS);
-          pos = TMP_ECLIPSE_ECLIPSING_POS;
-          // World radius of the eclipsing body, matching atlas's
-          // scale-mode resolution.
-          //
-          // W5 corrected this comment (standing law 4). It used to claim
-          // `resolveSemanticBodyRadius` "returns the same value the eclipsing
-          // body's mesh is actually scaled by". That is now only true for a
-          // spherical body: a body with a `flattening` or `shapeScale` record
-          // is scaled uniformly by its LARGEST semi-axis and then carries its
-          // figure in the baked geometry, so the shadow caster is treated as a
-          // sphere of that largest semi-axis. Harmless today — the only
-          // eclipsing bodies in the catalog are the Moon and Earth, both
-          // unflagged — but the cone model gains a real per-axis error the day
-          // a flattened body eclipses anything, and W7 owns that fix.
-          // The `eclipsingBodyRadius × 1.7` penumbra ratio is unchanged.
-          radius = AstroPhysics.resolveSemanticBodyRadius({
-            body: eclipsingBody,
-            scaleMode,
-          });
-          // vrScale must be large enough for the segment from the
-          // receiver fragment toward the Sun (world origin) to reach
-          // past the eclipsing body. `distance(receiver, sun) × 2`
-          // guarantees that regardless of whether the eclipsing body
-          // is between receiver and sun or beyond.
-          groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
-          vrScale = Math.max(1, TMP_ECLIPSE_RECEIVER_POS.length() * 2);
-          active = 1;
+        if (cameraInterest.visibility !== "hidden") {
+          const now = simulationClock.getNow();
+          const eclipserAU = resolveHeliocentricPositionAU(
+            body.eclipsingBodyId,
+            now
+          );
+          const receiverAU = resolveHeliocentricPositionAU(body.id, now);
+          resolveEclipseConeGeometry(
+            eclipserAU,
+            receiverAU,
+            eclipseBodies,
+            cone
+          );
+          if (cone.active) {
+            groupRef.current.getWorldPosition(TMP_ECLIPSE_RECEIVER_POS);
+            // `semanticRadius` is this receiver's render radius. Every
+            // receiver in the catalog is spherical, so the similarity
+            // ratio `semanticRadius / radiusKm` is exact; a flattened
+            // receiver would make it the max-axis over the mean — add
+            // the figure to the transform before flagging one.
+            resolveEclipseRenderConfig(
+              cone,
+              eclipserAU,
+              receiverAU,
+              TMP_ECLIPSE_RECEIVER_POS,
+              semanticRadius,
+              body.radiusKm,
+              config
+            );
+            active = 1;
+          }
         }
         const materials = [planetMaterial, cloudMaterial] as (
           | THREE.Material
@@ -441,15 +471,30 @@ const PlanetVisual = ({
             | undefined;
           if (!s) continue;
           const uPos = s.uniforms.uEclipsingBodyPos;
-          const uRadius = s.uniforms.uEclipsingBodyRadius;
+          const uSunPos = s.uniforms.uEclipsingSunPos;
+          const uUmbra = s.uniforms.uEclipsingUmbraRadius;
+          const uPenumbra = s.uniforms.uEclipsingPenumbraRadius;
+          const uMinShadow = s.uniforms.uEclipsingMinShadow;
           const uVrScale = s.uniforms.uEclipsingVrScale;
           const uActive = s.uniforms.uEclipsingActive;
-          if (!uPos || !uRadius || !uVrScale || !uActive) continue;
-          if (pos) {
-            (uPos.value as THREE.Vector3).copy(pos);
+          if (
+            !uPos ||
+            !uSunPos ||
+            !uUmbra ||
+            !uPenumbra ||
+            !uMinShadow ||
+            !uVrScale ||
+            !uActive
+          )
+            continue;
+          if (active) {
+            (uPos.value as THREE.Vector3).copy(config.eclipserPosWorld);
+            (uSunPos.value as THREE.Vector3).copy(config.sunPosWorld);
+            uUmbra.value = config.umbraRadiusWu;
+            uPenumbra.value = config.penumbraRadiusWu;
+            uMinShadow.value = config.minShadow;
+            uVrScale.value = config.vrScaleWu;
           }
-          uRadius.value = radius;
-          uVrScale.value = vrScale;
           uActive.value = active;
         }
       }
@@ -497,7 +542,17 @@ const PlanetVisual = ({
           {/* 1. Base Planet Sphere */}
           {planetMaterial ? (
             <mesh
-              castShadow={body.type !== "star"}
+              // W7 — castShadow deliberately absent. The surface sphere is
+              // convex, so its own casting can never produce a legitimate
+              // self-shadow; all it ever painted was other bodies' hard
+              // silhouettes through the SmartSunLight map (the Moon's full
+              // disc onto Earth on 2024-04-08 — 27× the real umbra), a
+              // second eclipse renderer competing with the analytical cone
+              // in `eclipseGeometry.ts`. The cloud mesh keeps casting (its
+              // shadow on the surface below is the map's one legitimate
+              // consumer) and this mesh keeps RECEIVING it. The GLB path
+              // is audited separately — Vesta is non-convex, so
+              // self-shadowing there is a real and different question.
               receiveShadow={body.type !== "star"}
               raycast={THREE.Mesh.prototype.raycast}
             >

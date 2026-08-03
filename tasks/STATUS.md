@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-08-03 (W7 shipped — physical eclipse cone + dead-needle fix + shadow-map caster deletion + 13 receivers, smokes batched to the deferred gate; earlier same day: W5 stage B's 07-28 re-open exposed as false (L42). W1–W7 code-done; the fidelity-honesty queue moves to **W8**; parallel lines unchanged — see each section)._
 
 ---
 
@@ -119,18 +119,26 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1-W4 and W6 are done on `main`; their browser smokes are batched into one
+**W1 through W7 are code-done; their browser smokes are batched into one
 pass at the end of the wave** — owner decision, 2026-07-26, so "smoke pending"
 in the progress table is NOT a blocker and no increment waits on it. The
 consolidated checklist is the wave's **Deferred smoke gate** section; do not
 rebuild it from the per-wave prose.
 
-**W5 stage B is still open** and is the one thing an agent could walk past,
-because W6 landing later makes the queue look finished: stage A shipped the
-body figure (`2d26f5e`), stage B — **Saturn, F-09, the ring shaders** — was
-never started. Arbitrated decision B puts F-09 in W5, first commit of stage B,
-not in W1. So the next increment is **W5 stage B or W7**, owner's pick; they do
-not depend on each other.
+**W5 shipped both stages** (`2d26f5e` + `d5c6ebb`) — the 2026-07-28 note
+here that re-opened stage B was itself the error; verified intact at HEAD
+2026-08-03, pins green. How the docs went wrong is **L42** and the wave
+file's Progress row.
+
+**W7 shipped 2026-08-03** (`13ee995` · `0d3ff5e` · `9bc7767`): physical
+umbra/penumbra cone in `src/lib/eclipseGeometry.ts` landed together with
+the dead-needle fix, the surface-mesh `castShadow` (the second eclipse
+renderer) is deleted, thirteen moons joined the predicate, and lunar
+totality floors at a Danjon copper term instead of black. Read the wave's
+**"Shipped 2026-08-03"** subsection before touching eclipses — settled
+judgement calls live there. W8's badge and scan must consume
+`resolveEclipseConeGeometry`, never a second predicate. **The next
+increment is W8** (W9 and W10 do not depend on it).
 
 **W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
 source, and the Sun, all eight planets, the Moon, the eighteen analytical
@@ -138,35 +146,14 @@ satellites, Triton, Pluto and Charon now carry measured IAU rotational elements.
 Read W6's **"Stage B shipped"** subsection before touching orientation again —
 it records what a later session must not re-derive.
 
-**The satellite constants were not typed by a human.**
-`scripts/derive-iau-orientation.js` parses NAIF's `pck00011.tpc`; it re-emits
-the nine bodies stage A entered by hand and reproduces all 54 of their secular
-coefficients exactly, which is what validates the other 22. **Do not
-hand-transcribe additions** — and do not restore the plan's "drop periodic
-terms, disclose the amplitude" prescription: Mimas's prime meridian librates
-44.85° and Triton's pole 32.35°, so that instruction would have shipped gross
-errors under a ~1° budget.
-
-**Triton and Charon are analytical satellites now**, with Horizons-derived
-ecliptic elements, and both left the parent-equatorial mount. Their fabricated
-nodes are gone (Charon's `O/w/M0` were zeros; Triton carried a disclosed 150°
-envelope) and both sit inside the 0.5° family bound. **Pluto's obliquity was
-also corrected**, 122.53° → 119.59°: the old figure was measured to the ecliptic
-where the rest of the catalog uses the orbit. The retrograde sign in
-`resolveObliquityDeg` now comes from the IAU Ẇ, not `rotationPeriodHours` —
-those two genuinely disagree for Pluto and both are true.
-
-**Verification, and what it is not.** Orientation is checked against **JPL
-Horizons sub-solar points** (127 fixtures, 30 bodies, 1900–2100) in
-[`subSolarPoint.test.ts`](../src/lib/subSolarPoint.test.ts), and every satellite
-pole is checked against an **independently fitted orbit normal** in
-`bodyOrientation.test.ts` — 20 bodies, all within 0.69°, from two datasets that
-share no input. Read those files' headers before adding bodies: they record the
-west-vs-east longitude trap, light-time treatment, the planetocentric-vs-
-planetodetic latitude conversion, and why a stale satellite phase — not a bad Ẇ
-— loosens the 2000-01-01 longitude bound. **Do not "fix" the app's ΔT toward
-JPL**: Horizons freezes it beyond the observed record, the app extrapolates with
-Espenak-Meeus, and future Earth rotation is unknowable.
+The W6 detail — kernel-parsed satellite constants (never hand-transcribe
+additions; the "drop periodic terms" prescription would ship gross errors),
+Triton/Charon's analytical elements, Pluto's corrected obliquity, and the
+JPL sub-solar + orbit-normal verification story — lives in that subsection
+and in the headers of `subSolarPoint.test.ts` / `bodyOrientation.test.ts`.
+**Do not "fix" the app's ΔT toward JPL**: Horizons freezes it beyond the
+observed record, the app extrapolates with Espenak-Meeus, and future Earth
+rotation is unknowable.
 
 **Nothing is owed for W6.** The pixel-gate re-bless both stages predicted is
 not needed: `npm run test:e2e` passes 12/12 including `boot visual identity`,
@@ -179,11 +166,12 @@ Two W3 findings a later wave must not re-derive, both recorded in that wave's
 "What the gates actually proved" subsection: **the single pixel gate is
 structurally blind to planet surfaces** (the frozen boot frame is a wide shot —
 so W5/W9/W10 should not read "baseline unchanged" as a photometry result), and
-**the eclipse fragment patch has never run on three r181** — `output_fragment` was
-renamed `opaque_fragment` in r152, so three `.replace` calls in
-`usePlanetMaterials.ts` are silent no-ops. That one is logged against **W7**, not
-open for a drive-by fix: repairing the needle before the cone switches on a shadow
-that fires on ~86% of new moons.
+**the eclipse fragment patch had never run on three r181** — `output_fragment`
+was renamed `opaque_fragment` in r152, so three `.replace` calls in
+`usePlanetMaterials.ts` were silent no-ops. **Closed by W7** (needle + cone
+landed together, exactly as prescribed), and generalised:
+`shaderNeedles.test.ts` now walks every replaced `#include` needle against
+the installed three.
 
 W4 added a third: **the wave file's own Rigel and Proxima figures were computed
 from a catalog edition that is not the one on disk.** The shipped code is right
