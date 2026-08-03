@@ -967,6 +967,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 2634,
     color: "#C0A080",
     airlessRegolith: true,
+    eclipsingBodyId: "jupiter",
     orbit: { a: 0.007155, e: 0.0013, i: 0.2, O: 0, w: 0, M0: 0, n: 50.317 },
     rotationPeriodHours: 171.7,
     axialTilt: 0.33,
@@ -1033,6 +1034,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 2410,
     color: "#908070",
     airlessRegolith: true,
+    eclipsingBodyId: "jupiter",
     orbit: { a: 0.012585, e: 0.0074, i: 0.2, O: 0, w: 0, M0: 0, n: 21.57 },
     rotationPeriodHours: 400.5,
     iauOrientation: {
@@ -1098,6 +1100,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 1821,
     color: "#F0E070",
     airlessRegolith: true,
+    eclipsingBodyId: "jupiter",
     orbit: { a: 0.002819, e: 0.0041, i: 0.05, O: 0, w: 0, M0: 0, n: 203.48 },
     rotationPeriodHours: 42.5,
     iauOrientation: {
@@ -1136,6 +1139,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       "Plumes of sulfur and sulfur dioxide climb as high as 500 km above the surface.",
       "Its surface is constantly being renewed by lava flows, erasing any impact craters.",
       "Io cuts across Jupiter's magnetic field lines, generating a powerful electric current.",
+      "In 1676, Ole Rømer measured the speed of light from Io's eclipses: they ran early when Earth approached Jupiter and late as it receded — up to ~17 minutes across Earth's orbit. Atlas shows the geometric times, without that light-travel delay.",
     ],
     records: ["Most volcanically active body", "Driest object in Solar System"],
     explorationMilestone: {
@@ -1156,6 +1160,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 1560,
     color: "#C0C0C0",
     airlessRegolith: true,
+    eclipsingBodyId: "jupiter",
     orbit: { a: 0.004486, e: 0.0094, i: 0.47, O: 0, w: 0, M0: 0, n: 101.37 },
     rotationPeriodHours: 85.2,
     axialTilt: 0.1,
@@ -1249,6 +1254,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "TITAN", pt: "TITÃ" },
     radiusKm: 2575,
     color: "#E0C060",
+    eclipsingBodyId: "saturn",
     orbit: { a: 0.008168, e: 0.0288, i: 0.348, O: 0, w: 0, M0: 0, n: 22.577 },
     rotationPeriodHours: 382.7,
     iauOrientation: {
@@ -1312,6 +1318,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "RHEA", pt: "REIA" },
     radiusKm: 764,
     color: "#C0C0C0",
+    eclipsingBodyId: "saturn",
     orbit: {
       a: 0.003525,
       e: 0.001,
@@ -1383,6 +1390,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "IAPETUS", pt: "JÁPETO" },
     radiusKm: 734,
     color: "#807060",
+    eclipsingBodyId: "saturn",
     orbit: { a: 0.02381, e: 0.0283, i: 15.47, O: 0, w: 0, M0: 0, n: 4.538 },
     rotationPeriodHours: 1903.9,
     iauOrientation: {
@@ -1424,6 +1432,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "DIONE", pt: "DIONE" },
     radiusKm: 561,
     color: "#D0D0D0",
+    eclipsingBodyId: "saturn",
     orbit: {
       a: 0.002523,
       e: 0.0022,
@@ -1486,6 +1495,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "TETHYS", pt: "TÉTIS" },
     radiusKm: 531,
     color: "#E0E0E0",
+    eclipsingBodyId: "saturn",
     orbit: {
       a: 0.001971,
       e: 0.0001,
@@ -1550,6 +1560,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     radiusKm: 252,
     color: "#FFFFFF",
     airlessRegolith: true,
+    eclipsingBodyId: "saturn",
     orbit: {
       a: 0.001591,
       e: 0.0047,
@@ -1599,6 +1610,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     name: { en: "MIMAS", pt: "MIMAS" },
     radiusKm: 198,
     color: "#B0B0B0",
+    eclipsingBodyId: "saturn",
     orbit: {
       a: 0.00124,
       e: 0.0202,
@@ -1669,6 +1681,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
      * to **Neptune's equator** and its `Ω` was fabricated: the pair behind the
      * disclosed ~150° envelope W6 stage B retired.
      */
+    eclipsingBodyId: "neptune",
     orbit: {
       a: 0.002371478,
       e: 0.000027,
@@ -2624,6 +2637,7 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
      * Kepler fallback from the analytical block directly, for the reasons
      * documented there. What survives here is the panel's display source.
      */
+    eclipsingBodyId: "pluto",
     orbit: {
       a: 0.00013098,
       e: 0.000096,

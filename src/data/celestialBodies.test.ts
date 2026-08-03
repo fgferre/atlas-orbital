@@ -367,3 +367,41 @@ describe("minor-body visual provenance", () => {
     expect(getBody("quaoar").shapeScale).toEqual([1.18, 0.99, 0.86]);
   });
 });
+
+// W7 — eclipse receiver contracts. The predicate in `eclipseGeometry.ts`
+// makes over-assignment physically safe, so these pin wiring, not policy.
+describe("eclipse receiver contracts (W7)", () => {
+  const receivers = SOLAR_SYSTEM_BODIES.filter((b) => b.eclipsingBodyId);
+
+  it("every eclipsingBodyId names a real catalog body, never itself", () => {
+    const ids = new Set(SOLAR_SYSTEM_BODIES.map((b) => b.id));
+    for (const body of receivers) {
+      expect(ids.has(body.eclipsingBodyId!), body.id).toBe(true);
+      expect(body.eclipsingBodyId).not.toBe(body.id);
+    }
+  });
+
+  it("no ringed planet is a receiver — the eclipse branch precedes the ring branch in usePlanetMaterials and would silently replace the ring-shadow shader", () => {
+    expect(
+      SOLAR_SYSTEM_BODIES.filter((b) => b.ringSystem && b.eclipsingBodyId)
+    ).toEqual([]);
+  });
+
+  it("the five regolith moons keep Lommel-Seeliger while riding the eclipse branch", () => {
+    // Gaining eclipsingBodyId moved them from the trailing material branch
+    // into the eclipse-only branch; that branch's `patchDirectLights` call
+    // is their ONLY remaining Lommel-Seeliger route, keyed on this flag —
+    // losing it would revert them to Lambert with no test and no console
+    // line.
+    for (const id of ["io", "europa", "ganymede", "callisto", "enceladus"]) {
+      expect(getBody(id).airlessRegolith, id).toBe(true);
+      expect(getBody(id).eclipsingBodyId, id).toBeDefined();
+    }
+  });
+
+  it("every moon receiver names its own parent as the eclipser", () => {
+    for (const body of receivers.filter((b) => b.type === "moon")) {
+      expect(body.eclipsingBodyId, body.id).toBe(body.parentId);
+    }
+  });
+});
