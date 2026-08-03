@@ -279,9 +279,11 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
       kMie: 0.0015,
       wavelengthsUm: [0.65, 0.57, 0.475],
     },
-    // T3.3 eclipse: Moon occludes the Sun for Earth fragments during
-    // solar eclipse events. Shader patch in `usePlanetMaterials`
-    // + per-frame uniform wiring in `Planet.tsx`.
+    // W7 eclipse: the Moon occludes the Sun for Earth during solar
+    // eclipses — real umbra/penumbra cone from `eclipseGeometry.ts`
+    // (anchored to 2024-04-08, which renders total, and 2023-10-14,
+    // which renders annular), shader patch in `usePlanetMaterials`,
+    // per-frame uniforms in `Planet.tsx`.
     eclipsingBodyId: "moon",
   },
   {
@@ -947,9 +949,13 @@ export const SOLAR_SYSTEM_BODIES: CelestialBody[] = [
     distanceFromParent: "384,400 km",
     info: "Earth satellite.",
     textures: { map: TEXTURE_PATH + "8k_moon.jpg" },
-    // T3.3 eclipse: Earth casts a shadow on the Moon during lunar
-    // eclipses — the signature blood-moon red tint comes from the
-    // diffraction spectrum multiplied into the shadow band.
+    // W7 eclipse: Earth casts a shadow on the Moon during lunar
+    // eclipses, from the real umbra/penumbra cone in
+    // `eclipseGeometry.ts` (Earth's umbra at lunar distance is
+    // ~2.6 R_moon, so totality covers the whole disc). The signature
+    // blood-moon copper comes from the lunar refraction floor in
+    // `eclipseShaderPatch.ts` — sunlight bent through Earth's limb
+    // atmosphere — with its honesty disclosure in `eclipseMath.ts`.
     eclipsingBodyId: "earth",
   },
   // Galilean Moons (Jupiter)
