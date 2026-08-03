@@ -3,7 +3,7 @@
 **Read with [`AGENTS.md`](../AGENTS.md).** That file is product law.
 This file is only **what to do next**. Folder map: [`README.md`](./README.md).
 
-_Last updated: 2026-07-29 (lighting-redesign queue step 2 shipped — realistic-scale boot default + system-overview camera framing, second attempt same day after the first found and resolved the real blocker; Onda 2.2 assisted sunlight default + unified fidelity badge, Onda 1 items 1–3 and Onda 2.1 already in; starfield visual-upgrade and texture-VRAM lines still open; W1–W5 + W6 stage A code-complete; browser smokes BATCHED to the end of the wave; W6 stage B next)._
+_Last updated: 2026-08-03 (W5 stage B's 07-28 re-open was false — stage B shipped in `d5c6ebb` on 07-26 and is intact at HEAD, so W1–W6 are done and the fidelity-honesty queue moves to **W7**; browser smokes remain BATCHED; the parallel lines' states are unchanged — see each section)._
 
 ---
 
@@ -119,18 +119,18 @@ thirteen waves in two tranches. Tranche 1 (W1–W10) closes every confirmed
 fidelity and honesty defect; **tranche 2 is re-decided at the checkpoint, not
 pre-committed**.
 
-**W1-W4 and W6 are done on `main`; their browser smokes are batched into one
+**W1 through W6 are done on `main`; their browser smokes are batched into one
 pass at the end of the wave** — owner decision, 2026-07-26, so "smoke pending"
 in the progress table is NOT a blocker and no increment waits on it. The
 consolidated checklist is the wave's **Deferred smoke gate** section; do not
 rebuild it from the per-wave prose.
 
-**W5 stage B is still open** and is the one thing an agent could walk past,
-because W6 landing later makes the queue look finished: stage A shipped the
-body figure (`2d26f5e`), stage B — **Saturn, F-09, the ring shaders** — was
-never started. Arbitrated decision B puts F-09 in W5, first commit of stage B,
-not in W1. So the next increment is **W5 stage B or W7**, owner's pick; they do
-not depend on each other.
+**W5 shipped both stages — the 2026-07-28 note here that re-opened stage B
+(`d8d9317`) was itself the error.** Stage A `2d26f5e`, stage B `d5c6ebb`:
+Saturn's figure, F-09's equatorial ring ratios, the ellipsoid ring-shadow
+occluder. Verified intact at HEAD 2026-08-03, pins green at
+`astrophysics.test.ts:582-607`; how the docs went wrong is L42 and the wave
+file's Progress row. **The next increment is W7.**
 
 **W6 is code-complete.** `src/lib/bodyOrientation.ts` is the single orientation
 source, and the Sun, all eight planets, the Moon, the eighteen analytical
