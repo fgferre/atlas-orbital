@@ -6,7 +6,10 @@
       "Bash(npm run build:*)",
       "Bash(node --experimental-strip-types scripts/measure-multi-epoch-drift.ts)",
       "Bash(npx vitest *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'docs\\(status\\): point the queue at W3 *)",
+      "Bash(git push *)"
     ],
     "deny": [],
     "ask": []
